@@ -28,11 +28,10 @@ class SignupData {
   });
 
   Map<String, dynamic> toJson() {
-    return {
+    final Map<String, dynamic> data = {
       'name': name,
       'email': email,
       'password': password,
-      'dateOfBirth': dateOfBirth?.toIso8601String(),
       'sex': sex,
       'heightFeet': heightFeet,
       'heightInches': heightInches,
@@ -42,5 +41,15 @@ class SignupData {
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
     };
+
+    // Only add dateOfBirth if it's not null and convert it to ISO string
+    if (dateOfBirth != null) {
+      data['dateOfBirth'] = dateOfBirth!.toIso8601String();
+    }
+
+    // Remove null values
+    data.removeWhere((key, value) => value == null);
+
+    return data;
   }
 }

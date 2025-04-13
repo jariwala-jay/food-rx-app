@@ -245,9 +245,10 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           label: 'Medical Conditions',
                           value: null,
                           options: const [
+                            'Hypertension',
+                            'Pre-Diabetes',
                             'Diabetes',
-                            'High Blood Pressure',
-                            'Heart Disease',
+                            'Overweight/Obesity',
                             'None',
                           ],
                           onChanged: (value) {
@@ -328,17 +329,31 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                         ),
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            context.read<SignupProvider>().updateHealthInfo(
-                                  dateOfBirth: DateFormat('MM/dd/yyyy')
-                                      .parse(_dobController.text),
-                                  sex: _selectedSex,
-                                  heightFeet: _heightFeet,
-                                  heightInches: _heightInches,
-                                  weight:
-                                      double.tryParse(_weightController.text),
-                                  medicalConditions: _selectedMedicalConditions,
-                                );
-                            widget.onNext();
+                            try {
+                              final dateOfBirth = _dobController.text.isNotEmpty
+                                  ? DateFormat('MM/dd/yyyy')
+                                      .parse(_dobController.text)
+                                  : null;
+
+                              context.read<SignupProvider>().updateHealthInfo(
+                                    dateOfBirth: dateOfBirth,
+                                    sex: _selectedSex,
+                                    heightFeet: _heightFeet,
+                                    heightInches: _heightInches,
+                                    weight:
+                                        double.tryParse(_weightController.text),
+                                    medicalConditions:
+                                        _selectedMedicalConditions,
+                                  );
+                              widget.onNext();
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter a valid date'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           }
                         },
                         child: const Text(

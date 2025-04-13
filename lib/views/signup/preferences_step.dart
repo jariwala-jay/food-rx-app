@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/providers/signup_provider.dart';
+import 'package:flutter_app/providers/auth_provider.dart';
 import 'package:flutter_app/widgets/form_fields.dart';
 import 'package:flutter_app/utils/typography.dart';
 import 'package:provider/provider.dart';
-import 'diet_plan_step.dart';
 
 class PreferencesStep extends StatefulWidget {
   final VoidCallback onPrevious;
@@ -24,6 +24,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   List<String> _selectedFoodAllergies = [];
   String? _activityLevel;
   List<String> _selectedHealthGoals = [];
+  bool _isLoading = false;
 
   final List<String> _activityLevels = [
     'Sedentary',
@@ -47,6 +48,56 @@ class _PreferencesStepState extends State<PreferencesStep> {
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
     _activityLevel = signupData.activityLevel;
     _selectedHealthGoals = List.from(signupData.healthGoals);
+  }
+
+  Future<void> _handleSubmit() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Update preferences in SignupProvider
+        context.read<SignupProvider>().updatePreferences(
+              foodAllergies: _selectedFoodAllergies,
+              activityLevel: _activityLevel,
+              healthGoals: _selectedHealthGoals,
+            );
+
+        // Get all collected data
+        final signupData = context.read<SignupProvider>().data;
+        final authProvider = context.read<AuthProvider>();
+
+        // Register the user with all collected data
+        final success = await authProvider.register(
+          email: signupData.email!,
+          password: signupData.password!,
+          userData: signupData.toJson(),
+        );
+
+        if (success) {
+          widget.onSubmit();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(authProvider.error ?? 'Registration failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -215,28 +266,20 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           ),
                           elevation: 0,
                         ),
-                        onPressed: () {
-                          if (_formKey.currentState?.validate() ?? false) {
-                            context.read<SignupProvider>().updatePreferences(
-                                  foodAllergies: _selectedFoodAllergies,
-                                  activityLevel: _activityLevel,
-                                  healthGoals: _selectedHealthGoals,
-                                );
-
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => DietPlanStep(
-                                  onFinish: widget.onSubmit,
+                        onPressed: _isLoading ? null : _handleSubmit,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
                                 ),
+                              )
+                            : const Text(
+                                'Submit',
+                                style: AppTypography.bg_16_sb,
                               ),
-                            );
-                          }
-                        },
-                        child: const Text(
-                          'Submit',
-                          style: AppTypography.bg_16_sb,
-                        ),
                       ),
                     ),
                   ),

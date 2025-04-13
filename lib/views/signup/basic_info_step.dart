@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/providers/signup_provider.dart';
-import 'package:flutter_app/widgets/form_fields.dart';
-import 'package:flutter_app/utils/typography.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import '../../providers/auth_provider.dart';
+import '../../widgets/form_fields.dart';
+import '../../utils/typography.dart';
+import '../../providers/signup_provider.dart';
 
 class BasicInfoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -22,13 +25,18 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _imagePicker = ImagePicker();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
+  String? _error;
+  File? _profilePhoto;
+  String? _profilePhotoPath;
 
   @override
   void initState() {
     super.initState();
-    final signupData = context.read<SignupProvider>().data;
+    final signupData = context.read<AuthProvider>().data;
     _nameController.text = signupData.name ?? '';
     _emailController.text = signupData.email ?? '';
     _passwordController.text = signupData.password ?? '';
@@ -42,6 +50,62 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _profilePhoto = File(pickedFile.path);
+          _profilePhotoPath = pickedFile.path;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to pick image: $e';
+      });
+    }
+  }
+
+  Future<void> _handleNext() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      try {
+        // Store the data in SignupProvider instead of registering
+        context.read<SignupProvider>().updateBasicInfo(
+              name: _nameController.text,
+              email: _emailController.text,
+              password: _passwordController.text,
+            );
+
+        widget.onNext();
+      } catch (e) {
+        setState(() {
+          _error = 'An error occurred: $e';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -63,6 +127,28 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                         .copyWith(color: const Color(0xFF90909A)),
                   ),
                   const SizedBox(height: 24),
+                  if (_error != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Center(
                     child: Stack(
                       children: [
@@ -76,29 +162,40 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                               color: const Color(0xFFE7E9EC),
                               width: 1,
                             ),
+                            image: _profilePhotoPath != null
+                                ? DecorationImage(
+                                    image: FileImage(File(_profilePhotoPath!)),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.person_outline,
-                              size: 48,
-                              color: Color(0xFF90909A),
-                            ),
-                          ),
+                          child: _profilePhotoPath == null
+                              ? const Center(
+                                  child: Icon(
+                                    Icons.person_outline,
+                                    size: 48,
+                                    color: Color(0xFF90909A),
+                                  ),
+                                )
+                              : null,
                         ),
                         Positioned(
                           bottom: 0,
                           right: 0,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFF6A00),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt_outlined,
-                              color: Colors.white,
-                              size: 20,
+                          child: InkWell(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFF6A00),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_outlined,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),
@@ -155,8 +252,21 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your password';
                             }
-                            if (value.length < 6) {
-                              return 'Password must be at least 6 characters';
+                            if (value.length < 8) {
+                              return 'Password must be at least 8 characters';
+                            }
+                            if (!value.contains(RegExp(r'[A-Z]'))) {
+                              return 'Password must contain at least one uppercase letter';
+                            }
+                            if (!value.contains(RegExp(r'[a-z]'))) {
+                              return 'Password must contain at least one lowercase letter';
+                            }
+                            if (!value.contains(RegExp(r'[0-9]'))) {
+                              return 'Password must contain at least one number';
+                            }
+                            if (!value
+                                .contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+                              return 'Password must contain at least one special character';
                             }
                             return null;
                           },
@@ -229,20 +339,20 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                   ),
                   elevation: 0,
                 ),
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    context.read<SignupProvider>().updateBasicInfo(
-                          name: _nameController.text,
-                          email: _emailController.text,
-                          password: _passwordController.text,
-                        );
-                    widget.onNext();
-                  }
-                },
-                child: const Text(
-                  'Next',
-                  style: AppTypography.bg_16_sb,
-                ),
+                onPressed: _isLoading ? null : _handleNext,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Next',
+                        style: AppTypography.bg_16_sb,
+                      ),
               ),
             ),
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/views/pages/home_page.dart';
-import 'package:flutter_app/views/pages/education_page.dart';
-import 'package:flutter_app/widgets/custom_nav_bar.dart';
+import 'home_page.dart';
+import 'education_page.dart';
+import '../../widgets/custom_nav_bar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

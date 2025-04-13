@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/providers/auth_service.dart';
-import 'package:flutter_app/widgets/form_fields.dart';
-import 'package:flutter_app/utils/typography.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/form_fields.dart';
+import '../../utils/typography.dart';
 import 'package:provider/provider.dart';
 
 class LoginPage extends StatefulWidget {
@@ -17,6 +17,21 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to auth provider errors
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = context.read<AuthProvider>();
+      if (authProvider.error != null) {
+        setState(() {
+          _errorMessage = authProvider.error;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -26,26 +41,61 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      final success = await context.read<AuthService>().login(
-            _emailController.text,
-            _passwordController.text,
-          );
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-      setState(() => _isLoading = false);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
 
-      if (success && mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else if (mounted) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        if (!success) {
+          _errorMessage = authProvider.error ?? 'Invalid credentials';
+        }
+      });
+
+      if (success) {
+        // Clear the form
+        _emailController.clear();
+        _passwordController.clear();
+        // Navigate to main screen
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid credentials'),
+          SnackBar(
+            content: Text(_errorMessage!),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Login failed: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage!),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -69,11 +119,8 @@ class _LoginPageState extends State<LoginPage> {
               ),
               Container(
                 width: double.infinity,
-                height: 250,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 16,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
                 margin: const EdgeInsets.only(top: 80, bottom: 20),
                 decoration: ShapeDecoration(
                   color: Colors.white,
@@ -95,6 +142,9 @@ class _LoginPageState extends State<LoginPage> {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your email';
                         }
+                        if (!value.contains('@')) {
+                          return 'Please enter a valid email';
+                        }
                         return null;
                       },
                     ),
@@ -107,6 +157,9 @@ class _LoginPageState extends State<LoginPage> {
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your password';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be at least 6 characters';
                         }
                         return null;
                       },
@@ -124,6 +177,23 @@ class _LoginPageState extends State<LoginPage> {
                         },
                       ),
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     const Align(
                       alignment: Alignment.centerRight,
@@ -165,7 +235,7 @@ class _LoginPageState extends State<LoginPage> {
                       : const Text('Submit', style: AppTypography.bg_16_sb),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
               const Center(
                 child: Text(
                   '------------------- Or Login with -------------------',
@@ -182,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Container(
                   width: 343,
                   height: 52,
-                  margin: const EdgeInsets.only(bottom: 60),
+                  margin: const EdgeInsets.only(bottom: 20),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
