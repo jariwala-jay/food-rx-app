@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/signup_provider.dart';
+import 'providers/article_provider.dart';
 import 'services/mongodb_service.dart';
+import 'services/article_service.dart';
 import 'views/pages/login_page.dart';
 import 'views/pages/signup_page.dart';
 import 'views/pages/main_screen.dart';
@@ -15,6 +17,12 @@ void main() async {
   final mongoDBService = MongoDBService();
   await mongoDBService.initialize();
 
+  // Uncomment the line below to insert test articles
+  //await insertTestArticles();
+
+  // Initialize Article service
+  final articleService = ArticleService(mongoDBService);
+
   runApp(
     MultiProvider(
       providers: [
@@ -26,6 +34,14 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => AuthService(),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, ArticleProvider>(
+          create: (context) => ArticleProvider(
+            articleService,
+            context.read<AuthProvider>(),
+          ),
+          update: (context, authProvider, articleProvider) =>
+              ArticleProvider(articleService, authProvider),
         ),
       ],
       child: const MyApp(),

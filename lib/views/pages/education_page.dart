@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/models/article.dart';
-import 'package:flutter_app/models/category.dart';
-import 'package:flutter_app/views/pages/article_detail_page.dart';
-import 'package:flutter_app/widgets/education/article_card.dart';
-import 'package:flutter_app/widgets/education/category_chips.dart';
+import 'package:provider/provider.dart';
+import '../../models/category.dart';
+import '../../providers/article_provider.dart';
+import '../../widgets/education/article_card.dart';
+import '../../widgets/education/category_chips.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({super.key});
@@ -14,37 +14,14 @@ class EducationPage extends StatefulWidget {
 
 class _EducationPageState extends State<EducationPage> {
   final TextEditingController _searchController = TextEditingController();
-  List<Category> categories = [
-    const Category(name: 'All', isSelected: true),
-    const Category(name: 'Hypertension', isSelected: false),
-    const Category(name: 'Diabetes', isSelected: false),
-    const Category(name: 'Heart Disease', isSelected: false),
-  ];
 
-  List<Article> articles = [
-    Article(
-      title: 'Why the Dash Eating Plan Works',
-      category: 'Healthy Lifestyle',
-      imageUrl: 'assets/images/dash_diet.png',
-    ),
-    Article(
-      title: 'Why the Dash Eating Plan Works',
-      category: 'Healthy Lifestyle',
-      imageUrl: 'assets/images/dash_diet.png',
-      isBookmarked: true,
-    ),
-    // Add more articles as needed
-  ];
-
-  void _onCategorySelected(Category category) {
-    if (!mounted) return;
-    setState(() {
-      for (var i = 0; i < categories.length; i++) {
-        categories[i] = Category(
-          name: categories[i].name,
-          isSelected: categories[i].name == category.name,
-        );
-      }
+  @override
+  void initState() {
+    super.initState();
+    // Load articles when the page is first shown
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('Loading articles...');
+      context.read<ArticleProvider>().loadArticles();
     });
   }
 
@@ -82,41 +59,81 @@ class _EducationPageState extends State<EducationPage> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: CategoryChips(
-                categories: categories,
-                onCategorySelected: _onCategorySelected,
-              ),
+            Consumer<ArticleProvider>(
+              builder: (context, articleProvider, _) {
+                print('Categories: ${articleProvider.categories}');
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: CategoryChips(
+                    categories: [
+                      Category(
+                          name: 'All',
+                          isSelected: articleProvider.selectedCategory == null),
+                      ...articleProvider.categories.map((category) => Category(
+                            name: category.name,
+                            isSelected: articleProvider.selectedCategory ==
+                                category.name,
+                          )),
+                    ],
+                    onCategorySelected: (category) {
+                      if (category.name == 'All') {
+                        articleProvider.clearCategory();
+                      } else {
+                        articleProvider.selectCategory(category.name);
+                      }
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: articles.length,
-                itemBuilder: (context, index) {
-                  return ArticleCard(
-                    article: articles[index],
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ArticleDetailPage(
-                            article: articles[index],
-                          ),
+              child: Consumer<ArticleProvider>(
+                builder: (context, articleProvider, _) {
+                  print('Loading: ${articleProvider.isLoading}');
+                  print('Error: ${articleProvider.error}');
+                  print('Articles count: ${articleProvider.articles.length}');
+
+                  if (articleProvider.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (articleProvider.error != null) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          articleProvider.error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red),
                         ),
+                      ),
+                    );
+                  }
+
+                  if (articleProvider.articles.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No articles found. Please check your internet connection or try again later.',
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: articleProvider.articles.length,
+                    itemBuilder: (context, index) {
+                      final article = articleProvider.articles[index];
+                      return ArticleCard(
+                        article: article,
+                        onTap: () {
+                          // TODO: Implement article detail navigation
+                        },
+                        onBookmarkTap: () {
+                          articleProvider.toggleBookmark(article);
+                        },
                       );
-                    },
-                    onBookmarkTap: () {
-                      if (!mounted) return;
-                      setState(() {
-                        articles[index] = Article(
-                          title: articles[index].title,
-                          category: articles[index].category,
-                          imageUrl: articles[index].imageUrl,
-                          isBookmarked: !articles[index].isBookmarked,
-                        );
-                      });
                     },
                   );
                 },

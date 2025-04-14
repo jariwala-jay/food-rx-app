@@ -1,74 +1,100 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/models/article.dart';
+import '../../models/article.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
-  final VoidCallback? onTap;
-  final VoidCallback? onBookmarkTap;
+  final VoidCallback onTap;
+  final VoidCallback onBookmarkTap;
 
   const ArticleCard({
     super.key,
     required this.article,
-    this.onTap,
-    this.onBookmarkTap,
+    required this.onTap,
+    required this.onBookmarkTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
                 article.imageUrl,
-                width: 80,
-                height: 80,
+                height: 200,
+                width: double.infinity,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    width: double.infinity,
+                    color: Colors.grey[300],
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      size: 50,
+                      color: Colors.grey,
+                    ),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 200,
+                    width: double.infinity,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    article.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF181818),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        article.category,
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          article.isBookmarked
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                          color: Colors.orange[700],
+                        ),
+                        onPressed: onBookmarkTap,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    article.category,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    article.title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
-            ),
-            IconButton(
-              icon: Icon(
-                article.isBookmarked
-                    ? Icons.bookmark
-                    : Icons.bookmark_border_outlined,
-                color: article.isBookmarked
-                    ? const Color(0xFFFF6A00)
-                    : Colors.grey[400],
-              ),
-              onPressed: onBookmarkTap,
             ),
           ],
         ),
