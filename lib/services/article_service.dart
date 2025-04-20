@@ -12,41 +12,28 @@ class ArticleService {
     List<String>? healthGoals,
     String? category,
     String? userId,
+    bool bookmarksOnly = false,
   }) async {
     try {
       final query = <String, dynamic>{};
 
-      if (medicalConditions != null && medicalConditions.isNotEmpty) {
-        // Convert conditions to lowercase for case-insensitive matching
-        final lowerConditions =
-            medicalConditions.map((c) => c.toLowerCase()).toList();
-        print('Searching for conditions: $lowerConditions');
-
-        // Get all articles first to debug the tags
-        final allArticles =
-            await _mongoDBService.educationalContentCollection.find().toList();
-        print('All articles and their tags:');
-        for (var article in allArticles) {
-          print('${article['title']}: ${article['medicalConditionTags']}');
-        }
-
-        // Try to find articles with matching tags
-        query['medicalConditionTags'] = {'\$in': lowerConditions};
+      if (category != null && category != 'All' && !bookmarksOnly) {
+        query['category'] = category;
       }
 
-      if (category != null && category != 'All') {
-        query['category'] = category;
+      // If bookmarksOnly is true, only fetch bookmarked articles
+      if (bookmarksOnly && userId != null) {
+        query['bookmarkedBy'] = userId;
       }
 
       print('Final query: $query');
 
-      // If no articles found with the query, return all articles
+      // Get all articles matching the category
       var articles = await _mongoDBService.educationalContentCollection
           .find(query)
           .toList();
 
-      if (articles.isEmpty &&
-          (medicalConditions?.isNotEmpty == true || category != null)) {
+      if (articles.isEmpty && category != null) {
         print('No articles found with filters, showing all articles');
         articles =
             await _mongoDBService.educationalContentCollection.find().toList();
@@ -69,6 +56,7 @@ class ArticleService {
                 category: doc['category'],
                 imageUrl: doc['imageUrl'],
                 isBookmarked: bookmarkedTitles.contains(doc['title']),
+                content: doc['content'],
               ))
           .toList();
     } catch (e) {
@@ -83,6 +71,7 @@ class ArticleService {
                   category: doc['category'],
                   imageUrl: doc['imageUrl'],
                   isBookmarked: false,
+                  content: doc['content'],
                 ))
             .toList();
       } catch (e) {

@@ -1,52 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'providers/auth_provider.dart';
 import 'providers/signup_provider.dart';
 import 'providers/article_provider.dart';
+import 'providers/tip_provider.dart';
 import 'services/mongodb_service.dart';
 import 'services/article_service.dart';
+import 'services/tip_service.dart';
 import 'views/pages/login_page.dart';
 import 'views/pages/signup_page.dart';
 import 'views/pages/main_screen.dart';
+import 'views/pages/chatbot_page.dart';
+import 'views/pages/article_detail_page.dart';
+import 'models/article.dart';
 import 'services/auth_service.dart';
+import 'scripts/insert_tips.dart';
+import 'services/dialogflow_service.dart';
+//import 'scripts/insert_test_articles.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize MongoDB service
-  final mongoDBService = MongoDBService();
-  await mongoDBService.initialize();
+  try {
+    // Load environment variables
+    await dotenv.load(fileName: ".env");
 
-  // Uncomment the line below to insert test articles
-  //await insertTestArticles();
+    // Initialize DialogflowService
+    DialogflowService.initialize();
 
-  // Initialize Article service
-  final articleService = ArticleService(mongoDBService);
+    // Initialize MongoDB service
+    final mongoDBService = MongoDBService();
+    await mongoDBService.initialize();
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(
-          create: (_) => AuthProvider()..initialize(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => SignupProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => AuthService(),
-        ),
-        ChangeNotifierProxyProvider<AuthProvider, ArticleProvider>(
-          create: (context) => ArticleProvider(
-            articleService,
-            context.read<AuthProvider>(),
+    // Initialize services
+    final articleService = ArticleService(mongoDBService);
+    final tipService = TipService(mongoDBService.db);
+
+    // Check if tips exist in database
+    final tips = await tipService.getAllTips();
+    print('Number of tips in database: ${tips.length}');
+    if (tips.isEmpty) {
+      print('No tips found in database. Inserting tips...');
+      await insertTips();
+      final newTips = await tipService.getAllTips();
+      print('Number of tips after insertion: ${newTips.length}');
+    }
+
+    // Insert initial tips
+    //await insertTips();
+
+    // Uncomment the line below to insert test articles
+    //await insertTestArticles();
+
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(
+            create: (_) => AuthProvider()..initialize(),
           ),
-          update: (context, authProvider, articleProvider) =>
-              ArticleProvider(articleService, authProvider),
-        ),
-      ],
-      child: const MyApp(),
-    ),
-  );
+          ChangeNotifierProvider(
+            create: (_) => SignupProvider(),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => AuthService(),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => TipProvider(tipService),
+          ),
+          ChangeNotifierProxyProvider<AuthProvider, ArticleProvider>(
+            create: (context) => ArticleProvider(
+              articleService,
+              context.read<AuthProvider>(),
+            ),
+            update: (context, authProvider, articleProvider) =>
+                ArticleProvider(articleService, authProvider),
+          ),
+        ],
+        child: const MyApp(),
+      ),
+    );
+  } catch (e) {
+    print('Error during initialization: $e');
+    rethrow;
+  }
 }
 
 //stateful
@@ -90,9 +127,11 @@ class MyApp extends StatelessWidget {
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
         '/home': (context) => const MainScreen(),
-        '/chatbot': (context) => const Scaffold(
-            body:
-                Center(child: Text('Chat Bot'))), // Placeholder for chat screen
+        '/chatbot': (context) => const ChatbotPage(),
+        '/article-detail': (context) {
+          final article = ModalRoute.of(context)!.settings.arguments as Article;
+          return ArticleDetailPage(article: article);
+        },
       },
       navigatorKey: GlobalKey<NavigatorState>(),
     );

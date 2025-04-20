@@ -11,6 +11,7 @@ class MongoDBService {
   MongoDBService._internal();
 
   late Db _db;
+  Db get db => _db;
   late DbCollection _usersCollection;
   late DbCollection _dietPlansCollection;
   late DbCollection _educationalContentCollection;
@@ -79,7 +80,17 @@ class MongoDBService {
   }
 
   Future<Map<String, dynamic>?> findUserById(String id) async {
-    return await _usersCollection.findOne({'_id': ObjectId.fromHexString(id)});
+    try {
+      if (id.length != 24) {
+        print('Invalid ObjectId format: $id');
+        return null;
+      }
+      return await _usersCollection
+          .findOne({'_id': ObjectId.fromHexString(id)});
+    } catch (e) {
+      print('Error finding user by ID: $e');
+      return null;
+    }
   }
 
   Future<bool> registerUser({
@@ -100,8 +111,9 @@ class MongoDBService {
         profilePhotoId = await uploadProfilePhoto(profilePhoto);
       }
 
+      final userId = ObjectId();
       final userDocument = {
-        '_id': ObjectId(),
+        '_id': userId,
         'email': email,
         'password': hashedPassword,
         ...userData,
@@ -115,7 +127,7 @@ class MongoDBService {
       };
 
       await _usersCollection.insertOne(userDocument);
-      await _storeSession(userDocument['_id'].toString(), email);
+      await _storeSession(userId.toHexString(), email);
       return true;
     } catch (e) {
       print('Error registering user: $e');
@@ -142,7 +154,8 @@ class MongoDBService {
       }
 
       await _handleSuccessfulLogin(user['_id']);
-      await _storeSession(user['_id'].toString(), email);
+      final objectId = user['_id'] as ObjectId;
+      await _storeSession(objectId.toHexString(), email);
       return true;
     } catch (e) {
       print('Error logging in: $e');
@@ -192,9 +205,25 @@ class MongoDBService {
   }
 
   Future<void> _storeSession(String userId, String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_id', userId);
-    await prefs.setString('user_email', email);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Ensure we're storing a valid hex string
+      String validUserId = userId;
+      if (userId.contains('ObjectId')) {
+        // Extract hexString from ObjectId("hexString") format
+        validUserId = userId.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
+      }
+
+      if (validUserId.length != 24) {
+        print(
+            'Warning: Storing potentially invalid ObjectId: $userId -> $validUserId');
+      }
+
+      await prefs.setString('user_id', validUserId);
+      await prefs.setString('user_email', email);
+    } catch (e) {
+      print('Error storing session: $e');
+    }
   }
 
   Future<void> clearSession() async {

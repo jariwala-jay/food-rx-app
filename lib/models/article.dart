@@ -3,11 +3,13 @@ class Article {
   final String category;
   final String imageUrl;
   final bool isBookmarked;
+  final String? content;
 
   Article({
     required this.title,
     required this.category,
     required this.imageUrl,
     this.isBookmarked = false,
+    this.content,
   });
 }

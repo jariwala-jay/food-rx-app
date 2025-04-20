@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/models/article.dart';
+import '../../models/article.dart';
+import '../../providers/article_provider.dart';
+import 'package:provider/provider.dart';
 
 class ArticleDetailPage extends StatelessWidget {
   final Article article;
@@ -39,11 +41,32 @@ class ArticleDetailPage extends StatelessWidget {
               child: Column(
                 children: [
                   // Header Image
-                  Image.asset(
+                  Image.network(
                     article.imageUrl,
                     width: double.infinity,
                     height: 240,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 240,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 240,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    },
                   ),
 
                   Padding(
@@ -72,14 +95,23 @@ class ArticleDetailPage extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Icon(
-                              article.isBookmarked
-                                  ? Icons.bookmark
-                                  : Icons.bookmark_border,
-                              color: article.isBookmarked
-                                  ? const Color(0xFFFF6A00)
-                                  : Colors.black,
-                              size: 28,
+                            Consumer<ArticleProvider>(
+                              builder: (context, articleProvider, _) {
+                                return IconButton(
+                                  icon: Icon(
+                                    article.isBookmarked
+                                        ? Icons.bookmark
+                                        : Icons.bookmark_border,
+                                    color: article.isBookmarked
+                                        ? const Color(0xFFFF6A00)
+                                        : Colors.black,
+                                    size: 28,
+                                  ),
+                                  onPressed: () {
+                                    articleProvider.toggleBookmark(article);
+                                  },
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -98,25 +130,7 @@ class ArticleDetailPage extends StatelessWidget {
 
                         // Content paragraphs
                         Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[800],
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[800],
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
+                          article.content ?? 'No content available',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[800],

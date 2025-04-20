@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/article.dart';
 import '../../models/category.dart';
 import '../../providers/article_provider.dart';
 import '../../widgets/education/article_card.dart';
 import '../../widgets/education/category_chips.dart';
+import 'article_detail_page.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({super.key});
@@ -68,7 +70,15 @@ class _EducationPageState extends State<EducationPage> {
                     categories: [
                       Category(
                           name: 'All',
-                          isSelected: articleProvider.selectedCategory == null),
+                          isSelected:
+                              articleProvider.selectedCategory == null &&
+                                  !articleProvider.showBookmarksOnly),
+                      // Add a bookmark category with an icon after All
+                      Category(
+                        name: 'Bookmarks',
+                        isSelected: articleProvider.showBookmarksOnly,
+                        icon: Icons.bookmark,
+                      ),
                       ...articleProvider.categories.map((category) => Category(
                             name: category.name,
                             isSelected: articleProvider.selectedCategory ==
@@ -78,6 +88,8 @@ class _EducationPageState extends State<EducationPage> {
                     onCategorySelected: (category) {
                       if (category.name == 'All') {
                         articleProvider.clearCategory();
+                      } else if (category.name == 'Bookmarks') {
+                        articleProvider.showBookmarks();
                       } else {
                         articleProvider.selectCategory(category.name);
                       }
@@ -114,7 +126,7 @@ class _EducationPageState extends State<EducationPage> {
                   if (articleProvider.articles.isEmpty) {
                     return const Center(
                       child: Text(
-                        'No articles found. Please check your internet connection or try again later.',
+                        'No articles found!',
                         textAlign: TextAlign.center,
                       ),
                     );
@@ -128,7 +140,13 @@ class _EducationPageState extends State<EducationPage> {
                       return ArticleCard(
                         article: article,
                         onTap: () {
-                          // TODO: Implement article detail navigation
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ArticleDetailPage(article: article),
+                            ),
+                          );
                         },
                         onBookmarkTap: () {
                           articleProvider.toggleBookmark(article);

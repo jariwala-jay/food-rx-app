@@ -13,6 +13,7 @@ class ArticleProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   String? _selectedCategory;
+  bool _showBookmarksOnly = false;
 
   ArticleProvider(this._articleService, this._authProvider);
 
@@ -21,6 +22,7 @@ class ArticleProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get selectedCategory => _selectedCategory;
+  bool get showBookmarksOnly => _showBookmarksOnly;
 
   Future<void> loadArticles() async {
     _isLoading = true;
@@ -36,10 +38,9 @@ class ArticleProvider with ChangeNotifier {
       _categories = await _articleService.getCategories();
 
       _articles = await _articleService.getArticles(
-        medicalConditions: user.medicalConditions,
-        healthGoals: user.healthGoals ?? [],
-        category: _selectedCategory,
+        category: _showBookmarksOnly ? null : _selectedCategory,
         userId: user.id,
+        bookmarksOnly: _showBookmarksOnly,
       );
 
       _error = null;
@@ -53,11 +54,19 @@ class ArticleProvider with ChangeNotifier {
 
   void selectCategory(String category) {
     _selectedCategory = category;
+    _showBookmarksOnly = false;
+    loadArticles();
+  }
+
+  void showBookmarks() {
+    _showBookmarksOnly = true;
+    _selectedCategory = null;
     loadArticles();
   }
 
   void clearCategory() {
     _selectedCategory = null;
+    _showBookmarksOnly = false;
     loadArticles();
   }
 
@@ -69,11 +78,40 @@ class ArticleProvider with ChangeNotifier {
       final success =
           await _articleService.toggleBookmark(article.title, user.id!);
       if (success) {
-        await loadArticles(); // Reload articles to update bookmark status
+        // Update the local state instead of reloading all articles
+        final index = _articles.indexWhere((a) => a.title == article.title);
+        if (index != -1) {
+          _articles[index] = Article(
+            title: article.title,
+            category: article.category,
+            imageUrl: article.imageUrl,
+            isBookmarked: !article.isBookmarked,
+            content: article.content,
+          );
+          notifyListeners();
+        }
       }
     } catch (e) {
       _error = 'Failed to toggle bookmark: $e';
       notifyListeners();
+    }
+  }
+
+  Future<List<Article>> getArticles({String? category}) async {
+    try {
+      final user = _authProvider.currentUser;
+      if (user == null) {
+        _error = 'User not authenticated';
+        return [];
+      }
+
+      return await _articleService.getArticles(
+        category: category,
+        userId: user.id,
+      );
+    } catch (e) {
+      _error = 'Failed to load articles: $e';
+      return [];
     }
   }
 }

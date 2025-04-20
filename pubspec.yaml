@@ -39,6 +39,7 @@ dependencies:
   image_picker: ^1.0.7
   path_provider: ^2.1.2
   flutter_dotenv: ^5.1.0
+  googleapis_auth: ^1.4.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -76,6 +77,7 @@ flutter:
     - assets/images/tip1.png
     - assets/images/tip2.png
     - assets/images/
+    - assets/dialogflow_auth.json
     - .env
   #   - images/a_dot_ham.jpeg
 

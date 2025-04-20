@@ -4,6 +4,8 @@ import 'dart:io';
 import '../models/user_model.dart';
 import '../services/mongodb_service.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:mongo_dart/mongo_dart.dart';
 
 class AuthProvider with ChangeNotifier {
   final MongoDBService _mongoDBService = MongoDBService();
@@ -27,10 +29,23 @@ class AuthProvider with ChangeNotifier {
       final userEmail = prefs.getString('user_email');
 
       if (userId != null && userEmail != null) {
-        final userData = await _mongoDBService.findUserById(userId);
-        if (userData != null && userData['email'] == userEmail) {
-          _currentUser = UserModel.fromJson(userData);
-        } else {
+        try {
+          // Validate the user ID format before using it
+          if (userId.length != 24) {
+            print('Invalid userId format in shared preferences: $userId');
+            await _mongoDBService.clearSession();
+            throw Exception('Invalid user ID format');
+          }
+
+          final userData = await _mongoDBService.findUserById(userId);
+          if (userData != null && userData['email'] == userEmail) {
+            _currentUser = _createUserModel(userData);
+          } else {
+            print('User data not found or email mismatch. Clearing session.');
+            await _mongoDBService.clearSession();
+          }
+        } catch (e) {
+          print('Error loading user data: $e');
           await _mongoDBService.clearSession();
         }
       }
@@ -40,6 +55,18 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  UserModel _createUserModel(Map<String, dynamic> userData) {
+    // Convert ObjectId to String for the id field
+    final id = userData['_id'] is ObjectId
+        ? (userData['_id'] as ObjectId).toHexString()
+        : userData['_id'].toString();
+
+    return UserModel.fromJson({
+      ...userData,
+      '_id': id,
+    });
   }
 
   Future<bool> register({
@@ -84,7 +111,7 @@ class AuthProvider with ChangeNotifier {
       if (success) {
         final userData = await _mongoDBService.findUserByEmail(email);
         if (userData != null) {
-          _currentUser = UserModel.fromJson(userData);
+          _currentUser = _createUserModel(userData);
           return true;
         }
       }
@@ -125,7 +152,7 @@ class AuthProvider with ChangeNotifier {
       await _mongoDBService.updateUserProfile(_currentUser!.id!, updates);
       final updatedUser = await _mongoDBService.findUserById(_currentUser!.id!);
       if (updatedUser != null) {
-        _currentUser = UserModel.fromJson(updatedUser);
+        _currentUser = _createUserModel(updatedUser);
       }
     } catch (e) {
       _error = 'Failed to update profile: $e';
@@ -150,7 +177,7 @@ class AuthProvider with ChangeNotifier {
         final updatedUser =
             await _mongoDBService.findUserById(_currentUser!.id!);
         if (updatedUser != null) {
-          _currentUser = UserModel.fromJson(updatedUser);
+          _currentUser = _createUserModel(updatedUser);
         }
       }
     } catch (e) {
