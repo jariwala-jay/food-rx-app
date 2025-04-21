@@ -80,10 +80,14 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // Remove password from userData if it exists
+      final cleanUserData = Map<String, dynamic>.from(userData);
+      cleanUserData.remove('password');
+
       final success = await _mongoDBService.registerUser(
         email: email,
         password: password,
-        userData: userData,
+        userData: cleanUserData,
         profilePhoto: profilePhoto,
       );
 

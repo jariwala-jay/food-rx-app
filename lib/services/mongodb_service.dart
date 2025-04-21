@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:math';
 
 class MongoDBService {
   static final MongoDBService _instance = MongoDBService._internal();
@@ -48,30 +49,88 @@ class MongoDBService {
   }
 
   String _hashPassword(String password) {
-    final salt = List<int>.generate(_saltLength, (i) => i);
-    final key = utf8.encode(password);
-    final hmac = Hmac(sha256, key);
-    final hash = hmac.convert(salt).toString();
-    final saltBase64 = base64.encode(salt);
-    return '$saltBase64:$hash';
+    try {
+      // Generate a random salt
+      final random = Random.secure();
+      final salt = List<int>.generate(_saltLength, (_) => random.nextInt(256));
+      final saltBase64 = base64.encode(salt);
+
+      // Hash the password with the salt
+      final key = utf8.encode(password);
+      final hmac = Hmac(sha256, key);
+      final hash = hmac.convert(salt).toString();
+
+      // Store salt and hash together
+      final result = '$saltBase64:$hash';
+      print('Password hashing details:');
+      print('Salt: $saltBase64');
+      print('Hash: $hash');
+      print('Final stored value: $result');
+      return result;
+    } catch (e) {
+      print('Error in _hashPassword: $e');
+      rethrow;
+    }
   }
 
   bool _verifyPassword(String password, String storedHash) {
     try {
-      final parts = storedHash.split(':');
-      if (parts.length != 2) return false;
+      print('Password verification details:');
+      print('Stored hash: $storedHash');
 
+      // Check if the stored hash is in the correct format
+      if (!storedHash.contains(':')) {
+        print('ERROR: Password was stored in plain text!');
+        // For existing users with plain text passwords, hash it now
+        final hashedPassword = _hashPassword(storedHash);
+        // Update the user's password in the database
+        _updateUserPassword(storedHash, hashedPassword);
+        return false;
+      }
+
+      final parts = storedHash.split(':');
+      if (parts.length != 2) {
+        print('Invalid hash format: $storedHash');
+        return false;
+      }
+
+      // Extract salt and stored hash
       final salt = base64.decode(parts[0]);
       final storedKey = parts[1];
+      print('Extracted salt: ${base64.encode(salt)}');
+      print('Stored key: $storedKey');
 
+      // Hash the provided password with the stored salt
       final key = utf8.encode(password);
       final hmac = Hmac(sha256, key);
       final computedHash = hmac.convert(salt).toString();
+      print('Computed hash: $computedHash');
 
-      return storedKey == computedHash;
+      // Compare the computed hash with the stored hash
+      final result = storedKey == computedHash;
+      print('Verification result: $result');
+      return result;
     } catch (e) {
-      print('Error verifying password: $e');
+      print('Error in _verifyPassword: $e');
       return false;
+    }
+  }
+
+  Future<void> _updateUserPassword(
+      String email, String newHashedPassword) async {
+    try {
+      await _usersCollection.updateOne(
+        {'email': email},
+        {
+          '\$set': {
+            'password': newHashedPassword,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
+        },
+      );
+      print('Updated password hash for user: $email');
+    } catch (e) {
+      print('Error updating password hash: $e');
     }
   }
 
@@ -104,7 +163,12 @@ class MongoDBService {
         return false;
       }
 
+      // Hash the password before storing
       final hashedPassword = _hashPassword(password);
+      print('Password hashing debug:');
+      print('Original password: $password');
+      print('Hashed password: $hashedPassword');
+
       String? profilePhotoId;
 
       if (profilePhoto != null) {
@@ -115,7 +179,7 @@ class MongoDBService {
       final userDocument = {
         '_id': userId,
         'email': email,
-        'password': hashedPassword,
+        'password': hashedPassword, // Use the hashed password here
         ...userData,
         'profilePhotoId': profilePhotoId,
         'createdAt': DateTime.now().toIso8601String(),
@@ -125,6 +189,14 @@ class MongoDBService {
         'isLocked': false,
         'lockUntil': null,
       };
+
+      print('User document before insertion:');
+      print(userDocument);
+
+      // Verify the password was hashed before storing
+      if (userDocument['password'] == password) {
+        throw Exception('Password was not hashed before storage!');
+      }
 
       await _usersCollection.insertOne(userDocument);
       await _storeSession(userId.toHexString(), email);
@@ -140,6 +212,10 @@ class MongoDBService {
       final user = await findUserByEmail(email);
       if (user == null) return false;
 
+      print('Login debug:');
+      print('Stored password hash: ${user['password']}');
+      print('Attempting to verify password...');
+
       if (user['isLocked'] == true) {
         final lockUntil = user['lockUntil'];
         if (lockUntil != null &&
@@ -148,7 +224,11 @@ class MongoDBService {
         }
       }
 
-      if (!_verifyPassword(password, user['password'])) {
+      // Verify the password using the stored hash
+      final isPasswordValid = _verifyPassword(password, user['password']);
+      print('Password verification result: $isPasswordValid');
+
+      if (!isPasswordValid) {
         await _handleFailedLogin(user['_id']);
         return false;
       }

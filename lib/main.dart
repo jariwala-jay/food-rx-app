@@ -15,7 +15,7 @@ import 'views/pages/chatbot_page.dart';
 import 'views/pages/article_detail_page.dart';
 import 'models/article.dart';
 import 'services/auth_service.dart';
-import 'scripts/insert_tips.dart';
+//import 'scripts/insert_tips.dart';
 import 'services/dialogflow_service.dart';
 //import 'scripts/insert_test_articles.dart';
 
@@ -42,7 +42,7 @@ void main() async {
     print('Number of tips in database: ${tips.length}');
     if (tips.isEmpty) {
       print('No tips found in database. Inserting tips...');
-      await insertTips();
+      //await insertTips();
       final newTips = await tipService.getAllTips();
       print('Number of tips after insertion: ${newTips.length}');
     }
