@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/article.dart';
+import '../../services/image_cache_service.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
@@ -28,23 +30,11 @@ class ArticleCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                article.imageUrl,
+              child: Image(
+                image: ImageCacheService().getImageProvider(article.imageUrl),
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 80,
-                    height: 80,
-                    color: Colors.grey[300],
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      size: 30,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
                   return Container(
@@ -55,6 +45,18 @@ class ArticleCard extends StatelessWidget {
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                       ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 80,
+                    height: 80,
+                    color: Colors.grey[300],
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      size: 30,
+                      color: Colors.grey,
                     ),
                   );
                 },

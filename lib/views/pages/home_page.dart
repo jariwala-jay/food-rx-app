@@ -3,6 +3,10 @@ import 'package:flutter_app/providers/auth_provider.dart';
 import 'package:flutter_app/providers/tip_provider.dart';
 import 'package:flutter_app/models/tip.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:typed_data';
+import '../../services/image_cache_service.dart';
+import '../../services/mongodb_service.dart';
 import '../../widgets/recommended_articles_section.dart';
 
 class CustomNavBarShape extends CustomPainter {
@@ -91,28 +95,42 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _mongoDBService = MongoDBService();
+  Uint8List? _profilePhotoData;
+
   @override
   void initState() {
     super.initState();
-    print('HomePage initState called');
     _initializeTips();
+    _loadProfilePhoto();
   }
 
   Future<void> _initializeTips() async {
-    print('Initializing tips...');
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.currentUser;
-    print('Current user: ${user?.id ?? 'null'}');
-    print('User medical conditions: ${user?.medicalConditions ?? []}');
 
     if (user != null) {
       final medicalConditions = user.medicalConditions ?? [];
       final tipProvider = Provider.of<TipProvider>(context, listen: false);
-      print('Calling initializeTips on TipProvider');
       await tipProvider.initializeTips(medicalConditions, user.id!);
-      print('Tips initialization completed');
-    } else {
-      print('No user found, cannot initialize tips');
+    }
+  }
+
+  Future<void> _loadProfilePhoto() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final photoId = authProvider.currentUser?.profilePhotoId;
+
+    if (photoId != null) {
+      try {
+        final photoData = await _mongoDBService.getProfilePhoto(photoId);
+        if (photoData != null && mounted) {
+          setState(() {
+            _profilePhotoData = Uint8List.fromList(photoData);
+          });
+        }
+      } catch (e) {
+        throw Exception(e);
+      }
     }
   }
 
@@ -125,59 +143,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Widget _buildRecommendedCard(
-      BuildContext context, String title, String imagePath) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.asset(
-              imagePath,
-              height: 120,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    print('HomePage build called');
     final authProvider = context.watch<AuthProvider>();
     final tipProvider = context.watch<TipProvider>();
-
-    print('Current auth state: ${authProvider.isAuthenticated}');
-    print('Current user: ${authProvider.currentUser?.id ?? 'null'}');
-    print('Number of shown tips: ${tipProvider.shownTips.length}');
-    print('Is loading: ${tipProvider.isLoading}');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
@@ -194,10 +163,13 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Row(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 20,
-                          backgroundImage:
-                              AssetImage('assets/images/profile_pic.png'),
+                          backgroundImage: _profilePhotoData != null
+                              ? MemoryImage(_profilePhotoData!)
+                              : const AssetImage(
+                                      'assets/images/profile_pic.png')
+                                  as ImageProvider,
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -239,7 +211,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               }
                             } catch (e) {
-                              print('Logout error: $e');
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -280,7 +251,6 @@ class _HomePageState extends State<HomePage> {
                   )
                 else
                   ...tipProvider.shownTips.map((tip) {
-                    print('Rendering tip: ${tip.title}');
                     return Column(
                       children: [
                         _buildTipCard(
@@ -337,8 +307,8 @@ class _HomePageState extends State<HomePage> {
                 ClipRRect(
                   borderRadius:
                       const BorderRadius.vertical(top: Radius.circular(20)),
-                  child: Image.network(
-                    imageUrl,
+                  child: Image(
+                    image: ImageCacheService().getImageProvider(imageUrl),
                     height: 250,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -417,8 +387,8 @@ class _HomePageState extends State<HomePage> {
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                imageUrl,
+              child: Image(
+                image: ImageCacheService().getImageProvider(imageUrl),
                 height: 200,
                 width: double.infinity,
                 fit: BoxFit.cover,

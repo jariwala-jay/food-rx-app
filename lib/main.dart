@@ -14,9 +14,8 @@ import 'views/pages/main_screen.dart';
 import 'views/pages/chatbot_page.dart';
 import 'views/pages/article_detail_page.dart';
 import 'models/article.dart';
-import 'services/auth_service.dart';
-//import 'scripts/insert_tips.dart';
 import 'services/dialogflow_service.dart';
+//import 'scripts/insert_tips.dart';
 //import 'scripts/insert_test_articles.dart';
 
 void main() async {
@@ -34,24 +33,13 @@ void main() async {
     await mongoDBService.initialize();
 
     // Initialize services
-    final articleService = ArticleService(mongoDBService);
     final tipService = TipService(mongoDBService.db);
-
-    // Check if tips exist in database
-    final tips = await tipService.getAllTips();
-    print('Number of tips in database: ${tips.length}');
-    if (tips.isEmpty) {
-      print('No tips found in database. Inserting tips...');
-      //await insertTips();
-      final newTips = await tipService.getAllTips();
-      print('Number of tips after insertion: ${newTips.length}');
-    }
 
     // Insert initial tips
     //await insertTips();
 
     // Uncomment the line below to insert test articles
-    //await insertTestArticles();
+    //  await insertTestArticles();
 
     runApp(
       MultiProvider(
@@ -63,25 +51,33 @@ void main() async {
             create: (_) => SignupProvider(),
           ),
           ChangeNotifierProvider(
-            create: (_) => AuthService(),
-          ),
-          ChangeNotifierProvider(
             create: (_) => TipProvider(tipService),
           ),
+          Provider<ArticleService>(
+            create: (_) => ArticleService(mongoDBService),
+          ),
           ChangeNotifierProxyProvider<AuthProvider, ArticleProvider>(
-            create: (context) => ArticleProvider(
-              articleService,
-              context.read<AuthProvider>(),
-            ),
-            update: (context, authProvider, articleProvider) =>
-                ArticleProvider(articleService, authProvider),
+            create: (context) {
+              final authProvider =
+                  Provider.of<AuthProvider>(context, listen: false);
+              final articleProvider = ArticleProvider(
+                  Provider.of<ArticleService>(context, listen: false));
+              articleProvider.setAuthProvider(authProvider);
+              return articleProvider;
+            },
+            update: (context, authProvider, articleProvider) {
+              final provider = articleProvider ??
+                  ArticleProvider(
+                      Provider.of<ArticleService>(context, listen: false));
+              provider.setAuthProvider(authProvider);
+              return provider;
+            },
           ),
         ],
         child: const MyApp(),
       ),
     );
   } catch (e) {
-    print('Error during initialization: $e');
     rethrow;
   }
 }
@@ -102,11 +98,7 @@ class MyApp extends StatelessWidget {
       ),
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
-          print(
-              'Auth state changed - isAuthenticated: ${authProvider.isAuthenticated}, isLoading: ${authProvider.isLoading}, currentUser: ${authProvider.currentUser?.id}');
-
           if (authProvider.isLoading) {
-            print('Showing loading screen');
             return const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
@@ -115,11 +107,9 @@ class MyApp extends StatelessWidget {
           }
 
           if (authProvider.isAuthenticated) {
-            print('User is authenticated, showing MainScreen');
             return const MainScreen();
           }
 
-          print('User is not authenticated, showing LoginPage');
           return const LoginPage();
         },
       ),

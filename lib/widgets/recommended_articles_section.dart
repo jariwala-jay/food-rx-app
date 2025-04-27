@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/article.dart';
 import '../providers/article_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/image_cache_service.dart';
 
 class RecommendedArticlesSection extends StatefulWidget {
   const RecommendedArticlesSection({super.key});
@@ -61,6 +62,13 @@ class _RecommendedArticlesSectionState
         _articles = recommendedArticles.take(5).toList();
         _isLoading = false;
       });
+
+      // Preload images for recommended articles
+      if (_articles.isNotEmpty) {
+        for (final article in _articles) {
+          ImageCacheService().getImageProvider(article.imageUrl);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -100,22 +108,11 @@ class _RecommendedArticlesSectionState
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                article.imageUrl,
+              child: Image(
+                image: ImageCacheService().getImageProvider(article.imageUrl),
                 height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 120,
-                    color: Colors.grey[300],
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      size: 30,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
                   return Container(
@@ -125,6 +122,17 @@ class _RecommendedArticlesSectionState
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                       ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 120,
+                    color: Colors.grey[300],
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      size: 30,
+                      color: Colors.grey,
                     ),
                   );
                 },

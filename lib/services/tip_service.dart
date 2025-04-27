@@ -14,8 +14,7 @@ class TipService {
       final tips = await cursor.toList();
       return tips.map((doc) => Tip.fromJson(doc)).toList();
     } catch (e) {
-      print('Error fetching tips: $e');
-      return [];
+      throw Exception(e);
     }
   }
 
@@ -26,8 +25,7 @@ class TipService {
       final tips = await cursor.toList();
       return tips.map((doc) => Tip.fromJson(doc)).toList();
     } catch (e) {
-      print('Error fetching all tips: $e');
-      return [];
+      throw Exception(e);
     }
   }
 
@@ -39,7 +37,7 @@ class TipService {
         tip.toJson(),
       );
     } catch (e) {
-      print('Error updating tip: $e');
+      throw Exception(e);
     }
   }
 }

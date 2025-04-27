@@ -1,15 +1,29 @@
 import 'package:flutter/material.dart';
 import '../../models/article.dart';
 import '../../providers/article_provider.dart';
+import '../../services/image_cache_service.dart';
 import 'package:provider/provider.dart';
 
-class ArticleDetailPage extends StatelessWidget {
+class ArticleDetailPage extends StatefulWidget {
   final Article article;
 
   const ArticleDetailPage({
     super.key,
     required this.article,
   });
+
+  @override
+  State<ArticleDetailPage> createState() => _ArticleDetailPageState();
+}
+
+class _ArticleDetailPageState extends State<ArticleDetailPage> {
+  late Article _article;
+
+  @override
+  void initState() {
+    super.initState();
+    _article = widget.article;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +55,22 @@ class ArticleDetailPage extends StatelessWidget {
               child: Column(
                 children: [
                   // Header Image
-                  Image.network(
-                    article.imageUrl,
+                  Image(
+                    image:
+                        ImageCacheService().getImageProvider(_article.imageUrl),
                     width: double.infinity,
                     height: 240,
                     fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 240,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    },
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
                         height: 240,
@@ -54,16 +79,6 @@ class ArticleDetailPage extends StatelessWidget {
                           Icons.image_not_supported,
                           size: 50,
                           color: Colors.grey,
-                        ),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 240,
-                        color: Colors.grey[300],
-                        child: const Center(
-                          child: CircularProgressIndicator(),
                         ),
                       );
                     },
@@ -88,7 +103,7 @@ class ArticleDetailPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                article.category,
+                                _article.category,
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontSize: 14,
@@ -99,16 +114,21 @@ class ArticleDetailPage extends StatelessWidget {
                               builder: (context, articleProvider, _) {
                                 return IconButton(
                                   icon: Icon(
-                                    article.isBookmarked
+                                    _article.isBookmarked
                                         ? Icons.bookmark
                                         : Icons.bookmark_border,
-                                    color: article.isBookmarked
+                                    color: _article.isBookmarked
                                         ? const Color(0xFFFF6A00)
                                         : Colors.black,
                                     size: 28,
                                   ),
-                                  onPressed: () {
-                                    articleProvider.toggleBookmark(article);
+                                  onPressed: () async {
+                                    await articleProvider
+                                        .toggleBookmark(_article);
+                                    setState(() {
+                                      _article = articleProvider
+                                          .getArticleById(_article.id);
+                                    });
                                   },
                                 );
                               },
@@ -119,7 +139,7 @@ class ArticleDetailPage extends StatelessWidget {
 
                         // Title
                         Text(
-                          article.title,
+                          _article.title,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -130,7 +150,7 @@ class ArticleDetailPage extends StatelessWidget {
 
                         // Content paragraphs
                         Text(
-                          article.content ?? 'No content available',
+                          _article.content ?? 'No content available',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[800],

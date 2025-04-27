@@ -22,7 +22,6 @@ class _EducationPageState extends State<EducationPage> {
     super.initState();
     // Load articles when the page is first shown
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('Loading articles...');
       context.read<ArticleProvider>().loadArticles();
     });
   }
@@ -63,7 +62,6 @@ class _EducationPageState extends State<EducationPage> {
             ),
             Consumer<ArticleProvider>(
               builder: (context, articleProvider, _) {
-                print('Categories: ${articleProvider.categories}');
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: CategoryChips(
@@ -102,10 +100,6 @@ class _EducationPageState extends State<EducationPage> {
             Expanded(
               child: Consumer<ArticleProvider>(
                 builder: (context, articleProvider, _) {
-                  print('Loading: ${articleProvider.isLoading}');
-                  print('Error: ${articleProvider.error}');
-                  print('Articles count: ${articleProvider.articles.length}');
-
                   if (articleProvider.isLoading) {
                     return const Center(child: CircularProgressIndicator());
                   }

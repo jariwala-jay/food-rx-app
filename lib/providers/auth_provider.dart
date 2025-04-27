@@ -4,7 +4,6 @@ import 'dart:io';
 import '../models/user_model.dart';
 import '../services/mongodb_service.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 class AuthProvider with ChangeNotifier {
@@ -32,7 +31,6 @@ class AuthProvider with ChangeNotifier {
         try {
           // Validate the user ID format before using it
           if (userId.length != 24) {
-            print('Invalid userId format in shared preferences: $userId');
             await _mongoDBService.clearSession();
             throw Exception('Invalid user ID format');
           }
@@ -41,11 +39,9 @@ class AuthProvider with ChangeNotifier {
           if (userData != null && userData['email'] == userEmail) {
             _currentUser = _createUserModel(userData);
           } else {
-            print('User data not found or email mismatch. Clearing session.');
             await _mongoDBService.clearSession();
           }
         } catch (e) {
-          print('Error loading user data: $e');
           await _mongoDBService.clearSession();
         }
       }

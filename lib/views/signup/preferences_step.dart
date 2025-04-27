@@ -66,6 +66,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
         // Get all collected data
         final signupData = context.read<SignupProvider>().data;
+        final profilePhoto = context.read<SignupProvider>().profilePhoto;
         final authProvider = context.read<AuthProvider>();
 
         // Register the user with all collected data
@@ -73,6 +74,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
           email: signupData.email!,
           password: signupData.password!,
           userData: signupData.toJson(),
+          profilePhoto: profilePhoto,
         );
 
         if (success) {

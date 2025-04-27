@@ -19,28 +19,15 @@ class TipProvider with ChangeNotifier {
 
   Future<void> initializeTips(
       List<String> medicalConditions, String userId) async {
-    print(
-        'Initializing tips for user: $userId with conditions: $medicalConditions');
-
-    // Check if we need to update tips:
-    // 1. If no tips are shown
-    // 2. If it's been more than a day since last update
-    // 3. If the user has changed
-    // 4. If the medical conditions have changed
     final shouldUpdate = _shownTips.isEmpty ||
         DateTime.now().difference(_lastUpdate).inDays >= 1 ||
         _lastUserId != userId ||
         !_areMedicalConditionsEqual(_lastMedicalConditions, medicalConditions);
 
     if (shouldUpdate) {
-      print('Updating shown tips...');
-      print(
-          'Reason: ${_getUpdateReason(_shownTips.isEmpty, _lastUserId != userId, !_areMedicalConditionsEqual(_lastMedicalConditions, medicalConditions))}');
       await _updateShownTips(medicalConditions, userId);
       _lastUserId = userId;
       _lastMedicalConditions = List<String>.from(medicalConditions);
-    } else {
-      print('Using cached tips');
     }
   }
 
@@ -69,9 +56,7 @@ class TipProvider with ChangeNotifier {
     _notifyListeners();
 
     try {
-      print('Fetching all tips from service...');
       final List<Tip> allTips = await _tipService.getAllTips();
-      print('Retrieved ${allTips.length} tips from service');
 
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -83,8 +68,6 @@ class TipProvider with ChangeNotifier {
             DateTime(lastShown.year, lastShown.month, lastShown.day) != today;
       }).toList();
 
-      print('${availableTips.length} tips available for today');
-
       // Separate tips by category
       final conditionTips = availableTips
           .where((tip) => medicalConditions.contains(tip.category))
@@ -93,9 +76,7 @@ class TipProvider with ChangeNotifier {
       final generalTips =
           availableTips.where((tip) => tip.category == 'General').toList();
 
-      print(
-          'Found ${conditionTips.length} condition-specific tips and ${generalTips.length} general tips');
-
+      // Select 2 condition-specific tips
       // Select 2 condition-specific tips and 2 general tips
       final selectedTips = <Tip>[];
 
@@ -105,8 +86,6 @@ class TipProvider with ChangeNotifier {
           ..shuffle(_random);
         final conditionTipsToAdd = shuffledConditionTips.take(2).toList();
         selectedTips.addAll(conditionTipsToAdd);
-        print(
-            'Selected condition-specific tips: ${conditionTipsToAdd.map((t) => t.title).join(', ')}');
       }
 
       // Select 2 general tips
@@ -115,8 +94,6 @@ class TipProvider with ChangeNotifier {
           ..shuffle(_random);
         final generalTipsToAdd = shuffledGeneralTips.take(2).toList();
         selectedTips.addAll(generalTipsToAdd);
-        print(
-            'Selected general tips: ${generalTipsToAdd.map((t) => t.title).join(', ')}');
       }
 
       // If we don't have enough tips, fill with any available tips
@@ -128,7 +105,6 @@ class TipProvider with ChangeNotifier {
 
         final randomIndex = _random.nextInt(remainingTips.length);
         selectedTips.add(remainingTips[randomIndex]);
-        print('Added additional tip: ${remainingTips[randomIndex].title}');
       }
 
       // Update last shown date and view count for selected tips
@@ -148,10 +124,8 @@ class TipProvider with ChangeNotifier {
 
       _shownTips = selectedTips;
       _lastUpdate = now;
-      print(
-          'Final selected tips: ${selectedTips.map((t) => t.title).join(', ')}');
     } catch (e) {
-      print('Error updating shown tips: $e');
+      throw Exception(e);
     } finally {
       _isLoading = false;
       _notifyListeners();
@@ -174,7 +148,7 @@ class TipProvider with ChangeNotifier {
         _notifyListeners();
       }
     } catch (e) {
-      print('Error marking tip as viewed: $e');
+      throw Exception(e);
     }
   }
 

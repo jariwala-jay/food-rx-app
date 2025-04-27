@@ -27,8 +27,6 @@ class MongoDBService {
 
   // Security constants
   static const int _saltLength = 32;
-  static const int _iterations = 10000;
-  static const int _keyLength = 32;
 
   Future<void> initialize() async {
     await dotenv.load();
@@ -46,6 +44,12 @@ class MongoDBService {
     _profilePhotosBucket = GridFS(_db, 'profile_photos');
 
     await _usersCollection.createIndex(keys: {'email': 1}, unique: true);
+
+    // Create index for bookmarkedBy field
+    await _educationalContentCollection.createIndex(
+      keys: {'bookmarkedBy': 1},
+      sparse: true,
+    );
   }
 
   String _hashPassword(String password) {
@@ -62,26 +66,16 @@ class MongoDBService {
 
       // Store salt and hash together
       final result = '$saltBase64:$hash';
-      print('Password hashing details:');
-      print('Salt: $saltBase64');
-      print('Hash: $hash');
-      print('Final stored value: $result');
       return result;
     } catch (e) {
-      print('Error in _hashPassword: $e');
       rethrow;
     }
   }
 
   bool _verifyPassword(String password, String storedHash) {
     try {
-      print('Password verification details:');
-      print('Stored hash: $storedHash');
-
       // Check if the stored hash is in the correct format
       if (!storedHash.contains(':')) {
-        print('ERROR: Password was stored in plain text!');
-        // For existing users with plain text passwords, hash it now
         final hashedPassword = _hashPassword(storedHash);
         // Update the user's password in the database
         _updateUserPassword(storedHash, hashedPassword);
@@ -90,28 +84,22 @@ class MongoDBService {
 
       final parts = storedHash.split(':');
       if (parts.length != 2) {
-        print('Invalid hash format: $storedHash');
         return false;
       }
 
       // Extract salt and stored hash
       final salt = base64.decode(parts[0]);
       final storedKey = parts[1];
-      print('Extracted salt: ${base64.encode(salt)}');
-      print('Stored key: $storedKey');
 
       // Hash the provided password with the stored salt
       final key = utf8.encode(password);
       final hmac = Hmac(sha256, key);
       final computedHash = hmac.convert(salt).toString();
-      print('Computed hash: $computedHash');
 
       // Compare the computed hash with the stored hash
       final result = storedKey == computedHash;
-      print('Verification result: $result');
       return result;
     } catch (e) {
-      print('Error in _verifyPassword: $e');
       return false;
     }
   }
@@ -128,9 +116,8 @@ class MongoDBService {
           },
         },
       );
-      print('Updated password hash for user: $email');
     } catch (e) {
-      print('Error updating password hash: $e');
+      throw Exception(e);
     }
   }
 
@@ -141,14 +128,12 @@ class MongoDBService {
   Future<Map<String, dynamic>?> findUserById(String id) async {
     try {
       if (id.length != 24) {
-        print('Invalid ObjectId format: $id');
         return null;
       }
       return await _usersCollection
           .findOne({'_id': ObjectId.fromHexString(id)});
     } catch (e) {
-      print('Error finding user by ID: $e');
-      return null;
+      throw Exception(e);
     }
   }
 
@@ -165,9 +150,6 @@ class MongoDBService {
 
       // Hash the password before storing
       final hashedPassword = _hashPassword(password);
-      print('Password hashing debug:');
-      print('Original password: $password');
-      print('Hashed password: $hashedPassword');
 
       String? profilePhotoId;
 
@@ -190,9 +172,6 @@ class MongoDBService {
         'lockUntil': null,
       };
 
-      print('User document before insertion:');
-      print(userDocument);
-
       // Verify the password was hashed before storing
       if (userDocument['password'] == password) {
         throw Exception('Password was not hashed before storage!');
@@ -202,8 +181,7 @@ class MongoDBService {
       await _storeSession(userId.toHexString(), email);
       return true;
     } catch (e) {
-      print('Error registering user: $e');
-      return false;
+      throw Exception(e);
     }
   }
 
@@ -211,10 +189,6 @@ class MongoDBService {
     try {
       final user = await findUserByEmail(email);
       if (user == null) return false;
-
-      print('Login debug:');
-      print('Stored password hash: ${user['password']}');
-      print('Attempting to verify password...');
 
       if (user['isLocked'] == true) {
         final lockUntil = user['lockUntil'];
@@ -226,7 +200,6 @@ class MongoDBService {
 
       // Verify the password using the stored hash
       final isPasswordValid = _verifyPassword(password, user['password']);
-      print('Password verification result: $isPasswordValid');
 
       if (!isPasswordValid) {
         await _handleFailedLogin(user['_id']);
@@ -238,8 +211,7 @@ class MongoDBService {
       await _storeSession(objectId.toHexString(), email);
       return true;
     } catch (e) {
-      print('Error logging in: $e');
-      return false;
+      throw Exception(e);
     }
   }
 
@@ -294,15 +266,10 @@ class MongoDBService {
         validUserId = userId.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
       }
 
-      if (validUserId.length != 24) {
-        print(
-            'Warning: Storing potentially invalid ObjectId: $userId -> $validUserId');
-      }
-
       await prefs.setString('user_id', validUserId);
       await prefs.setString('user_email', email);
     } catch (e) {
-      print('Error storing session: $e');
+      throw Exception(e);
     }
   }
 
@@ -315,44 +282,94 @@ class MongoDBService {
   Future<String?> uploadProfilePhoto(File photo) async {
     try {
       final photoBytes = await photo.readAsBytes();
+
       final photoId = ObjectId();
 
-      await _profilePhotosBucket.files.insertOne({
+      // Create file metadata
+      final fileMetadata = {
         '_id': photoId,
         'filename': 'profile_photo_${photoId.toHexString()}.jpg',
         'contentType': 'image/jpeg',
         'length': photoBytes.length,
         'uploadDate': DateTime.now().toIso8601String(),
-      });
+      };
 
-      await _profilePhotosBucket.chunks.insertOne({
+      // Insert file metadata
+      final fileResult =
+          await _profilePhotosBucket.files.insertOne(fileMetadata);
+
+      if (!fileResult.isSuccess) {
+        throw Exception(
+            'Failed to insert file metadata: ${fileResult.writeError?.errmsg}');
+      }
+
+      // Insert file data
+      final chunkResult = await _profilePhotosBucket.chunks.insertOne({
         'files_id': photoId,
         'n': 0,
         'data': photoBytes,
       });
 
+      if (!chunkResult.isSuccess) {
+        // Clean up file metadata if chunk insert fails
+        await _profilePhotosBucket.files.deleteOne({'_id': photoId});
+        throw Exception(
+            'Failed to insert file chunk: ${chunkResult.writeError?.errmsg}');
+      }
+
+      // Verify the upload
+      final uploadedFile =
+          await _profilePhotosBucket.files.findOne({'_id': photoId});
+      if (uploadedFile == null) {
+        throw Exception('Failed to verify file upload');
+      }
+
+      // Return the photo ID as a hex string
       return photoId.toHexString();
     } catch (e) {
-      print('Error uploading profile photo: $e');
-      return null;
+      throw Exception('Failed to upload profile photo: $e');
     }
   }
 
   Future<List<int>?> getProfilePhoto(String photoId) async {
     try {
-      final file = await _profilePhotosBucket.files
-          .findOne({'_id': ObjectId.fromHexString(photoId)});
-      if (file == null) return null;
+      // Convert string ID to ObjectId
+      final objectId = ObjectId.fromHexString(photoId);
 
-      final chunk = await _profilePhotosBucket.chunks
-          .findOne({'files_id': ObjectId.fromHexString(photoId)});
-      if (chunk == null) return null;
+      // Get file metadata
+      final file = await _profilePhotosBucket.files.findOne({'_id': objectId});
+      if (file == null) {
+        return null;
+      }
 
-      return chunk['data'] as List<int>;
+      // Get file data
+      final chunk =
+          await _profilePhotosBucket.chunks.findOne({'files_id': objectId});
+      if (chunk == null) {
+        return null;
+      }
+
+      // Convert dynamic list to List<int>
+      final dynamicData = chunk['data'] as List<dynamic>;
+      return dynamicData.map((e) => e as int).toList();
     } catch (e) {
-      print('Error getting profile photo: $e');
-      return null;
+      throw Exception('Failed to get profile photo: $e');
     }
+  }
+
+  // Add a method to get the profile photo URL
+  String getProfilePhotoUrl(String photoId) {
+    final connectionString = dotenv.env['MONGODB_URL'];
+    if (connectionString == null) {
+      throw Exception('MONGODB_URL not found in .env file');
+    }
+
+    // Extract the host from the MongoDB connection string
+    final uri = Uri.parse(connectionString);
+    final host = uri.host;
+
+    // Construct the profile photo URL using https scheme
+    return 'https://$host/api/profile-photos/$photoId';
   }
 
   Future<void> updateUserProfile(
@@ -370,5 +387,68 @@ class MongoDBService {
 
   Future<void> close() async {
     await _db.close();
+  }
+
+  Future<void> updateArticleBookmark(
+      String articleId, bool isBookmarked, String userId) async {
+    try {
+      // Convert string IDs to ObjectId
+      final articleObjectId = ObjectId.fromHexString(articleId);
+      final userObjectId = ObjectId.fromHexString(userId);
+
+      // Verify article exists
+      final article =
+          await _educationalContentCollection.findOne({'_id': articleObjectId});
+      if (article == null) {
+        throw Exception('Article not found with ID: $articleId');
+      }
+
+      if (isBookmarked) {
+        // Add bookmark
+        final result = await _educationalContentCollection.updateOne(
+          {'_id': articleObjectId},
+          {
+            '\$addToSet': {'bookmarkedBy': userObjectId}
+          },
+        );
+        if (!result.isSuccess) {
+          throw Exception(
+              'Failed to add bookmark: ${result.writeError?.errmsg}');
+        }
+      } else {
+        // Remove bookmark
+        final result = await _educationalContentCollection.updateOne(
+          {'_id': articleObjectId},
+          {
+            '\$pull': {'bookmarkedBy': userObjectId}
+          },
+        );
+        if (!result.isSuccess) {
+          throw Exception(
+              'Failed to remove bookmark: ${result.writeError?.errmsg}');
+        }
+      }
+
+      // Verify the update
+      final updatedArticle =
+          await _educationalContentCollection.findOne({'_id': articleObjectId});
+      if (updatedArticle == null) {
+        throw Exception('Failed to verify bookmark update');
+      }
+    } catch (e) {
+      throw Exception('Failed to update bookmark in MongoDB: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getBookmarkedArticles(
+      String userId) async {
+    try {
+      final userObjectId = ObjectId.fromHexString(userId);
+      final articles = await _educationalContentCollection
+          .find({'bookmarkedBy': userObjectId}).toList();
+      return articles;
+    } catch (e) {
+      throw Exception('Failed to get bookmarked articles: $e');
+    }
   }
 }

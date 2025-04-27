@@ -1,6 +1,7 @@
 import '../models/article.dart';
 import '../models/category.dart';
 import 'mongodb_service.dart';
+import 'package:mongo_dart/mongo_dart.dart';
 
 class ArticleService {
   final MongoDBService _mongoDBService;
@@ -13,6 +14,7 @@ class ArticleService {
     String? category,
     String? userId,
     bool bookmarksOnly = false,
+    String? search,
   }) async {
     try {
       final query = <String, dynamic>{};
@@ -23,10 +25,8 @@ class ArticleService {
 
       // If bookmarksOnly is true, only fetch bookmarked articles
       if (bookmarksOnly && userId != null) {
-        query['bookmarkedBy'] = userId;
+        query['bookmarkedBy'] = ObjectId.fromHexString(userId);
       }
-
-      print('Final query: $query');
 
       // Get all articles matching the category
       var articles = await _mongoDBService.educationalContentCollection
@@ -34,39 +34,38 @@ class ArticleService {
           .toList();
 
       if (articles.isEmpty && category != null) {
-        print('No articles found with filters, showing all articles');
         articles =
             await _mongoDBService.educationalContentCollection.find().toList();
       }
 
-      print('Found ${articles.length} articles');
-
       // Get user's bookmarked articles
       final bookmarkedArticles = userId != null
-          ? await _mongoDBService.educationalContentCollection
-              .find({'bookmarkedBy': userId}).toList()
+          ? await _mongoDBService.getBookmarkedArticles(userId)
           : [];
 
-      final bookmarkedTitles =
-          bookmarkedArticles.map((doc) => doc['title'] as String).toSet();
+      final bookmarkedIds =
+          bookmarkedArticles.map((doc) => doc['_id'].toString()).toSet();
 
       return articles
           .map((doc) => Article(
+                id: (doc['_id'] is ObjectId)
+                    ? (doc['_id'] as ObjectId).toHexString()
+                    : doc['_id'].toString(),
                 title: doc['title'],
                 category: doc['category'],
                 imageUrl: doc['imageUrl'],
-                isBookmarked: bookmarkedTitles.contains(doc['title']),
+                isBookmarked: bookmarkedIds.contains(doc['_id'].toString()),
                 content: doc['content'],
               ))
           .toList();
     } catch (e) {
-      print('Error fetching articles: $e');
       // On error, try to return all articles
       try {
         final allArticles =
             await _mongoDBService.educationalContentCollection.find().toList();
         return allArticles
             .map((doc) => Article(
+                  id: doc['_id'].toString(),
                   title: doc['title'],
                   category: doc['category'],
                   imageUrl: doc['imageUrl'],
@@ -75,7 +74,6 @@ class ArticleService {
                 ))
             .toList();
       } catch (e) {
-        print('Error fetching all articles: $e');
         return [];
       }
     }
@@ -100,42 +98,25 @@ class ArticleService {
               ))
           .toList();
     } catch (e) {
-      print('Error fetching categories: $e');
       return [];
     }
   }
 
-  Future<bool> toggleBookmark(String articleTitle, String userId) async {
+  Future<void> updateArticleBookmark(String articleId, bool isBookmarked,
+      {String? userId}) async {
     try {
-      final article = await _mongoDBService.educationalContentCollection
-          .findOne({'title': articleTitle});
-
-      if (article == null) return false;
-
-      final isBookmarked = article['bookmarkedBy']?.contains(userId) ?? false;
-
-      if (isBookmarked) {
-        // Remove bookmark
-        await _mongoDBService.educationalContentCollection.updateOne(
-          {'title': articleTitle},
-          {
-            '\$pull': {'bookmarkedBy': userId}
-          },
-        );
-      } else {
-        // Add bookmark
-        await _mongoDBService.educationalContentCollection.updateOne(
-          {'title': articleTitle},
-          {
-            '\$addToSet': {'bookmarkedBy': userId}
-          },
-        );
+      if (userId == null) {
+        return;
       }
 
-      return true;
+      // Update bookmark in MongoDB
+      await _mongoDBService.updateArticleBookmark(
+        articleId,
+        isBookmarked,
+        userId,
+      );
     } catch (e) {
-      print('Error toggling bookmark: $e');
-      return false;
+      throw Exception('Failed to update bookmark: $e');
     }
   }
 }

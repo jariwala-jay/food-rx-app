@@ -86,6 +86,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
               name: _nameController.text,
               email: _emailController.text,
               password: _passwordController.text,
+              profilePhoto: _profilePhoto,
             );
 
         widget.onNext();
