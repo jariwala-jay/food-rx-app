@@ -17,6 +17,7 @@ class MongoDBService {
   late DbCollection _dietPlansCollection;
   late DbCollection _educationalContentCollection;
   late GridFS _profilePhotosBucket;
+  bool _isInitialized = false;
 
   // Make collections accessible
   DbCollection get usersCollection => _usersCollection;
@@ -29,6 +30,8 @@ class MongoDBService {
   static const int _saltLength = 32;
 
   Future<void> initialize() async {
+    if (_isInitialized) return;
+
     await dotenv.load();
     final connectionString = dotenv.env['MONGODB_URL'];
     if (connectionString == null) {
@@ -50,6 +53,25 @@ class MongoDBService {
       keys: {'bookmarkedBy': 1},
       sparse: true,
     );
+
+    _isInitialized = true;
+  }
+
+  Future<void> ensureConnection() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (_db.state == State.CLOSED) {
+      await _db.open();
+    }
+  }
+
+  Future<void> close() async {
+    if (_isInitialized && _db.state != State.CLOSED) {
+      await _db.close();
+      _isInitialized = false;
+    }
   }
 
   String _hashPassword(String password) {
@@ -107,6 +129,7 @@ class MongoDBService {
   Future<void> _updateUserPassword(
       String email, String newHashedPassword) async {
     try {
+      await ensureConnection();
       await _usersCollection.updateOne(
         {'email': email},
         {
@@ -117,23 +140,29 @@ class MongoDBService {
         },
       );
     } catch (e) {
-      throw Exception(e);
+      throw Exception('Failed to update user password: $e');
     }
   }
 
   Future<Map<String, dynamic>?> findUserByEmail(String email) async {
-    return await _usersCollection.findOne({'email': email});
+    try {
+      await ensureConnection();
+      return await _usersCollection.findOne({'email': email});
+    } catch (e) {
+      throw Exception('Failed to find user by email: $e');
+    }
   }
 
   Future<Map<String, dynamic>?> findUserById(String id) async {
     try {
+      await ensureConnection();
       if (id.length != 24) {
         return null;
       }
       return await _usersCollection
           .findOne({'_id': ObjectId.fromHexString(id)});
     } catch (e) {
-      throw Exception(e);
+      throw Exception('Failed to find user by ID: $e');
     }
   }
 
@@ -144,13 +173,12 @@ class MongoDBService {
     File? profilePhoto,
   }) async {
     try {
+      await ensureConnection();
       if (await findUserByEmail(email) != null) {
         return false;
       }
 
-      // Hash the password before storing
       final hashedPassword = _hashPassword(password);
-
       String? profilePhotoId;
 
       if (profilePhoto != null) {
@@ -161,7 +189,7 @@ class MongoDBService {
       final userDocument = {
         '_id': userId,
         'email': email,
-        'password': hashedPassword, // Use the hashed password here
+        'password': hashedPassword,
         ...userData,
         'profilePhotoId': profilePhotoId,
         'createdAt': DateTime.now().toIso8601String(),
@@ -172,7 +200,6 @@ class MongoDBService {
         'lockUntil': null,
       };
 
-      // Verify the password was hashed before storing
       if (userDocument['password'] == password) {
         throw Exception('Password was not hashed before storage!');
       }
@@ -181,12 +208,13 @@ class MongoDBService {
       await _storeSession(userId.toHexString(), email);
       return true;
     } catch (e) {
-      throw Exception(e);
+      throw Exception('Failed to register user: $e');
     }
   }
 
   Future<bool> loginUser(String email, String password) async {
     try {
+      await ensureConnection();
       final user = await findUserByEmail(email);
       if (user == null) return false;
 
@@ -198,7 +226,6 @@ class MongoDBService {
         }
       }
 
-      // Verify the password using the stored hash
       final isPasswordValid = _verifyPassword(password, user['password']);
 
       if (!isPasswordValid) {
@@ -211,49 +238,59 @@ class MongoDBService {
       await _storeSession(objectId.toHexString(), email);
       return true;
     } catch (e) {
-      throw Exception(e);
+      throw Exception('Failed to login user: $e');
     }
   }
 
   Future<void> _handleFailedLogin(ObjectId userId) async {
-    await _usersCollection.updateOne(
-      {'_id': userId},
-      {
-        '\$inc': {'failedLoginAttempts': 1},
-        '\$set': {'updatedAt': DateTime.now().toIso8601String()},
-      },
-    );
-
-    final user = await _usersCollection.findOne({'_id': userId});
-    if (user != null && user['failedLoginAttempts'] >= 5) {
+    try {
+      await ensureConnection();
       await _usersCollection.updateOne(
         {'_id': userId},
         {
-          '\$set': {
-            'isLocked': true,
-            'lockUntil': DateTime.now()
-                .add(const Duration(minutes: 30))
-                .toIso8601String(),
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
+          '\$inc': {'failedLoginAttempts': 1},
+          '\$set': {'updatedAt': DateTime.now().toIso8601String()},
         },
       );
+
+      final user = await _usersCollection.findOne({'_id': userId});
+      if (user != null && user['failedLoginAttempts'] >= 5) {
+        await _usersCollection.updateOne(
+          {'_id': userId},
+          {
+            '\$set': {
+              'isLocked': true,
+              'lockUntil': DateTime.now()
+                  .add(const Duration(minutes: 30))
+                  .toIso8601String(),
+              'updatedAt': DateTime.now().toIso8601String(),
+            },
+          },
+        );
+      }
+    } catch (e) {
+      throw Exception('Failed to handle failed login: $e');
     }
   }
 
   Future<void> _handleSuccessfulLogin(ObjectId userId) async {
-    await _usersCollection.updateOne(
-      {'_id': userId},
-      {
-        '\$set': {
-          'failedLoginAttempts': 0,
-          'isLocked': false,
-          'lockUntil': null,
-          'lastLoginAt': DateTime.now().toIso8601String(),
-          'updatedAt': DateTime.now().toIso8601String(),
+    try {
+      await ensureConnection();
+      await _usersCollection.updateOne(
+        {'_id': userId},
+        {
+          '\$set': {
+            'failedLoginAttempts': 0,
+            'isLocked': false,
+            'lockUntil': null,
+            'lastLoginAt': DateTime.now().toIso8601String(),
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
         },
-      },
-    );
+      );
+    } catch (e) {
+      throw Exception('Failed to handle successful login: $e');
+    }
   }
 
   Future<void> _storeSession(String userId, String email) async {
@@ -281,11 +318,10 @@ class MongoDBService {
 
   Future<String?> uploadProfilePhoto(File photo) async {
     try {
+      await ensureConnection();
       final photoBytes = await photo.readAsBytes();
-
       final photoId = ObjectId();
 
-      // Create file metadata
       final fileMetadata = {
         '_id': photoId,
         'filename': 'profile_photo_${photoId.toHexString()}.jpg',
@@ -294,16 +330,13 @@ class MongoDBService {
         'uploadDate': DateTime.now().toIso8601String(),
       };
 
-      // Insert file metadata
       final fileResult =
           await _profilePhotosBucket.files.insertOne(fileMetadata);
-
       if (!fileResult.isSuccess) {
         throw Exception(
             'Failed to insert file metadata: ${fileResult.writeError?.errmsg}');
       }
 
-      // Insert file data
       final chunkResult = await _profilePhotosBucket.chunks.insertOne({
         'files_id': photoId,
         'n': 0,
@@ -311,20 +344,17 @@ class MongoDBService {
       });
 
       if (!chunkResult.isSuccess) {
-        // Clean up file metadata if chunk insert fails
         await _profilePhotosBucket.files.deleteOne({'_id': photoId});
         throw Exception(
             'Failed to insert file chunk: ${chunkResult.writeError?.errmsg}');
       }
 
-      // Verify the upload
       final uploadedFile =
           await _profilePhotosBucket.files.findOne({'_id': photoId});
       if (uploadedFile == null) {
         throw Exception('Failed to verify file upload');
       }
 
-      // Return the photo ID as a hex string
       return photoId.toHexString();
     } catch (e) {
       throw Exception('Failed to upload profile photo: $e');
@@ -333,23 +363,20 @@ class MongoDBService {
 
   Future<List<int>?> getProfilePhoto(String photoId) async {
     try {
-      // Convert string ID to ObjectId
+      await ensureConnection();
       final objectId = ObjectId.fromHexString(photoId);
 
-      // Get file metadata
       final file = await _profilePhotosBucket.files.findOne({'_id': objectId});
       if (file == null) {
         return null;
       }
 
-      // Get file data
       final chunk =
           await _profilePhotosBucket.chunks.findOne({'files_id': objectId});
       if (chunk == null) {
         return null;
       }
 
-      // Convert dynamic list to List<int>
       final dynamicData = chunk['data'] as List<dynamic>;
       return dynamicData.map((e) => e as int).toList();
     } catch (e) {
@@ -374,29 +401,29 @@ class MongoDBService {
 
   Future<void> updateUserProfile(
       String userId, Map<String, dynamic> updates) async {
-    await _usersCollection.updateOne(
-      {'_id': ObjectId.fromHexString(userId)},
-      {
-        '\$set': {
-          ...updates,
-          'updatedAt': DateTime.now().toIso8601String(),
+    try {
+      await ensureConnection();
+      await _usersCollection.updateOne(
+        {'_id': ObjectId.fromHexString(userId)},
+        {
+          '\$set': {
+            ...updates,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
         },
-      },
-    );
-  }
-
-  Future<void> close() async {
-    await _db.close();
+      );
+    } catch (e) {
+      throw Exception('Failed to update user profile: $e');
+    }
   }
 
   Future<void> updateArticleBookmark(
       String articleId, bool isBookmarked, String userId) async {
     try {
-      // Convert string IDs to ObjectId
+      await ensureConnection();
       final articleObjectId = ObjectId.fromHexString(articleId);
       final userObjectId = ObjectId.fromHexString(userId);
 
-      // Verify article exists
       final article =
           await _educationalContentCollection.findOne({'_id': articleObjectId});
       if (article == null) {
@@ -404,7 +431,6 @@ class MongoDBService {
       }
 
       if (isBookmarked) {
-        // Add bookmark
         final result = await _educationalContentCollection.updateOne(
           {'_id': articleObjectId},
           {
@@ -416,7 +442,6 @@ class MongoDBService {
               'Failed to add bookmark: ${result.writeError?.errmsg}');
         }
       } else {
-        // Remove bookmark
         final result = await _educationalContentCollection.updateOne(
           {'_id': articleObjectId},
           {
@@ -429,7 +454,6 @@ class MongoDBService {
         }
       }
 
-      // Verify the update
       final updatedArticle =
           await _educationalContentCollection.findOne({'_id': articleObjectId});
       if (updatedArticle == null) {
@@ -443,6 +467,7 @@ class MongoDBService {
   Future<List<Map<String, dynamic>>> getBookmarkedArticles(
       String userId) async {
     try {
+      await ensureConnection();
       final userObjectId = ObjectId.fromHexString(userId);
       final articles = await _educationalContentCollection
           .find({'bookmarkedBy': userObjectId}).toList();
@@ -459,26 +484,23 @@ class MongoDBService {
     String? search,
   }) async {
     try {
+      await ensureConnection();
       final query = <String, dynamic>{};
 
       if (category != null && category != 'All' && !bookmarksOnly) {
         query['category'] = category;
       }
 
-      // If bookmarksOnly is true, only fetch bookmarked articles
       if (bookmarksOnly && userId != null) {
         query['bookmarkedBy'] = ObjectId.fromHexString(userId);
       }
 
-      // Add text search if search query is provided
       if (search != null && search.isNotEmpty) {
         query['\$text'] = {'\$search': search};
       }
 
-      // Get all articles matching the category and search
       var articles = await _educationalContentCollection.find(query).toList();
 
-      // Sort by text score if search is provided
       if (search != null && search.isNotEmpty) {
         articles.sort((a, b) {
           final scoreA = a['score'] ?? 0;

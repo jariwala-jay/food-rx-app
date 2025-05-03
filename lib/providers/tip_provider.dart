@@ -31,6 +31,17 @@ class TipProvider with ChangeNotifier {
     }
   }
 
+  String _getUpdateReason(
+      bool noTips, bool userChanged, bool conditionsChanged) {
+    final reasons = <String>[];
+    if (noTips) reasons.add('no tips shown');
+    if (userChanged) reasons.add('user changed');
+    if (conditionsChanged) reasons.add('medical conditions changed');
+    if (DateTime.now().difference(_lastUpdate).inDays >= 1)
+      reasons.add('tips expired');
+    return reasons.join(', ');
+  }
+
   bool _areMedicalConditionsEqual(List<String>? a, List<String> b) {
     if (a == null) return false;
     if (a.length != b.length) return false;
@@ -65,7 +76,6 @@ class TipProvider with ChangeNotifier {
       final generalTips =
           availableTips.where((tip) => tip.category == 'General').toList();
 
-      // Select 2 condition-specific tips
       // Select 2 condition-specific tips and 2 general tips
       final selectedTips = <Tip>[];
 
@@ -98,23 +108,29 @@ class TipProvider with ChangeNotifier {
 
       // Update last shown date and view count for selected tips
       for (var tip in selectedTips) {
-        final updatedTip = tip.copyWith(
-          lastShownToUsers: {
-            ...tip.lastShownToUsers,
-            userId: now,
-          },
-          viewCountByUser: {
-            ...tip.viewCountByUser,
-            userId: (tip.getViewCountForUser(userId) + 1),
-          },
-        );
-        await _tipService.updateTip(updatedTip);
+        try {
+          final updatedTip = tip.copyWith(
+            lastShownToUsers: {
+              ...tip.lastShownToUsers,
+              userId: now,
+            },
+            viewCountByUser: {
+              ...tip.viewCountByUser,
+              userId: (tip.getViewCountForUser(userId) + 1),
+            },
+          );
+          await _tipService.updateTip(updatedTip);
+        } catch (e) {
+          print('Failed to update tip ${tip.id}: $e');
+          // Continue with other tips even if one fails
+        }
       }
 
       _shownTips = selectedTips;
       _lastUpdate = now;
     } catch (e) {
-      throw Exception(e);
+      print('Error updating shown tips: $e');
+      // Keep existing tips if update fails
     } finally {
       _isLoading = false;
       _notifyListeners();
@@ -137,7 +153,8 @@ class TipProvider with ChangeNotifier {
         _notifyListeners();
       }
     } catch (e) {
-      throw Exception(e);
+      print('Failed to mark tip as viewed: $e');
+      // Don't throw the error to prevent UI disruption
     }
   }
 

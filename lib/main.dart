@@ -37,7 +37,7 @@ void main() async {
     await setupTextIndex();
 
     // Initialize services
-    final tipService = TipService(mongoDBService.db);
+    final tipService = TipService(mongoDBService);
 
     // Insert initial tips
     //await insertTips();
