@@ -31,17 +31,6 @@ class TipProvider with ChangeNotifier {
     }
   }
 
-  String _getUpdateReason(
-      bool noTips, bool userChanged, bool conditionsChanged) {
-    final reasons = <String>[];
-    if (noTips) reasons.add('no tips shown');
-    if (userChanged) reasons.add('user changed');
-    if (conditionsChanged) reasons.add('medical conditions changed');
-    if (DateTime.now().difference(_lastUpdate).inDays >= 1)
-      reasons.add('tips expired');
-    return reasons.join(', ');
-  }
-
   bool _areMedicalConditionsEqual(List<String>? a, List<String> b) {
     if (a == null) return false;
     if (a.length != b.length) return false;

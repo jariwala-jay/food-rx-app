@@ -52,43 +52,4 @@ class _DietPlanStepState extends State<DietPlanStep> {
           : MyPlatePlan(onFinish: widget.onFinish);
     }
   }
-
-  Widget _buildNutritionItem({
-    required Color color,
-    required IconData icon,
-    required String title,
-    required String description,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTypography.bg_16_m),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: AppTypography.bg_14_r
-                      .copyWith(color: const Color(0xFF90909A)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

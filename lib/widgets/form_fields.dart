@@ -13,6 +13,9 @@ class AppFormField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final bool readOnly;
   final VoidCallback? onTap;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final Function(String)? onFieldSubmitted;
 
   const AppFormField({
     super.key,
@@ -26,6 +29,9 @@ class AppFormField extends StatelessWidget {
     this.inputFormatters,
     this.readOnly = false,
     this.onTap,
+    this.focusNode,
+    this.textInputAction,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -46,6 +52,9 @@ class AppFormField extends StatelessWidget {
           inputFormatters: inputFormatters,
           readOnly: readOnly,
           onTap: onTap,
+          focusNode: focusNode,
+          textInputAction: textInputAction,
+          onFieldSubmitted: onFieldSubmitted,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: AppTypography.bg_14_r.copyWith(
@@ -256,9 +265,9 @@ class AppDropdownField extends StatefulWidget {
 
 class _AppDropdownFieldState extends State<AppDropdownField> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
   bool _isExpanded = false;
   List<String> _filteredOptions = [];
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -352,6 +361,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                     ],
                   ),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(8.0),
@@ -385,6 +395,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                         constraints: const BoxConstraints(maxHeight: 200),
                         child: ListView.builder(
                           shrinkWrap: true,
+                          padding: EdgeInsets.zero,
                           itemCount: _filteredOptions.length,
                           itemBuilder: (context, index) {
                             final option = _filteredOptions[index];
@@ -443,99 +454,120 @@ class HeightDropdownField extends StatefulWidget {
 }
 
 class _HeightDropdownFieldState extends State<HeightDropdownField> {
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
   bool _isExpanded = false;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.label.isNotEmpty) ...[
-          Text(
-            widget.label,
-            style: AppTypography.bg_16_m,
-          ),
-          const SizedBox(height: 8),
-        ],
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _isExpanded = !_isExpanded;
-            });
-          },
-          child: Column(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F7F8),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _isExpanded = false;
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isExpanded = true;
+    });
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: widget.options.length,
+                itemBuilder: (context, index) {
+                  final option = widget.options[index];
+                  return InkWell(
+                    onTap: () {
+                      widget.onChanged?.call(option);
+                      _removeOverlay();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Text(
-                        widget.value ?? widget.hintText,
-                        style: widget.value != null
-                            ? AppTypography.bg_14_r
-                            : AppTypography.bg_14_r.copyWith(
-                                color: const Color(0xFF90909A),
-                              ),
+                        option,
+                        style: AppTypography.bg_14_r,
                       ),
                     ),
-                    const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Color(0xFF90909A),
-                    ),
-                  ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: () {
+          if (_isExpanded) {
+            _removeOverlay();
+          } else {
+            _showOverlay();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F7F8),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.value ?? widget.hintText,
+                  style: widget.value != null
+                      ? AppTypography.bg_14_r
+                      : AppTypography.bg_14_r.copyWith(
+                          color: const Color(0xFF90909A),
+                        ),
                 ),
               ),
-              if (_isExpanded)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.options.length,
-                    itemBuilder: (context, index) {
-                      final option = widget.options[index];
-                      return InkWell(
-                        onTap: () {
-                          widget.onChanged?.call(option);
-                          setState(() {
-                            _isExpanded = false;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Text(
-                            option,
-                            style: AppTypography.bg_14_r,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+              const Icon(
+                Icons.keyboard_arrow_down,
+                color: Color(0xFF90909A),
+              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

@@ -451,4 +451,49 @@ class MongoDBService {
       throw Exception('Failed to get bookmarked articles: $e');
     }
   }
+
+  Future<List<Map<String, dynamic>>> getArticles({
+    String? category,
+    String? userId,
+    bool bookmarksOnly = false,
+    String? search,
+  }) async {
+    try {
+      final query = <String, dynamic>{};
+
+      if (category != null && category != 'All' && !bookmarksOnly) {
+        query['category'] = category;
+      }
+
+      // If bookmarksOnly is true, only fetch bookmarked articles
+      if (bookmarksOnly && userId != null) {
+        query['bookmarkedBy'] = ObjectId.fromHexString(userId);
+      }
+
+      // Add text search if search query is provided
+      if (search != null && search.isNotEmpty) {
+        query['\$text'] = {'\$search': search};
+      }
+
+      // Get all articles matching the category and search
+      var articles = await _educationalContentCollection.find(query).toList();
+
+      // Sort by text score if search is provided
+      if (search != null && search.isNotEmpty) {
+        articles.sort((a, b) {
+          final scoreA = a['score'] ?? 0;
+          final scoreB = b['score'] ?? 0;
+          return scoreB.compareTo(scoreA);
+        });
+      }
+
+      if (articles.isEmpty && category != null) {
+        articles = await _educationalContentCollection.find().toList();
+      }
+
+      return articles;
+    } catch (e) {
+      throw Exception('Failed to get articles: $e');
+    }
+  }
 }

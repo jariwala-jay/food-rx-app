@@ -3,7 +3,6 @@ import 'package:flutter_app/providers/auth_provider.dart';
 import 'package:flutter_app/providers/tip_provider.dart';
 import 'package:flutter_app/models/tip.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
 import '../../services/image_cache_service.dart';
 import '../../services/mongodb_service.dart';

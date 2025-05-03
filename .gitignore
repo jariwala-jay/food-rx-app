@@ -52,6 +52,7 @@ app.*.map.json
 
 #cursor rules
 .cursorrules
+.cursor
 
 #cursor settings
 .cursorsettings

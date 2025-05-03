@@ -15,6 +15,7 @@ import 'views/pages/chatbot_page.dart';
 import 'views/pages/article_detail_page.dart';
 import 'models/article.dart';
 import 'services/dialogflow_service.dart';
+import 'scripts/setup_text_index.dart';
 //import 'scripts/insert_tips.dart';
 //import 'scripts/insert_test_articles.dart';
 
@@ -31,6 +32,9 @@ void main() async {
     // Initialize MongoDB service
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
+
+    // Set up text index for article search
+    await setupTextIndex();
 
     // Initialize services
     final tipService = TipService(mongoDBService.db);
