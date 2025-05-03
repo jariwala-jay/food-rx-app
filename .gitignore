@@ -33,6 +33,9 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Web related
+lib/generated_plugin_registrant.dart
+
 # Symbolication related
 app.*.symbols
 
@@ -43,3 +46,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables
+.env
+
+#cursor rules
+.cursorrules
+
+#cursor settings
+.cursorsettings
+
+#dialogflow_auth.json
+dialogflow_auth.json

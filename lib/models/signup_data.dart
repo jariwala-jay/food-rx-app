@@ -31,7 +31,6 @@ class SignupData {
     final Map<String, dynamic> data = {
       'name': name,
       'email': email,
-      'password': password,
       'sex': sex,
       'heightFeet': heightFeet,
       'heightInches': heightInches,

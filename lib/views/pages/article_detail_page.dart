@@ -1,13 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/models/article.dart';
+import '../../models/article.dart';
+import '../../providers/article_provider.dart';
+import '../../services/image_cache_service.dart';
+import 'package:provider/provider.dart';
 
-class ArticleDetailPage extends StatelessWidget {
+class ArticleDetailPage extends StatefulWidget {
   final Article article;
 
   const ArticleDetailPage({
     super.key,
     required this.article,
   });
+
+  @override
+  State<ArticleDetailPage> createState() => _ArticleDetailPageState();
+}
+
+class _ArticleDetailPageState extends State<ArticleDetailPage> {
+  late Article _article;
+
+  @override
+  void initState() {
+    super.initState();
+    _article = widget.article;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +55,33 @@ class ArticleDetailPage extends StatelessWidget {
               child: Column(
                 children: [
                   // Header Image
-                  Image.asset(
-                    article.imageUrl,
+                  Image(
+                    image:
+                        ImageCacheService().getImageProvider(_article.imageUrl),
                     width: double.infinity,
                     height: 240,
                     fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 240,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 240,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
                   ),
 
                   Padding(
@@ -65,21 +103,35 @@ class ArticleDetailPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                article.category,
+                                _article.category,
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontSize: 14,
                                 ),
                               ),
                             ),
-                            Icon(
-                              article.isBookmarked
-                                  ? Icons.bookmark
-                                  : Icons.bookmark_border,
-                              color: article.isBookmarked
-                                  ? const Color(0xFFFF6A00)
-                                  : Colors.black,
-                              size: 28,
+                            Consumer<ArticleProvider>(
+                              builder: (context, articleProvider, _) {
+                                return IconButton(
+                                  icon: Icon(
+                                    _article.isBookmarked
+                                        ? Icons.bookmark
+                                        : Icons.bookmark_border,
+                                    color: _article.isBookmarked
+                                        ? const Color(0xFFFF6A00)
+                                        : Colors.black,
+                                    size: 28,
+                                  ),
+                                  onPressed: () async {
+                                    await articleProvider
+                                        .toggleBookmark(_article);
+                                    setState(() {
+                                      _article = articleProvider
+                                          .getArticleById(_article.id);
+                                    });
+                                  },
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -87,7 +139,7 @@ class ArticleDetailPage extends StatelessWidget {
 
                         // Title
                         Text(
-                          article.title,
+                          _article.title,
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -98,25 +150,7 @@ class ArticleDetailPage extends StatelessWidget {
 
                         // Content paragraphs
                         Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[800],
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[800],
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id sit eu tellus sed cursus eleifend id porta. Lorem adipiscing mus vestibulum consequat porta eu ultrices feugiat. Et, faucibus at amet turpis. Facilisis faucibus semper cras purus.',
+                          _article.content ?? 'No content available',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[800],

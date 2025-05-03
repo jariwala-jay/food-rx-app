@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../../providers/auth_provider.dart';
+import '../../providers/signup_provider.dart';
 import '../../widgets/form_fields.dart';
 import '../../utils/typography.dart';
-import '../../providers/signup_provider.dart';
 
 class BasicInfoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -36,7 +35,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   @override
   void initState() {
     super.initState();
-    final signupData = context.read<AuthProvider>().data;
+    final signupData = context.read<SignupProvider>().data;
     _nameController.text = signupData.name ?? '';
     _emailController.text = signupData.email ?? '';
     _passwordController.text = signupData.password ?? '';
@@ -87,6 +86,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
               name: _nameController.text,
               email: _emailController.text,
               password: _passwordController.text,
+              profilePhoto: _profilePhoto,
             );
 
         widget.onNext();

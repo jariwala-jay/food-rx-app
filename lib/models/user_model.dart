@@ -36,6 +36,9 @@ class UserModel {
   final bool? isLocked;
   final DateTime? lockUntil;
 
+  // Health Goals
+  final List<String> healthGoals;
+
   UserModel({
     this.id,
     required this.email,
@@ -69,6 +72,8 @@ class UserModel {
     this.failedLoginAttempts,
     this.isLocked,
     this.lockUntil,
+    // Health Goals
+    this.healthGoals = const [],
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -113,6 +118,8 @@ class UserModel {
       lockUntil: json['lockUntil'] is String
           ? DateTime.parse(json['lockUntil'])
           : json['lockUntil'],
+      // Health Goals
+      healthGoals: List<String>.from(json['healthGoals'] ?? []),
     );
   }
 
@@ -149,6 +156,8 @@ class UserModel {
       'failedLoginAttempts': failedLoginAttempts,
       'isLocked': isLocked,
       'lockUntil': lockUntil?.toIso8601String(),
+      // Health Goals
+      'healthGoals': healthGoals,
     };
   }
 
@@ -185,6 +194,8 @@ class UserModel {
     int? failedLoginAttempts,
     bool? isLocked,
     DateTime? lockUntil,
+    // Health Goals
+    List<String>? healthGoals,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -219,6 +230,8 @@ class UserModel {
       failedLoginAttempts: failedLoginAttempts ?? this.failedLoginAttempts,
       isLocked: isLocked ?? this.isLocked,
       lockUntil: lockUntil ?? this.lockUntil,
+      // Health Goals
+      healthGoals: healthGoals ?? this.healthGoals,
     );
   }
 }

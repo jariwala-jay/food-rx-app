@@ -113,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
             children: [
               const Text('Welcome!', style: AppTypography.bg_24_b),
               Text(
-                'Lorem ipsum dolor sit amet consectetur. Sagittis egestas',
+                'Login to your account to continue',
                 style: AppTypography.bg_14_r
                     .copyWith(color: const Color(0xFF90909A)),
               ),

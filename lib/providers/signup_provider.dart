@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/models/signup_data.dart';
+import 'dart:io';
 
 class SignupProvider extends ChangeNotifier {
   final SignupData _data = SignupData();
   int _currentStep = 0;
+  File? _profilePhoto;
 
   SignupData get data => _data;
   int get currentStep => _currentStep;
+  File? get profilePhoto => _profilePhoto;
 
   void updateBasicInfo({
     String? name,
     String? email,
     String? password,
+    File? profilePhoto,
   }) {
     _data.name = name ?? _data.name;
     _data.email = email ?? _data.email;
     _data.password = password ?? _data.password;
+    _profilePhoto = profilePhoto;
     notifyListeners();
   }
 
@@ -75,6 +80,7 @@ class SignupProvider extends ChangeNotifier {
     _data.foodAllergies = [];
     _data.activityLevel = null;
     _data.healthGoals = [];
+    _profilePhoto = null;
     notifyListeners();
   }
 }

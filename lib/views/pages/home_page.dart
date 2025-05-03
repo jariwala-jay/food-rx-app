@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/providers/auth_provider.dart';
+import 'package:flutter_app/providers/tip_provider.dart';
+import 'package:flutter_app/models/tip.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:typed_data';
+import '../../services/image_cache_service.dart';
+import '../../services/mongodb_service.dart';
+import '../../widgets/recommended_articles_section.dart';
 
 class CustomNavBarShape extends CustomPainter {
   @override
@@ -80,110 +87,66 @@ class CustomNavBarShape extends CustomPainter {
   bool shouldRepaint(CustomNavBarShape oldDelegate) => false;
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
-  Widget _buildRecommendedCard(
-      BuildContext context, String title, String imagePath) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.asset(
-              imagePath,
-              height: 120,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final _mongoDBService = MongoDBService();
+  Uint8List? _profilePhotoData;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTips();
+    _loadProfilePhoto();
   }
 
-  Widget _buildTipCard(BuildContext context, String title, String description,
-      String imagePath) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.asset(
-              imagePath,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _initializeTips() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+
+    if (user != null) {
+      final medicalConditions = user.medicalConditions ?? [];
+      final tipProvider = Provider.of<TipProvider>(context, listen: false);
+      await tipProvider.initializeTips(medicalConditions, user.id!);
+    }
+  }
+
+  Future<void> _loadProfilePhoto() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final photoId = authProvider.currentUser?.profilePhotoId;
+
+    if (photoId != null) {
+      try {
+        final photoData = await _mongoDBService.getProfilePhoto(photoId);
+        if (photoData != null && mounted) {
+          setState(() {
+            _profilePhotoData = Uint8List.fromList(photoData);
+          });
+        }
+      } catch (e) {
+        throw Exception(e);
+      }
+    }
+  }
+
+  Future<void> _handleTipTap(Tip tip) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    if (user != null) {
+      final tipProvider = Provider.of<TipProvider>(context, listen: false);
+      await tipProvider.markTipAsViewed(tip.id, user.id!);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final tipProvider = context.watch<TipProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
@@ -200,10 +163,13 @@ class HomePage extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 20,
-                          backgroundImage:
-                              AssetImage('assets/images/profile_pic.png'),
+                          backgroundImage: _profilePhotoData != null
+                              ? MemoryImage(_profilePhotoData!)
+                              : const AssetImage(
+                                      'assets/images/profile_pic.png')
+                                  as ImageProvider,
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -238,15 +204,14 @@ class HomePage extends StatelessWidget {
                           onPressed: () async {
                             try {
                               await authProvider.logout();
-                              if (context.mounted) {
+                              if (mounted) {
                                 Navigator.of(context).pushNamedAndRemoveUntil(
                                   '/login',
                                   (route) => false,
                                 );
                               }
                             } catch (e) {
-                              print('Logout error: $e');
-                              if (context.mounted) {
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text('Logout failed: $e'),
@@ -263,35 +228,8 @@ class HomePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Recommended Section
-                const Text(
-                  'Recommended',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 180,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _buildRecommendedCard(
-                        context,
-                        'What is High Blood Pressure?',
-                        'assets/images/blood_pressure.png',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildRecommendedCard(
-                        context,
-                        'Healthy Diet Tips',
-                        'assets/images/healthy_diet.png',
-                      ),
-                    ],
-                  ),
-                ),
-
+                // Recommended Articles Section
+                const RecommendedArticlesSection(),
                 const SizedBox(height: 24),
 
                 // Daily Tips Section
@@ -303,22 +241,204 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildTipCard(
-                  context,
-                  'Tip 1',
-                  'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-                  'assets/images/tip1.png',
+                if (tipProvider.isLoading)
+                  const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                else if (tipProvider.shownTips.isEmpty)
+                  const Center(
+                    child: Text('No tips available'),
+                  )
+                else
+                  ...tipProvider.shownTips.map((tip) {
+                    return Column(
+                      children: [
+                        _buildTipCard(
+                          context,
+                          tip.title,
+                          tip.description,
+                          tip.imageUrl,
+                          onTap: () => _handleTipTap(tip),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    );
+                  }).toList(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTipCard(
+    BuildContext context,
+    String title,
+    String description,
+    String imageUrl, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => Container(
+            height: MediaQuery.of(context).size.height * 0.9,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // Drag handle
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _buildTipCard(
-                  context,
-                  'Tip 2',
-                  'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do',
-                  'assets/images/tip2.png',
+                // Image
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Image(
+                    image: ImageCacheService().getImageProvider(imageUrl),
+                    height: 250,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 250,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 250,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+        );
+        if (onTap != null) onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image(
+                image: ImageCacheService().getImageProvider(imageUrl),
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Icon(
+                      Icons.image_not_supported,
+                      size: 50,
+                      color: Colors.grey,
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
