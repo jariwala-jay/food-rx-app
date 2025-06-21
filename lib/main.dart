@@ -1,82 +1,152 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'providers/auth_provider.dart';
-import 'providers/signup_provider.dart';
-import 'providers/article_provider.dart';
-import 'providers/tip_provider.dart';
-import 'services/mongodb_service.dart';
-import 'services/article_service.dart';
-import 'services/tip_service.dart';
-import 'views/pages/login_page.dart';
-import 'views/pages/signup_page.dart';
-import 'views/pages/main_screen.dart';
-import 'views/pages/chatbot_page.dart';
-import 'views/pages/article_detail_page.dart';
-import 'models/article.dart';
-import 'services/dialogflow_service.dart';
-import 'scripts/setup_text_index.dart';
-//import 'scripts/insert_tips.dart';
-//import 'scripts/insert_test_articles.dart';
+import 'package:provider/provider.dart';
+
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/features/auth/views/login_page.dart';
+import 'package:flutter_app/features/auth/views/signup_page.dart';
+import 'package:flutter_app/features/chatbot/views/chatbot_page.dart';
+import 'package:flutter_app/features/education/controller/article_controller.dart';
+import 'package:flutter_app/features/education/models/article.dart';
+import 'package:flutter_app/features/education/repositories/article_repository.dart';
+import 'package:flutter_app/features/education/repositories/mongo_article_repository.dart';
+import 'package:flutter_app/features/education/views/article_detail_page.dart';
+import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
+import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
+import 'package:flutter_app/features/pantry/repositories/spoonacular_ingredient_repository.dart';
+import 'package:flutter_app/features/recipes/application/recipe_generation_service.dart';
+import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
+import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart'
+    as domain_repo;
+import 'package:flutter_app/features/recipes/repositories/spoonacular_recipe_repository.dart';
+import 'package:flutter_app/features/recipes/repositories/mongo_recipe_repository.dart';
+import 'package:flutter_app/features/recipes/repositories/recipe_repository_impl.dart';
+import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/features/auth/providers/signup_provider.dart';
+import 'package:flutter_app/features/home/providers/tip_provider.dart';
+import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
+import 'package:flutter_app/core/services/food_category_service.dart';
+import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/features/home/services/tip_service.dart';
+import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/features/navigation/views/main_screen.dart';
+
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Load environment variables
     await dotenv.load(fileName: ".env");
-
-    // Initialize DialogflowService
     DialogflowService.initialize();
 
-    // Initialize MongoDB service
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
-
-    // Set up text index for article search
-    await setupTextIndex();
-
-    // Initialize services
-    final tipService = TipService(mongoDBService);
-
-    // Insert initial tips
-    //await insertTips();
-
-    // Uncomment the line below to insert test articles
-    //  await insertTestArticles();
 
     runApp(
       MultiProvider(
         providers: [
+          // Core providers and services
+          ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
+          ChangeNotifierProvider(create: (_) => SignupProvider()),
+          Provider<MongoDBService>(create: (_) => mongoDBService),
           ChangeNotifierProvider(
-            create: (_) => AuthProvider()..initialize(),
+              create: (context) =>
+                  TipProvider(TipService(context.read<MongoDBService>()))),
+          ChangeNotifierProvider(create: (_) => TrackerProvider()),
+          Provider<UnitConversionService>(
+              create: (_) => UnitConversionService()),
+          Provider<FoodCategoryService>(
+              create: (context) => FoodCategoryService(
+                  conversionService: context.read<UnitConversionService>())),
+          Provider<IngredientSubstitutionService>(
+              create: (context) => IngredientSubstitutionService(
+                  conversionService: context.read<UnitConversionService>())),
+
+          // Feature-specific Repositories
+          Provider<ArticleRepository>(
+            create: (context) =>
+                MongoArticleRepository(context.read<MongoDBService>()),
           ),
-          ChangeNotifierProvider(
-            create: (_) => SignupProvider(),
+          Provider<SpoonacularRecipeRepository>(
+            create: (_) => SpoonacularRecipeRepository(),
           ),
-          ChangeNotifierProvider(
-            create: (_) => TipProvider(tipService),
+          Provider<MongoRecipeRepository>(
+            create: (context) =>
+                MongoRecipeRepository(context.read<MongoDBService>()),
           ),
-          Provider<ArticleService>(
-            create: (_) => ArticleService(mongoDBService),
+          Provider<domain_repo.RecipeRepository>(
+            create: (context) => RecipeRepositoryImpl(
+              context.read<SpoonacularRecipeRepository>(),
+              context.read<MongoRecipeRepository>(),
+            ),
           ),
-          ChangeNotifierProxyProvider<AuthProvider, ArticleProvider>(
-            create: (context) {
-              final authProvider =
-                  Provider.of<AuthProvider>(context, listen: false);
-              final articleProvider = ArticleProvider(
-                  Provider.of<ArticleService>(context, listen: false));
-              articleProvider.setAuthProvider(authProvider);
-              return articleProvider;
+          Provider<IngredientRepository>(
+            create: (context) => SpoonacularIngredientRepository(),
+          ),
+
+          // Feature Controllers (as ProxyProviders where they depend on auth state)
+          ChangeNotifierProxyProvider<AuthController, PantryController>(
+            create: (context) => PantryController(
+              context.read<MongoDBService>(),
+              conversionService: context.read<UnitConversionService>(),
+              ingredientSubstitutionService:
+                  context.read<IngredientSubstitutionService>(),
+            ),
+            update: (context, auth, pantry) {
+              final controller = pantry ??
+                  PantryController(
+                    context.read<MongoDBService>(),
+                    conversionService: context.read<UnitConversionService>(),
+                    ingredientSubstitutionService:
+                        context.read<IngredientSubstitutionService>(),
+                  );
+              if (auth.isAuthenticated && auth.currentUser?.id != null) {
+                controller.setAuthProvider(auth);
+                controller.initializeWithUser(auth.currentUser!.id!);
+              }
+              return controller;
             },
-            update: (context, authProvider, articleProvider) {
-              final provider = articleProvider ??
-                  ArticleProvider(
-                      Provider.of<ArticleService>(context, listen: false));
-              provider.setAuthProvider(authProvider);
-              return provider;
+          ),
+
+          ChangeNotifierProxyProvider<AuthController, ArticleController>(
+            create: (context) => ArticleController(
+              context.read<ArticleRepository>(),
+              context.read<AuthController>(),
+            ),
+            update: (context, auth, articleController) {
+              final controller = articleController ??
+                  ArticleController(context.read<ArticleRepository>(), auth);
+              controller.initialize();
+              return controller;
             },
           ),
+
+          ChangeNotifierProxyProvider2<AuthController, PantryController,
+              RecipeController>(
+            create: (context) => RecipeController(
+              recipeGenerationService: RecipeGenerationService(
+                recipeRepository: context.read<domain_repo.RecipeRepository>(),
+                unitConversionService: context.read<UnitConversionService>(),
+                foodCategoryService: context.read<FoodCategoryService>(),
+                ingredientSubstitutionService:
+                    context.read<IngredientSubstitutionService>(),
+              ),
+              recipeRepository: context.read<domain_repo.RecipeRepository>(),
+              authProvider: context.read<AuthController>(),
+              pantryController: context.read<PantryController>(),
+            ),
+            update: (context, auth, pantry, recipeController) {
+              final controller = recipeController!;
+              controller.authProvider = auth;
+              controller.pantryController = pantry;
+              return controller;
+            },
+          ),
+
+          Provider<RouteObserver<ModalRoute<void>>>.value(value: routeObserver),
         ],
         child: const MyApp(),
       ),
@@ -85,9 +155,6 @@ void main() async {
     rethrow;
   }
 }
-
-//stateful
-//Material App
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -100,9 +167,10 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.orange,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          if (authProvider.isLoading) {
+      navigatorObservers: [routeObserver],
+      home: Consumer<AuthController>(
+        builder: (context, authController, _) {
+          if (authController.isLoading) {
             return const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
@@ -110,7 +178,7 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          if (authProvider.isAuthenticated) {
+          if (authController.isAuthenticated) {
             return const MainScreen();
           }
 

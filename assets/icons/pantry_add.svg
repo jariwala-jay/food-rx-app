@@ -1,0 +1,15 @@
+<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="ic:medication" clip-path="url(#clip0_8966_11648)">
+<g id="Group">
+<g id="Group_2">
+<path id="Vector" d="M18.75 3H6.75V5H18.75V3Z" fill="#FF6A00"/>
+<path id="Vector_2" d="M17.75 6H7.75C6.65 6 5.75 6.9 5.75 8V19C5.75 20.1 6.65 21 7.75 21H17.75C18.85 21 19.75 20.1 19.75 19V8C19.75 6.9 18.85 6 17.75 6ZM16.75 15H14.25V17.5H11.25V15H8.75V12H11.25V9.5H14.25V12H16.75V15Z" fill="#FF6A00"/>
+</g>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_8966_11648">
+<rect width="24" height="24" fill="white" transform="translate(0.75)"/>
+</clipPath>
+</defs>
+</svg>

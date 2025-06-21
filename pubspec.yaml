@@ -71,14 +71,18 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/images/
     - assets/icons/
+    - assets/icons/food_pantry_icons/
+    - assets/icons/other_pantry_icons/
+    - assets/icons/tracker_icons/
     - assets/images/profile_pic.png
     - assets/images/blood_pressure.png
     - assets/images/healthy_diet.png
     - assets/images/tip1.png
     - assets/images/tip2.png
-    - assets/images/
     - assets/dialogflow_auth.json
+    - assets/top-1k-ingredients.csv
     - .env
   #   - images/a_dot_ham.jpeg
 
