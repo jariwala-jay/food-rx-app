@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app/features/pantry/models/pantry_item.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/recipes/application/recipe_generation_service.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';

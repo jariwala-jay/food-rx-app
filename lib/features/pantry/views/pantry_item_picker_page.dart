@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_app/features/pantry/models/pantry_item.dart';
-import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 import '../providers/pantry_item_picker_provider.dart';
 import 'dart:developer' as developer;
-import '../models/ingredient.dart';
+
 import '../widgets/pantry_item_add_modal.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
-import '../models/ingredient.dart';
+import 'package:flutter_app/core/models/ingredient.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
@@ -297,6 +294,31 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                           color: Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
+                      ),
+                    )
+                  else if (!_isTyping && provider.searchResults.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Popular ${widget.title}',
+                            style: TextStyle(
+                              color: Colors.grey[800],
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tap + to add items to your pantry',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   Expanded(

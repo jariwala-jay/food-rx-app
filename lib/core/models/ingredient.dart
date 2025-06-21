@@ -54,4 +54,4 @@ class Ingredient {
 
   @override
   int get hashCode => id.hashCode;
-}
+} 

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../controller/pantry_controller.dart';
-import '../models/pantry_item.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);

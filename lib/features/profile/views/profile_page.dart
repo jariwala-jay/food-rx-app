@@ -1,78 +1,132 @@
-import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/utils/typography.dart';
+import 'dart:typed_data';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.all(16),
-      child: Container(
-        width: double.infinity,
-        decoration: ShapeDecoration(
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InputFieldsWidget("Name", "Enter your name"),
-            SizedBox(height: 20),
-            InputFieldsWidget("Email", "Enter your email"),
-            SizedBox(height: 20),
-            InputFieldsWidget("Password", "Enter your password"),
-            SizedBox(height: 20),
-            InputFieldsWidget("Confirm Password", "Re-enter your password"),
-          ],
-        ),
-      ),
-    );
-  }
+  State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class InputFieldsWidget extends StatelessWidget {
-  const InputFieldsWidget(this.label, this.hintText, {super.key});
-  final String label;
-  final String hintText;
+class _ProfilePageState extends State<ProfilePage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  Uint8List? _profilePhotoData;
+
+  @override
+  void initState() {
+    super.initState();
+    final authController = context.read<AuthController>();
+    _nameController.text = authController.currentUser?.name ?? '';
+    _emailController.text = authController.currentUser?.email ?? '';
+    _loadProfilePhoto();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfilePhoto() async {
+    final authProvider = Provider.of<AuthController>(context, listen: false);
+    if (authProvider.currentUser?.profilePhotoId != null) {
+      final photoData = await authProvider.getProfilePhoto();
+      if (mounted && photoData != null) {
+        setState(() {
+          _profilePhotoData = Uint8List.fromList(photoData);
+        });
+      }
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    if (_formKey.currentState!.validate()) {
+      final authController = context.read<AuthController>();
+      final updates = {
+        'name': _nameController.text,
+        'email': _emailController.text,
+      };
+      await authController.updateUserProfile(updates);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.bg_16_m.copyWith(color: Colors.black)),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: ShapeDecoration(
-            color: const Color(0xFFF7F7F8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+    final authController = context.watch<AuthController>();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F8),
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await authController.logout();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
           ),
-          child: TextField(
-            style:
-                AppTypography.bg_14_r.copyWith(color: const Color(0xFF2C2C2C)),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              fillColor: Colors.black,
-              hintText: hintText,
-              hintStyle: AppTypography.bg_14_r.copyWith(
-                color: const Color(0xFF90909A),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundImage: _profilePhotoData != null
+                    ? MemoryImage(_profilePhotoData!)
+                    : const AssetImage('assets/images/profile_pic.png')
+                        as ImageProvider,
               ),
-            ),
+              const SizedBox(height: 24),
+              AppFormField(
+                label: 'Name',
+                hintText: 'Enter your name',
+                controller: _nameController,
+              ),
+              const SizedBox(height: 16),
+              AppFormField(
+                label: 'Email',
+                hintText: 'Enter your email',
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _updateProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6A00),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child:
+                      const Text('Save Changes', style: AppTypography.bg_16_sb),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

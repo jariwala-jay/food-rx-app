@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
-import '../models/pantry_item.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter/foundation.dart';
-import '../models/ingredient.dart';
+import 'package:flutter_app/core/models/ingredient.dart';
+import 'package:flutter_app/core/constants/pantry_categories.dart';
 import '../repositories/ingredient_repository.dart';
 
 class PantryItemPickerProvider extends ChangeNotifier {
@@ -16,7 +17,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
   bool isLoading = false;
   String? error;
   List<Ingredient> items = [];
-  List<Ingredient> mostUsedItems = [];
+  List<Ingredient> commonItems = [];
   List<Ingredient> searchResults = [];
   String _currentCategoryKey = '';
 
@@ -41,24 +42,35 @@ class PantryItemPickerProvider extends ChangeNotifier {
     // Clear previous results to avoid mixing categories
     items = [];
     searchResults = [];
-    mostUsedItems = [];
+    commonItems = [];
 
     notifyListeners();
 
     try {
-      // Fetch ingredients for the category by searching with an aisle
-      final results = await _ingredientRepository.searchIngredients(
-          aisle: categoryKey, number: 50);
+      // First, load common items from constants
+      final commonItemsData =
+          getCommonItemsForCategory(categoryKey, isFoodPantryItem);
+      commonItems = commonItemsData
+          .map((itemData) => Ingredient(
+                id: itemData['id']?.toString() ?? '',
+                name: itemData['name'] ?? '',
+                image: itemData['imageUrl'] ?? '',
+                imageName:
+                    itemData['imageUrl']?.split('/').last ?? 'default.jpg',
+                aisle: categoryKey,
+              ))
+          .toList();
 
-      developer.log('Loaded ${results.length} items for category $categoryKey');
+      developer.log(
+          'Loaded ${commonItems.length} common items for category $categoryKey');
 
-      items = results;
-      mostUsedItems = items.take(3).toList();
-      searchResults = List<Ingredient>.from(items);
+      // Set common items as initial search results
+      items = List<Ingredient>.from(commonItems);
+      searchResults = List<Ingredient>.from(commonItems);
 
-      if (items.isEmpty) {
-        developer.log('Warning: No items found for category $categoryKey');
-      }
+      // Optionally load additional items from API in background
+      // This provides immediate results while still allowing for expanded search
+      _loadAdditionalItemsInBackground(categoryKey);
     } catch (e) {
       developer.log('Error loading items: $e');
       error = 'Failed to load items: $e';
@@ -68,11 +80,49 @@ class PantryItemPickerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadAdditionalItemsInBackground(String categoryKey) async {
+    try {
+      // Fetch additional ingredients from API
+      final apiResults = await _ingredientRepository.searchIngredients(
+          aisle: categoryKey, number: 30);
+
+      developer.log(
+          'Loaded ${apiResults.length} additional API items for category $categoryKey');
+
+      // Merge API results with common items, avoiding duplicates
+      final allItems = <Ingredient>[...commonItems];
+
+      for (final apiItem in apiResults) {
+        // Check if item already exists in common items (by name similarity)
+        final isDuplicate = commonItems.any((commonItem) =>
+            commonItem.name.toLowerCase().trim() ==
+            apiItem.name.toLowerCase().trim());
+
+        if (!isDuplicate) {
+          allItems.add(apiItem);
+        }
+      }
+
+      items = allItems;
+
+      // Update search results only if user hasn't started searching
+      if (searchResults.length == commonItems.length) {
+        searchResults = List<Ingredient>.from(allItems);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      developer.log('Error loading additional items in background: $e');
+      // Don't set error here as common items are already loaded
+    }
+  }
+
   void searchItems(String query) {
     if (query.isEmpty) {
+      // Show all items (common + API results)
       searchResults = List<Ingredient>.from(items);
     } else {
-      // Local filtering for immediate feedback (can be removed if API is fast enough)
+      // Local filtering for immediate feedback
       searchResults = items
           .where(
               (item) => item.name.toLowerCase().contains(query.toLowerCase()))
@@ -110,7 +160,26 @@ class PantryItemPickerProvider extends ChangeNotifier {
 
         searchResults = autocompleteResults;
       } else {
-        searchResults = results;
+        // Merge search results with existing items to avoid losing common items
+        final mergedResults = <Ingredient>[...results];
+
+        // Add relevant common items that match the search
+        final matchingCommonItems = commonItems
+            .where((commonItem) =>
+                commonItem.name.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+
+        for (final commonItem in matchingCommonItems) {
+          final isDuplicate = mergedResults.any((result) =>
+              result.name.toLowerCase().trim() ==
+              commonItem.name.toLowerCase().trim());
+
+          if (!isDuplicate) {
+            mergedResults.insert(0, commonItem); // Add common items at the top
+          }
+        }
+
+        searchResults = mergedResults;
       }
 
       developer

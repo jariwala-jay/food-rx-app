@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/pantry_item.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'dart:developer' as developer;
 
 class PantryItemAddModal extends StatefulWidget {

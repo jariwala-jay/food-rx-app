@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:developer' as developer;
 
-import 'package:flutter_app/features/pantry/models/ingredient.dart';
+import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 
 class SpoonacularIngredientRepository implements IngredientRepository {

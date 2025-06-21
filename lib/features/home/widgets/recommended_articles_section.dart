@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/typography.dart';
-import 'package:flutter_app/features/education/providers/article_provider.dart';
+import 'package:flutter_app/features/education/controller/article_controller.dart';
 import 'package:flutter_app/features/education/models/article.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
@@ -11,44 +11,37 @@ class RecommendedArticlesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Provider.of<ArticleProvider>(context, listen: false)
-          .fetchRecommendedArticles(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return Consumer<ArticleController>(
+      builder: (context, articleController, child) {
+        if (articleController.isLoading) {
           return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (articleController.error != null) {
+          return Center(child: Text('Error: ${articleController.error}'));
         } else {
-          return Consumer<ArticleProvider>(
-            builder: (context, articleProvider, child) {
-              final articles = articleProvider.recommendedArticles;
-              if (articles.isEmpty) {
-                return const Center(child: Text('No recommended articles.'));
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Recommended For You',
-                      style: AppTypography.bg_18_b),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: articles.length,
-                      itemBuilder: (context, index) {
-                        final article = articles[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 16.0),
-                          child: _buildRecommendedCard(context, article),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
+          final articles = articleController.recommendedArticles;
+          if (articles.isEmpty) {
+            return const Center(child: Text('No recommended articles.'));
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Recommended For You', style: AppTypography.bg_18_b),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: articles.length,
+                  itemBuilder: (context, index) {
+                    final article = articles[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 16.0),
+                      child: _buildRecommendedCard(context, article),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         }
       },
@@ -57,7 +50,7 @@ class RecommendedArticlesSection extends StatelessWidget {
 
   Widget _buildRecommendedCard(BuildContext context, Article article) {
     final authController = context.read<AuthController>();
-    final articleProvider = context.read<ArticleProvider>();
+    final articleController = context.read<ArticleController>();
     final user = authController.currentUser;
     return GestureDetector(
       onTap: () {
@@ -135,7 +128,7 @@ class RecommendedArticlesSection extends StatelessWidget {
               ),
               onPressed: () {
                 if (user != null) {
-                  articleProvider.toggleBookmark(article.id);
+                  articleController.toggleBookmark(article.id);
                 }
               },
             ),

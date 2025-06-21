@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../models/pantry_item.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:provider/provider.dart';
@@ -63,95 +63,14 @@ class PantryController extends ChangeNotifier {
       final otherItemsData =
           await _mongoDBService.getPantryItems(_userId!, isPantryItem: false);
 
-      _pantryItems = _convertLegacyItemsToPantryItems(pantryItemsData, true);
-      _otherItems = _convertLegacyItemsToPantryItems(otherItemsData, false);
+      _pantryItems =
+          pantryItemsData.map((data) => PantryItem.fromMap(data)).toList();
+      _otherItems =
+          otherItemsData.map((data) => PantryItem.fromMap(data)).toList();
 
       _setLoading(false);
     } catch (e) {
       _setError('Failed to load pantry items: $e');
-    }
-  }
-
-  // Convert legacy item data to the new PantryItem format
-  List<PantryItem> _convertLegacyItemsToPantryItems(
-      List<Map<String, dynamic>> itemsData, bool isPantryItems) {
-    return itemsData.map((data) {
-      final double quantity =
-          double.tryParse(data['quantity']?.toString() ?? '1') ?? 1.0;
-      final UnitType unit = _parseUnitType(data['unit']);
-
-      // Helper function to parse IDs that might be in "ObjectId(...)" format
-      String parseItemId(dynamic id) {
-        if (id == null) return '';
-
-        String idStr = id.toString();
-        if (idStr.startsWith('ObjectId("') && idStr.endsWith('")')) {
-          // Extract the hexadecimal ID from ObjectId("hexString")
-          return idStr.substring(9, idStr.length - 2);
-        }
-        return idStr;
-      }
-
-      // Get the item ID, handling ObjectId format if present
-      String itemId = '';
-      if (data['_id'] != null) {
-        itemId = parseItemId(data['_id']);
-      } else if (data['id'] != null) {
-        itemId = parseItemId(data['id']);
-      }
-
-      return PantryItem(
-        id: itemId,
-        name: data['name'] ?? '',
-        imageUrl: data['imageUrl'] ??
-            'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg',
-        category: data['category'] ?? '',
-        quantity: quantity,
-        unit: unit,
-        expirationDate: data['expiryDate'] != null
-            ? DateTime.parse(data['expiryDate'])
-            : DateTime.now().add(const Duration(days: 7)),
-        addedDate: data['addedDate'] != null
-            ? DateTime.parse(data['addedDate'])
-            : DateTime.now(),
-        isSelected: false,
-        isPantryItem: isPantryItems, // Ensure correct isPantryItem value
-      );
-    }).toList();
-  }
-
-  // Helper to parse unit types from string
-  UnitType _parseUnitType(String? unitStr) {
-    if (unitStr == null) return UnitType.piece;
-
-    switch (unitStr.toLowerCase()) {
-      case 'lb':
-        return UnitType.pound;
-      case 'oz':
-        return UnitType.ounces;
-      case 'gal':
-        return UnitType.gallon;
-      case 'ml':
-        return UnitType.milliliter;
-      case 'l':
-        return UnitType.liter;
-      case 'pc':
-      case 'piece':
-      case 'pieces':
-        return UnitType.piece;
-      case 'g':
-        return UnitType.grams;
-      case 'kg':
-        return UnitType.kilograms;
-      case 'cup':
-      case 'cups':
-        return UnitType.cup;
-      case 'tbsp':
-        return UnitType.tablespoon;
-      case 'tsp':
-        return UnitType.teaspoon;
-      default:
-        return UnitType.piece;
     }
   }
 
@@ -166,11 +85,11 @@ class PantryController extends ChangeNotifier {
 
     try {
       await _mongoDBService.ensureConnection();
-      final itemData = _convertPantryItemToLegacyFormat(item);
+      final itemData = item.toMap();
       final itemId = await _mongoDBService.addPantryItem(_userId!, itemData);
 
       final newItem = item.copyWith(id: itemId);
-      if (itemData['isPantryItem']) {
+      if (item.isPantryItem) {
         _pantryItems = [..._pantryItems, newItem];
       } else {
         _otherItems = [..._otherItems, newItem];
@@ -181,22 +100,6 @@ class PantryController extends ChangeNotifier {
     } catch (e) {
       _setError('Failed to add item: $e');
     }
-  }
-
-  // Convert our new PantryItem to the legacy format for DB storage
-  Map<String, dynamic> _convertPantryItemToLegacyFormat(PantryItem item) {
-    // Use the item's actual isPantryItem value, not a hardcoded value
-    return {
-      'id': item.id,
-      'name': item.name,
-      'category': item.category,
-      'quantity': item.quantity.toString(),
-      'unit': item.unitLabel,
-      'expiryDate': item.expirationDate.toIso8601String(),
-      'addedDate': item.addedDate.toIso8601String(),
-      'imageUrl': item.imageUrl,
-      'isPantryItem': item.isPantryItem,
-    };
   }
 
   // Remove a pantry item
@@ -229,7 +132,7 @@ class PantryController extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      final updates = _convertPantryItemToLegacyFormat(item);
+      final updates = item.toMap();
 
       await _mongoDBService.ensureConnection();
 
@@ -264,7 +167,7 @@ class PantryController extends ChangeNotifier {
       await _mongoDBService.ensureConnection();
       final expiringItemsData = await _mongoDBService.getExpiringItems(_userId!,
           daysThreshold: daysThreshold);
-      return _convertLegacyItemsToPantryItems(expiringItemsData, true);
+      return expiringItemsData.map((data) => PantryItem.fromMap(data)).toList();
     } catch (e) {
       _setError('Failed to get expiring items: $e');
       return [];
@@ -287,20 +190,14 @@ class PantryController extends ChangeNotifier {
   }
 
   Future<void> deductIngredientsForRecipe(Recipe recipe) async {
-    if (_unitConversionService == null ||
-        _ingredientSubstitutionService == null) {
-      _setError("Services not initialized for pantry deduction.");
-      return;
-    }
-
     _setLoading(true);
 
     try {
       for (final recipeIngredient in recipe.extendedIngredients) {
         PantryItem? pantryItemToUpdate;
         for (final pantryItem in [..._pantryItems, ..._otherItems]) {
-          final substitute = _ingredientSubstitutionService!
-              .getValidSubstitute(recipeIngredient.name, pantryItem.name);
+          final substitute = _ingredientSubstitutionService.getValidSubstitute(
+              recipeIngredient.name, pantryItem.name);
           if (substitute != null) {
             pantryItemToUpdate = pantryItem;
             break;
@@ -308,7 +205,7 @@ class PantryController extends ChangeNotifier {
         }
 
         if (pantryItemToUpdate != null) {
-          final requiredAmount = _unitConversionService!.convert(
+          final requiredAmount = _unitConversionService.convert(
             amount: recipeIngredient.amount,
             fromUnit: recipeIngredient.unit,
             toUnit: pantryItemToUpdate.unit.name,

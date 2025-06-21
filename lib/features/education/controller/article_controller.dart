@@ -6,9 +6,17 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class ArticleController extends ChangeNotifier {
   final ArticleRepository _articleRepository;
-  final AuthController _authProvider;
+  AuthController _authProvider;
 
-  ArticleController(this._articleRepository, this._authProvider);
+  ArticleController(this._articleRepository, this._authProvider) {
+    _authProvider.addListener(_onAuthChanged);
+    initialize();
+  }
+
+  set authProvider(AuthController authProvider) {
+    _authProvider = authProvider;
+    _onAuthChanged();
+  }
 
   // State
   List<Article> _articles = [];
@@ -22,6 +30,9 @@ class ArticleController extends ChangeNotifier {
   bool _bookmarksOnly = false;
   String _searchQuery = '';
 
+  // Cache
+  final Map<String, List<Article>> _cachedArticles = {};
+
   // Getters
   List<Article> get articles => _articles;
   List<Article> get recommendedArticles => _recommendedArticles;
@@ -33,6 +44,30 @@ class ArticleController extends ChangeNotifier {
   String? get error => _error;
   bool get bookmarksOnly => _bookmarksOnly;
   String? get _userId => _authProvider.currentUser?.id;
+
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    clearCache();
+    initialize();
+  }
+
+  void clearCache() {
+    _cachedArticles.clear();
+    _articles = [];
+    _recommendedArticles = [];
+    _searchSuggestions = [];
+    _categories = [];
+    _bookmarkedArticles = [];
+    _selectedCategory = null;
+    _bookmarksOnly = false;
+    _searchQuery = '';
+    notifyListeners();
+  }
 
   Future<void> initialize() async {
     await loadCategories();
@@ -61,13 +96,26 @@ class ArticleController extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
+    final cacheKey =
+        '${_bookmarksOnly ? 'bookmarks' : _selectedCategory?.name ?? 'all'}_$_searchQuery';
+
+    if (_cachedArticles.containsKey(cacheKey)) {
+      _articles = _cachedArticles[cacheKey]!;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
     try {
-      _articles = await _articleRepository.getArticles(
+      final fetchedArticles = await _articleRepository.getArticles(
         category: _selectedCategory?.name,
         userId: _userId,
         bookmarksOnly: _bookmarksOnly,
         searchQuery: _searchQuery,
       );
+      _articles = fetchedArticles;
+      _cachedArticles[cacheKey] = fetchedArticles;
     } catch (e) {
       _error = 'Failed to load articles: $e';
     } finally {
@@ -94,7 +142,8 @@ class ArticleController extends ChangeNotifier {
       final allArticles = await _articleRepository.getArticles();
       _recommendedArticles = allArticles
           .where(
-              (article) => user.medicalConditions!.contains(article.category))
+            (article) => user.medicalConditions!.contains(article.category),
+          )
           .toList();
     } catch (e) {
       _error = 'Failed to load recommended articles: $e';
@@ -119,9 +168,6 @@ class ArticleController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-    _bookmarksOnly = false;
-    _searchQuery = '';
-    loadArticles();
   }
 
   void selectCategory(Category category) {
@@ -155,60 +201,80 @@ class ArticleController extends ChangeNotifier {
       return;
     }
 
-    Article? articleToUpdate;
-    try {
-      articleToUpdate = _articles.firstWhere((a) => a.id == articleId);
-    } catch (e) {
-      // Also check bookmarks
-      try {
-        articleToUpdate =
-            _bookmarkedArticles.firstWhere((a) => a.id == articleId);
-      } catch (e) {
-        _error = 'Article not found.';
-        notifyListeners();
-        return;
-      }
+    final article = _findArticleById(articleId);
+    if (article == null) {
+      _error = 'Article not found.';
+      notifyListeners();
+      return;
     }
 
-    final newBookmarkStatus = !articleToUpdate.isBookmarked;
-    final originalStatus = articleToUpdate.isBookmarked;
+    final newBookmarkStatus = !article.isBookmarked;
 
     // Optimistic UI update
     _updateArticleInLists(articleId, newBookmarkStatus);
+    notifyListeners();
 
     try {
       await _articleRepository.updateArticleBookmark(
-          articleId, newBookmarkStatus,
-          userId: _userId!);
-      // If successful, we might want to refresh the bookmark list if we are on it
-      if (_bookmarksOnly) {
-        await loadBookmarkedArticles();
-      }
+        articleId,
+        newBookmarkStatus,
+        userId: _userId!,
+      );
+      // Invalidate cache for the lists that might have changed
+      _cachedArticles.removeWhere(
+        (key, value) => key.contains('bookmarks') || key.contains('all'),
+      );
     } catch (e) {
       _error = 'Failed to update bookmark: $e';
       // Revert on failure
-      _updateArticleInLists(articleId, originalStatus);
+      _updateArticleInLists(articleId, !newBookmarkStatus);
+      notifyListeners();
     }
-    notifyListeners();
+  }
+
+  Article? _findArticleById(String articleId) {
+    try {
+      return _articles.firstWhere((a) => a.id == articleId);
+    } catch (e) {
+      try {
+        return _bookmarkedArticles.firstWhere((a) => a.id == articleId);
+      } catch (e) {
+        try {
+          return _recommendedArticles.firstWhere((a) => a.id == articleId);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
   }
 
   void _updateArticleInLists(String articleId, bool isBookmarked) {
     final articleIndex = _articles.indexWhere((a) => a.id == articleId);
     if (articleIndex != -1) {
-      _articles[articleIndex] =
-          _articles[articleIndex].copyWith(isBookmarked: isBookmarked);
+      _articles[articleIndex] = _articles[articleIndex].copyWith(
+        isBookmarked: isBookmarked,
+      );
+    }
+
+    final recommendedIndex = _recommendedArticles.indexWhere(
+      (a) => a.id == articleId,
+    );
+    if (recommendedIndex != -1) {
+      _recommendedArticles[recommendedIndex] =
+          _recommendedArticles[recommendedIndex].copyWith(
+            isBookmarked: isBookmarked,
+          );
     }
 
     if (isBookmarked) {
-      if (!_bookmarkedArticles.any((a) => a.id == articleId) &&
-          articleIndex != -1) {
-        _bookmarkedArticles
-            .add(_articles[articleIndex].copyWith(isBookmarked: true));
+      final article = _findArticleById(articleId);
+      if (article != null &&
+          !_bookmarkedArticles.any((a) => a.id == articleId)) {
+        _bookmarkedArticles.add(article.copyWith(isBookmarked: true));
       }
     } else {
       _bookmarkedArticles.removeWhere((a) => a.id == articleId);
     }
-    notifyListeners();
   }
 
   Future<void> searchArticles(String query) async {
@@ -217,14 +283,16 @@ class ArticleController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    _searchSuggestions =
-        await _articleRepository.getArticles(searchQuery: query);
+    _searchSuggestions = await _articleRepository.getArticles(
+      searchQuery: query,
+      userId: _userId,
+    );
     notifyListeners();
   }
 
   void clearSearch() {
     _searchQuery = '';
     _searchSuggestions = [];
-    notifyListeners();
+    loadArticles();
   }
 }

@@ -16,8 +16,7 @@ import 'package:flutter_app/features/pantry/repositories/ingredient_repository.d
 import 'package:flutter_app/features/pantry/repositories/spoonacular_ingredient_repository.dart';
 import 'package:flutter_app/features/recipes/application/recipe_generation_service.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
-import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart'
-    as domain_repo;
+import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart';
 import 'package:flutter_app/features/recipes/repositories/spoonacular_recipe_repository.dart';
 import 'package:flutter_app/features/recipes/repositories/mongo_recipe_repository.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository_impl.dart';
@@ -48,14 +47,8 @@ void main() async {
     runApp(
       MultiProvider(
         providers: [
-          // Core providers and services
-          ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
-          ChangeNotifierProvider(create: (_) => SignupProvider()),
-          Provider<MongoDBService>(create: (_) => mongoDBService),
-          ChangeNotifierProvider(
-              create: (context) =>
-                  TipProvider(TipService(context.read<MongoDBService>()))),
-          ChangeNotifierProvider(create: (_) => TrackerProvider()),
+          // Core services
+          Provider<MongoDBService>.value(value: mongoDBService),
           Provider<UnitConversionService>(
               create: (_) => UnitConversionService()),
           Provider<FoodCategoryService>(
@@ -70,24 +63,26 @@ void main() async {
             create: (context) =>
                 MongoArticleRepository(context.read<MongoDBService>()),
           ),
-          Provider<SpoonacularRecipeRepository>(
-            create: (_) => SpoonacularRecipeRepository(),
-          ),
-          Provider<MongoRecipeRepository>(
-            create: (context) =>
-                MongoRecipeRepository(context.read<MongoDBService>()),
-          ),
-          Provider<domain_repo.RecipeRepository>(
+          Provider<RecipeRepository>(
             create: (context) => RecipeRepositoryImpl(
-              context.read<SpoonacularRecipeRepository>(),
-              context.read<MongoRecipeRepository>(),
+              SpoonacularRecipeRepository(),
+              MongoRecipeRepository(context.read<MongoDBService>()),
             ),
           ),
           Provider<IngredientRepository>(
             create: (context) => SpoonacularIngredientRepository(),
           ),
 
-          // Feature Controllers (as ProxyProviders where they depend on auth state)
+          // Core Controllers / State Managers
+          ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
+          ChangeNotifierProvider(create: (_) => SignupProvider()),
+          ChangeNotifierProvider(create: (_) => TrackerProvider()),
+
+          // Dependent Controllers (as ProxyProviders)
+          ChangeNotifierProvider(
+              create: (context) =>
+                  TipProvider(TipService(context.read<MongoDBService>()))),
+
           ChangeNotifierProxyProvider<AuthController, PantryController>(
             create: (context) => PantryController(
               context.read<MongoDBService>(),
@@ -96,53 +91,42 @@ void main() async {
                   context.read<IngredientSubstitutionService>(),
             ),
             update: (context, auth, pantry) {
-              final controller = pantry ??
-                  PantryController(
-                    context.read<MongoDBService>(),
-                    conversionService: context.read<UnitConversionService>(),
-                    ingredientSubstitutionService:
-                        context.read<IngredientSubstitutionService>(),
-                  );
-              if (auth.isAuthenticated && auth.currentUser?.id != null) {
-                controller.setAuthProvider(auth);
-                controller.initializeWithUser(auth.currentUser!.id!);
+              pantry!.setAuthProvider(auth);
+              if (auth.isAuthenticated) {
+                pantry.initializeWithUser(auth.currentUser!.id!);
               }
-              return controller;
+              return pantry;
             },
           ),
 
           ChangeNotifierProxyProvider<AuthController, ArticleController>(
-            create: (context) => ArticleController(
-              context.read<ArticleRepository>(),
-              context.read<AuthController>(),
-            ),
-            update: (context, auth, articleController) {
-              final controller = articleController ??
-                  ArticleController(context.read<ArticleRepository>(), auth);
-              controller.initialize();
-              return controller;
-            },
-          ),
+              create: (context) => ArticleController(
+                    context.read<ArticleRepository>(),
+                    context.read<AuthController>(),
+                  ),
+              update: (context, auth, articleController) {
+                articleController!.authProvider = auth;
+                return articleController;
+              }),
 
           ChangeNotifierProxyProvider2<AuthController, PantryController,
               RecipeController>(
             create: (context) => RecipeController(
               recipeGenerationService: RecipeGenerationService(
-                recipeRepository: context.read<domain_repo.RecipeRepository>(),
+                recipeRepository: context.read<RecipeRepository>(),
                 unitConversionService: context.read<UnitConversionService>(),
                 foodCategoryService: context.read<FoodCategoryService>(),
                 ingredientSubstitutionService:
                     context.read<IngredientSubstitutionService>(),
               ),
-              recipeRepository: context.read<domain_repo.RecipeRepository>(),
+              recipeRepository: context.read<RecipeRepository>(),
               authProvider: context.read<AuthController>(),
               pantryController: context.read<PantryController>(),
             ),
             update: (context, auth, pantry, recipeController) {
-              final controller = recipeController!;
-              controller.authProvider = auth;
-              controller.pantryController = pantry;
-              return controller;
+              recipeController!.authProvider = auth;
+              recipeController.pantryController = pantry;
+              return recipeController;
             },
           ),
 

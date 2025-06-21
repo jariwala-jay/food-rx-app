@@ -1,4 +1,4 @@
-import 'package:flutter_app/features/pantry/models/ingredient.dart';
+import 'package:flutter_app/core/models/ingredient.dart';
 
 abstract class IngredientRepository {
   Future<List<Ingredient>> searchIngredients(
