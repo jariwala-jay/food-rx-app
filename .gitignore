@@ -47,6 +47,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# GCloud
+/gcloud/functions/tracker-reset/node_modules/
+/gcloud/functions/tracker-reset/.env
+/gcloud/functions/tracker-reset/package-lock.json
+/gcloud/functions/tracker-reset/.gcloudignore
+
 # Environment variables
 .env
 
