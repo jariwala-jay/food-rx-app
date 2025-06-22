@@ -1,5 +1,4 @@
-import 'package:mongo_dart/mongo_dart.dart';
-import 'package:flutter/material.dart';
+import 'package:mongo_dart/mongo_dart.dart' as mongo;
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
@@ -7,30 +6,29 @@ import 'tracker_progress_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter_app/features/tracking/services/diet_plan_service.dart';
 
 class TrackerService {
   final MongoDBService _mongoDBService;
   final TrackerProgressService _progressService;
+  final DietPlanService _dietPlanService;
   static final TrackerService _instance = TrackerService._internal();
 
-  // Local cache of trackers
   List<TrackerGoal> _cachedDailyTrackers = [];
   List<TrackerGoal> _cachedWeeklyTrackers = [];
   bool _useLocalFallback = false;
   bool _isInitialized = false;
 
-  // Singleton pattern
   factory TrackerService() => _instance;
 
   TrackerService._internal()
       : _mongoDBService = MongoDBService(),
-        _progressService = TrackerProgressService();
+        _progressService = TrackerProgressService(),
+        _dietPlanService = DietPlanService();
 
-  // Collection name for trackers in MongoDB
   static const String _collectionName = 'user_trackers';
 
-  // Get DB collection with proper connection check
-  Future<DbCollection?> get _collection async {
+  Future<mongo.DbCollection?> get _collection async {
     try {
       await _ensureMongoConnection();
       if (_useLocalFallback) return null;
@@ -42,14 +40,16 @@ class TrackerService {
     }
   }
 
-  // Robust MongoDB connection management
   Future<void> _ensureMongoConnection() async {
     try {
       if (!_isInitialized) {
         await _mongoDBService.initialize();
         _isInitialized = true;
       }
-
+      if (_mongoDBService.db.state == mongo.State.closed) {
+        await _mongoDBService.initialize();
+        _isInitialized = true;
+      }
       await _mongoDBService.ensureConnection();
       _useLocalFallback = false;
     } catch (e) {
@@ -59,28 +59,19 @@ class TrackerService {
     }
   }
 
-  // Queue of pending tracker updates to MongoDB - now using a different approach
   final List<Map<String, dynamic>> _pendingUpdates = [];
   bool _isProcessingQueue = false;
-  final Completer<void>? _processingCompleter = null;
 
-  // Cache trackers locally
   Future<void> _cacheTrackersLocally(List<TrackerGoal> daily,
       List<TrackerGoal> weekly, String userId, String dietType) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      // Cache identifiers
       final dailyCacheKey = 'daily_trackers_${userId}_$dietType';
       final weeklyCacheKey = 'weekly_trackers_${userId}_$dietType';
-
-      // Save to shared preferences
       await prefs.setString(
           dailyCacheKey, jsonEncode(daily.map((t) => t.toJson()).toList()));
       await prefs.setString(
           weeklyCacheKey, jsonEncode(weekly.map((t) => t.toJson()).toList()));
-
-      // Update memory cache
       _cachedDailyTrackers = List.from(daily);
       _cachedWeeklyTrackers = List.from(weekly);
     } catch (e) {
@@ -88,7 +79,6 @@ class TrackerService {
     }
   }
 
-  // Retrieve trackers from local cache
   Future<List<TrackerGoal>> _getLocalTrackers(
       String userId, String dietType, bool isWeekly) async {
     try {
@@ -96,32 +86,23 @@ class TrackerService {
       final cacheKey = isWeekly
           ? 'weekly_trackers_${userId}_$dietType'
           : 'daily_trackers_${userId}_$dietType';
-
-      // Try to get from memory cache first
       if (isWeekly && _cachedWeeklyTrackers.isNotEmpty) {
         return List.from(_cachedWeeklyTrackers);
       } else if (!isWeekly && _cachedDailyTrackers.isNotEmpty) {
         return List.from(_cachedDailyTrackers);
       }
-
-      // Otherwise load from shared preferences
       final cached = prefs.getString(cacheKey);
       if (cached != null) {
         final List<dynamic> decoded = jsonDecode(cached);
         final trackers =
             decoded.map((json) => TrackerGoal.fromJson(json)).toList();
-
-        // Update memory cache
         if (isWeekly) {
           _cachedWeeklyTrackers = List.from(trackers);
         } else {
           _cachedDailyTrackers = List.from(trackers);
         }
-
         return trackers;
       }
-
-      // If not in cache, return empty list
       return [];
     } catch (e) {
       print('Failed to get local trackers: $e');
@@ -129,35 +110,25 @@ class TrackerService {
     }
   }
 
-  // Fetch all trackers for a specific user and diet type
   Future<List<TrackerGoal>> getTrackers(String userId, String dietType) async {
     try {
       await _ensureMongoConnection();
-
       if (_useLocalFallback) {
-        final dailyTrackers = await _getLocalTrackers(userId, dietType, false);
-        final weeklyTrackers = await _getLocalTrackers(userId, dietType, true);
-        return [...dailyTrackers, ...weeklyTrackers];
+        return await _getFallbackTrackers(userId, dietType);
       }
-
       final collection = await _collection;
       if (collection == null) {
         return await _getFallbackTrackers(userId, dietType);
       }
-
       final results = await collection.find({
         'userId': userId,
         'dietType': dietType,
       }).toList();
-
       final trackers = results.map((doc) => TrackerGoal.fromJson(doc)).toList();
-
-      // Update cache
       final dailyTrackers = trackers.where((t) => !t.isWeeklyGoal).toList();
       final weeklyTrackers = trackers.where((t) => t.isWeeklyGoal).toList();
       await _cacheTrackersLocally(
           dailyTrackers, weeklyTrackers, userId, dietType);
-
       return trackers;
     } catch (e) {
       print('Error fetching trackers from MongoDB: $e');
@@ -165,24 +136,23 @@ class TrackerService {
     }
   }
 
-  // Fallback method to get trackers from local cache
   Future<List<TrackerGoal>> _getFallbackTrackers(
       String userId, String dietType) async {
     final dailyTrackers = await _getLocalTrackers(userId, dietType, false);
     final weeklyTrackers = await _getLocalTrackers(userId, dietType, true);
+    if (dailyTrackers.isEmpty && weeklyTrackers.isEmpty) {
+      return _dietPlanService.getDietPlan(dietType).getGoals(userId);
+    }
     return [...dailyTrackers, ...weeklyTrackers];
   }
 
-  // Initialize default trackers for a new user
   Future<void> initializeUserTrackers(String userId, String dietType) async {
     try {
       await _ensureMongoConnection();
-
-      // Create default trackers
-      final defaultTrackers = _getDefaultTrackers(userId, dietType);
+      final defaultTrackers =
+          _dietPlanService.getDietPlan(dietType).getGoals(userId);
 
       if (_useLocalFallback) {
-        // Save default trackers locally
         final dailyTrackers =
             defaultTrackers.where((t) => !t.isWeeklyGoal).toList();
         final weeklyTrackers =
@@ -193,709 +163,215 @@ class TrackerService {
       }
 
       final collection = await _collection;
-      if (collection == null) {
-        await _initializeLocalTrackers(userId, dietType, defaultTrackers);
-        return;
-      }
-
-      // Check if trackers already exist
-      final existingTrackers =
-          await collection.find({'userId': userId}).toList();
-      if (existingTrackers.isNotEmpty) {
-        // If trackers already exist, just cache them
-        final trackers =
-            existingTrackers.map((doc) => TrackerGoal.fromJson(doc)).toList();
-        final dailyTrackers = trackers.where((t) => !t.isWeeklyGoal).toList();
-        final weeklyTrackers = trackers.where((t) => t.isWeeklyGoal).toList();
-        await _cacheTrackersLocally(
-            dailyTrackers, weeklyTrackers, userId, dietType);
-        return;
-      }
-
-      // Insert new trackers
-      await _insertTrackersToMongoDB(
-          collection, defaultTrackers, userId, dietType);
-    } catch (e) {
-      print('Error initializing trackers: $e');
-      await _initializeLocalTrackers(
-          userId, dietType, _getDefaultTrackers(userId, dietType));
-    }
-  }
-
-  // Initialize trackers locally only
-  Future<void> _initializeLocalTrackers(
-      String userId, String dietType, List<TrackerGoal> defaultTrackers) async {
-    final dailyTrackers =
-        defaultTrackers.where((t) => !t.isWeeklyGoal).toList();
-    final weeklyTrackers =
-        defaultTrackers.where((t) => t.isWeeklyGoal).toList();
-    await _cacheTrackersLocally(
-        dailyTrackers, weeklyTrackers, userId, dietType);
-  }
-
-  // Insert trackers to MongoDB with proper error handling
-  Future<void> _insertTrackersToMongoDB(DbCollection collection,
-      List<TrackerGoal> defaultTrackers, String userId, String dietType) async {
-    List<TrackerGoal> createdTrackers = [];
-
-    for (var tracker in defaultTrackers) {
-      try {
-        final mongoId = ObjectId();
-        final trackerWithId = tracker.copyWith(id: mongoId.toHexString());
-
-        final json = {
-          '_id': mongoId,
-          'userId': userId,
-          'name': tracker.name,
-          'category': tracker.category.toString().split('.').last,
-          'goalValue': tracker.goalValue,
-          'currentValue': tracker.currentValue,
-          'unit': tracker.unit.toString().split('.').last,
-          'colorStart': tracker.colorStart?.value,
-          'colorEnd': tracker.colorEnd?.value,
-          'dietType': tracker.dietType,
-          'isWeeklyGoal': tracker.isWeeklyGoal,
-          'lastUpdated': DateTime.now().toIso8601String(),
-          'createdAt': DateTime.now().toIso8601String(),
-        };
-
-        await collection.insertOne(json);
-        createdTrackers.add(trackerWithId);
-      } catch (e) {
-        print('Failed to insert tracker ${tracker.name}: $e');
-      }
-    }
-
-    // Cache the successfully created trackers
-    final dailyTrackers =
-        createdTrackers.where((t) => !t.isWeeklyGoal).toList();
-    final weeklyTrackers =
-        createdTrackers.where((t) => t.isWeeklyGoal).toList();
-    await _cacheTrackersLocally(
-        dailyTrackers, weeklyTrackers, userId, dietType);
-  }
-
-  // Update a tracker's current value - improved approach
-  Future<void> updateTrackerValue(String trackerId, double newValue) async {
-    print('Starting tracker update - ID: $trackerId, New Value: $newValue');
-
-    // 1. ALWAYS update the local cache first for immediate response
-    await _updateTrackerInLocalCache(trackerId, newValue);
-    print('Local cache updated successfully');
-
-    // 2. Update MongoDB and ensure cache consistency
-    try {
-      await _ensureMongoConnection();
-      if (!_useLocalFallback) {
-        await _sendUpdateToMongoDB(trackerId, newValue);
-
-        // 3. After successful MongoDB update, refresh the specific tracker from DB
-        // to ensure cache consistency
-        await _refreshTrackerFromMongoDB(trackerId);
-      }
-    } catch (e) {
-      print('MongoDB update failed, continuing with local cache: $e');
-      _useLocalFallback = true;
-    }
-  }
-
-  // Refresh a specific tracker from MongoDB to ensure cache consistency
-  Future<void> _refreshTrackerFromMongoDB(String trackerId) async {
-    try {
-      final collection = await _collection;
       if (collection == null) return;
 
-      // Parse trackerId to ObjectId
-      String hexString = trackerId;
-      if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
-        hexString = trackerId.substring(9, trackerId.length - 2);
-      }
-      hexString = hexString.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
-
-      if (hexString.length != 24) return;
-
-      final objectId = ObjectId.fromHexString(hexString);
-      final updatedDoc = await collection.findOne({'_id': objectId});
-
-      if (updatedDoc != null) {
-        final updatedTracker = TrackerGoal.fromJson(updatedDoc);
-
-        // Update the specific tracker in cache
-        await _updateSpecificTrackerInCache(updatedTracker);
-        print('Refreshed tracker ${trackerId} from MongoDB');
-      }
-    } catch (e) {
-      print('Failed to refresh tracker from MongoDB: $e');
-    }
-  }
-
-  // Update a specific tracker in the cache
-  Future<void> _updateSpecificTrackerInCache(TrackerGoal updatedTracker) async {
-    try {
-      bool updated = false;
-
-      // Update in daily trackers
-      for (int i = 0; i < _cachedDailyTrackers.length; i++) {
-        if (_cachedDailyTrackers[i].id == updatedTracker.id) {
-          _cachedDailyTrackers[i] = updatedTracker;
-          updated = true;
-          break;
-        }
-      }
-
-      // Update in weekly trackers if not found in daily
-      if (!updated) {
-        for (int i = 0; i < _cachedWeeklyTrackers.length; i++) {
-          if (_cachedWeeklyTrackers[i].id == updatedTracker.id) {
-            _cachedWeeklyTrackers[i] = updatedTracker;
-            updated = true;
-            break;
-          }
-        }
-      }
-
-      if (updated) {
-        await _persistCachedTrackers();
-      }
-    } catch (e) {
-      print('Failed to update specific tracker in cache: $e');
-    }
-  }
-
-  // Update tracker in local cache with better error handling
-  Future<void> _updateTrackerInLocalCache(
-      String trackerId, double newValue) async {
-    try {
-      String cleanId = trackerId;
-      if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
-        cleanId = trackerId.substring(9, trackerId.length - 2);
-      }
-
-      bool updated = false;
-
-      // Create new lists to avoid concurrent modification
-      List<TrackerGoal> updatedDailyTrackers = [];
-      for (final tracker in _cachedDailyTrackers) {
-        if (tracker.id == trackerId || tracker.id == cleanId) {
-          updatedDailyTrackers.add(tracker.copyWith(
-            currentValue: newValue,
-            lastUpdated: DateTime.now(),
-          ));
-          updated = true;
-        } else {
-          updatedDailyTrackers.add(tracker);
-        }
-      }
-
-      List<TrackerGoal> updatedWeeklyTrackers = [];
-      if (!updated) {
-        for (final tracker in _cachedWeeklyTrackers) {
-          if (tracker.id == trackerId || tracker.id == cleanId) {
-            updatedWeeklyTrackers.add(tracker.copyWith(
-              currentValue: newValue,
-              lastUpdated: DateTime.now(),
-            ));
-            updated = true;
-          } else {
-            updatedWeeklyTrackers.add(tracker);
-          }
-        }
-      } else {
-        updatedWeeklyTrackers = List.from(_cachedWeeklyTrackers);
-      }
-
-      if (updated) {
-        _cachedDailyTrackers = updatedDailyTrackers;
-        _cachedWeeklyTrackers = updatedWeeklyTrackers;
-        await _persistCachedTrackers();
-      }
-    } catch (e) {
-      print('Failed to update local cache: $e');
-    }
-  }
-
-  // Persist cached trackers to shared preferences
-  Future<void> _persistCachedTrackers() async {
-    try {
-      if (_cachedDailyTrackers.isEmpty && _cachedWeeklyTrackers.isEmpty) {
-        return;
-      }
-
-      final userId = _cachedDailyTrackers.isNotEmpty
-          ? _cachedDailyTrackers.first.userId
-          : _cachedWeeklyTrackers.first.userId;
-
-      final dietType = _cachedDailyTrackers.isNotEmpty
-          ? _cachedDailyTrackers.first.dietType
-          : _cachedWeeklyTrackers.first.dietType;
-
-      await _cacheTrackersLocally(
-          _cachedDailyTrackers, _cachedWeeklyTrackers, userId, dietType);
-    } catch (e) {
-      print('Failed to persist cached trackers: $e');
-    }
-  }
-
-  // Get all weekly trackers
-  Future<List<TrackerGoal>> getWeeklyTrackers(
-      String userId, String dietType) async {
-    try {
-      await _ensureMongoConnection();
-
-      if (_useLocalFallback) {
-        return await _getLocalTrackers(userId, dietType, true);
-      }
-
-      final collection = await _collection;
-      if (collection == null) {
-        return await _getLocalTrackers(userId, dietType, true);
-      }
-
-      final results = await collection.find({
+      final existingTrackers = await collection.findOne({
         'userId': userId,
         'dietType': dietType,
-        'isWeeklyGoal': true
-      }).toList();
+      });
 
-      final trackers = results.map((doc) => TrackerGoal.fromJson(doc)).toList();
-
-      // Update cache
-      _cachedWeeklyTrackers = List.from(trackers);
-      await _persistCachedTrackers();
-
-      return trackers;
+      if (existingTrackers == null) {
+        final trackerDocs =
+            defaultTrackers.map((tracker) => tracker.toJson()).toList();
+        await collection.insertMany(trackerDocs);
+        print('Initialized default trackers for $userId with $dietType diet.');
+        final dailyTrackers =
+            defaultTrackers.where((t) => !t.isWeeklyGoal).toList();
+        final weeklyTrackers =
+            defaultTrackers.where((t) => t.isWeeklyGoal).toList();
+        await _cacheTrackersLocally(
+            dailyTrackers, weeklyTrackers, userId, dietType);
+      } else {
+        print('Trackers for $userId with $dietType diet already exist.');
+        await getTrackers(userId, dietType);
+      }
     } catch (e) {
-      print('Error fetching weekly trackers: $e');
-      return await _getLocalTrackers(userId, dietType, true);
+      print('Error initializing user trackers: $e');
+      _useLocalFallback = true;
+      final defaultTrackers =
+          _dietPlanService.getDietPlan(dietType).getGoals(userId);
+      final dailyTrackers =
+          defaultTrackers.where((t) => !t.isWeeklyGoal).toList();
+      final weeklyTrackers =
+          defaultTrackers.where((t) => t.isWeeklyGoal).toList();
+      await _cacheTrackersLocally(
+          dailyTrackers, weeklyTrackers, userId, dietType);
     }
   }
 
-  // Get all daily trackers
   Future<List<TrackerGoal>> getDailyTrackers(
       String userId, String dietType) async {
+    if (_cachedDailyTrackers.isNotEmpty) {
+      return _cachedDailyTrackers;
+    }
     try {
       await _ensureMongoConnection();
-
       if (_useLocalFallback) {
         return await _getLocalTrackers(userId, dietType, false);
       }
-
       final collection = await _collection;
       if (collection == null) {
         return await _getLocalTrackers(userId, dietType, false);
       }
-
       final results = await collection.find({
         'userId': userId,
         'dietType': dietType,
         'isWeeklyGoal': false
       }).toList();
-
+      if (results.isEmpty) {
+        print(
+            'No daily trackers found for $userId ($dietType), initializing...');
+        await initializeUserTrackers(userId, dietType);
+        final goals = _dietPlanService.getDietPlan(dietType).getGoals(userId);
+        return goals.where((g) => !g.isWeeklyGoal).toList();
+      }
       final trackers = results.map((doc) => TrackerGoal.fromJson(doc)).toList();
-
-      // Update cache
-      _cachedDailyTrackers = List.from(trackers);
-      await _persistCachedTrackers();
-
+      _cachedDailyTrackers = trackers;
       return trackers;
     } catch (e) {
-      print('Error fetching daily trackers: $e');
-      return await _getLocalTrackers(userId, dietType, false);
-    }
-  }
-
-  // Reset daily trackers (e.g., at midnight)
-  Future<void> resetDailyTrackers(String userId) async {
-    try {
-      // Get current daily trackers before resetting
-      final currentTrackers = await getDailyTrackers(
-          userId,
-          _cachedDailyTrackers.isNotEmpty
-              ? _cachedDailyTrackers.first.dietType
-              : 'MyPlate');
-
-      // Save progress snapshot for analytics (only if there's progress to save)
-      if (currentTrackers.any((t) => t.currentValue > 0)) {
-        await _progressService.saveProgressSnapshot(
-            currentTrackers, ProgressPeriodType.daily);
-      }
-
-      // First reset in local cache
-      await _resetTrackersInLocalCache(userId, false);
-
-      // Try to reset in MongoDB if available
-      await _ensureMongoConnection();
-      if (!_useLocalFallback) {
-        final collection = await _collection;
-        if (collection != null) {
-          try {
-            await collection.updateMany(
-              {'userId': userId, 'isWeeklyGoal': false},
-              {
-                '\$set': {
-                  'currentValue': 0.0,
-                  'lastUpdated': DateTime.now().toIso8601String()
-                }
-              },
-            );
-          } catch (e) {
-            print('Failed to reset daily trackers in MongoDB: $e');
-          }
-        }
-      }
-    } catch (e) {
-      print('Error resetting daily trackers: $e');
-    }
-  }
-
-  // Reset weekly trackers (e.g., on Sunday midnight)
-  Future<void> resetWeeklyTrackers(String userId) async {
-    try {
-      // Get current weekly trackers before resetting
-      final currentTrackers = await getWeeklyTrackers(
-          userId,
-          _cachedWeeklyTrackers.isNotEmpty
-              ? _cachedWeeklyTrackers.first.dietType
-              : 'MyPlate');
-
-      // Save progress snapshot for analytics (only if there's progress to save)
-      if (currentTrackers.any((t) => t.currentValue > 0)) {
-        await _progressService.saveProgressSnapshot(
-            currentTrackers, ProgressPeriodType.weekly);
-      }
-
-      // First reset in local cache
-      await _resetTrackersInLocalCache(userId, true);
-
-      // Try to reset in MongoDB if available
-      await _ensureMongoConnection();
-      if (!_useLocalFallback) {
-        final collection = await _collection;
-        if (collection != null) {
-          try {
-            await collection.updateMany(
-              {'userId': userId, 'isWeeklyGoal': true},
-              {
-                '\$set': {
-                  'currentValue': 0.0,
-                  'lastUpdated': DateTime.now().toIso8601String()
-                }
-              },
-            );
-          } catch (e) {
-            print('Failed to reset weekly trackers in MongoDB: $e');
-          }
-        }
-      }
-    } catch (e) {
-      print('Error resetting weekly trackers: $e');
-    }
-  }
-
-  // Reset trackers in local cache
-  Future<void> _resetTrackersInLocalCache(String userId, bool isWeekly) async {
-    try {
-      if (isWeekly) {
-        List<TrackerGoal> resetTrackers = [];
-        for (final tracker in _cachedWeeklyTrackers) {
-          resetTrackers.add(tracker.copyWith(
-            currentValue: 0.0,
-            lastUpdated: DateTime.now(),
-          ));
-        }
-        _cachedWeeklyTrackers = resetTrackers;
-      } else {
-        List<TrackerGoal> resetTrackers = [];
-        for (final tracker in _cachedDailyTrackers) {
-          resetTrackers.add(tracker.copyWith(
-            currentValue: 0.0,
-            lastUpdated: DateTime.now(),
-          ));
-        }
-        _cachedDailyTrackers = resetTrackers;
-      }
-
-      await _persistCachedTrackers();
-    } catch (e) {
-      print('Failed to reset trackers in local cache: $e');
-    }
-  }
-
-  // Cleanup duplicate trackers (MongoDB only)
-  Future<void> cleanupDuplicateTrackers(String userId) async {
-    try {
-      await _ensureMongoConnection();
-      if (_useLocalFallback) return;
-
-      final collection = await _collection;
-      if (collection == null) return;
-
-      // Find all trackers for the user
-      final trackers = await collection.find({'userId': userId}).toList();
-
-      // Group by name and isWeeklyGoal to find duplicates
-      Map<String, List<Map<String, dynamic>>> groups = {};
-
-      for (final tracker in trackers) {
-        final key = '${tracker['name']}_${tracker['isWeeklyGoal']}';
-        groups[key] ??= [];
-        groups[key]!.add(tracker);
-      }
-
-      // Remove duplicates (keep the most recent one)
-      for (final group in groups.values) {
-        if (group.length > 1) {
-          // Sort by lastUpdated descending
-          group.sort((a, b) {
-            final dateA =
-                DateTime.tryParse(a['lastUpdated'] ?? '') ?? DateTime(1970);
-            final dateB =
-                DateTime.tryParse(b['lastUpdated'] ?? '') ?? DateTime(1970);
-            return dateB.compareTo(dateA);
-          });
-
-          // Remove all except the first (most recent)
-          for (int i = 1; i < group.length; i++) {
-            try {
-              await collection.deleteOne({'_id': group[i]['_id']});
-              print('Removed duplicate tracker: ${group[i]['name']}');
-            } catch (e) {
-              print('Failed to remove duplicate tracker: $e');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('Error cleaning up duplicate trackers: $e');
-    }
-  }
-
-  // Helper method to get default trackers based on diet type
-  List<TrackerGoal> _getDefaultTrackers(String userId, String dietType) {
-    if (dietType == 'DASH') {
-      return _getDefaultDashTrackers(userId);
-    } else {
-      return _getDefaultMyPlateTrackers(userId);
-    }
-  }
-
-  // Default trackers for DASH diet
-  List<TrackerGoal> _getDefaultDashTrackers(String userId) {
-    return [
-      TrackerGoal(
-        userId: userId,
-        name: 'Veggies',
-        category: TrackerCategory.veggies,
-        goalValue: 4.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFFFF6E6E),
-        colorEnd: const Color(0xFFFF9797),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Fruits',
-        category: TrackerCategory.fruits,
-        goalValue: 4.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFFFF6E6E),
-        colorEnd: const Color(0xFFFF9797),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Lean Meats/poultry/fish',
-        category: TrackerCategory.leanMeat,
-        goalValue: 6.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFFFFA726),
-        colorEnd: const Color(0xFFFFCC80),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Grains',
-        category: TrackerCategory.grains,
-        goalValue: 6.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFFFFA726),
-        colorEnd: const Color(0xFFFFCC80),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Low-fat/fat-free Dairy',
-        category: TrackerCategory.dairy,
-        goalValue: 2.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFF4CAF50),
-        colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Fats/oils',
-        category: TrackerCategory.fatsOils,
-        goalValue: 2.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFF4CAF50),
-        colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Water',
-        category: TrackerCategory.water,
-        goalValue: 3.0,
-        unit: TrackerUnit.cups,
-        colorStart: const Color(0xFF2196F3),
-        colorEnd: const Color(0xFF90CAF9),
-        dietType: 'DASH',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Sweets/added-sugar',
-        category: TrackerCategory.sweets,
-        goalValue: 5.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFF4CAF50),
-        colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'DASH',
-        isWeeklyGoal: true,
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Nuts/seeds/legumes',
-        category: TrackerCategory.nutsLegumes,
-        goalValue: 4.0,
-        unit: TrackerUnit.servings,
-        colorStart: const Color(0xFF4CAF50),
-        colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'DASH',
-        isWeeklyGoal: true,
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Sodium',
-        category: TrackerCategory.sodium,
-        goalValue: 1500.0, // Stricter DASH goal
-        unit: TrackerUnit.mg,
-        colorStart: const Color(0xFFB0BEC5), // Blue Grey
-        colorEnd: const Color(0xFF78909C),
-        dietType: 'DASH',
-        isWeeklyGoal: false,
-      ),
-    ];
-  }
-
-  // Default trackers for MyPlate diet
-  List<TrackerGoal> _getDefaultMyPlateTrackers(String userId) {
-    return [
-      TrackerGoal(
-        userId: userId,
-        name: 'Veggies',
-        category: TrackerCategory.veggies,
-        goalValue: 2.5,
-        unit: TrackerUnit.cups,
-        colorStart: const Color(0xFFFF6E6E),
-        colorEnd: const Color(0xFFFF9797),
-        dietType: 'MyPlate',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Fruits',
-        category: TrackerCategory.fruits,
-        goalValue: 2.0,
-        unit: TrackerUnit.cups,
-        colorStart: const Color(0xFFFF6E6E),
-        colorEnd: const Color(0xFFFF9797),
-        dietType: 'MyPlate',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Protein',
-        category: TrackerCategory.protein,
-        goalValue: 5.5,
-        unit: TrackerUnit.oz,
-        colorStart: const Color(0xFFFFA726),
-        colorEnd: const Color(0xFFFFCC80),
-        dietType: 'MyPlate',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Grains',
-        category: TrackerCategory.grains,
-        goalValue: 6.0,
-        unit: TrackerUnit.oz,
-        colorStart: const Color(0xFFFFA726),
-        colorEnd: const Color(0xFFFFCC80),
-        dietType: 'MyPlate',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Dairy',
-        category: TrackerCategory.dairy,
-        goalValue: 3.0,
-        unit: TrackerUnit.cups,
-        colorStart: const Color(0xFF4CAF50),
-        colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'MyPlate',
-      ),
-      TrackerGoal(
-        userId: userId,
-        name: 'Water',
-        category: TrackerCategory.water,
-        goalValue: 8.0,
-        unit: TrackerUnit.cups,
-        colorStart: const Color(0xFF2196F3),
-        colorEnd: const Color(0xFF90CAF9),
-        dietType: 'MyPlate',
-      ),
-    ];
-  }
-
-  // Core MongoDB update logic with better error handling
-  Future<void> _sendUpdateToMongoDB(String trackerId, double newValue) async {
-    if (_useLocalFallback) return;
-
-    try {
-      final collection = await _collection;
-      if (collection == null) return;
-
-      // Parse trackerId to ObjectId
-      String hexString = trackerId;
-      if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
-        hexString = trackerId.substring(9, trackerId.length - 2);
-      }
-
-      hexString = hexString.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
-
-      if (hexString.length != 24) {
-        throw Exception('Invalid ObjectId format: $trackerId');
-      }
-
-      final objectId = ObjectId.fromHexString(hexString);
-
-      // Perform the update
-      final result = await collection.updateOne(
-        {'_id': objectId},
-        {
-          '\$set': {
-            'currentValue': newValue,
-            'lastUpdated': DateTime.now().toIso8601String(),
-          }
-        },
-      );
-
-      if (!result.isSuccess) {
-        throw Exception('Update failed: ${result.writeError?.errmsg}');
-      }
-
-      print('MongoDB update successful for tracker $trackerId');
-    } catch (e) {
-      print('MongoDB update failed for tracker $trackerId: $e');
+      print('Error fetching daily trackers from MongoDB: $e');
       _useLocalFallback = true;
-      rethrow;
+      return _getLocalTrackers(userId, dietType, false);
     }
+  }
+
+  Future<List<TrackerGoal>> getWeeklyTrackers(
+      String userId, String dietType) async {
+    if (_cachedWeeklyTrackers.isNotEmpty) {
+      return _cachedWeeklyTrackers;
+    }
+    try {
+      await _ensureMongoConnection();
+      if (_useLocalFallback) {
+        return await _getLocalTrackers(userId, dietType, true);
+      }
+      final collection = await _collection;
+      if (collection == null) {
+        return await _getLocalTrackers(userId, dietType, true);
+      }
+      final results = await collection.find({
+        'userId': userId,
+        'dietType': dietType,
+        'isWeeklyGoal': true
+      }).toList();
+      if (results.isEmpty) {
+        print(
+            'No weekly trackers found for $userId ($dietType), initializing...');
+        await initializeUserTrackers(userId, dietType);
+        final goals = _dietPlanService.getDietPlan(dietType).getGoals(userId);
+        return goals.where((g) => g.isWeeklyGoal).toList();
+      }
+      final trackers = results.map((doc) => TrackerGoal.fromJson(doc)).toList();
+      _cachedWeeklyTrackers = trackers;
+      return trackers;
+    } catch (e) {
+      print('Error fetching weekly trackers from MongoDB: $e');
+      _useLocalFallback = true;
+      return _getLocalTrackers(userId, dietType, true);
+    }
+  }
+
+  Future<void> updateTrackerValue(String trackerId, double newValue) async {
+    try {
+      final tracker = _cachedDailyTrackers.firstWhere((t) => t.id == trackerId,
+          orElse: () => _cachedWeeklyTrackers.firstWhere(
+                (t) => t.id == trackerId,
+              ));
+      tracker.currentValue = newValue;
+      tracker.lastUpdated = DateTime.now();
+      _pendingUpdates.add({
+        'trackerId': tracker.id,
+        'updateData': {
+          r'$set': {
+            'currentValue': newValue,
+            'lastUpdated': DateTime.now().toIso8601String()
+          }
+        }
+      });
+      // The queue will be processed, no need to await here
+      _processUpdateQueue();
+    } catch (e) {
+      print('Failed to update tracker value for $trackerId: $e');
+    }
+  }
+
+  Future<void> _processUpdateQueue() async {
+    if (_isProcessingQueue || _pendingUpdates.isEmpty) {
+      return;
+    }
+    _isProcessingQueue = true;
+    final collection = await _collection;
+    if (collection == null) {
+      print('Cannot process update queue, no MongoDB collection.');
+      _isProcessingQueue = false;
+      return;
+    }
+    final updatesToProcess = List<Map<String, dynamic>>.from(_pendingUpdates);
+    _pendingUpdates.clear();
+    try {
+      for (final update in updatesToProcess) {
+        final trackerId = update['trackerId'];
+        final updateData = update['updateData'];
+        await collection.updateOne(
+          mongo.where.eq('_id', trackerId),
+          updateData,
+        );
+        print('Successfully processed update for tracker $trackerId');
+      }
+    } catch (e) {
+      print('Error processing update queue: $e');
+      _pendingUpdates.insertAll(0, updatesToProcess);
+    } finally {
+      _isProcessingQueue = false;
+      if (_pendingUpdates.isNotEmpty) {
+        _processUpdateQueue();
+      }
+    }
+  }
+
+  Future<void> resetTrackers(String userId, String dietType,
+      {required bool isWeekly}) async {
+    try {
+      await _ensureMongoConnection();
+      final collection = await _collection;
+      if (collection == null) return;
+
+      final trackersToReset =
+          isWeekly ? _cachedWeeklyTrackers : _cachedDailyTrackers;
+
+      // Save snapshot before resetting
+      await _progressService.saveProgressSnapshot(trackersToReset,
+          isWeekly ? ProgressPeriodType.weekly : ProgressPeriodType.daily);
+
+      final query = {
+        'userId': userId,
+        'isWeeklyGoal': isWeekly,
+      };
+      await collection.updateMany(query, {
+        r'$set': {
+          'currentValue': 0.0,
+          'lastUpdated': DateTime.now().toIso8601String()
+        }
+      });
+
+      // Update local cache after db operation
+      for (final tracker in trackersToReset) {
+        tracker.currentValue = 0.0;
+      }
+
+      if (isWeekly) {
+        await getWeeklyTrackers(userId, dietType);
+      } else {
+        await getDailyTrackers(userId, dietType);
+      }
+      print('Trackers reset for $userId (weekly: $isWeekly, diet: $dietType).');
+    } catch (e) {
+      print('Error resetting trackers: $e');
+    }
+  }
+
+  void clearCache() {
+    _cachedDailyTrackers.clear();
+    _cachedWeeklyTrackers.clear();
   }
 }

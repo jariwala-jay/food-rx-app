@@ -262,8 +262,8 @@ class ArticleController extends ChangeNotifier {
     if (recommendedIndex != -1) {
       _recommendedArticles[recommendedIndex] =
           _recommendedArticles[recommendedIndex].copyWith(
-            isBookmarked: isBookmarked,
-          );
+        isBookmarked: isBookmarked,
+      );
     }
 
     if (isBookmarked) {

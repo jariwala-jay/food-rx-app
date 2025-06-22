@@ -1,6 +1,13 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:developer' as developer;
 
 class UnitConversionService {
+  final String _baseUrl = 'https://api.spoonacular.com';
+  final String? _apiKey = dotenv.env['SPOONACULAR_API_KEY'];
+
   // --- Ratio-based Converters ---
 
   // Volume conversions (base unit: milliliters)
@@ -53,6 +60,42 @@ class UnitConversionService {
     'clove of garlic': 3.0,
     'slice of bread': 28.0,
     'bacon slice': 12.0,
+  };
+
+  // Direct serving mappings for common ingredients
+  static const Map<String, Map<String, double>> _servingConversions = {
+    'egg': {
+      'piece': 1.0,
+      'pieces': 1.0,
+      'pc': 1.0,
+      'whole': 1.0,
+      'large': 1.0,
+    },
+    'eggs': {
+      'piece': 1.0,
+      'pieces': 1.0,
+      'pc': 1.0,
+      'whole': 1.0,
+      'large': 1.0,
+    },
+    'bread': {
+      'slice': 1.0,
+      'slices': 1.0,
+      'piece': 1.0,
+      'pieces': 1.0,
+    },
+    'apple': {
+      'piece': 1.0,
+      'pieces': 1.0,
+      'medium': 1.0,
+      'whole': 1.0,
+    },
+    'banana': {
+      'piece': 1.0,
+      'pieces': 1.0,
+      'medium': 1.0,
+      'whole': 1.0,
+    },
   };
 
   /// Normalizes a unit string to a consistent, singular, lowercase format.
@@ -135,6 +178,7 @@ class UnitConversionService {
   }
 
   /// Converts an amount from a source unit to a target unit.
+  /// If local conversion fails, tries Spoonacular API as fallback.
   double convert({
     required double amount,
     required String fromUnit,
@@ -148,6 +192,32 @@ class UnitConversionService {
       return amount;
     }
 
+    // Handle serving conversions with direct mapping first
+    if (normFrom == 'serving' || normFrom == 'servings') {
+      final lowerIngredient = ingredientName.toLowerCase();
+
+      // Check direct serving mappings
+      for (final ingredient in _servingConversions.keys) {
+        if (lowerIngredient.contains(ingredient)) {
+          final conversion = _servingConversions[ingredient]?[normTo];
+          if (conversion != null) {
+            if (kDebugMode) {
+              print(
+                  '[UnitConversionService] 🎯 Direct serving conversion: $amount $normFrom $ingredientName -> ${amount * conversion} $normTo');
+            }
+            return amount * conversion;
+          }
+        }
+      }
+    }
+
+    // Try standard conversion tables
+    final conversionFactor = _getConversionFactor(normFrom, normTo);
+    if (conversionFactor != null) {
+      return amount * conversionFactor;
+    }
+
+    // Try complex conversion logic with density and ingredient-specific conversions
     double? amountInGrams;
     double? amountInMl;
 
@@ -198,12 +268,188 @@ class UnitConversionService {
         return amountInGrams / _weightToGrams[normTo]!;
       }
     }
+    // To Piece
+    else if (normTo == 'piece' || normTo == 'unit') {
+      final pieceKey = _findBestMatch(ingredientName, _pieceToGrams);
+      if (pieceKey != null && amountInGrams != null) {
+        return amountInGrams / _pieceToGrams[pieceKey]!;
+      }
+    }
 
-    // If conversion is not possible, log it and return original amount
+    // Skip Spoonacular API for nonsensical conversions
+    if (normFrom == 'serving' || normTo == 'serving') {
+      // Don't try to convert arbitrary ingredients from/to servings
+      // This often doesn't make sense (e.g., "serving of salt" to "ounces")
+      if (ingredientName.isNotEmpty) {
+        final lowerIngredient = ingredientName.toLowerCase();
+        final servingMakesSense = [
+          'egg',
+          'bread',
+          'slice',
+          'piece',
+          'apple',
+          'banana',
+          'orange',
+          'chicken breast',
+          'fish fillet',
+        ].any((item) => lowerIngredient.contains(item));
+
+        if (!servingMakesSense) {
+          if (kDebugMode) {
+            print(
+                '[UnitConversionService] ⚠️ Skipping nonsensical serving conversion: $amount $normFrom $ingredientName to $normTo');
+          }
+          return amount; // Return original amount as fallback
+        }
+      }
+    }
+
     if (kDebugMode) {
       print(
-          '⚠️ UnitConversionService: Cannot convert $amount from "$fromUnit" to "$toUnit" for ingredient "$ingredientName". No valid conversion path found.');
+          '[UnitConversionService] ⚠️ UnitConversionService: Cannot convert $amount from "$fromUnit" to "$toUnit" for ingredient "$ingredientName". No valid conversion path found.');
     }
+    return amount; // Return original amount as fallback
+  }
+
+  /// Get direct conversion factor between two units if available
+  double? _getConversionFactor(String fromUnit, String toUnit) {
+    // Volume to volume
+    if (_volumeToMl.containsKey(fromUnit) && _volumeToMl.containsKey(toUnit)) {
+      return _volumeToMl[fromUnit]! / _volumeToMl[toUnit]!;
+    }
+
+    // Weight to weight
+    if (_weightToGrams.containsKey(fromUnit) &&
+        _weightToGrams.containsKey(toUnit)) {
+      return _weightToGrams[fromUnit]! / _weightToGrams[toUnit]!;
+    }
+
+    return null;
+  }
+
+  /// Async version of convert that can use Spoonacular API
+  Future<double> convertAsync({
+    required double amount,
+    required String fromUnit,
+    required String toUnit,
+    String ingredientName = '',
+  }) async {
+    // First try local conversion
+    final localResult = convert(
+      amount: amount,
+      fromUnit: fromUnit,
+      toUnit: toUnit,
+      ingredientName: ingredientName,
+    );
+
+    // If local conversion worked (result is different from input or units are the same)
+    final String normFrom = _normalizeUnit(fromUnit);
+    final String normTo = _normalizeUnit(toUnit);
+
+    if (normFrom == normTo || localResult != amount) {
+      return localResult;
+    }
+
+    // Try Spoonacular API as fallback
+    if (ingredientName.isNotEmpty && _apiKey != null) {
+      final apiResult = await _trySpoonacularConversion(
+        ingredientName: ingredientName,
+        sourceAmount: amount,
+        sourceUnit: fromUnit,
+        targetUnit: toUnit,
+      );
+
+      if (apiResult != null) {
+        return apiResult;
+      }
+    }
+
+    // Return original amount if all else fails
     return amount;
+  }
+
+  /// Try Spoonacular API conversion (async version)
+  Future<double?> _trySpoonacularConversion({
+    required String ingredientName,
+    required double sourceAmount,
+    required String sourceUnit,
+    required String targetUnit,
+  }) async {
+    if (_apiKey == null) return null;
+
+    try {
+      final uri = Uri.parse('$_baseUrl/recipes/convert').replace(
+        queryParameters: {
+          'ingredientName': ingredientName,
+          'sourceAmount': sourceAmount.toString(),
+          'sourceUnit': sourceUnit,
+          'targetUnit': targetUnit,
+          'apiKey': _apiKey!,
+        },
+      );
+
+      developer.log(
+        'Trying Spoonacular conversion: $sourceAmount $sourceUnit $ingredientName to $targetUnit',
+        name: 'UnitConversionService',
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final targetAmount = data['targetAmount'];
+
+        if (targetAmount != null) {
+          final convertedAmount = (targetAmount is num)
+              ? targetAmount.toDouble()
+              : double.tryParse(targetAmount.toString());
+
+          if (convertedAmount != null) {
+            developer.log(
+              '✅ Spoonacular conversion successful: $sourceAmount $sourceUnit -> $convertedAmount $targetUnit',
+              name: 'UnitConversionService',
+            );
+            return convertedAmount;
+          }
+        }
+      } else {
+        developer.log(
+          'Spoonacular API error: ${response.statusCode} - ${response.body}',
+          name: 'UnitConversionService',
+        );
+      }
+    } catch (e) {
+      developer.log(
+        'Spoonacular conversion failed: $e',
+        name: 'UnitConversionService',
+      );
+    }
+
+    return null;
+  }
+
+  /// Fire-and-forget async call for logging purposes
+  void _trySpoonacularConversionAsync({
+    required String ingredientName,
+    required double sourceAmount,
+    required String sourceUnit,
+    required String targetUnit,
+  }) {
+    // Fire and forget - just for logging what would be possible with API
+    _trySpoonacularConversion(
+      ingredientName: ingredientName,
+      sourceAmount: sourceAmount,
+      sourceUnit: sourceUnit,
+      targetUnit: targetUnit,
+    ).then((result) {
+      if (result != null) {
+        developer.log(
+          '💡 Spoonacular API could convert: $sourceAmount $sourceUnit $ingredientName -> $result $targetUnit',
+          name: 'UnitConversionService',
+        );
+      }
+    }).catchError((e) {
+      // Ignore errors in fire-and-forget call
+    });
   }
 }

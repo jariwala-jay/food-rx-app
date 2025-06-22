@@ -8,10 +8,16 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart'
     as domain_repo;
+import 'package:flutter_app/features/recipes/services/cooking_service.dart';
+import 'package:flutter_app/features/recipes/services/meal_logging_service.dart';
+import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 
 class RecipeController extends ChangeNotifier {
   final RecipeGenerationService recipeGenerationService;
   final domain_repo.RecipeRepository recipeRepository;
+  final CookingService cookingService;
+  final MealLoggingService? mealLoggingService;
+  final TrackerProvider? trackerProvider;
   AuthController authProvider;
   PantryController pantryController;
 
@@ -20,6 +26,9 @@ class RecipeController extends ChangeNotifier {
     required this.recipeRepository,
     required this.authProvider,
     required this.pantryController,
+    required this.cookingService,
+    this.mealLoggingService,
+    this.trackerProvider,
   });
 
   // State
@@ -138,27 +147,72 @@ class RecipeController extends ChangeNotifier {
     return _savedRecipes.any((r) => r.id == recipeId);
   }
 
-  Future<void> cookRecipe(Recipe recipe) async {
+  /// Cook a recipe with enhanced diet tracking
+  Future<void> cookRecipe(Recipe recipe,
+      {int? servingsConsumed, int? totalServingsToDeduct}) async {
     final userId = authProvider.currentUser?.id;
     if (userId == null) return;
 
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
-      // 1. Deduct ingredients from pantry
-      await pantryController.deductIngredientsForRecipe(recipe);
+      final actualServingsConsumed = servingsConsumed ?? 1;
+      final actualServingsToDeduct =
+          totalServingsToDeduct ?? actualServingsConsumed;
+      final dietType = currentUser!.dietType ?? 'MyPlate';
 
-      // 2. Log the meal in the user's history (via RecipeRepository)
-      await recipeRepository.cookRecipe(userId, recipe);
+      await cookingService.cookRecipe(
+        userId: userId,
+        recipe: recipe,
+        servingsConsumed: actualServingsConsumed,
+        servingsToDeduct: actualServingsToDeduct,
+        dietType: dietType,
+      );
 
-      // 3. Update trackers (This might move to a dedicated TrackerService later)
-      //_trackerProvider.logMeal(recipe);
+      // Force refresh pantry to update UI
+      await pantryController.loadItems();
+
+      // Force refresh tracker UI if available
+      if (trackerProvider != null) {
+        trackerProvider!.forceUIRefresh();
+      }
     } catch (e) {
       _error = "Failed to cook recipe: $e";
+      if (kDebugMode) {
+        print('❌ Error cooking recipe: $e');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Get a preview of what diet trackers would be updated
+  Future<List<TrackerPreview>> getTrackingPreview(
+      Recipe recipe, int servings) async {
+    if (mealLoggingService == null || currentUser == null) {
+      return [];
+    }
+
+    final userId = currentUser!.id;
+    final dietType = currentUser!.dietType ?? 'MyPlate';
+
+    if (userId == null) return [];
+
+    try {
+      return await mealLoggingService!.getTrackingPreview(
+        recipe: recipe,
+        servingsConsumed: servings,
+        userId: userId,
+        dietType: dietType,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting tracking preview: $e');
+      }
+      return [];
     }
   }
 

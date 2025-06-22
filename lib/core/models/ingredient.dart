@@ -16,8 +16,7 @@ class Ingredient {
     this.aisle,
   });
 
-  String get imageUrl =>
-      'https://spoonacular.com/cdn/ingredients_100x100/$imageName';
+  String get imageUrl => imageName;
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
     return Ingredient(
@@ -54,4 +53,4 @@ class Ingredient {
 
   @override
   int get hashCode => id.hashCode;
-} 
+}

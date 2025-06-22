@@ -124,21 +124,21 @@ class FoodCategoryService {
   static const Map<String, Map<TrackerCategory, Map<String, dynamic>>>
       _standardServings = {
     'myplate': {
-      TrackerCategory.veggies: {'amount': 1, 'unit': 'cup'},
-      TrackerCategory.fruits: {'amount': 1, 'unit': 'cup'},
-      TrackerCategory.grains: {'amount': 1, 'unit': 'ounce'},
-      TrackerCategory.protein: {'amount': 1, 'unit': 'ounce'},
-      TrackerCategory.dairy: {'amount': 1, 'unit': 'cup'},
+      TrackerCategory.veggies: {'amount': 1.0, 'unit': 'cup'},
+      TrackerCategory.fruits: {'amount': 1.0, 'unit': 'cup'},
+      TrackerCategory.grains: {'amount': 1.0, 'unit': 'ounce'},
+      TrackerCategory.protein: {'amount': 1.0, 'unit': 'ounce'},
+      TrackerCategory.dairy: {'amount': 1.0, 'unit': 'cup'},
     },
     'dash': {
-      TrackerCategory.veggies: {'amount': 1, 'unit': 'cup'},
-      TrackerCategory.fruits: {'amount': 1, 'unit': 'cup'},
-      TrackerCategory.grains: {'amount': 1, 'unit': 'ounce'},
-      TrackerCategory.protein: {'amount': 1, 'unit': 'ounce'},
-      TrackerCategory.dairy: {'amount': 1, 'unit': 'cup'},
+      TrackerCategory.veggies: {'amount': 1.0, 'unit': 'cup'},
+      TrackerCategory.fruits: {'amount': 1.0, 'unit': 'cup'},
+      TrackerCategory.grains: {'amount': 1.0, 'unit': 'ounce'},
+      TrackerCategory.protein: {'amount': 1.0, 'unit': 'ounce'},
+      TrackerCategory.dairy: {'amount': 1.0, 'unit': 'cup'},
       TrackerCategory.nutsLegumes: {'amount': 0.25, 'unit': 'cup'},
-      TrackerCategory.fatsOils: {'amount': 1, 'unit': 'teaspoon'},
-      TrackerCategory.sweets: {'amount': 1, 'unit': 'tablespoon'},
+      TrackerCategory.fatsOils: {'amount': 1.0, 'unit': 'teaspoon'},
+      TrackerCategory.sweets: {'amount': 1.0, 'unit': 'tablespoon'},
     },
     // Can add other diet types here
   };
@@ -177,6 +177,39 @@ class FoodCategoryService {
 
     // Convert the ingredient's amount to the standard serving unit
     final convertedAmount = _conversionService.convert(
+      amount: amount,
+      fromUnit: unit,
+      toUnit: standardUnit,
+      ingredientName: ingredientName,
+    );
+
+    if (convertedAmount == 0.0 || standardAmount == 0.0) {
+      return 0.0;
+    }
+
+    return convertedAmount / standardAmount;
+  }
+
+  /// Async version that uses Spoonacular API for complex conversions
+  Future<double> getServingsForTrackerAsync({
+    required String ingredientName,
+    required double amount,
+    required String unit,
+    required TrackerCategory category,
+    required String dietType,
+  }) async {
+    final lowerDiet = dietType.toLowerCase();
+    final standardServing = _standardServings[lowerDiet]?[category];
+
+    if (standardServing == null) {
+      return 0.0; // This diet doesn't track this category
+    }
+
+    final standardAmount = standardServing['amount'] as double;
+    final standardUnit = standardServing['unit'] as String;
+
+    // Convert the ingredient's amount to the standard serving unit using async conversion
+    final convertedAmount = await _conversionService.convertAsync(
       amount: amount,
       fromUnit: unit,
       toUnit: standardUnit,

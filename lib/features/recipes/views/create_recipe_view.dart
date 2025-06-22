@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class CreateRecipeView extends StatefulWidget {
   const CreateRecipeView({Key? key}) : super(key: key);
@@ -451,63 +450,6 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
         content: Text('Generating recipes based on your preferences...'),
         backgroundColor: Colors.orange,
         duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showDebugInfo(BuildContext context, RecipeController controller) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Debug Information'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('User ID: ${controller.currentUser?.id ?? 'Not loaded'}'),
-                const SizedBox(height: 8),
-                Text('Pantry Items Count: ${controller.pantryItems.length}'),
-                const SizedBox(height: 8),
-                Text('Is Loading: ${controller.isLoading}'),
-                const SizedBox(height: 8),
-                Text('Error: ${controller.error ?? 'None'}'),
-                const SizedBox(height: 16),
-                const Text('Pantry Items:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (controller.pantryItems.isEmpty)
-                  const Text('No pantry items found')
-                else
-                  ...controller.pantryItems.take(20).map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '• ${item.name} (${item.quantity} ${item.unitLabel}) - isPantryItem: ${item.isPantryItem}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      )),
-                if (controller.pantryItems.length > 20)
-                  Text(
-                      '... and ${controller.pantryItems.length - 20} more items'),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              controller.refreshPantryItems();
-              Navigator.pop(context);
-            },
-            child: const Text('Refresh & Close'),
-          ),
-        ],
       ),
     );
   }

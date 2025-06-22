@@ -2,10 +2,13 @@ import 'dart:async';
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:developer' as developer;
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 
 class MongoDBService {
   static final MongoDBService _instance = MongoDBService._internal();
@@ -108,7 +111,7 @@ class MongoDBService {
 
     try {
       // Check connection status
-      if (_db.state == State.CLOSED) {
+      if (_db.state == State.closed) {
         await _db.open().timeout(const Duration(seconds: 15), onTimeout: () {
           throw TimeoutException(
               'MongoDB connection timed out during reopen (15 seconds)');
@@ -146,7 +149,7 @@ class MongoDBService {
   }
 
   Future<void> close() async {
-    if (_isInitialized && _db.state != State.CLOSED) {
+    if (_isInitialized && _db.state != State.closed) {
       await _db.close();
       _isInitialized = false;
     }
@@ -602,17 +605,14 @@ class MongoDBService {
 
     final idStr = id.toString().replaceAll('"', '').trim();
 
-    // Matches formats like ObjectId("..."), ObjectId('...')
-    final match = RegExp('ObjectId(\\"|\\\')?([a-fA-F0-9]{24})(\\"|\\\')?\\)')
-        .firstMatch(idStr);
-    if (match != null) return ObjectId.fromHexString(match.group(1)!);
-
-    // Clean hex string (24-char)
-    if (RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idStr)) {
-      return ObjectId.fromHexString(idStr);
+    // Handles formats like ObjectId("...") and also plain 24-char hex strings
+    final hexMatch = RegExp(r'([a-fA-F0-9]{24})').firstMatch(idStr);
+    if (hexMatch != null && hexMatch.group(1) != null) {
+      return ObjectId.fromHexString(hexMatch.group(1)!);
     }
 
-    throw ArgumentError('Invalid ObjectId format: $id');
+    throw Exception(
+        'Could not parse ObjectId from string: "$id". Expected a 24-character hex string.');
   }
 
   // When serializing ObjectId to string, always use toHexString()
@@ -658,22 +658,30 @@ class MongoDBService {
     }
   }
 
-  Future<void> updatePantryItem(
-      dynamic id, Map<String, dynamic> updates) async {
-    try {
-      await ensureConnection();
-      final objectId = parseObjectId(id);
-      await _pantryCollection.updateOne(
-        {'_id': objectId},
-        {
-          '\$set': {
-            ...updates,
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-        },
-      );
-    } catch (e) {
-      throw Exception('Failed to update pantry item: $e');
+  Future<void> updatePantryItem(PantryItem item) async {
+    await ensureConnection();
+    final collection =
+        db.collection('pantry_items'); // Use the correct collection name
+    final objectId = parseObjectId(item.id);
+
+    // The update document should NOT contain the _id field.
+    final updateDoc = item.toJson();
+    updateDoc.remove('_id');
+    updateDoc.remove('id');
+
+    // Use the $set operator to update fields rather than replacing the document
+    final result = await collection.updateOne(
+      where.eq('_id', objectId),
+      {'\$set': updateDoc},
+    );
+
+    if (kDebugMode) {
+      print('Updated pantry item ${item.id}. Modified: ${result.nModified}');
+    }
+
+    if (result.nModified == 0 && kDebugMode) {
+      print(
+          'Warning: updatePantryItem did not modify any documents for id: $objectId. This might mean the item does not exist in the database.');
     }
   }
 

@@ -49,28 +49,44 @@ class PantryController extends ChangeNotifier {
 
   // Load pantry items from database
   Future<void> loadItems() async {
-    if (_userId == null) {
-      _setError('User not logged in');
+    final userId = _authProvider?.currentUser?.id;
+    if (userId == null) {
+      _pantryItems.clear();
+      _otherItems.clear();
+      _error = "User not logged in";
+      notifyListeners();
       return;
     }
 
     _setLoading(true);
-
     try {
-      await _mongoDBService.ensureConnection();
-      final pantryItemsData =
-          await _mongoDBService.getPantryItems(_userId!, isPantryItem: true);
-      final otherItemsData =
-          await _mongoDBService.getPantryItems(_userId!, isPantryItem: false);
+      final allItemMaps = await _mongoDBService.getPantryItems(userId);
 
-      _pantryItems =
-          pantryItemsData.map((data) => PantryItem.fromMap(data)).toList();
-      _otherItems =
-          otherItemsData.map((data) => PantryItem.fromMap(data)).toList();
+      // Convert maps to PantryItem objects
+      final allItems =
+          allItemMaps.map((map) => PantryItem.fromMap(map)).toList();
 
-      _setLoading(false);
+      // IMPORTANT: Clear the lists before adding new items
+      _pantryItems.clear();
+      _otherItems.clear();
+
+      for (var item in allItems) {
+        if (item.isPantryItem) {
+          _pantryItems.add(item);
+        } else {
+          _otherItems.add(item);
+        }
+      }
+
+      // Sort items alphabetically
+      _pantryItems.sort((a, b) => a.name.compareTo(b.name));
+      _otherItems.sort((a, b) => a.name.compareTo(b.name));
+
+      _error = null;
     } catch (e) {
-      _setError('Failed to load pantry items: $e');
+      _setError('Failed to load items: $e');
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -103,56 +119,45 @@ class PantryController extends ChangeNotifier {
   }
 
   // Remove a pantry item
-  Future<void> removeItem(String itemId, bool isPantryItem) async {
+  Future<void> removeItem(String itemId) async {
     _setLoading(true);
-
     try {
-      await _mongoDBService.ensureConnection();
-
-      // 🔑 Ensure itemId is a clean hex string, no quotes or wrapper
-      final cleanedId = itemId.replaceAll('"', '').trim();
-
-      await _mongoDBService.deletePantryItem(cleanedId);
-
-      if (isPantryItem) {
-        _pantryItems = _pantryItems.where((item) => item.id != itemId).toList();
-      } else {
-        _otherItems = _otherItems.where((item) => item.id != itemId).toList();
-      }
-
-      _setLoading(false);
+      await _mongoDBService.deletePantryItem(itemId);
+      _pantryItems.removeWhere((item) => item.id == itemId);
+      _otherItems.removeWhere((item) => item.id == itemId);
       notifyListeners();
     } catch (e) {
       _setError('Failed to remove item: $e');
+    } finally {
+      _setLoading(false);
     }
   }
 
   // Update a pantry item
   Future<void> updateItem(PantryItem item) async {
     _setLoading(true);
-
     try {
-      final updates = item.toMap();
+      await _mongoDBService.updatePantryItem(item);
+      // await loadItems(); // This is inefficient, let's update locally
 
-      await _mongoDBService.ensureConnection();
-
-      // 🔑 Ensure itemId is a clean hex string, no quotes or wrapper
-      final cleanedId = item.id.replaceAll('"', '').trim();
-
-      await _mongoDBService.updatePantryItem(cleanedId, updates);
-
-      if (item.isPantryItem) {
-        _pantryItems =
-            _pantryItems.map((i) => i.id == item.id ? item : i).toList();
+      // Find and update in the correct list
+      int pantryIndex = _pantryItems.indexWhere((i) => i.id == item.id);
+      if (pantryIndex != -1) {
+        _pantryItems[pantryIndex] = item;
       } else {
-        _otherItems =
-            _otherItems.map((i) => i.id == item.id ? item : i).toList();
+        int otherIndex = _otherItems.indexWhere((i) => i.id == item.id);
+        if (otherIndex != -1) {
+          _otherItems[otherIndex] = item;
+        }
       }
 
-      _setLoading(false);
       notifyListeners();
     } catch (e) {
       _setError('Failed to update item: $e');
+      // Optionally reload to revert optimistic update on failure
+      await loadItems();
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -189,10 +194,28 @@ class PantryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deductIngredientsForRecipe(Recipe recipe) async {
+  /// Force a UI refresh - useful when external services update pantry
+  void forceUIRefresh() {
+    notifyListeners();
+  }
+
+  Future<void> deductIngredientsForRecipe(Recipe recipe,
+      {int servingsToDeduct = 1}) async {
     _setLoading(true);
 
     try {
+      // Calculate the multiplier based on servings
+      final servingMultiplier = servingsToDeduct / recipe.servings;
+
+      if (kDebugMode) {
+        print('🥘 Deducting ingredients for ${recipe.title}');
+        print('   Recipe servings: ${recipe.servings}');
+        print('   Servings to deduct: $servingsToDeduct');
+        print('   Multiplier: $servingMultiplier');
+      }
+
+      bool anyItemsUpdated = false;
+
       for (final recipeIngredient in recipe.extendedIngredients) {
         PantryItem? pantryItemToUpdate;
         for (final pantryItem in [..._pantryItems, ..._otherItems]) {
@@ -205,22 +228,43 @@ class PantryController extends ChangeNotifier {
         }
 
         if (pantryItemToUpdate != null) {
-          final requiredAmount = _unitConversionService.convert(
-            amount: recipeIngredient.amount,
+          // Calculate the actual amount needed based on servings
+          final baseAmount = recipeIngredient.amount * servingMultiplier;
+
+          final requiredAmount = await _unitConversionService.convertAsync(
+            amount: baseAmount,
             fromUnit: recipeIngredient.unit,
-            toUnit: pantryItemToUpdate.unit.name,
+            toUnit: pantryItemToUpdate.unitLabel,
             ingredientName: recipeIngredient.name,
           );
 
           final newQuantity = pantryItemToUpdate.quantity - requiredAmount;
 
+          if (kDebugMode) {
+            print(
+                '   ${recipeIngredient.name}: ${recipeIngredient.amount} ${recipeIngredient.unit} * $servingMultiplier = $baseAmount ${recipeIngredient.unit}');
+            print(
+                '   Converting to ${pantryItemToUpdate.unitLabel}: $requiredAmount');
+            print(
+                '   Pantry: ${pantryItemToUpdate.quantity} -> $newQuantity ${pantryItemToUpdate.unitLabel}');
+          }
+
           if (newQuantity <= 0) {
-            await removeItem(
-                pantryItemToUpdate.id, pantryItemToUpdate.isPantryItem);
+            await removeItem(pantryItemToUpdate.id);
+            anyItemsUpdated = true;
           } else {
             await updateItem(
                 pantryItemToUpdate.copyWith(quantity: newQuantity));
+            anyItemsUpdated = true;
           }
+        }
+      }
+
+      // Force UI refresh if any items were updated
+      if (anyItemsUpdated) {
+        forceUIRefresh();
+        if (kDebugMode) {
+          print('🔄 Forced pantry UI refresh after ingredient deduction');
         }
       }
     } catch (e) {

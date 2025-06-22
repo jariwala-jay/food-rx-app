@@ -7,12 +7,12 @@ import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
 import '../services/tracker_service.dart';
 import '../services/tracker_progress_service.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TrackerProvider extends ChangeNotifier {
   final TrackerService _trackerService = TrackerService();
   final TrackerProgressService _progressService = TrackerProgressService();
-  // final TrackerResetScheduler _resetScheduler = TrackerResetScheduler(); // REMOVED: Client-side scheduler
 
   List<TrackerGoal> _dailyTrackers = [];
   List<TrackerGoal> _weeklyTrackers = [];
@@ -94,10 +94,11 @@ class TrackerProvider extends ChangeNotifier {
         // Continue to try loading from the database
       }
 
-      // Clean up duplicates if possible (non-critical, can run in background)
+      // Clean up duplicates if possible
       try {
         await _trackerService.cleanupDuplicateTrackers(userId);
       } catch (e) {
+        // Non-critical operation, just log the error
         print('Warning: Failed to cleanup duplicate trackers: $e');
       }
 
@@ -416,39 +417,21 @@ class TrackerProvider extends ChangeNotifier {
     await updateTrackerValue(trackerId, newValue);
   }
 
-  Future<void> resetDailyTrackers(String userId) async {
-    _setLoading(true);
+  Future<void> _resetDailyTrackers(String userId, String dietType) async {
     try {
-      await _trackerService.resetDailyTrackers(userId);
-
-      _dailyTrackers = _dailyTrackers
-          .map((tracker) =>
-              tracker.copyWith(currentValue: 0, lastUpdated: DateTime.now()))
-          .toList();
-
-      notifyListeners();
+      await _trackerService.resetTrackers(userId, dietType, isWeekly: false);
+      await loadUserTrackers(userId, dietType);
     } catch (e) {
       _setError('Failed to reset daily trackers: $e');
-    } finally {
-      _setLoading(false);
     }
   }
 
-  Future<void> resetWeeklyTrackers(String userId) async {
-    _setLoading(true);
+  Future<void> _resetWeeklyTrackers(String userId, String dietType) async {
     try {
-      await _trackerService.resetWeeklyTrackers(userId);
-
-      _weeklyTrackers = _weeklyTrackers
-          .map((tracker) =>
-              tracker.copyWith(currentValue: 0, lastUpdated: DateTime.now()))
-          .toList();
-
-      notifyListeners();
+      await _trackerService.resetTrackers(userId, dietType, isWeekly: true);
+      await loadUserTrackers(userId, dietType);
     } catch (e) {
       _setError('Failed to reset weekly trackers: $e');
-    } finally {
-      _setLoading(false);
     }
   }
 
@@ -549,15 +532,69 @@ class TrackerProvider extends ChangeNotifier {
       return {};
     }
   }
-  // All client-side scheduler methods removed as backend handles them now
+
+  // Scheduler Methods
+
+  /// Start automatic reset scheduler
+  Future<void> startResetScheduler(String userId) async {
+    try {
+      await _resetScheduler.startScheduler(userId);
+    } catch (e) {
+      print('Error starting reset scheduler: $e');
+    }
+  }
+
+  /// Stop automatic reset scheduler
+  void stopResetScheduler() {
+    _resetScheduler.stopScheduler();
+  }
+
+  /// Get next reset times
+  Map<String, DateTime> getNextResetTimes() {
+    return _resetScheduler.getNextResetTimes();
+  }
+
+  /// Manual daily reset (for testing or immediate use)
+  Future<void> manualDailyReset(String userId) async {
+    _setLoading(true);
+    try {
+      await _resetScheduler.manualDailyReset(userId);
+      // Reload trackers to reflect the reset
+      if (_dailyTrackers.isNotEmpty) {
+        final dietType = _dailyTrackers.first.dietType;
+        await loadUserTrackers(userId, dietType);
+      }
+    } catch (e) {
+      _setError('Failed to reset daily trackers: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Manual weekly reset (for testing or immediate use)
+  Future<void> manualWeeklyReset(String userId) async {
+    _setLoading(true);
+    try {
+      await _resetScheduler.manualWeeklyReset(userId);
+      // Reload trackers to reflect the reset
+      if (_weeklyTrackers.isNotEmpty) {
+        final dietType = _weeklyTrackers.first.dietType;
+        await loadUserTrackers(userId, dietType);
+      }
+    } catch (e) {
+      _setError('Failed to reset weekly trackers: $e');
+    } finally {
+      _setLoading(false);
+    }
+  }
 
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
   }
 
-  void _setError(String? errorMessage) {
-    _error = errorMessage;
+  /// Force a UI refresh - useful when external services update trackers
+  void forceUIRefresh() {
     notifyListeners();
   }
 }

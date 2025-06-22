@@ -305,8 +305,22 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           height: 28,
         ),
       ),
-      onDismissed: (_) {
-        context.read<PantryController>().removeItem(item.id, item.isPantryItem);
+      onDismissed: (direction) {
+        context.read<PantryController>().removeItem(item.id);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${item.name} removed from your pantry'),
+            backgroundColor: Colors.redAccent,
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () {
+                // To undo, we'd need an 'addItem' method in the controller
+                // For now, we'll just show the message
+              },
+            ),
+          ),
+        );
       },
       child: GestureDetector(
         onTap: () => _showEditItemDialog(item),
