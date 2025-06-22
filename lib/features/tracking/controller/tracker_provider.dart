@@ -1,3 +1,5 @@
+// lib/features/tracking/controller/tracker_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
@@ -5,13 +7,13 @@ import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
 import '../services/tracker_service.dart';
 import '../services/tracker_progress_service.dart';
-import '../services/tracker_reset_scheduler.dart';
+// import '../services/tracker_reset_scheduler.dart'; // REMOVED: Client-side scheduler
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TrackerProvider extends ChangeNotifier {
   final TrackerService _trackerService = TrackerService();
   final TrackerProgressService _progressService = TrackerProgressService();
-  final TrackerResetScheduler _resetScheduler = TrackerResetScheduler();
+  // final TrackerResetScheduler _resetScheduler = TrackerResetScheduler(); // REMOVED: Client-side scheduler
 
   List<TrackerGoal> _dailyTrackers = [];
   List<TrackerGoal> _weeklyTrackers = [];
@@ -25,10 +27,26 @@ class TrackerProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  // Add this clearError method
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  // ... (rest of the TrackerProvider code remains the same,
+  //      but ensure any calls to _resetScheduler are removed as well,
+  //      and the _processingCompleter, _pendingUpdates, _isProcessingQueue
+  //      are cleaned up from TrackerService if they are remnants.)
+
+  // The initializeUserTrackers and loadUserTrackers logic should now simply
+  // fetch the current state from the database as the backend handles resets.
+
   Future<void> initializeUserTrackers(String userId, String dietType) async {
     _setError(null);
     _setLoading(true);
     try {
+      // This call to _trackerService.initializeUserTrackers should handle provisioning
+      // default trackers if none exist for the user on the backend.
       await _trackerService
           .initializeUserTrackers(userId, dietType)
           .timeout(const Duration(seconds: 20), onTimeout: () {
@@ -76,7 +94,8 @@ class TrackerProvider extends ChangeNotifier {
           _retryCount = 0;
           notifyListeners();
           // Try to sync with the database in the background
-          _syncWithDatabase(userId, dietType);
+          _syncWithDatabase(
+              userId, dietType); // Keep this for eventual consistency
           return;
         }
       } catch (localError) {
@@ -84,23 +103,25 @@ class TrackerProvider extends ChangeNotifier {
         // Continue to try loading from the database
       }
 
-      // Clean up duplicates if possible
+      // Clean up duplicates if possible (non-critical, can run in background)
       try {
         await _trackerService.cleanupDuplicateTrackers(userId);
       } catch (e) {
-        // Non-critical operation, just log the error
         print('Warning: Failed to cleanup duplicate trackers: $e');
       }
 
+      // Always attempt to fetch from MongoDB to get the latest state after backend resets
       try {
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
       } catch (e) {
-        throw Exception('Failed to load trackers: $e');
+        throw Exception('Failed to load trackers from database: $e');
       }
 
+      // If after all attempts, trackers are empty, re-initialize defaults
+      // (This serves as a client-side fallback if backend provisioning fails for new users)
       if (_dailyTrackers.isEmpty && _weeklyTrackers.isEmpty) {
         await _initializeDefaultTrackers(userId, dietType);
       }
@@ -172,6 +193,7 @@ class TrackerProvider extends ChangeNotifier {
   }
 
   // Attempt to sync local data with the database
+  // This method remains for ensuring cache consistency but the primary reset is backend.
   Future<void> _syncWithDatabase(String userId, String dietType) async {
     try {
       // Add a small delay to allow any pending MongoDB updates to complete
@@ -536,61 +558,7 @@ class TrackerProvider extends ChangeNotifier {
       return {};
     }
   }
-
-  // Scheduler Methods
-
-  /// Start automatic reset scheduler
-  Future<void> startResetScheduler(String userId) async {
-    try {
-      await _resetScheduler.startScheduler(userId);
-    } catch (e) {
-      print('Error starting reset scheduler: $e');
-    }
-  }
-
-  /// Stop automatic reset scheduler
-  void stopResetScheduler() {
-    _resetScheduler.stopScheduler();
-  }
-
-  /// Get next reset times
-  Map<String, DateTime> getNextResetTimes() {
-    return _resetScheduler.getNextResetTimes();
-  }
-
-  /// Manual daily reset (for testing or immediate use)
-  Future<void> manualDailyReset(String userId) async {
-    _setLoading(true);
-    try {
-      await _resetScheduler.manualDailyReset(userId);
-      // Reload trackers to reflect the reset
-      if (_dailyTrackers.isNotEmpty) {
-        final dietType = _dailyTrackers.first.dietType;
-        await loadUserTrackers(userId, dietType);
-      }
-    } catch (e) {
-      _setError('Failed to reset daily trackers: $e');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  /// Manual weekly reset (for testing or immediate use)
-  Future<void> manualWeeklyReset(String userId) async {
-    _setLoading(true);
-    try {
-      await _resetScheduler.manualWeeklyReset(userId);
-      // Reload trackers to reflect the reset
-      if (_weeklyTrackers.isNotEmpty) {
-        final dietType = _weeklyTrackers.first.dietType;
-        await loadUserTrackers(userId, dietType);
-      }
-    } catch (e) {
-      _setError('Failed to reset weekly trackers: $e');
-    } finally {
-      _setLoading(false);
-    }
-  }
+  // All client-side scheduler methods removed as backend handles them now
 
   void _setLoading(bool loading) {
     _isLoading = loading;
