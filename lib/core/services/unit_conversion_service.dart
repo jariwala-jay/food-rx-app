@@ -69,6 +69,7 @@ class UnitConversionService {
       'tablespoons': 'tablespoon',
       'tablespoon': 'tablespoon',
       'tbsp': 'tablespoon',
+      'tbs': 'tablespoon',
       'teaspoons': 'teaspoon',
       'teaspoon': 'teaspoon',
       'tsp': 'teaspoon',
@@ -99,13 +100,17 @@ class UnitConversionService {
       'pound': 'pound',
       'lbs': 'pound',
       'lb': 'pound',
-      // Piece-based
+      // Piece-based (maps to a standard 'piece' for logic)
       'piece': 'piece',
       'pieces': 'piece',
-      'clove': 'clove',
-      'cloves': 'clove',
-      'slice': 'slice',
-      'slices': 'slice',
+      'clove': 'piece',
+      'cloves': 'piece',
+      'slice': 'piece',
+      'slices': 'piece',
+      'large': 'piece',
+      'medium': 'piece',
+      'small': 'piece',
+      // Other
       '': 'unit', // Default for empty unit strings
       'unit': 'unit',
       'serving': 'serving',
@@ -115,7 +120,6 @@ class UnitConversionService {
   }
 
   /// Finds the best matching key in a map for a given ingredient name.
-  /// This is more robust than simple `contains`.
   String? _findBestMatch(String ingredientName, Map<String, dynamic> map) {
     final lowerIngredient = ingredientName.toLowerCase();
 
@@ -124,7 +128,16 @@ class UnitConversionService {
       return lowerIngredient;
     }
 
-    // Then check for keywords
+    // Then check for keywords where the map key is more specific
+    // e.g., recipe says "garlic", map key is "clove of garlic"
+    for (final key in map.keys) {
+      if (key.contains(lowerIngredient)) {
+        return key;
+      }
+    }
+
+    // Fallback check for when the ingredient is more specific
+    // e.g., recipe says "yellow onion", map key is "onion"
     for (final key in map.keys) {
       if (lowerIngredient.contains(key)) {
         return key;
@@ -141,6 +154,7 @@ class UnitConversionService {
     required String toUnit,
     String ingredientName = '',
   }) {
+    // ... (existing implementation of convert method)
     final String normFrom = _normalizeUnit(fromUnit);
     final String normTo = _normalizeUnit(toUnit);
 
@@ -161,7 +175,7 @@ class UnitConversionService {
     else if (_weightToGrams.containsKey(normFrom)) {
       amountInGrams = amount * _weightToGrams[normFrom]!;
     }
-    // From Piece
+    // From Piece (handles units like "clove", "large", "slice")
     else if (normFrom == 'piece' || normFrom == 'unit') {
       final pieceKey = _findBestMatch(ingredientName, _pieceToGrams);
       if (pieceKey != null) {
@@ -205,5 +219,34 @@ class UnitConversionService {
           '⚠️ UnitConversionService: Cannot convert $amount from "$fromUnit" to "$toUnit" for ingredient "$ingredientName". No valid conversion path found.');
     }
     return amount;
+  }
+
+  // NEW METHOD: Optimizes units for human readability after scaling.
+  Map<String, dynamic> optimizeUnits(double amount, String unit) {
+    String normUnit = _normalizeUnit(unit);
+
+    // From Teaspoon to Tablespoon
+    if (normUnit == 'teaspoon' && amount >= 3) {
+      return {'amount': amount / 3, 'unit': 'tablespoons'};
+    }
+    // From Tablespoon to Cup
+    else if (normUnit == 'tablespoon' && amount >= 16) {
+      return {'amount': amount / 16, 'unit': 'cups'};
+    }
+    // From Cup to a smaller unit (if a small fraction)
+    else if (normUnit == 'cup' && amount < 0.25 && amount > 0) {
+      return {'amount': amount * 16, 'unit': 'tablespoons'};
+    }
+    // From Grams to Kilograms
+    else if (normUnit == 'gram' && amount >= 1000) {
+      return {'amount': amount / 1000, 'unit': 'kg'};
+    }
+    // From Ounces to Pounds
+    else if (normUnit == 'ounce' && amount >= 16) {
+      return {'amount': amount / 16, 'unit': 'pounds'};
+    }
+
+    // No conversion needed, return original values
+    return {'amount': amount, 'unit': unit};
   }
 }

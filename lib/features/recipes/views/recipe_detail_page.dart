@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/core/services/unit_conversion_service.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
@@ -35,10 +36,18 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
 
     final ratio = target / original;
-    final adjustedIngredients = widget.recipe.extendedIngredients.map((ing) {
-      final newAmount = ing.amount * ratio;
+    final unitConversionService = UnitConversionService();
 
-      // Format the amount to a string, handling decimals nicely.
+    final adjustedIngredients = widget.recipe.extendedIngredients.map((ing) {
+      final scaledAmount = ing.amount * ratio;
+
+      // --- NEW: Smart unit optimization ---
+      final optimized =
+          unitConversionService.optimizeUnits(scaledAmount, ing.unit);
+      final newAmount = optimized['amount'] as double;
+      final newUnit = optimized['unit'] as String;
+
+      // Format the new amount to a string, handling decimals nicely.
       String amountStr;
       if (newAmount == newAmount.truncateToDouble()) {
         amountStr = newAmount.toInt().toString();
@@ -53,12 +62,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         }
       }
 
-      // Re-create the 'original' string with the new amount.
-      final newOriginal =
-          '$amountStr ${ing.unit} ${ing.nameClean ?? ing.name}'.trim();
+      // Re-create the 'original' string with the new amount and unit.
+      final newOriginal = '$amountStr $newUnit ${ing.nameClean}'.trim();
 
       return ing.copyWith(
         amount: newAmount,
+        unit: newUnit, // Update the unit as well
         original: newOriginal,
       );
     }).toList();
