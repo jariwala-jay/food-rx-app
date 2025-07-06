@@ -36,48 +36,30 @@ class RecipeGenerationService {
     // 2. Fetch recipes from the repository with enhanced filter
     final recipes = await _recipeRepository.getRecipes(enhancedFilter, pantryIngredientNames);
 
-    print('🔍 Recipe filtering stats:');
-    print('   Initial recipes from API: ${recipes.length}');
-
     // 3. Perform local validation and enhancement
     final validatedRecipes = <Recipe>[];
-    int filteredByIngredients = 0;
-    int filteredByHealth = 0;
-    int filteredByMedical = 0;
     
     for (var recipe in recipes) {
       // a. Check if pantry has enough ingredients
       if (!_hasEnoughIngredients(recipe, pantryItems)) {
-        filteredByIngredients++;
         continue;
       }
 
       // b. Validate against health constraints (DASH, MyPlate, etc.)
       if (!_isHealthCompliant(recipe, userProfile)) {
-        filteredByHealth++;
-        print('   ❌ Health filtered: "${recipe.title}" (${recipe.id})');
         continue;
       }
 
       // c. Validate against medical condition constraints
       if (!_isMedicalConditionCompliant(recipe, userProfile)) {
-        filteredByMedical++;
-        print('   ❌ Medical filtered: "${recipe.title}" (${recipe.id})');
         continue;
       }
-
-      print('   ✅ Approved: "${recipe.title}" (${recipe.id})');
 
       // d. Enhance recipe with pantry data
       final enhancedRecipe = _enhanceRecipeWithPantryData(recipe, pantryItems);
 
       validatedRecipes.add(enhancedRecipe);
     }
-
-    print('   Filtered by ingredients: $filteredByIngredients');
-    print('   Filtered by health constraints: $filteredByHealth');
-    print('   Filtered by medical conditions: $filteredByMedical');
-    print('   Final approved recipes: ${validatedRecipes.length}');
 
     // 4. Sort recipes by health score and ingredient availability
     validatedRecipes.sort((a, b) {
@@ -188,7 +170,6 @@ class RecipeGenerationService {
   bool _isDashCompliant(Recipe recipe) {
     final nutrition = recipe.nutrition;
     if (nutrition == null) {
-      print('     ⚠️  No nutrition data available');
       return true; // Allow if nutrition data is not available
     }
 
@@ -198,23 +179,17 @@ class RecipeGenerationService {
     final fiber = _getNutrientAmount(nutrition, 'Fiber');
     final potassium = _getNutrientAmount(nutrition, 'Potassium');
 
-    print('     📊 Nutrition: Na=${sodium}mg, SatFat=${saturatedFat}g, Fiber=${fiber}g, K=${potassium}mg');
-
     // DASH compliance checks (more practical)
     if (sodium > 800) {
-      print('     ❌ Too much sodium: ${sodium}mg > 800mg');
       return false; // Max 800mg sodium per serving (more practical than 600mg)
     }
     if (saturatedFat > 8) {
-      print('     ❌ Too much saturated fat: ${saturatedFat}g > 8g');
       return false; // Max 8g saturated fat per serving (slightly more lenient)
     }
     if (fiber < 2) {
-      print('     ❌ Too little fiber: ${fiber}g < 2g');
       return false; // Min 2g fiber per serving (more achievable)
     }
     
-    print('     ✅ DASH compliant');
     return true;
   }
 
@@ -296,20 +271,15 @@ class RecipeGenerationService {
     final saturatedFat = _getNutrientAmount(nutrition, 'Saturated Fat');
     final potassium = _getNutrientAmount(nutrition, 'Potassium');
 
-    print('     📊 Hypertension check: Na=${sodium}mg, SatFat=${saturatedFat}g, K=${potassium}mg');
-
     // DASH guidelines for hypertension (practical approach)
     if (sodium > 800) {
-      print('     ❌ Too much sodium for hypertension: ${sodium}mg > 800mg');
       return false; // Max 800mg sodium per serving (practical DASH)
     }
     if (saturatedFat > 8) {
-      print('     ❌ Too much saturated fat for hypertension: ${saturatedFat}g > 8g');
       return false; // Max 8g saturated fat per serving
     }
     // Prefer recipes with good potassium (300mg+) but don't require it
 
-    print('     ✅ Hypertension compliant');
     return true;
   }
 

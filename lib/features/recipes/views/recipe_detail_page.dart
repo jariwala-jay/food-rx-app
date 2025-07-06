@@ -12,6 +12,7 @@ import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
+import 'package:flutter/foundation.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
@@ -106,6 +107,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       final authController = Provider.of<AuthController>(context, listen: false);
       final trackerProvider = Provider.of<TrackerProvider>(context, listen: false);
 
+      if (kDebugMode) {
+        print('\n🍳 ===== RECIPE DETAIL PAGE COOKING =====');
+        print('Recipe: ${_adjustedRecipe.title}');
+        print('Recipe servings: ${_adjustedRecipe.servings}');
+      }
+
       // Step 1: Deduct ingredients from pantry
       final scaledIngredients = _adjustedRecipe.extendedIngredients.map((ing) => {
         'name': ing.nameClean,
@@ -113,22 +120,100 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         'unit': ing.unit, // Units are now clean from the source
       }).toList();
 
+      if (kDebugMode) {
+        print('\n📦 PANTRY DEDUCTION (RECIPE DETAIL PAGE)...');
+        print('Current pantry items: ${pantryController.pantryItems.length}');
+        print('Current other items: ${pantryController.otherItems.length}');
+      }
+
       final deductionResult = await _pantryService.deductIngredientsFromPantry(
         scaledIngredients: scaledIngredients,
         pantryItems: [...pantryController.pantryItems, ...pantryController.otherItems],
       );
 
+      if (kDebugMode) {
+        print('\n📦 DEDUCTION RESULT:');
+        print('Successful: ${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed}');
+        print('Updated items: ${deductionResult.updatedItems.length}');
+        print('Items to remove: ${deductionResult.itemsToRemove.length}');
+      }
+
+      // Step 1.5: ACTUALLY PERSIST THE PANTRY CHANGES TO DATABASE
+      if (kDebugMode) {
+        print('\n💾 PERSISTING PANTRY CHANGES TO DATABASE...');
+      }
+
+      // Update quantities for modified items
+      for (final updatedItem in deductionResult.updatedItems) {
+        if (kDebugMode) {
+          print('Updating ${updatedItem.name}: ${updatedItem.quantity} ${updatedItem.unit.name}');
+        }
+        await pantryController.updateItem(updatedItem);
+      }
+
+      // Remove depleted items
+      for (final itemId in deductionResult.itemsToRemove) {
+        if (kDebugMode) {
+          print('Removing item: $itemId');
+        }
+        // Find the item to determine if it's pantry or other
+        final itemToRemove = [...pantryController.pantryItems, ...pantryController.otherItems]
+            .firstWhere((item) => item.id == itemId);
+        await pantryController.removeItem(itemId, itemToRemove.isPantryItem);
+      }
+
+      if (kDebugMode) {
+        print('✅ Pantry changes persisted to database');
+      }
+
       // Step 2: Add to diet tracking (1 serving per person)
+      // ONLY track ingredients that were successfully deducted from pantry
       final user = authController.currentUser;
       final userDietType = user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
       
       const servingsPerPerson = 1;
       
+      if (kDebugMode) {
+        print('\n🥗 DIET TRACKING...');
+        print('User diet type: $userDietType');
+        print('Only tracking successfully deducted ingredients:');
+      }
+      
+      // Create a set of successfully deducted ingredient names for quick lookup
+      final successfullyDeductedNames = <String>{};
+      for (var updatedItem in deductionResult.updatedItems) {
+        // Find matching recipe ingredient names
+        for (final ingredient in _adjustedRecipe.extendedIngredients) {
+          if (ingredient.nameClean.toLowerCase().contains(updatedItem.name.toLowerCase()) ||
+              updatedItem.name.toLowerCase().contains(ingredient.nameClean.toLowerCase())) {
+            successfullyDeductedNames.add(ingredient.nameClean);
+          }
+        }
+      }
+      
+      if (kDebugMode) {
+        print('Successfully deducted ingredients: ${successfullyDeductedNames.join(', ')}');
+        print('Total ingredients in recipe: ${_adjustedRecipe.extendedIngredients.length}');
+        print('Will track: ${successfullyDeductedNames.length} ingredients');
+      }
+      
       // Aggregate servings by category to avoid duplicate updates
       final Map<TrackerCategory, double> categoryServings = {};
       
       // Use the clean ingredient data directly from the recipe
+      // BUT only track ingredients that were successfully deducted
       for (final ingredient in _adjustedRecipe.extendedIngredients) {
+        // Skip ingredients that were NOT successfully deducted from pantry
+        if (!successfullyDeductedNames.contains(ingredient.nameClean)) {
+          if (kDebugMode) {
+            print('  ⏭️ Skipping ${ingredient.nameClean} (not deducted from pantry)');
+          }
+          continue;
+        }
+        
+        if (kDebugMode) {
+          print('  ✅ Tracking ${ingredient.nameClean} (successfully deducted)');
+        }
         final categories = _dietService.getCategoriesForIngredient(ingredient.nameClean, dietType: userDietType);
         
         for (final category in categories) {
@@ -196,6 +281,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         }
       }
 
+      if (kDebugMode) {
+        print('\n✅ RECIPE DETAIL PAGE COOKING COMPLETE');
+        print('   Pantry changes: ${deductionResult.updatedItems.length} updated, ${deductionResult.itemsToRemove.length} removed');
+        print('   Diet tracking: ${categoryServings.length} categories updated');
+        print('===== RECIPE DETAIL PAGE COOKING COMPLETE =====\n');
+      }
+
       // Step 3: Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -214,6 +306,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       }
     } catch (e) {
       debugPrint('Error cooking recipe: $e');
+      if (kDebugMode) {
+        print('\n❌ RECIPE DETAIL PAGE COOKING FAILED: $e');
+        print('Stack trace: ${StackTrace.current}');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

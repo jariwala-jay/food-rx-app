@@ -29,6 +29,8 @@ import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/home/services/tip_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/core/services/pantry_deduction_service.dart';
+import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
@@ -56,6 +58,13 @@ void main() async {
                   conversionService: context.read<UnitConversionService>())),
           Provider<IngredientSubstitutionService>(
               create: (context) => IngredientSubstitutionService(
+                  conversionService: context.read<UnitConversionService>())),
+          Provider<PantryDeductionService>(
+              create: (context) => PantryDeductionService(
+                  conversionService: context.read<UnitConversionService>(),
+                  substitutionService: context.read<IngredientSubstitutionService>())),
+          Provider<DietServingService>(
+              create: (context) => DietServingService(
                   conversionService: context.read<UnitConversionService>())),
 
           // Feature-specific Repositories
@@ -109,7 +118,7 @@ void main() async {
                 return articleController;
               }),
 
-          ChangeNotifierProxyProvider2<AuthController, PantryController,
+          ChangeNotifierProxyProvider3<AuthController, PantryController, TrackerProvider,
               RecipeController>(
             create: (context) => RecipeController(
               recipeGenerationService: RecipeGenerationService(
@@ -120,10 +129,13 @@ void main() async {
                     context.read<IngredientSubstitutionService>(),
               ),
               recipeRepository: context.read<RecipeRepository>(),
+              pantryDeductionService: context.read<PantryDeductionService>(),
+              dietServingService: context.read<DietServingService>(),
+              trackerProvider: context.read<TrackerProvider>(),
               authProvider: context.read<AuthController>(),
               pantryController: context.read<PantryController>(),
             ),
-            update: (context, auth, pantry, recipeController) {
+            update: (context, auth, pantry, tracker, recipeController) {
               recipeController!.authProvider = auth;
               recipeController.pantryController = pantry;
               return recipeController;

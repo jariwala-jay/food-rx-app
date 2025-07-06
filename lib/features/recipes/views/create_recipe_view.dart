@@ -459,10 +459,6 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
     if (kDebugMode) {
       print('🎯 CreateRecipeView: Starting recipe generation...');
-      print('   DASH Compliant: $dashCompliant');
-      print('   MyPlate Compliant: $myPlateCompliant');
-      print('   User Diet Type: ${user?.dietType}');
-      print('   Medical Conditions: ${user?.medicalConditions}');
     }
 
     // Get controller and generate recipes
