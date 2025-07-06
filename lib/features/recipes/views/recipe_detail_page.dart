@@ -3,6 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/core/services/recipe_scaling_service.dart';
+import 'package:flutter_app/core/services/pantry_deduction_service.dart';
+import 'package:flutter_app/core/services/diet_serving_service.dart';
+import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
+
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
@@ -20,10 +29,33 @@ class RecipeDetailPage extends StatefulWidget {
 
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
   late Recipe _adjustedRecipe;
+  late RecipeScalingService _scalingService;
+  late PantryDeductionService _pantryService;
+  late DietServingService _dietService;
 
+  bool _isScaling = false;
+  bool _isCooking = false;
+  bool _showScalingDetails = false;
+  Map<String, dynamic>? _scalingResult;
+  
   @override
   void initState() {
     super.initState();
+    final conversionService = UnitConversionService();
+    final substitutionService = IngredientSubstitutionService(
+      conversionService: conversionService,
+    );
+    
+    _scalingService = RecipeScalingService(
+      conversionService: conversionService,
+    );
+    _pantryService = PantryDeductionService(
+      conversionService: conversionService,
+      substitutionService: substitutionService,
+    );
+    _dietService = DietServingService(
+      conversionService: conversionService,
+    );
     _adjustedRecipe = _getAdjustedRecipe();
   }
 
@@ -35,47 +67,166 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       return widget.recipe;
     }
 
-    final ratio = target / original;
-    final unitConversionService = UnitConversionService();
+    setState(() {
+      _isScaling = true;
+    });
 
-    final adjustedIngredients = widget.recipe.extendedIngredients.map((ing) {
-      final scaledAmount = ing.amount * ratio;
+    try {
+      // Convert Recipe to Map for the scaling service
+      final recipeMap = widget.recipe.toJson();
+      
+      // Use the enhanced RecipeScalingService
+      final result = _scalingService.scaleRecipe(
+        originalRecipe: recipeMap,
+        targetServings: target,
+      );
+      
+      _scalingResult = result;
+      
+      // Convert back to Recipe object
+      return Recipe.fromJson(result);
+    } catch (e) {
+      print('\n❌ Recipe scaling failed: $e');
+      setState(() {
+        _isScaling = false;
+      });
+      
+      // Fallback to original recipe if scaling fails
+      return widget.recipe;
+    }
+  }
 
-      // --- NEW: Smart unit optimization ---
-      final optimized =
-          unitConversionService.optimizeUnits(scaledAmount, ing.unit);
-      final newAmount = optimized['amount'] as double;
-      final newUnit = optimized['unit'] as String;
+  Future<void> _cookRecipe() async {
+    setState(() {
+      _isCooking = true;
+    });
 
-      // Format the new amount to a string, handling decimals nicely.
-      String amountStr;
-      if (newAmount == newAmount.truncateToDouble()) {
-        amountStr = newAmount.toInt().toString();
-      } else {
-        String formatted = newAmount.toStringAsFixed(2);
-        if (formatted.endsWith('.00')) {
-          amountStr = newAmount.toInt().toString();
-        } else if (formatted.endsWith('0')) {
-          amountStr = newAmount.toStringAsFixed(1);
-        } else {
-          amountStr = formatted;
+    try {
+      final pantryController = Provider.of<PantryController>(context, listen: false);
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final trackerProvider = Provider.of<TrackerProvider>(context, listen: false);
+
+      // Step 1: Deduct ingredients from pantry
+      final scaledIngredients = _adjustedRecipe.extendedIngredients.map((ing) => {
+        'name': ing.nameClean,
+        'amount': ing.amount,
+        'unit': ing.unit, // Units are now clean from the source
+      }).toList();
+
+      final deductionResult = await _pantryService.deductIngredientsFromPantry(
+        scaledIngredients: scaledIngredients,
+        pantryItems: [...pantryController.pantryItems, ...pantryController.otherItems],
+      );
+
+      // Step 2: Add to diet tracking (1 serving per person)
+      final user = authController.currentUser;
+      final userDietType = user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
+      
+      const servingsPerPerson = 1;
+      
+      // Aggregate servings by category to avoid duplicate updates
+      final Map<TrackerCategory, double> categoryServings = {};
+      
+      // Use the clean ingredient data directly from the recipe
+      for (final ingredient in _adjustedRecipe.extendedIngredients) {
+        final categories = _dietService.getCategoriesForIngredient(ingredient.nameClean, dietType: userDietType);
+        
+        for (final category in categories) {
+          double dietServings = 0.0;
+          
+          // Skip any remaining malformed units (should be very rare now)
+          if (ingredient.unit.toLowerCase() == 'servings' || ingredient.unit.toLowerCase() == 'serving') {
+            continue;
+          }
+          
+          // Calculate servings for the user's selected diet only
+          // This is the amount per person (total recipe amount divided by servings)
+          final perPersonAmount = ingredient.amount / _adjustedRecipe.servings;
+          
+          dietServings = _dietService.getServingsForTracker(
+            ingredientName: ingredient.nameClean,
+            amount: perPersonAmount * servingsPerPerson,
+            unit: ingredient.unit,
+            category: category,
+            dietType: userDietType,
+          );
+          
+          if (dietServings > 0) {
+            // Round to 2 decimal places and aggregate
+            final roundedServings = double.parse(dietServings.toStringAsFixed(2));
+            categoryServings[category] = (categoryServings[category] ?? 0.0) + roundedServings;
+          }
+        }
+      }
+      
+      // Add sodium tracking from nutrition data (DASH diet specific)
+      if (userDietType == 'dash' && _adjustedRecipe.nutrition != null) {
+        final sodiumNutrient = _adjustedRecipe.nutrition!.nutrients
+            .where((n) => n.name.toLowerCase() == 'sodium')
+            .firstOrNull;
+        
+        if (sodiumNutrient != null) {
+          // Convert sodium amount per serving to mg if needed
+          // The nutrition data is typically per serving, so we multiply by servingsPerPerson
+          double sodiumMg = sodiumNutrient.amount * servingsPerPerson;
+          
+          // Convert to mg if in different units
+          if (sodiumNutrient.unit.toLowerCase() == 'g') {
+            sodiumMg *= 1000; // Convert grams to mg
+          } else if (sodiumNutrient.unit.toLowerCase() == 'mcg' || sodiumNutrient.unit.toLowerCase() == 'μg') {
+            sodiumMg /= 1000; // Convert micrograms to mg
+          }
+          
+          if (sodiumMg > 0) {
+            final roundedSodium = double.parse(sodiumMg.toStringAsFixed(2));
+            categoryServings[TrackerCategory.sodium] = (categoryServings[TrackerCategory.sodium] ?? 0.0) + roundedSodium;
+          }
+        }
+      }
+      
+      // Update tracker for each category
+      for (final entry in categoryServings.entries) {
+        final category = entry.key;
+        final servings = entry.value;
+        
+        // Find the matching tracker and update it
+        final matchingTracker = trackerProvider.findTrackerByCategory(category, userDietType);
+        if (matchingTracker != null) {
+          await trackerProvider.incrementTracker(matchingTracker.id, servings);
         }
       }
 
-      // Re-create the 'original' string with the new amount and unit.
-      final newOriginal = '$amountStr $newUnit ${ing.nameClean}'.trim();
+      // Step 3: Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Recipe cooked! Ingredients deducted from pantry (${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful) and added to diet tracking.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
 
-      return ing.copyWith(
-        amount: newAmount,
-        unit: newUnit, // Update the unit as well
-        original: newOriginal,
-      );
-    }).toList();
-
-    return widget.recipe.copyWith(
-      extendedIngredients: adjustedIngredients,
-      servings: target,
-    );
+      // Navigate back to home
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('Error cooking recipe: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cooking recipe: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isCooking = false;
+      });
+    }
   }
 
   @override
@@ -89,6 +240,36 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          if (_scalingResult != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${(_scalingResult!['scalingMetadata']['overallConfidence']).toStringAsFixed(0)}% confidence',
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -103,10 +284,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   _buildTitleSection(context),
                   const SizedBox(height: 16),
                   _buildIngredientTags(),
+                  const SizedBox(height: 16),
+                  _buildCookButton(),
                   const SizedBox(height: 24),
                   _buildSectionTitle(
                       'Ingredients for ${_adjustedRecipe.servings} servings'),
                   const SizedBox(height: 8),
+                  if (_scalingResult != null && widget.targetServings != widget.recipe.servings)
+                    _buildScalingDetailsSection(),
                   _buildIngredientsList(),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Instructions'),
@@ -117,6 +302,54 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCookButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isCooking ? null : _cookRecipe,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFF6A00),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+        ),
+        child: _isCooking
+            ? const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Cooking...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.restaurant, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Cook This Recipe',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -136,7 +369,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -161,9 +394,26 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(
-            _adjustedRecipe.title,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _adjustedRecipe.title,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              if (widget.targetServings != null && widget.targetServings != widget.recipe.servings)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Scaled from ${widget.recipe.servings} to ${widget.targetServings} servings',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
         Consumer<RecipeController>(
@@ -204,6 +454,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           label: '+${_adjustedRecipe.missedIngredientCount ?? 0}',
           color: Colors.orange,
         ),
+        if (_scalingResult != null) ...[
+          const SizedBox(width: 12),
+          _buildTag(
+            icon: Icons.analytics,
+            label: 'Enhanced UCS',
+            color: Colors.blue,
+          ),
+        ],
       ],
     );
   }
@@ -216,7 +474,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -240,6 +498,245 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
+  Widget _buildScalingDetailsSection() {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _showScalingDetails = !_showScalingDetails;
+            });
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.analytics, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Scaling Details (${widget.recipe.servings} → ${widget.targetServings} servings)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _showScalingDetails ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.blue,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_showScalingDetails) _buildScalingComparison(),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildScalingComparison() {
+    if (_scalingResult == null) return const SizedBox.shrink();
+
+    final metadata = _scalingResult!['scalingMetadata'];
+    final scaleFactor = widget.targetServings! / widget.recipe.servings;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Scaling metadata
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricCard(
+                  'Scale Factor',
+                  '${scaleFactor.toStringAsFixed(2)}x',
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMetricCard(
+                  'Confidence',
+                  '${(metadata['overallConfidence']).toStringAsFixed(0)}%',
+                  Colors.green,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Ingredient comparison
+          const Text(
+            'Ingredient Conversions:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          
+          ...widget.recipe.extendedIngredients.asMap().entries.map((entry) {
+            final index = entry.key;
+            final original = entry.value;
+            final scaled = _adjustedRecipe.extendedIngredients[index];
+            final expectedAmount = original.amount * scaleFactor;
+            final wasOptimized = scaled.amount != expectedAmount || scaled.unit != original.unit;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: wasOptimized 
+                  ? Colors.orange.withValues(alpha: 0.1)
+                  : Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: wasOptimized 
+                    ? Colors.orange.withValues(alpha: 0.3)
+                    : Colors.green.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    original.nameClean,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        '${_formatDisplayAmount(original.amount)} ${original.unit}',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_formatDisplayAmount(scaled.amount)} ${scaled.unit}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  if (wasOptimized) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.lightbulb_outline,
+                          size: 14,
+                          color: Colors.orange[700],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Optimized from ${expectedAmount.toStringAsFixed(2)} ${original.unit}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }).toList(),
+          
+          const SizedBox(height: 12),
+          
+          // Statistics summary
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Scaling Statistics:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                _buildStatRow('Total Ingredients', '${metadata['totalIngredients']}'),
+                _buildStatRow('Successful Conversions', '${metadata['successfulConversions']}'),
+                _buildStatRow('Unit Optimizations', '${metadata['unitOptimizations']}'),
+                _buildStatRow('Seasoning Adjustments', '${metadata['seasoningAdjustments']}'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildIngredientsList() {
     if (_adjustedRecipe.extendedIngredients.isEmpty) {
       return const Text('No ingredients listed.');
@@ -251,6 +748,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: _adjustedRecipe.extendedIngredients.map((ingredient) {
         final bool isAvailable = usedIngredientIds.contains(ingredient.id);
+        
+        // Build the display text with scaled amounts
+        String displayText = _buildScaledIngredientText(ingredient);
+        
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
           child: Row(
@@ -269,7 +770,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  ingredient.original,
+                  displayText,
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[800],
@@ -282,6 +783,205 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         );
       }).toList(),
     );
+  }
+
+  String _formatDisplayAmount(double amount) {
+    // Handle whole numbers
+    if (amount == amount.roundToDouble()) {
+      return amount.toInt().toString();
+    }
+    
+    // Handle common fractions with readable display
+    final tolerance = 0.01;
+    
+    // Check for halves
+    if ((amount - 0.5).abs() < tolerance) return '1/2';
+    if ((amount - 1.5).abs() < tolerance) return '1 1/2';
+    if ((amount - 2.5).abs() < tolerance) return '2 1/2';
+    if ((amount - 3.5).abs() < tolerance) return '3 1/2';
+    
+    // Check for thirds
+    if ((amount - 1/3).abs() < tolerance) return '1/3';
+    if ((amount - 2/3).abs() < tolerance) return '2/3';
+    if ((amount - 1.33).abs() < tolerance) return '1 1/3';
+    if ((amount - 1.67).abs() < tolerance) return '1 2/3';
+    if ((amount - 2.33).abs() < tolerance) return '2 1/3';
+    if ((amount - 2.67).abs() < tolerance) return '2 2/3';
+    
+    // Check for quarters
+    if ((amount - 0.25).abs() < tolerance) return '1/4';
+    if ((amount - 0.75).abs() < tolerance) return '3/4';
+    if ((amount - 1.25).abs() < tolerance) return '1 1/4';
+    if ((amount - 1.75).abs() < tolerance) return '1 3/4';
+    if ((amount - 2.25).abs() < tolerance) return '2 1/4';
+    if ((amount - 2.75).abs() < tolerance) return '2 3/4';
+    if ((amount - 3.25).abs() < tolerance) return '3 1/4';
+    if ((amount - 3.75).abs() < tolerance) return '3 3/4';
+    
+    // Check for eighths
+    if ((amount - 0.125).abs() < tolerance) return '1/8';
+    if ((amount - 0.375).abs() < tolerance) return '3/8';
+    if ((amount - 0.625).abs() < tolerance) return '5/8';
+    if ((amount - 0.875).abs() < tolerance) return '7/8';
+    
+    // For other amounts, use reasonable precision
+    if (amount < 1) {
+      return amount.toStringAsFixed(2);
+    } else if (amount < 10) {
+      return amount.toStringAsFixed(1);
+    } else {
+      return amount.toStringAsFixed(0);
+    }
+  }
+
+  Map<String, dynamic> _optimizeUnits(double amount, String unit) {
+    // Handle count-based ingredients that shouldn't be fractional
+    final countBasedUnits = ['', 'whole', 'piece', 'pieces', 'item', 'items'];
+    if (countBasedUnits.contains(unit.toLowerCase())) {
+      // Smart rounding for count-based items to nearest practical fraction
+      if (amount <= 0.25) {
+        return {'amount': 0.25, 'unit': unit}; // 1/4
+      } else if (amount <= 0.375) {
+        return {'amount': 0.5, 'unit': unit}; // 1/2
+      } else if (amount <= 0.625) {
+        return {'amount': 0.5, 'unit': unit}; // 1/2
+      } else if (amount <= 0.875) {
+        return {'amount': 0.75, 'unit': unit}; // 3/4
+      } else if (amount < 1.25) {
+        return {'amount': 1.0, 'unit': unit}; // 1
+      } else if (amount < 1.75) {
+        return {'amount': 1.5, 'unit': unit}; // 1 1/2
+      } else if (amount < 2.25) {
+        return {'amount': 2.0, 'unit': unit}; // 2
+      } else {
+        // For larger amounts, round to nearest half
+        return {'amount': (amount * 2).round() / 2, 'unit': unit};
+      }
+    }
+    
+    // Convert small tablespoon amounts to teaspoons
+    if ((unit == 'tablespoon' || unit == 'tablespoons' || unit == 'tbsp') && amount < 1) {
+      final tspAmount = amount * 3;
+      return {'amount': tspAmount, 'unit': tspAmount == 1 ? 'teaspoon' : 'teaspoons'};
+    }
+    
+    // Convert large teaspoon amounts to tablespoons
+    if ((unit == 'teaspoon' || unit == 'teaspoons' || unit == 'tsp') && amount >= 3) {
+      final tbspAmount = amount / 3;
+      return {'amount': tbspAmount, 'unit': tbspAmount == 1 ? 'tablespoon' : 'tablespoons'};
+    }
+    
+    // Convert large tablespoon amounts to cups
+    if ((unit == 'tablespoon' || unit == 'tablespoons' || unit == 'tbsp') && amount >= 16) {
+      final cupAmount = amount / 16;
+      return {'amount': cupAmount, 'unit': cupAmount == 1 ? 'cup' : 'cups'};
+    }
+    
+    // Convert small cup amounts to tablespoons for better readability
+    if ((unit == 'cup' || unit == 'cups') && amount < 0.25) {
+      final tbspAmount = amount * 16;
+      return {'amount': tbspAmount, 'unit': tbspAmount == 1 ? 'tablespoon' : 'tablespoons'};
+    }
+    
+    // Convert large ounce amounts to pounds
+    if ((unit == 'ounce' || unit == 'ounces' || unit == 'oz') && amount >= 16) {
+      final lbAmount = amount / 16;
+      return {'amount': lbAmount, 'unit': lbAmount == 1 ? 'pound' : 'pounds'};
+    }
+    
+    // Convert small pound amounts to ounces
+    if ((unit == 'pound' || unit == 'pounds' || unit == 'lb' || unit == 'lbs') && amount < 0.5) {
+      final ozAmount = amount * 16;
+      return {'amount': ozAmount, 'unit': ozAmount == 1 ? 'ounce' : 'ounces'};
+    }
+    
+    // Convert large gram amounts to kilograms
+    if ((unit == 'gram' || unit == 'grams' || unit == 'g') && amount >= 1000) {
+      final kgAmount = amount / 1000;
+      return {'amount': kgAmount, 'unit': kgAmount == 1 ? 'kilogram' : 'kilograms'};
+    }
+    
+    // Convert large milliliter amounts to liters
+    if ((unit == 'milliliter' || unit == 'milliliters' || unit == 'ml') && amount >= 1000) {
+      final lAmount = amount / 1000;
+      return {'amount': lAmount, 'unit': lAmount == 1 ? 'liter' : 'liters'};
+    }
+    
+    // Return original if no optimization needed
+    return {'amount': amount, 'unit': unit};
+  }
+
+  String _buildScaledIngredientText(dynamic ingredient) {
+    var amount = ingredient.amount;
+    var unit = ingredient.unit ?? '';
+    final nameClean = ingredient.nameClean ?? ingredient.name ?? '';
+    
+    // Apply intelligent unit optimization for better readability
+    final optimizedMeasurement = _optimizeUnits(amount, unit);
+    amount = optimizedMeasurement['amount'];
+    unit = optimizedMeasurement['unit'];
+    
+    // Get any additional descriptors from the original text
+    String originalText = ingredient.original ?? '';
+    
+    // Extract descriptors (text in parentheses, adjectives, etc.)
+    String descriptors = '';
+    if (originalText.isNotEmpty) {
+      // Look for parentheses content
+      final parenRegex = RegExp(r'\([^)]*\)');
+      final parenMatches = parenRegex.allMatches(originalText);
+      for (final match in parenMatches) {
+        descriptors += ' ${match.group(0)}';
+      }
+      
+      // Look for common descriptors before the ingredient name
+      final words = originalText.toLowerCase().split(' ');
+      final descriptorWords = ['fresh', 'dried', 'ground', 'whole', 'chopped', 'diced', 'sliced', 'grated', 'shredded', 'minced', 'large', 'small', 'medium', 'organic', 'free-range', 'lean'];
+      for (final word in words) {
+        if (descriptorWords.contains(word) && !descriptors.toLowerCase().contains(word)) {
+          descriptors = ' $word$descriptors';
+        }
+      }
+    }
+    
+    // Build the display text
+    String formattedAmount = _formatDisplayAmount(amount);
+    
+    if (unit.isEmpty) {
+      return '$formattedAmount $nameClean$descriptors';
+    } else {
+      // Handle unit pluralization
+      String displayUnit = unit;
+      if (amount != 1.0) {
+        // Simple pluralization rules
+        if (unit == 'cup' && amount != 1.0) displayUnit = 'cups';
+        else if (unit == 'tablespoon' && amount != 1.0) displayUnit = 'tablespoons';
+        else if (unit == 'teaspoon' && amount != 1.0) displayUnit = 'teaspoons';
+        else if (unit == 'ounce' && amount != 1.0) displayUnit = 'ounces';
+        else if (unit == 'pound' && amount != 1.0) displayUnit = 'pounds';
+        else if (unit == 'gram' && amount != 1.0) displayUnit = 'grams';
+        else if (unit == 'kilogram' && amount != 1.0) displayUnit = 'kilograms';
+        else if (unit == 'liter' && amount != 1.0) displayUnit = 'liters';
+        else if (unit == 'milliliter' && amount != 1.0) displayUnit = 'milliliters';
+        else if (unit == 'serving' && amount != 1.0) displayUnit = 'servings';
+        else if (unit == 'clove' && amount != 1.0) displayUnit = 'cloves';
+        else if (unit == 'sprig' && amount != 1.0) displayUnit = 'sprigs';
+        else if (unit == 'slice' && amount != 1.0) displayUnit = 'slices';
+        else if (unit == 'piece' && amount != 1.0) displayUnit = 'pieces';
+        else if (unit == 'packet' && amount != 1.0) displayUnit = 'packets';
+        // Add abbreviated forms
+        else if (unit == 'tsp' && amount != 1.0) displayUnit = 'tsp';
+        else if (unit == 'tbsp' && amount != 1.0) displayUnit = 'tbsp';
+        else if (unit == 'oz' && amount != 1.0) displayUnit = 'oz';
+        else if (unit == 'lb' && amount != 1.0) displayUnit = 'lbs';
+        else if (unit == 'g' && amount != 1.0) displayUnit = 'g';
+        else if (unit == 'kg' && amount != 1.0) displayUnit = 'kg';
+        else if (unit == 'ml' && amount != 1.0) displayUnit = 'ml';
+        else if (unit == 'l' && amount != 1.0) displayUnit = 'l';
+      }
+      
+      return '$formattedAmount $displayUnit $nameClean$descriptors';
+    }
   }
 
   Widget _buildInstructionsList() {
