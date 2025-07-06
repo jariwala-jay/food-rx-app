@@ -1,5 +1,6 @@
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../models/tracker_progress.dart';
 import '../models/tracker_goal.dart';
 import 'dart:async';
@@ -79,7 +80,7 @@ class TrackerProgressService {
       if (progressRecords.isNotEmpty) {
         final documents = progressRecords
             .map((p) => {
-                  '_id': ObjectId.fromHexString(p.id),
+                  '_id': ObjectIdHelper.parseObjectId(p.id),
                   ...p.toJson()
                     ..remove('_id'), // Remove the string ID, use ObjectId
                 })

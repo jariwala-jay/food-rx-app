@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
 
 @immutable
 class Ingredient {
@@ -16,8 +17,7 @@ class Ingredient {
     this.aisle,
   });
 
-  String get imageUrl =>
-      'https://spoonacular.com/cdn/ingredients_100x100/$imageName';
+  String get imageUrl => ImageUrlHelper.getValidImageUrl(imageName);
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
     return Ingredient(

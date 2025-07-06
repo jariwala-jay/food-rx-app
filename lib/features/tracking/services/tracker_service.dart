@@ -1,6 +1,7 @@
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
 import 'tracker_progress_service.dart';
@@ -240,7 +241,7 @@ class TrackerService {
 
     for (var tracker in defaultTrackers) {
       try {
-        final mongoId = ObjectId();
+        final mongoId = ObjectIdHelper.generateNew();
         final trackerWithId = tracker.copyWith(id: mongoId.toHexString());
 
         final json = {
@@ -305,16 +306,13 @@ class TrackerService {
       final collection = await _collection;
       if (collection == null) return;
 
-      // Parse trackerId to ObjectId
-      String hexString = trackerId;
-      if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
-        hexString = trackerId.substring(9, trackerId.length - 2);
+      // Parse trackerId to ObjectId using robust helper
+      if (!ObjectIdHelper.isValidObjectId(trackerId)) {
+        print('Invalid tracker ID format: $trackerId');
+        return;
       }
-      hexString = hexString.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
 
-      if (hexString.length != 24) return;
-
-      final objectId = ObjectId.fromHexString(hexString);
+      final objectId = ObjectIdHelper.parseObjectId(trackerId);
       final updatedDoc = await collection.findOne({'_id': objectId});
 
       if (updatedDoc != null) {
@@ -862,19 +860,12 @@ class TrackerService {
       final collection = await _collection;
       if (collection == null) return;
 
-      // Parse trackerId to ObjectId
-      String hexString = trackerId;
-      if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
-        hexString = trackerId.substring(9, trackerId.length - 2);
-      }
-
-      hexString = hexString.replaceAll(RegExp(r'[^a-fA-F0-9]'), '');
-
-      if (hexString.length != 24) {
+      // Parse trackerId to ObjectId using robust helper
+      if (!ObjectIdHelper.isValidObjectId(trackerId)) {
         throw Exception('Invalid ObjectId format: $trackerId');
       }
 
-      final objectId = ObjectId.fromHexString(hexString);
+      final objectId = ObjectIdHelper.parseObjectId(trackerId);
 
       // Perform the update
       final result = await collection.updateOne(

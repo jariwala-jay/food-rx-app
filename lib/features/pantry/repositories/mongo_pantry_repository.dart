@@ -1,9 +1,8 @@
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 import 'package:mongo_dart/mongo_dart.dart';
-
-const String spoonacularImageBaseUrl =
-    'https://img.spoonacular.com/ingredients_100x100/';
 
 class MongoPantryRepository {
   final MongoDBService _mongoDBService;
@@ -19,9 +18,7 @@ class MongoPantryRepository {
     return itemsJson.map((json) {
       final item = PantryItem.fromJson(json);
       return item.copyWith(
-        imageUrl: item.imageUrl.startsWith('http')
-            ? item.imageUrl
-            : '$spoonacularImageBaseUrl${item.imageUrl}',
+        imageUrl: ImageUrlHelper.getValidImageUrl(item.imageUrl),
       );
     }).toList();
   }
@@ -36,7 +33,7 @@ class MongoPantryRepository {
     await _mongoDBService.ensureConnection();
     final collection = _mongoDBService.db.collection(_collectionName);
     await collection.updateOne(
-      where.id(ObjectId.fromHexString(item.id)),
+      where.id(ObjectIdHelper.parseObjectId(item.id)),
       item.toJson(),
     );
   }
@@ -44,6 +41,6 @@ class MongoPantryRepository {
   Future<void> removePantryItem(String userId, String itemId) async {
     await _mongoDBService.ensureConnection();
     final collection = _mongoDBService.db.collection(_collectionName);
-    await collection.deleteOne(where.id(ObjectId.fromHexString(itemId)));
+    await collection.deleteOne(where.id(ObjectIdHelper.parseObjectId(itemId)));
   }
 }

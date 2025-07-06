@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:math';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class MongoDBService {
   static final MongoDBService _instance = MongoDBService._internal();
@@ -238,7 +239,7 @@ class MongoDBService {
         return null;
       }
       return await _usersCollection
-          .findOne({'_id': ObjectId.fromHexString(id)});
+          .findOne({'_id': parseObjectId(id)});
     } catch (e) {
       throw Exception('Failed to find user by ID: $e');
     }
@@ -442,7 +443,7 @@ class MongoDBService {
   Future<List<int>?> getProfilePhoto(String photoId) async {
     try {
       await ensureConnection();
-      final objectId = ObjectId.fromHexString(photoId);
+      final objectId = parseObjectId(photoId);
 
       final file = await _profilePhotosBucket.files.findOne({'_id': objectId});
       if (file == null) {
@@ -482,7 +483,7 @@ class MongoDBService {
     try {
       await ensureConnection();
       await _usersCollection.updateOne(
-        {'_id': ObjectId.fromHexString(userId)},
+        {'_id': parseObjectId(userId)},
         {
           '\$set': {
             ...updates,
@@ -499,8 +500,8 @@ class MongoDBService {
       String articleId, bool isBookmarked, String userId) async {
     try {
       await ensureConnection();
-      final articleObjectId = ObjectId.fromHexString(articleId);
-      final userObjectId = ObjectId.fromHexString(userId);
+      final articleObjectId = parseObjectId(articleId);
+      final userObjectId = parseObjectId(userId);
 
       final article =
           await _educationalContentCollection.findOne({'_id': articleObjectId});
@@ -546,7 +547,7 @@ class MongoDBService {
       String userId) async {
     try {
       await ensureConnection();
-      final userObjectId = ObjectId.fromHexString(userId);
+      final userObjectId = parseObjectId(userId);
       final articles = await _educationalContentCollection
           .find({'bookmarkedBy': userObjectId}).toList();
       return articles;
@@ -570,7 +571,7 @@ class MongoDBService {
       }
 
       if (bookmarksOnly && userId != null) {
-        query['bookmarkedBy'] = ObjectId.fromHexString(userId);
+        query['bookmarkedBy'] = parseObjectId(userId);
       }
 
       if (search != null && search.isNotEmpty) {
@@ -598,21 +599,8 @@ class MongoDBService {
   }
 
   ObjectId parseObjectId(dynamic id) {
-    if (id is ObjectId) return id;
-
-    final idStr = id.toString().replaceAll('"', '').trim();
-
-    // Matches formats like ObjectId("..."), ObjectId('...')
-    final match = RegExp('ObjectId(\\"|\\\')?([a-fA-F0-9]{24})(\\"|\\\')?\\)')
-        .firstMatch(idStr);
-    if (match != null) return ObjectId.fromHexString(match.group(1)!);
-
-    // Clean hex string (24-char)
-    if (RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idStr)) {
-      return ObjectId.fromHexString(idStr);
-    }
-
-    throw ArgumentError('Invalid ObjectId format: $id');
+    // Use the robust ObjectIdHelper instead of custom parsing
+    return ObjectIdHelper.parseObjectId(id);
   }
 
   // When serializing ObjectId to string, always use toHexString()

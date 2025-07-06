@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
 import 'dart:developer' as developer;
 
 class PantryItemAddModal extends StatefulWidget {
@@ -32,8 +33,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
   void initState() {
     super.initState();
     _itemName = widget.foodItem['name'] ?? 'Unknown Item';
-    _imageUrl =
-        'https://spoonacular.com/cdn/ingredients_100x100/${widget.foodItem['image']}';
+    _imageUrl = ImageUrlHelper.getValidImageUrl(widget.foodItem['image']);
 
     // Determine default unit and calculate smart expiration using public static methods
     _selectedUnit = PantryItem.getDefaultUnitForCategory(widget.category);
@@ -87,14 +87,12 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
       return;
     }
 
-    // Ensure foodItem['id'] exists and is a string, or generate one if necessary
-    // For items from Spoonacular or CSV, an ID should always be present.
-    // If adding a purely custom item in the future, ID generation would be needed here.
-    final String itemId = widget.foodItem['id']?.toString() ??
-        DateTime.now().millisecondsSinceEpoch.toString();
+    // For new items, we'll use a temporary ID that will be replaced by MongoDB
+    // For existing items from Spoonacular, we'll use their ID but convert it to ObjectId format
+    final String itemId = widget.foodItem['id']?.toString() ?? 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
     final newItem = PantryItem(
-      id: itemId, // Use the id from foodItem or generated
+      id: itemId, // This will be replaced by MongoDB with proper ObjectId
       name: _itemName,
       imageUrl: _imageUrl,
       category: widget.category,

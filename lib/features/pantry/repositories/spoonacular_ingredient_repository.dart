@@ -7,8 +7,8 @@ import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 
 class SpoonacularIngredientRepository implements IngredientRepository {
-  final String _baseUrl = 'https://api.spoonacular.com';
-  final String? _apiKey = dotenv.env['SPOONACULAR_API_KEY'];
+  final String _baseUrl = 'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  final String? _apiKey = dotenv.env['RAPID_API_KEY'];
 
   @override
   Future<List<Ingredient>> searchIngredients(
@@ -29,7 +29,7 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     }
 
     final uri = Uri.parse('$_baseUrl/food/ingredients/search')
-        .replace(queryParameters: {...queryParams, 'apiKey': _apiKey!});
+        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
 
     try {
       final response = await http.get(uri);
@@ -63,7 +63,7 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     };
 
     final uri = Uri.parse('$_baseUrl/food/ingredients/autocomplete')
-        .replace(queryParameters: {...queryParams, 'apiKey': _apiKey!});
+        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
 
     try {
       final response = await http.get(uri);

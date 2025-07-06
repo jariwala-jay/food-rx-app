@@ -6,6 +6,7 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../../recipes/models/recipe.dart';
 
 class PantryController extends ChangeNotifier {
@@ -109,10 +110,13 @@ class PantryController extends ChangeNotifier {
     try {
       await _mongoDBService.ensureConnection();
 
-      // 🔑 Ensure itemId is a clean hex string, no quotes or wrapper
-      final cleanedId = itemId.replaceAll('"', '').trim();
+      // Use robust ObjectId handling to convert any ID format to proper ObjectId
+      if (!ObjectIdHelper.isValidObjectId(itemId)) {
+        _setError('Invalid item ID format: $itemId');
+        return;
+      }
 
-      await _mongoDBService.deletePantryItem(cleanedId);
+      await _mongoDBService.deletePantryItem(itemId);
 
       if (isPantryItem) {
         _pantryItems = _pantryItems.where((item) => item.id != itemId).toList();
@@ -136,10 +140,13 @@ class PantryController extends ChangeNotifier {
 
       await _mongoDBService.ensureConnection();
 
-      // 🔑 Ensure itemId is a clean hex string, no quotes or wrapper
-      final cleanedId = item.id.replaceAll('"', '').trim();
+      // Use robust ObjectId handling
+      if (!ObjectIdHelper.isValidObjectId(item.id)) {
+        _setError('Invalid item ID format: ${item.id}');
+        return;
+      }
 
-      await _mongoDBService.updatePantryItem(cleanedId, updates);
+      await _mongoDBService.updatePantryItem(item.id, updates);
 
       if (item.isPantryItem) {
         _pantryItems =

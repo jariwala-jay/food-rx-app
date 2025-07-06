@@ -1,4 +1,4 @@
-import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 /// TrackerProgress represents a completed tracking period (daily/weekly)
 /// Used for analytics and historical data while TrackerGoal handles real-time tracking
@@ -31,7 +31,7 @@ class TrackerProgress {
     required this.dietType,
     required this.unit,
     DateTime? createdAt,
-  })  : id = id ?? ObjectId().toHexString(),
+  })  : id = id ?? ObjectIdHelper.generateNew().toHexString(),
         completionPercentage =
             targetValue > 0 ? (achievedValue / targetValue * 100) : 0.0,
         goalMet = achievedValue >= targetValue,
@@ -40,7 +40,9 @@ class TrackerProgress {
   // Convert from JSON
   factory TrackerProgress.fromJson(Map<String, dynamic> json) {
     return TrackerProgress(
-      id: json['_id']?.toString() ?? ObjectId().toHexString(),
+      id: json['_id'] != null 
+        ? ObjectIdHelper.toHexString(json['_id'])
+        : ObjectIdHelper.generateNew().toHexString(),
       userId: json['userId']?.toString() ?? '',
       trackerId: json['trackerId']?.toString() ?? '',
       trackerName: json['trackerName']?.toString() ?? '',

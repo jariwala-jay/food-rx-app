@@ -1,4 +1,4 @@
-import 'package:mongo_dart/mongo_dart.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class Article {
   final String id;
@@ -36,12 +36,17 @@ class Article {
   }
 
   factory Article.fromJson(Map<String, dynamic> json) {
-    // Handle both string and ObjectId types for id
+    // Use robust ObjectId handling for ID parsing
     String id;
-    if (json['_id'] is ObjectId) {
-      id = json['_id'].toHexString();
-    } else {
-      id = json['_id'].toString();
+    try {
+      if (json['_id'] != null) {
+        id = ObjectIdHelper.toHexString(json['_id']);
+      } else {
+        id = ObjectIdHelper.generateNew().toHexString();
+      }
+    } catch (e) {
+      // If ID parsing fails, generate a new one
+      id = ObjectIdHelper.generateNew().toHexString();
     }
 
     return Article(
@@ -67,10 +72,12 @@ class Article {
 
   // Helper method to get the hex string from an ObjectId string
   String getHexId() {
-    if (id.startsWith('ObjectId(')) {
-      return id.substring(9, 33);
+    try {
+      return ObjectIdHelper.toHexString(id);
+    } catch (e) {
+      // If parsing fails, return the ID as-is
+      return id;
     }
-    return id;
   }
 
   @override
