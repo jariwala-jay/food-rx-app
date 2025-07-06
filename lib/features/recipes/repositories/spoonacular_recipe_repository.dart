@@ -6,8 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:developer' as developer;
 
 class SpoonacularRecipeRepository {
-  final String _baseUrl = 'https://api.spoonacular.com';
-  final String? _apiKey = dotenv.env['SPOONACULAR_API_KEY'];
+  final String _baseUrl = 'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  final String? _apiKey = dotenv.env['RAPID_API_KEY'];
 
   Future<List<Recipe>> getRecipes(
       RecipeFilter filter, List<String> pantryIngredients) async {
@@ -29,7 +29,7 @@ class SpoonacularRecipeRepository {
     };
 
     final uri = Uri.parse('$_baseUrl/recipes/complexSearch')
-        .replace(queryParameters: {...queryParams, 'apiKey': _apiKey!});
+        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
 
     developer.log('Spoonacular Request URI: $uri',
         name: 'SpoonacularRecipeRepo');
