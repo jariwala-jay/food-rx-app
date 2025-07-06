@@ -1,9 +1,7 @@
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
 import 'package:mongo_dart/mongo_dart.dart';
-
-const String spoonacularImageBaseUrl =
-    'https://img.spoonacular.com/ingredients_100x100/';
 
 class MongoPantryRepository {
   final MongoDBService _mongoDBService;
@@ -19,9 +17,7 @@ class MongoPantryRepository {
     return itemsJson.map((json) {
       final item = PantryItem.fromJson(json);
       return item.copyWith(
-        imageUrl: item.imageUrl.startsWith('http')
-            ? item.imageUrl
-            : '$spoonacularImageBaseUrl${item.imageUrl}',
+        imageUrl: ImageUrlHelper.getValidImageUrl(item.imageUrl),
       );
     }).toList();
   }

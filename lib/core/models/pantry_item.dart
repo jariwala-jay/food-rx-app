@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
 
 enum UnitType {
   pound,
@@ -84,8 +85,7 @@ class PantryItem {
     return PantryItem(
       id: item['id'].toString(), // Spoonacular ID
       name: item['name'] ?? 'Unknown Item',
-      imageUrl: item['image'] ??
-          'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg',
+      imageUrl: ImageUrlHelper.getValidImageUrl(item['image']),
       category: category,
       quantity: quantity,
       unit: unit,
@@ -108,7 +108,7 @@ class PantryItem {
     return PantryItem(
       id: ingredient.id.toString(), // Spoonacular ID
       name: ingredient.name,
-      imageUrl: ingredient.imageUrl,
+      imageUrl: ImageUrlHelper.getValidImageUrl(ingredient.imageUrl),
       category: category,
       quantity: quantity,
       unit: unit,
@@ -230,8 +230,7 @@ class PantryItem {
     return PantryItem(
       id: itemId,
       name: map['name'] ?? 'Unknown Item',
-      imageUrl: map['imageUrl'] ??
-          'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg',
+      imageUrl: ImageUrlHelper.getValidImageUrl(map['imageUrl']),
       category: map['category'] ?? 'General',
       quantity: qty,
       unit: _parseUnitFromString(map['unit']),

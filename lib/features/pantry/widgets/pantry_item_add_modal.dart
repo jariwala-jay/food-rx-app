@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/utils/image_url_helper.dart';
 import 'dart:developer' as developer;
 
 class PantryItemAddModal extends StatefulWidget {
@@ -32,8 +33,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
   void initState() {
     super.initState();
     _itemName = widget.foodItem['name'] ?? 'Unknown Item';
-    _imageUrl =
-        'https://spoonacular.com/cdn/ingredients_100x100/${widget.foodItem['image']}';
+    _imageUrl = ImageUrlHelper.getValidImageUrl(widget.foodItem['image']);
 
     // Determine default unit and calculate smart expiration using public static methods
     _selectedUnit = PantryItem.getDefaultUnitForCategory(widget.category);
