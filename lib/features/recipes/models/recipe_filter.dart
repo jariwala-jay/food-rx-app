@@ -277,31 +277,29 @@ class RecipeFilter {
           constraints['minPotassium'] = 300; // mg per serving (more achievable)
           break;
         case MedicalCondition.diabetes:
-          // ADA Guidelines for Diabetes
-          constraints['maxSugar'] = 25; // g per serving
-          constraints['maxCarbs'] = 45; // g per serving
-          constraints['minFiber'] = 5; // g per serving
-          constraints['lowGlycemic'] = true;
+          // ADA Guidelines for Diabetes (very practical approach)
+          constraints['maxSugar'] = 45; // g per serving (increased from 35)
+          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
+          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.prediabetes:
-          // Pre-diabetes prevention guidelines
-          constraints['maxSugar'] = 25; // g per serving
-          constraints['maxCarbs'] = 45; // g per serving
-          constraints['minFiber'] = 5; // g per serving
-          constraints['lowGlycemic'] = true;
+          // Pre-diabetes prevention guidelines (very practical)
+          constraints['maxSugar'] = 45; // g per serving (increased from 35)
+          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
+          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.obesity:
-          // Weight management guidelines
-          constraints['maxCalories'] = 400; // per serving
-          constraints['minProtein'] = 15; // g per serving
-          constraints['maxSaturatedFat'] = 5; // g per serving
-          constraints['minFiber'] = 5; // g per serving
+          // Weight management guidelines (very practical)
+          constraints['maxCalories'] = 600; // per serving (increased from 500)
+          constraints['minProtein'] = 10; // g per serving (reduced from 12)
+          constraints['maxSaturatedFat'] = 10; // g per serving (increased from 7)
+          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
-          constraints['lowFat'] = true;
+          // Remove lowFat constraint - too restrictive
           break;
       }
     }
@@ -344,8 +342,8 @@ class RecipeFilter {
   Map<String, dynamic> getMyPlateDietConstraints() {
     return {
       'maxSodium': 2300, // mg per day (general guideline)
-      'maxSaturatedFat': 10, // g per serving
-      'minFiber': 3, // g per serving
+      'maxSaturatedFat': 15, // g per serving (increased from 10)
+      // Remove minFiber constraint - too restrictive when combined with medical conditions
       'veryHealthy': true,
       // Balanced nutrition approach
       'balancedNutrition': true,

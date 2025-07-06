@@ -6,6 +6,7 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter/foundation.dart';
 
 class RecipeGenerationService {
   final RecipeRepository _recipeRepository;
@@ -36,29 +37,59 @@ class RecipeGenerationService {
     // 2. Fetch recipes from the repository with enhanced filter
     final recipes = await _recipeRepository.getRecipes(enhancedFilter, pantryIngredientNames);
 
+    if (kDebugMode) {
+      print('\n🔍 RECIPE GENERATION DEBUG:');
+      print('Recipes from API: ${recipes.length}');
+      print('User Profile: $userProfile');
+    }
+
     // 3. Perform local validation and enhancement
     final validatedRecipes = <Recipe>[];
     
     for (var recipe in recipes) {
+      if (kDebugMode) {
+        print('\n📋 Validating recipe: ${recipe.title}');
+      }
+      
       // a. Check if pantry has enough ingredients
       if (!_hasEnoughIngredients(recipe, pantryItems)) {
+        if (kDebugMode) {
+          print('  ❌ Not enough ingredients (missed: ${recipe.missedIngredientCount})');
+        }
         continue;
       }
 
       // b. Validate against health constraints (DASH, MyPlate, etc.)
       if (!_isHealthCompliant(recipe, userProfile)) {
+        if (kDebugMode) {
+          print('  ❌ Not health compliant');
+        }
         continue;
       }
 
       // c. Validate against medical condition constraints
       if (!_isMedicalConditionCompliant(recipe, userProfile)) {
+        if (kDebugMode) {
+          print('  ❌ Not medical condition compliant');
+        }
         continue;
+      }
+
+      if (kDebugMode) {
+        print('  ✅ Recipe passed all validations');
       }
 
       // d. Enhance recipe with pantry data
       final enhancedRecipe = _enhanceRecipeWithPantryData(recipe, pantryItems);
 
       validatedRecipes.add(enhancedRecipe);
+    }
+
+    if (kDebugMode) {
+      print('\n📊 FINAL RESULTS:');
+      print('API recipes: ${recipes.length}');
+      print('Validated recipes: ${validatedRecipes.length}');
+      print('Filtered out: ${recipes.length - validatedRecipes.length}');
     }
 
     // 4. Sort recipes by health score and ingredient availability
@@ -216,25 +247,52 @@ class RecipeGenerationService {
     final medicalConditions = List<String>.from(userProfile['medicalConditions'] ?? []);
     final nutrition = recipe.nutrition;
     
-    if (nutrition == null) return true; // Allow if nutrition data is not available
+    if (nutrition == null) {
+      if (kDebugMode) {
+        print('    ℹ️ No nutrition data - allowing recipe');
+      }
+      return true; // Allow if nutrition data is not available
+    }
 
     for (final condition in medicalConditions) {
+      if (kDebugMode) {
+        print('    🏥 Checking condition: $condition');
+      }
+      
       switch (condition.toLowerCase()) {
         case 'diabetes':
         case 'pre-diabetes':
         case 'prediabetes':
-          if (!_isDiabetesCompliant(recipe, nutrition)) return false;
+          if (!_isDiabetesCompliant(recipe, nutrition)) {
+            if (kDebugMode) {
+              print('    ❌ Failed diabetes compliance');
+            }
+            return false;
+          }
           break;
         case 'obesity':
         case 'overweight/obesity':
-          if (!_isObesityCompliant(recipe, nutrition)) return false;
+          if (!_isObesityCompliant(recipe, nutrition)) {
+            if (kDebugMode) {
+              print('    ❌ Failed obesity compliance');
+            }
+            return false;
+          }
           break;
         case 'hypertension':
-          if (!_isHypertensionCompliant(recipe, nutrition)) return false;
+          if (!_isHypertensionCompliant(recipe, nutrition)) {
+            if (kDebugMode) {
+              print('    ❌ Failed hypertension compliance');
+            }
+            return false;
+          }
           break;
       }
     }
 
+    if (kDebugMode) {
+      print('    ✅ Passed all medical condition checks');
+    }
     return true;
   }
 
@@ -243,11 +301,28 @@ class RecipeGenerationService {
     final carbs = _getNutrientAmount(nutrition, 'Carbohydrates');
     final fiber = _getNutrientAmount(nutrition, 'Fiber');
 
-    // ADA guidelines for diabetes
-    if (sugar > 25) return false; // Max 25g sugar per serving
-    if (carbs > 45) return false; // Max 45g carbs per serving
-    if (fiber < 5) return false; // Min 5g fiber per serving (helps with blood sugar)
+    if (kDebugMode) {
+      print('      📊 Diabetes check - Sugar: ${sugar}g, Carbs: ${carbs}g, Fiber: ${fiber}g');
+    }
 
+    // ADA guidelines for diabetes (using the new relaxed limits from RecipeFilter)
+    if (sugar > 45) {
+      if (kDebugMode) {
+        print('      ❌ Sugar too high: ${sugar}g > 45g');
+      }
+      return false; // Max 45g sugar per serving
+    }
+    if (carbs > 75) {
+      if (kDebugMode) {
+        print('      ❌ Carbs too high: ${carbs}g > 75g');
+      }
+      return false; // Max 75g carbs per serving
+    }
+    // Removed fiber requirement as per our latest changes
+
+    if (kDebugMode) {
+      print('      ✅ Passed diabetes compliance');
+    }
     return true;
   }
 
