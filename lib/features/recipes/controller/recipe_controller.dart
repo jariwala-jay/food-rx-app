@@ -76,10 +76,28 @@ class RecipeController extends ChangeNotifier {
 
       await pantryController.loadItems();
       final pantryItems = pantryController.pantryItems;
+      
+      // Create comprehensive user profile for recipe filtering
       final userProfile = {
-        'dietPlan': user.dietType,
-        'medicalConditions': user.medicalConditions,
+        'dietType': user.dietType,
+        'medicalConditions': user.medicalConditions ?? [],
+        'healthGoals': user.healthGoals,
+        'allergies': user.allergies ?? [],
+        'foodRestrictions': user.foodRestrictions ?? [],
+        'excludedIngredients': user.excludedIngredients ?? [],
+        'activityLevel': user.activityLevel,
+        'age': user.age,
+        'gender': user.gender,
+        'targetCalories': user.targetCalories,
       };
+
+      if (kDebugMode) {
+        print('🎯 Recipe generation with profile:');
+        print('   Diet Type: ${userProfile['dietType']}');
+        print('   Medical Conditions: ${userProfile['medicalConditions']}');
+        print('   Health Goals: ${userProfile['healthGoals']}');
+        print('   Allergies: ${userProfile['allergies']}');
+      }
 
       _recipes = await recipeGenerationService.generateRecipes(
         filter: _currentFilter,
