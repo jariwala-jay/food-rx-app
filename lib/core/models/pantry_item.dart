@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/utils/image_url_helper.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 enum UnitType {
   pound,
@@ -149,83 +150,35 @@ class PantryItem {
       }
     }
 
-    String? parsedId;
-
-    // Helper function to parse "ObjectId('hex')" string
-    String? parseObjectIdString(dynamic idValue) {
-      if (idValue == null) return null;
-      String idStr = idValue.toString();
-      if (idStr.startsWith('ObjectId("') && idStr.endsWith('")')) {
-        if (idStr.length == 9 + 24 + 2) {
-          // ObjectId(" + 24 hex chars + ")
-          return idStr.substring(9, idStr.length - 2);
+    // Use robust ObjectId handling for ID parsing
+    String itemId;
+    try {
+      if (map['_id'] != null) {
+        // Try to parse the MongoDB _id using ObjectIdHelper
+        if (ObjectIdHelper.isValidObjectId(map['_id'])) {
+          itemId = ObjectIdHelper.toHexString(map['_id']);
+        } else {
+          // If _id is not a valid ObjectId format, create a deterministic one
+          itemId = ObjectIdHelper.convertTimestampToObjectIdHex(
+              DateTime.now().millisecondsSinceEpoch);
         }
-      }
-      // If it's not the "ObjectId('hex')" format, but might be a plain hex string or other.
-      // For now, we assume if it's not the specific format, it might be a pre-parsed ID or different type.
-      // If it's a 24-char hex string already, it's fine. Otherwise, it might be an error or a different ID system.
-      // For robustness, if it's a 24-character string and looks like hex, accept it.
-      // This part can be refined if other ID formats are expected.
-      if (idStr.length == 24 && RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idStr)) {
-        return idStr;
-      }
-      // If it's not "ObjectId(...)" and not a plain 24-char hex, it could be problematic for ObjectId.fromHexString
-      // For this fix, we prioritize parsing "ObjectId(...)" and accepting plain hex.
-      // If it's from `map['_id'].toString()` on a non-string/non-ObjectId type that results in a non-parseable format,
-      // it would have been an issue.
-      // If idValue was an ObjectId instance, .toString() gives "ObjectId(...)"
-      // If idValue was a string "ObjectId(...)", .toString() is still "ObjectId(...)"
-      // If idValue was a string "HEXVALUE", .toString() is still "HEXVALUE"
-      if (idStr.startsWith('ObjectId("') && idStr.endsWith('")')) {
-        // already handled above, but as a fallback, if length check failed
-        return idStr.substring(9, idStr.length - 2);
-      }
-      // Return the string as is if no specific parsing applied,
-      // hoping it's either a valid plain ID or will be handled/fail downstream.
-      // However, for deletion, it MUST be a 24-char hex.
-      // Let's be stricter: if it's not parsed to hex, it's null for our ObjectId context.
-      // This means if map['_id'] or map['id'] contains something like "Spoonacular123", it won't become the itemID here
-      // which would then fail ObjectId.fromHexString. The fallback to DateTime based ID is safer for those.
-      return null; // Null if not a recognized ObjectId string pattern
-    }
-
-    String? tempId;
-    if (map['_id'] != null) {
-      // Check if map['_id'] is a mongo_dart ObjectId by trying to call toHexString
-      // This is a bit of a hack without direct type checking or import.
-      // A common pattern is that custom objects might not have 'toHexString'.
-      // However, map['_id'] from mongo_dart driver *is* an ObjectId.
-      // A more direct approach: if (map['_id'] is ObjectId) { tempId = (map['_id'] as ObjectId).toHexString(); }
-      // For now, relying on robust toString() parsing.
-      String idString = map['_id'].toString();
-      if (idString.startsWith('ObjectId("') && idString.endsWith('")')) {
-        if (idString.length == 9 + 24 + 2) {
-          tempId = idString.substring(9, idString.length - 2);
+      } else if (map['id'] != null) {
+        // Try to parse the id field
+        if (ObjectIdHelper.isValidObjectId(map['id'])) {
+          itemId = ObjectIdHelper.toHexString(map['id']);
+        } else {
+          // If id is not a valid ObjectId format, create a deterministic one
+          itemId = ObjectIdHelper.convertTimestampToObjectIdHex(
+              DateTime.now().millisecondsSinceEpoch);
         }
-      } else if (idString.length == 24 &&
-          RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idString)) {
-        // It's already a hex string
-        tempId = idString;
+      } else {
+        // No ID found, create a new one
+        itemId = ObjectIdHelper.generateNew().toHexString();
       }
-      // if map['_id'] is an ObjectId, map['_id'].toHexString() would be the most direct
+    } catch (e) {
+      // If all else fails, create a new ObjectId
+      itemId = ObjectIdHelper.generateNew().toHexString();
     }
-
-    if (tempId == null && map['id'] != null) {
-      // If _id didn't yield a valid hex, try 'id'
-      String idStringFromMapId = map['id'].toString();
-      if (idStringFromMapId.startsWith('ObjectId("') &&
-          idStringFromMapId.endsWith('")')) {
-        if (idStringFromMapId.length == 9 + 24 + 2) {
-          tempId = idStringFromMapId.substring(9, idStringFromMapId.length - 2);
-        }
-      } else if (idStringFromMapId.length == 24 &&
-          RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idStringFromMapId)) {
-        tempId = idStringFromMapId;
-      }
-    }
-
-    final String itemId =
-        tempId ?? DateTime.now().millisecondsSinceEpoch.toString();
 
     return PantryItem(
       id: itemId,

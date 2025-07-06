@@ -87,14 +87,12 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
       return;
     }
 
-    // Ensure foodItem['id'] exists and is a string, or generate one if necessary
-    // For items from Spoonacular or CSV, an ID should always be present.
-    // If adding a purely custom item in the future, ID generation would be needed here.
-    final String itemId = widget.foodItem['id']?.toString() ??
-        DateTime.now().millisecondsSinceEpoch.toString();
+    // For new items, we'll use a temporary ID that will be replaced by MongoDB
+    // For existing items from Spoonacular, we'll use their ID but convert it to ObjectId format
+    final String itemId = widget.foodItem['id']?.toString() ?? 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
     final newItem = PantryItem(
-      id: itemId, // Use the id from foodItem or generated
+      id: itemId, // This will be replaced by MongoDB with proper ObjectId
       name: _itemName,
       imageUrl: _imageUrl,
       category: widget.category,

@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:math';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class MongoDBService {
   static final MongoDBService _instance = MongoDBService._internal();
@@ -598,21 +599,8 @@ class MongoDBService {
   }
 
   ObjectId parseObjectId(dynamic id) {
-    if (id is ObjectId) return id;
-
-    final idStr = id.toString().replaceAll('"', '').trim();
-
-    // Matches formats like ObjectId("..."), ObjectId('...')
-    final match = RegExp('ObjectId(\\"|\\\')?([a-fA-F0-9]{24})(\\"|\\\')?\\)')
-        .firstMatch(idStr);
-    if (match != null) return ObjectId.fromHexString(match.group(1)!);
-
-    // Clean hex string (24-char)
-    if (RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(idStr)) {
-      return ObjectId.fromHexString(idStr);
-    }
-
-    throw ArgumentError('Invalid ObjectId format: $id');
+    // Use the robust ObjectIdHelper instead of custom parsing
+    return ObjectIdHelper.parseObjectId(id);
   }
 
   // When serializing ObjectId to string, always use toHexString()
