@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter/material.dart';
-import 'package:mongo_dart/mongo_dart.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class AuthController with ChangeNotifier {
   final MongoDBService _mongoDBService = MongoDBService();
@@ -54,10 +54,10 @@ class AuthController with ChangeNotifier {
   }
 
   UserModel _createUserModel(Map<String, dynamic> userData) {
-    // Convert ObjectId to String for the id field
-    final id = userData['_id'] is ObjectId
-        ? (userData['_id'] as ObjectId).toHexString()
-        : userData['_id'].toString();
+    // Use robust ObjectId handling for ID conversion
+    final id = userData['_id'] != null 
+        ? ObjectIdHelper.toHexString(userData['_id'])
+        : ObjectIdHelper.generateNew().toHexString();
 
     return UserModel.fromJson({
       ...userData,

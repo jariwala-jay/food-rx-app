@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mongo_dart/mongo_dart.dart' show ObjectId;
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 // Helper function to safely convert dynamic values to double
 double _parseDoubleValue(dynamic value) {
@@ -102,7 +102,7 @@ class TrackerGoal {
     this.isWeeklyGoal = false,
     DateTime? lastUpdated,
     DateTime? createdAt,
-  })  : id = id ?? ObjectId().toHexString(),
+  })  : id = id ?? ObjectIdHelper.generateNew().toHexString(),
         lastUpdated = lastUpdated ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now();
 

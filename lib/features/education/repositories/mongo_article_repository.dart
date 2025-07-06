@@ -2,6 +2,7 @@ import 'package:flutter_app/features/education/models/article.dart';
 import 'package:flutter_app/features/education/models/category.dart';
 import 'package:flutter_app/features/education/repositories/article_repository.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/utils/objectid_helper.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
 class MongoArticleRepository implements ArticleRepository {
@@ -60,7 +61,7 @@ class MongoArticleRepository implements ArticleRepository {
     await _mongoDBService.ensureConnection();
     final collection = _mongoDBService.db.collection(_bookmarksCollectionName);
     final bookmarks = await collection
-        .find(where.eq('userId', ObjectId.fromHexString(userId)))
+        .find(where.eq('userId', ObjectIdHelper.parseObjectId(userId)))
         .toList();
     return bookmarks.map((doc) => doc['articleId'] as ObjectId).toList();
   }
@@ -89,14 +90,14 @@ class MongoArticleRepository implements ArticleRepository {
     final collection = _mongoDBService.db.collection(_bookmarksCollectionName);
     if (isBookmarked) {
       await collection.insertOne({
-        'userId': ObjectId.fromHexString(userId),
-        'articleId': ObjectId.fromHexString(articleId),
+        'userId': ObjectIdHelper.parseObjectId(userId),
+        'articleId': ObjectIdHelper.parseObjectId(articleId),
         'savedAt': DateTime.now(),
       });
     } else {
       await collection.deleteOne({
-        'userId': ObjectId.fromHexString(userId),
-        'articleId': ObjectId.fromHexString(articleId),
+        'userId': ObjectIdHelper.parseObjectId(userId),
+        'articleId': ObjectIdHelper.parseObjectId(articleId),
       });
     }
   }
