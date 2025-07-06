@@ -111,7 +111,21 @@ class TrackerGoal {
 
   /// Get the formatted current value with unit (e.g., "1/3 Cups")
   String get formattedProgress {
-    return "${currentValue.toStringAsFixed(currentValue.truncateToDouble() == currentValue ? 0 : 1)}/${goalValue.toStringAsFixed(goalValue.truncateToDouble() == goalValue ? 0 : 1)} $unitString";
+    return "${_formatValue(currentValue)}/${_formatValue(goalValue)} $unitString";
+  }
+
+  /// Helper method to format values with sensible decimal places
+  String _formatValue(double value) {
+    if (value == value.truncateToDouble()) {
+      // Whole number
+      return value.toStringAsFixed(0);
+    } else if ((value * 10) == (value * 10).truncateToDouble()) {
+      // One decimal place (like 1.5)
+      return value.toStringAsFixed(1);
+    } else {
+      // Two decimal places max (like 1.25)
+      return value.toStringAsFixed(2);
+    }
   }
 
   /// Format the unit for display

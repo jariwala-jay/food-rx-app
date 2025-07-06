@@ -460,6 +460,19 @@ class TrackerProvider extends ChangeNotifier {
     return _weeklyTrackers.where((t) => t.id == trackerId).firstOrNull;
   }
 
+  TrackerGoal? findTrackerByCategory(TrackerCategory category, String dietType) {
+    // First check daily trackers
+    final dailyTracker = _dailyTrackers
+        .where((t) => t.category == category && t.dietType.toLowerCase() == dietType.toLowerCase())
+        .firstOrNull;
+    if (dailyTracker != null) return dailyTracker;
+
+    // Then check weekly trackers
+    return _weeklyTrackers
+        .where((t) => t.category == category && t.dietType.toLowerCase() == dietType.toLowerCase())
+        .firstOrNull;
+  }
+
   // Analytics and Historical Data Methods
 
   /// Get progress history for analytics
