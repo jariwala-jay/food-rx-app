@@ -422,7 +422,29 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
           ((_cookingTimeHours ?? 0) * 60) + (_cookingTimeMinutes ?? 0);
     }
 
-    // Create filter with user selections
+    // Get user profile for intelligent filtering
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final user = authController.currentUser;
+    
+    // Determine diet compliance based on user profile
+    bool dashCompliant = false;
+    bool myPlateCompliant = false;
+    
+    if (user != null) {
+      final medicalConditions = user.medicalConditions ?? [];
+      final healthGoals = user.healthGoals;
+      
+      // Auto-detect diet type based on medical conditions and health goals
+      if (user.dietType == 'DASH' || 
+          medicalConditions.contains('Hypertension') || 
+          healthGoals.contains('Lower blood pressure')) {
+        dashCompliant = true;
+      } else {
+        myPlateCompliant = true;
+      }
+    }
+
+    // Create filter with user selections and intelligent defaults
     final filter = RecipeFilter(
       cuisines: _selectedCuisines,
       mealType: _selectedMealType,
@@ -430,6 +452,9 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       maxReadyTime: totalMinutes,
       includeIngredients: true,
       prioritizeExpiring: true,
+      dashCompliant: dashCompliant,
+      myPlateCompliant: myPlateCompliant,
+      veryHealthy: true, // Always prefer healthier options
     );
 
     if (kDebugMode) {
@@ -445,10 +470,11 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     if (!mounted) return;
     Navigator.pop(context);
 
-    // Show feedback
+    // Show feedback with diet-specific information
+    final dietInfo = dashCompliant ? 'DASH diet' : myPlateCompliant ? 'MyPlate guidelines' : 'your preferences';
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Generating recipes based on your preferences...'),
+      SnackBar(
+        content: Text('Generating recipes based on $dietInfo...'),
         backgroundColor: Colors.orange,
         duration: Duration(seconds: 2),
       ),

@@ -1,11 +1,14 @@
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/core/services/diet_serving_service.dart';
 
 class FoodCategoryService {
   final UnitConversionService _conversionService;
+  final DietServingService _dietServingService;
 
   FoodCategoryService({required UnitConversionService conversionService})
-      : _conversionService = conversionService;
+      : _conversionService = conversionService,
+        _dietServingService = DietServingService(conversionService: conversionService);
 
   // --- Data for Mapping Ingredients to Categories ---
 
@@ -144,20 +147,14 @@ class FoodCategoryService {
   };
 
   /// Maps an ingredient name to a list of relevant tracker categories.
-  List<TrackerCategory> getCategoriesForIngredient(String ingredientName) {
-    final lowerIngredient = ingredientName.toLowerCase();
-    final List<TrackerCategory> categories = [];
-
-    _categoryKeywords.forEach((category, keywords) {
-      if (keywords.any((keyword) => lowerIngredient.contains(keyword))) {
-        categories.add(category);
-      }
-    });
-
-    return categories;
+  /// Uses enhanced DietServingService for more accurate categorization.
+  List<TrackerCategory> getCategoriesForIngredient(String ingredientName, {String? dietType}) {
+    // Use the enhanced diet serving service for better categorization
+    return _dietServingService.getCategoriesForIngredient(ingredientName, dietType: dietType);
   }
 
   /// Calculates the number of servings for a given ingredient based on diet.
+  /// Uses enhanced DietServingService with canonical units and official guidelines.
   double getServingsForTracker({
     required String ingredientName,
     required double amount,
@@ -165,28 +162,59 @@ class FoodCategoryService {
     required TrackerCategory category,
     required String dietType,
   }) {
-    final lowerDiet = dietType.toLowerCase();
-    final standardServing = _standardServings[lowerDiet]?[category];
-
-    if (standardServing == null) {
-      return 0.0; // This diet doesn't track this category
-    }
-
-    final standardAmount = standardServing['amount'] as double;
-    final standardUnit = standardServing['unit'] as String;
-
-    // Convert the ingredient's amount to the standard serving unit
-    final convertedAmount = _conversionService.convert(
-      amount: amount,
-      fromUnit: unit,
-      toUnit: standardUnit,
+    // Use the enhanced diet serving service for accurate conversions
+    return _dietServingService.getServingsForTracker(
       ingredientName: ingredientName,
+      amount: amount,
+      unit: unit,
+      category: category,
+      dietType: dietType,
     );
+  }
 
-    if (convertedAmount == 0.0 || standardAmount == 0.0) {
-      return 0.0;
-    }
+  /// Gets the official serving definition for a category and diet (new method)
+  Map<String, dynamic>? getServingDefinition({
+    required TrackerCategory category,
+    required String dietType,
+  }) {
+    return _dietServingService.getServingDefinition(
+      category: category,
+      dietType: dietType,
+    );
+  }
 
-    return convertedAmount / standardAmount;
+  /// Calculates servings for multiple ingredients (useful for recipes)
+  Map<TrackerCategory, double> calculateRecipeServings({
+    required List<Map<String, dynamic>> ingredients,
+    required String dietType,
+    required int servings,
+  }) {
+    return _dietServingService.calculateRecipeServings(
+      ingredients: ingredients,
+      dietType: dietType,
+      servings: servings,
+    );
+  }
+
+  /// Gets recommended daily servings for a diet type
+  Map<TrackerCategory, double> getRecommendedDailyServings(String dietType) {
+    return _dietServingService.getRecommendedDailyServings(dietType);
+  }
+
+  /// Validates if an ingredient amount can be converted to diet servings
+  Map<String, dynamic> validateServingConversion({
+    required String ingredientName,
+    required double amount,
+    required String unit,
+    required TrackerCategory category,
+    required String dietType,
+  }) {
+    return _dietServingService.validateServingConversion(
+      ingredientName: ingredientName,
+      amount: amount,
+      unit: unit,
+      category: category,
+      dietType: dietType,
+    );
   }
 }

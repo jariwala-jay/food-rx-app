@@ -82,6 +82,20 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
     }
   }
 
+  /// Helper method to format values with sensible decimal places
+  String _formatValue(double value) {
+    if (value == value.truncateToDouble()) {
+      // Whole number
+      return value.toStringAsFixed(0);
+    } else if ((value * 10) == (value * 10).truncateToDouble()) {
+      // One decimal place (like 1.5)
+      return value.toStringAsFixed(1);
+    } else {
+      // Two decimal places max (like 1.25)
+      return value.toStringAsFixed(2);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final progress = _currentValue / widget.tracker.goalValue;
@@ -148,7 +162,7 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '$_currentValue of ${widget.tracker.goalValue} ${widget.tracker.unitString}',
+                          '${_formatValue(_currentValue)} of ${_formatValue(widget.tracker.goalValue)} ${widget.tracker.unitString}',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey.shade600,

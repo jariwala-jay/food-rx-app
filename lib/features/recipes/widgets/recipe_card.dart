@@ -31,9 +31,9 @@ class RecipeCard extends StatelessWidget {
           MaterialPageRoute(
             builder: (context) => RecipeDetailPage(
               recipe: recipe,
-              // When coming from saved list, don't apply servings filter
-              targetServings:
-                  fromSaved ? null : controller.currentFilter.servings,
+              // When coming from saved recipes, show original servings
+              // When coming from generated recipes, use user's preferred servings
+              targetServings: fromSaved ? null : controller.currentFilter.servings,
             ),
           ),
         );

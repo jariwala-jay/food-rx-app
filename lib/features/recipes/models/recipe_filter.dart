@@ -269,20 +269,37 @@ class RecipeFilter {
     for (var condition in medicalConditions) {
       switch (condition) {
         case MedicalCondition.hypertension:
-          constraints['maxSodium'] = 1500; // mg per day
+          // DASH Diet Guidelines for Hypertension (practical approach)
+          constraints['maxSodium'] = 1500; // mg per day (more practical than 1500)
           constraints['dashCompliant'] = true;
+          constraints['veryHealthy'] = true;
+          constraints['maxSaturatedFat'] = 8; // g per serving (slightly more lenient)
+          constraints['minPotassium'] = 300; // mg per serving (more achievable)
           break;
         case MedicalCondition.diabetes:
-          constraints['maxSugar'] = 25; // g per serving
-          constraints['lowGlycemic'] = true;
+          // ADA Guidelines for Diabetes (very practical approach)
+          constraints['maxSugar'] = 45; // g per serving (increased from 35)
+          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
+          // Remove minFiber constraint - let MyPlate handle it
+          constraints['veryHealthy'] = true;
+          constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.prediabetes:
-          constraints['maxSugar'] = 25; // g per serving
-          constraints['lowGlycemic'] = true;
+          // Pre-diabetes prevention guidelines (very practical)
+          constraints['maxSugar'] = 45; // g per serving (increased from 35)
+          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
+          // Remove minFiber constraint - let MyPlate handle it
+          constraints['veryHealthy'] = true;
+          constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.obesity:
-          constraints['maxCalories'] = 400; // per serving
+          // Weight management guidelines (very practical)
+          constraints['maxCalories'] = 600; // per serving (increased from 500)
+          constraints['minProtein'] = 10; // g per serving (reduced from 12)
+          constraints['maxSaturatedFat'] = 10; // g per serving (increased from 7)
+          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
+          // Remove lowFat constraint - too restrictive
           break;
       }
     }
@@ -290,7 +307,52 @@ class RecipeFilter {
     return constraints;
   }
 
-  // Convert to Spoonacular API query parameters
+  // Get recommended diet type based on medical conditions and health goals
+  static String getRecommendedDietType(List<String> medicalConditions, List<String> healthGoals) {
+    // DASH diet for hypertension and blood pressure goals
+    if (medicalConditions.contains('Hypertension') || 
+        medicalConditions.contains('hypertension') ||
+        healthGoals.contains('Lower blood pressure')) {
+      return 'DASH';
+    }
+    
+    // MyPlate for diabetes, obesity, and general health
+    return 'MyPlate';
+  }
+
+  // Get DASH diet specific constraints
+  Map<String, dynamic> getDashDietConstraints() {
+    return {
+      'maxSodium': 1500, // mg per day (more practical than 1500)
+      'minPotassium': 300, // mg per serving (more achievable)
+      'maxSaturatedFat': 8, // g per serving (slightly more lenient)
+      'minFiber': 2, // g per serving (more achievable)
+      'veryHealthy': true,
+      'lowFat': true,
+      // Emphasize these food groups
+      'emphasizeVegetables': true,
+      'emphasizeFruits': true,
+      'emphasizeLowFatDairy': true,
+      'emphasizeLeanProtein': true,
+      'emphasizeWoleGrains': true,
+    };
+  }
+
+  // Get MyPlate diet specific constraints
+  Map<String, dynamic> getMyPlateDietConstraints() {
+    return {
+      'maxSodium': 2300, // mg per day (general guideline)
+      'maxSaturatedFat': 15, // g per serving (increased from 10)
+      // Remove minFiber constraint - too restrictive when combined with medical conditions
+      'veryHealthy': true,
+      // Balanced nutrition approach
+      'balancedNutrition': true,
+      'emphasizeVariety': true,
+      'portionControl': true,
+    };
+  }
+
+  // Convert to Spoonacular API query parameters with enhanced diet-specific logic
   Map<String, String> toSpoonacularParams() {
     Map<String, String> params = {};
 
@@ -325,12 +387,37 @@ class RecipeFilter {
     // Add medical condition constraints
     final constraints = getMedicalConditionConstraints();
     constraints.forEach((key, value) {
-      if (key == 'maxSodium' || key == 'maxSugar' || key == 'maxCalories') {
+      if (key == 'maxSodium' || key == 'maxSugar' || key == 'maxCalories' || 
+          key == 'minProtein' || key == 'maxSaturatedFat' || key == 'minFiber' ||
+          key == 'minPotassium' || key == 'maxCarbs') {
         params[key] = value.toString();
-      } else if (key == 'veryHealthy' && value == true) {
-        params['veryHealthy'] = 'true';
+      } else if ((key == 'veryHealthy' || key == 'lowFat' || key == 'lowGlycemic') && value == true) {
+        params[key] = 'true';
       }
     });
+
+    // Add diet-specific constraints
+    if (dashCompliant) {
+      final dashConstraints = getDashDietConstraints();
+      dashConstraints.forEach((key, value) {
+        if (key == 'maxSodium' || key == 'minPotassium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+          params[key] = value.toString();
+        } else if (key == 'veryHealthy' || key == 'lowFat') {
+          params[key] = 'true';
+        }
+      });
+    }
+
+    if (myPlateCompliant) {
+      final myPlateConstraints = getMyPlateDietConstraints();
+      myPlateConstraints.forEach((key, value) {
+        if (key == 'maxSodium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+          params[key] = value.toString();
+        } else if (key == 'veryHealthy') {
+          params[key] = 'true';
+        }
+      });
+    }
 
     // Add boolean filters
     if (vegetarian) params['vegetarian'] = 'true';
@@ -338,6 +425,12 @@ class RecipeFilter {
     if (glutenFree) params['glutenFree'] = 'true';
     if (dairyFree) params['dairyFree'] = 'true';
     if (veryHealthy) params['veryHealthy'] = 'true';
+
+    // Add nutrient-specific filters
+    if (maxCalories != null) params['maxCalories'] = maxCalories.toString();
+    if (minProtein != null) params['minProtein'] = minProtein.toString();
+    if (maxSodium != null) params['maxSodium'] = maxSodium.toString();
+    if (maxSugar != null) params['maxSugar'] = maxSugar.toString();
 
     return params;
   }

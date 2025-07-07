@@ -390,6 +390,9 @@ class RecipeIngredient {
   });
 
   factory RecipeIngredient.fromJson(Map<String, dynamic> json) {
+    final rawUnit = json['unit'] ?? '';
+    final ingredientName = json['nameClean'] ?? json['name'] ?? '';
+    
     return RecipeIngredient(
       id: json['id'] ?? 0,
       aisle: json['aisle'] ?? '',
@@ -400,12 +403,41 @@ class RecipeIngredient {
       original: json['original'] ?? '',
       originalName: json['originalName'] ?? '',
       amount: (json['amount'] ?? 0).toDouble(),
-      unit: json['unit'] ?? '',
+      unit: _fixMalformedUnit(rawUnit, ingredientName),
       meta: List<String>.from(json['meta'] ?? []),
       measures: Measures.fromJson(json['measures'] ?? {}),
       isAvailableInPantry: json['isAvailableInPantry'] ?? false,
       isExpiring: json['isExpiring'] ?? false,
     );
+  }
+
+  /// Fixes malformed units from Spoonacular API at the source
+  static String _fixMalformedUnit(String unit, String ingredientName) {
+    // If unit is 'servings' or 'serving', try to convert to a proper unit
+    if (unit.toLowerCase() == 'servings' || unit.toLowerCase() == 'serving') {
+      // For common ingredients, convert to appropriate units based on typical usage
+      final lowerName = ingredientName.toLowerCase();
+      
+      if (lowerName.contains('egg')) {
+        return 'piece'; // eggs are typically counted as pieces
+      } else if (lowerName.contains('cheese') && lowerName.contains('cream')) {
+        return 'oz'; // cream cheese is typically measured in ounces
+      } else if (lowerName.contains('ham') || lowerName.contains('meat')) {
+        return 'oz'; // meat is typically measured in ounces
+      } else if (lowerName.contains('butter')) {
+        return 'tbsp'; // butter is typically measured in tablespoons
+      } else if (lowerName.contains('milk')) {
+        return 'cup'; // milk is typically measured in cups
+      } else if (lowerName.contains('bread')) {
+        return 'slice'; // bread is typically measured in slices
+      } else if (lowerName.contains('chicken') && (lowerName.contains('breast') || lowerName.contains('thigh'))) {
+        return 'piece'; // chicken pieces are typically counted
+      } else {
+        return 'piece'; // default to piece for count-based items
+      }
+    }
+    
+    return unit; // return original unit if no fix needed
   }
 
   Map<String, dynamic> toJson() {
