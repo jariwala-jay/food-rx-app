@@ -82,7 +82,7 @@ class SpoonacularRecipeRepository {
       Recipe.fromJson({
         'id': 1,
         'title': 'Demo Vegetable Stir Fry',
-        'image': 'https://spoonacular.com/recipeImages/1-312x231.jpg',
+        'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop',
         'readyInMinutes': 20,
         'servings': 4,
         'sourceUrl': 'https://example.com/recipe1',

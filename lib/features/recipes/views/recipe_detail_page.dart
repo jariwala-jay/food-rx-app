@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/recipe_scaling_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
-import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
-
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
+import 'package:provider/provider.dart';
 
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
@@ -453,11 +453,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Widget _buildImageWithOverlay() {
     return Stack(
       children: [
-        Image.network(
-          _adjustedRecipe.image,
+        RecipeImage(
+          imageUrl: _adjustedRecipe.image,
           width: double.infinity,
           height: 250,
-          fit: BoxFit.cover,
         ),
         Positioned(
           bottom: 10,

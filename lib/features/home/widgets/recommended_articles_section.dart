@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter_app/features/education/controller/article_controller.dart';
 import 'package:flutter_app/features/education/models/article.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
@@ -78,38 +79,11 @@ class RecommendedArticlesSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                article.imageUrl,
-                height: 120,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 120,
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 120,
-                    color: Colors.grey[300],
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      size: 30,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
-              ),
+            ArticleImage(
+              imageUrl: article.imageUrl,
+              height: 120,
+              width: double.infinity,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
