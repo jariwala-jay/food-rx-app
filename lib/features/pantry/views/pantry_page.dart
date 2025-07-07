@@ -4,6 +4,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../controller/pantry_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
 
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);
@@ -320,24 +321,13 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           child: Row(
             children: [
               // Item image
-              ClipRRect(
+              IngredientImage(
+                imageUrl: item.imageUrl,
+                width: 64,
+                height: 64,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   bottomLeft: Radius.circular(12),
-                ),
-                child: Image.network(
-                  item.imageUrl,
-                  width: 64,
-                  height: 64,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 64,
-                      height: 64,
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.image_not_supported),
-                    );
-                  },
                 ),
               ),
               // Item details

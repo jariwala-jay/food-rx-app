@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/features/recipes/views/recipe_detail_page.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:provider/provider.dart';
 
 class RecipeCard extends StatelessWidget {
@@ -56,26 +57,11 @@ class RecipeCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(12)),
-                  child: Image.network(
-                    recipe.image,
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 200,
-                        color: Colors.grey[200],
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          size: 50,
-                          color: Colors.grey,
-                        ),
-                      );
-                    },
-                  ),
+                RecipeImage(
+                  imageUrl: recipe.image,
+                  height: 200,
+                  width: double.infinity,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 Positioned(
                   top: 10,
