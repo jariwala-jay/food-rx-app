@@ -102,6 +102,11 @@ const List<Map<String, String>> otherPantryItemCategories = [
 const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
   'fresh_fruits': [
     {
+      'name': 'Avocados',
+      'id': 'avocado',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/avocado.jpg'
+    },
+    {
       'name': 'Apples',
       'id': 'apple',
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/apple.jpg'
@@ -112,15 +117,30 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/bananas.jpg'
     },
     {
-      'name': 'Oranges',
-      'id': 'orange',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/orange.jpg'
+      'name': 'Grapefruit',
+      'id': 'grapefruit',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/grapefruit.jpg'
     },
     {
-      'name': 'Grapes',
-      'id': 'grapes',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/red-grapes.jpg'
+      'name': 'Limes',
+      'id': 'lime',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lime.jpg'
+    },
+    {
+      'name': 'Lemon',
+      'id': 'lemon',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lemon.jpg'
+    },
+    {
+      'name': 'Mango',
+      'id': 'mango',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/mango.jpg'
+    },
+    {
+      'name': 'Orange',
+      'id': 'orange',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/orange.jpg'
     },
     {
       'name': 'Strawberries',
@@ -129,97 +149,66 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
           'https://spoonacular.com/cdn/ingredients_100x100/strawberries.jpg'
     },
     {
-      'name': 'Lemons',
-      'id': 'lemon',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lemon.jpg'
-    },
-    {
-      'name': 'Limes',
-      'id': 'lime',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lime.jpg'
-    },
-    {
-      'name': 'Pears',
-      'id': 'pear',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/pears.jpg'
-    },
-    {
-      'name': 'Peaches',
-      'id': 'peach',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peach.jpg'
-    },
-    {
-      'name': 'Plums',
-      'id': 'plum',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/plums.jpg'
-    },
-    {
-      'name': 'Watermelon',
-      'id': 'watermelon',
+      'name': 'Blackberries (Seasonal)',
+      'id': 'blackberries',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/watermelon.jpg'
-    },
-    {
-      'name': 'Cantaloupe',
-      'id': 'cantaloupe',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cantaloupe.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/blackberries.jpg'
     },
   ],
   'canned_fruits': [
     {
-      'name': 'Canned Peaches',
-      'id': 'canned-peaches',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-peaches.jpg'
-    },
-    {
-      'name': 'Canned Pears',
-      'id': 'canned-pears',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-pears.jpg'
-    },
-    {
-      'name': 'Canned Pineapple',
-      'id': 'canned-pineapple',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/pineapple.jpg'
-    },
-    {
-      'name': 'Applesauce',
-      'id': 'applesauce',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/applesauce.jpg'
-    },
-    {
-      'name': 'Canned Mandarin Oranges',
+      'name': 'Mandarin Oranges (in Juice)',
       'id': 'canned-mandarin',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/mandarin-oranges.jpg'
     },
     {
-      'name': 'Fruit Cocktail',
+      'name': 'Pears (in Juice)',
+      'id': 'canned-pears',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/canned-pears.jpg'
+    },
+    {
+      'name': 'Mixed Fruit (in Juice)',
       'id': 'fruit-cocktail',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/fruit-cocktail.jpg'
     },
     {
-      'name': 'Canned Cherries',
-      'id': 'canned-cherries',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cherries.jpg'
+      'name': 'Peaches (in Juice)',
+      'id': 'canned-peaches',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/canned-peaches.jpg'
     },
     {
-      'name': 'Cranberry Sauce',
-      'id': 'cranberry-sauce',
+      'name': 'Pineapple Chunks (in Juice)',
+      'id': 'canned-pineapple',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cranberry-sauce.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/pineapple.jpg'
+    },
+    {
+      'name': 'Applesauce (Unsweetened)',
+      'id': 'applesauce',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/applesauce.jpg'
     },
   ],
   'fresh_veggies': [
     {
-      'name': 'Carrots',
-      'id': 'carrots',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/carrots.jpg'
+      'name': 'Green Bell Pepper',
+      'id': 'green-bell-pepper',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/green-bell-pepper.jpg'
+    },
+    {
+      'name': 'Cabbage',
+      'id': 'cabbage',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cabbage.jpg'
+    },
+    {
+      'name': 'Romaine Lettuce',
+      'id': 'romaine-lettuce',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/romaine.jpg'
     },
     {
       'name': 'Onions',
@@ -234,58 +223,15 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
           'https://spoonacular.com/cdn/ingredients_100x100/potatoes-yukon-gold.jpg'
     },
     {
-      'name': 'Tomatoes',
-      'id': 'tomatoes',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/tomatoes.jpg'
-    },
-    {
-      'name': 'Bell Peppers',
-      'id': 'bell-peppers',
+      'name': 'Sweet Potato',
+      'id': 'sweet-potato',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/bell-peppers.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/sweet-potato.jpg'
     },
     {
-      'name': 'Celery',
-      'id': 'celery',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/celery.jpg'
-    },
-    {
-      'name': 'Lettuce',
-      'id': 'lettuce',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/iceberg-lettuce.jpg'
-    },
-    {
-      'name': 'Spinach',
-      'id': 'spinach',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/spinach.jpg'
-    },
-    {
-      'name': 'Broccoli',
-      'id': 'broccoli',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/broccoli.jpg'
-    },
-    {
-      'name': 'Cauliflower',
-      'id': 'cauliflower',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cauliflower.jpg'
-    },
-    {
-      'name': 'Cabbage',
-      'id': 'cabbage',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cabbage.jpg'
-    },
-    {
-      'name': 'Green Beans',
-      'id': 'green-beans',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/green-beans.jpg'
-    },
-    {
-      'name': 'Cucumber',
-      'id': 'cucumber',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cucumber.jpg'
+      'name': 'Yellow Squash',
+      'id': 'yellow-squash',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/squash.jpg'
     },
     {
       'name': 'Zucchini',
@@ -293,178 +239,135 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/zucchini.jpg'
     },
     {
-      'name': 'Sweet Potatoes',
-      'id': 'sweet-potatoes',
+      'name': 'Broccoli',
+      'id': 'broccoli',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/broccoli.jpg'
+    },
+    {
+      'name': 'Kale',
+      'id': 'kale',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/kale.jpg'
+    },
+    {
+      'name': 'Collard Greens',
+      'id': 'collard-greens',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/sweet-potato.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/collard-greens.jpg'
+    },
+    {
+      'name': 'Cucumber',
+      'id': 'cucumber',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cucumber.jpg'
     },
   ],
   'canned_veggies': [
     {
-      'name': 'Canned Corn',
-      'id': 'canned-corn',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/corn.jpg'
-    },
-    {
-      'name': 'Canned Green Beans',
-      'id': 'canned-green-beans',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/green-beans.jpg'
-    },
-    {
-      'name': 'Canned Peas',
-      'id': 'canned-peas',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peas.jpg'
-    },
-    {
-      'name': 'Canned Carrots',
-      'id': 'canned-carrots',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/carrots.jpg'
-    },
-    {
-      'name': 'Canned Tomatoes',
-      'id': 'canned-tomatoes',
+      'name': 'Tomatoes, Diced (No Salt)',
+      'id': 'canned-diced-tomatoes-no-salt',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/canned-tomatoes.jpg'
     },
     {
-      'name': 'Tomato Sauce',
-      'id': 'tomato-sauce',
+      'name': 'Green Beans (No Salt)',
+      'id': 'canned-green-beans-no-salt',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/green-beans.jpg'
+    },
+    {
+      'name': 'Tomato Sauce (No Salt)',
+      'id': 'tomato-sauce-no-salt',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/tomato-sauce.jpg'
     },
     {
-      'name': 'Tomato Paste',
-      'id': 'tomato-paste',
+      'name': 'Corn, Whole Kernel (No Salt)',
+      'id': 'canned-corn-no-salt',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/corn.jpg'
+    },
+    {
+      'name': 'Spaghetti Sauce (Low Sodium)',
+      'id': 'spaghetti-sauce-low-sodium',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/tomato-paste.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/tomato-sauce.jpg'
     },
     {
-      'name': 'Canned Spinach',
-      'id': 'canned-spinach',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/spinach.jpg'
+      'name': 'Peas, Sweet (Low Sodium)',
+      'id': 'canned-peas-low-sodium',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peas.jpg'
     },
     {
-      'name': 'Canned Beets',
-      'id': 'canned-beets',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/beets.jpg'
-    },
-    {
-      'name': 'Canned Mixed Vegetables',
-      'id': 'canned-mixed-vegetables',
+      'name': 'Mixed Vegetables (No Salt)',
+      'id': 'canned-mixed-vegetables-no-salt',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/mixed-vegetables.jpg'
+    },
+    {
+      'name': 'Collard Greens (Low Sodium)',
+      'id': 'canned-collard-greens-low-sodium',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/collard-greens.jpg'
+    },
+    {
+      'name': 'Spinach, Chopped (Low Sodium)',
+      'id': 'canned-spinach-low-sodium',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/spinach.jpg'
     },
   ],
   'grains': [
     {
-      'name': 'White Rice',
-      'id': 'white-rice',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/white-rice.jpg'
-    },
-    {
-      'name': 'Brown Rice',
-      'id': 'brown-rice',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/brown-rice.jpg'
-    },
-    {
-      'name': 'Pasta',
-      'id': 'pasta',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/fusilli.jpg'
-    },
-    {
-      'name': 'Spaghetti',
-      'id': 'spaghetti',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/spaghetti.jpg'
-    },
-    {
-      'name': 'Bread',
-      'id': 'bread',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/white-bread.jpg'
-    },
-    {
-      'name': 'Oats',
-      'id': 'oats',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/rolled-oats.jpg'
-    },
-    {
-      'name': 'Quinoa',
-      'id': 'quinoa',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/quinoa.jpg'
-    },
-    {
-      'name': 'Barley',
-      'id': 'barley',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/pearl-barley.jpg'
-    },
-    {
-      'name': 'Cereal',
-      'id': 'cereal',
+      'name': 'Cereal, Corn Flakes',
+      'id': 'corn-flakes',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/breakfast-cereal.jpg'
     },
     {
-      'name': 'Crackers',
-      'id': 'crackers',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/crackers.jpg'
+      'name': 'Cereal, Toasted Oats',
+      'id': 'toasted-oats-cereal',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/breakfast-cereal.jpg'
     },
     {
-      'name': 'Flour',
-      'id': 'flour',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/flour.jpg'
+      'name': 'Cereal, Rice Crisp',
+      'id': 'rice-crisp-cereal',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/breakfast-cereal.jpg'
     },
     {
-      'name': 'Cornmeal',
-      'id': 'cornmeal',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cornmeal.jpg'
+      'name': 'Oatmeal, Whole Grain',
+      'id': 'rolled-oats',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/rolled-oats.jpg'
+    },
+    {
+      'name': 'Grits, White, Premium',
+      'id': 'corn-grits',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/grits.jpg'
+    },
+    {
+      'name': 'Pasta, Spaghetti, Whole Wheat',
+      'id': 'whole-wheat-spaghetti',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/spaghetti.jpg'
+    },
+    {
+      'name': 'Rice, Whole Grain Brown',
+      'id': 'brown-rice',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/brown-rice.jpg'
     },
   ],
   'protein': [
     {
-      'name': 'Canned Tuna',
-      'id': 'canned-tuna',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-tuna.jpg'
-    },
-    {
-      'name': 'Canned Salmon',
-      'id': 'canned-salmon',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/salmon.jpg'
-    },
-    {
-      'name': 'Black Beans',
-      'id': 'black-beans',
+      'name': 'Beans, Black (No Salt Added)',
+      'id': 'black-beans-no-salt',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/black-beans.jpg'
     },
     {
-      'name': 'Kidney Beans',
-      'id': 'kidney-beans',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/kidney-beans.jpg'
-    },
-    {
-      'name': 'Chickpeas',
-      'id': 'chickpeas',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/chickpeas.jpg'
-    },
-    {
-      'name': 'Pinto Beans',
+      'name': 'Beans, Pinto',
       'id': 'pinto-beans',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/pinto-beans.jpg'
-    },
-    {
-      'name': 'Lentils',
-      'id': 'lentils',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lentils.jpg'
     },
     {
       'name': 'Peanut Butter',
@@ -473,144 +376,110 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
           'https://spoonacular.com/cdn/ingredients_100x100/peanut-butter.jpg'
     },
     {
-      'name': 'Canned Chicken',
+      'name': 'Tuna, In Water, Chunk Light',
+      'id': 'canned-tuna',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/canned-tuna.jpg'
+    },
+    {
+      'name': 'Chicken, Chunk White',
       'id': 'canned-chicken',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/rotisserie-chicken.jpg'
     },
-    {
-      'name': 'Eggs',
-      'id': 'eggs',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/egg.jpg'
-    },
-    {
-      'name': 'Nuts',
-      'id': 'nuts',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/mixed-nuts.jpg'
-    },
-    {
-      'name': 'Split Peas',
-      'id': 'split-peas',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/split-peas.jpg'
-    },
   ],
   'dairy': [
     {
-      'name': 'Milk',
-      'id': 'milk',
+      'name': 'Almond Milk (Shelf Stable)',
+      'id': 'almond-milk-shelf-stable',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/almond-milk.jpg'
+    },
+    {
+      'name': 'Milk 1% (Shelf Stable)',
+      'id': 'milk-1-percent-shelf-stable',
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/milk.jpg'
-    },
-    {
-      'name': 'Cheese',
-      'id': 'cheese',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cheddar-cheese.jpg'
-    },
-    {
-      'name': 'Yogurt',
-      'id': 'yogurt',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/plain-yogurt.jpg'
-    },
-    {
-      'name': 'Butter',
-      'id': 'butter',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/butter-sliced.jpg'
-    },
-    {
-      'name': 'Cream Cheese',
-      'id': 'cream-cheese',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cream-cheese.jpg'
-    },
-    {
-      'name': 'Sour Cream',
-      'id': 'sour-cream',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/sour-cream.jpg'
-    },
-    {
-      'name': 'Cottage Cheese',
-      'id': 'cottage-cheese',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/cottage-cheese.jpg'
-    },
-    {
-      'name': 'Powdered Milk',
-      'id': 'powdered-milk',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/milk-powder.jpg'
     },
   ],
   'seasonings': [
     {
-      'name': 'Salt',
-      'id': 'salt',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/salt.jpg'
-    },
-    {
-      'name': 'Black Pepper',
-      'id': 'black-pepper',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/pepper.jpg'
-    },
-    {
-      'name': 'Garlic Powder',
+      'name': 'Powder, Garlic',
       'id': 'garlic-powder',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/garlic-powder.jpg'
     },
     {
-      'name': 'Onion Powder',
+      'name': 'Seasoning, Italian',
+      'id': 'italian-seasoning',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/italian-seasoning.jpg'
+    },
+    {
+      'name': 'Powder, Paprika',
+      'id': 'paprika',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/paprika.jpg'
+    },
+    {
+      'name': 'Oil, Pure Olive',
+      'id': 'olive-oil',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/olive-oil.jpg'
+    },
+    {
+      'name': 'Seasoning, Original, Salt Free',
+      'id': 'salt-free-seasoning',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/mixed-spice.jpg'
+    },
+    {
+      'name': 'Cinnamon, ground',
+      'id': 'ground-cinnamon',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cinnamon.jpg'
+    },
+    {
+      'name': 'Sea Salt Grinder',
+      'id': 'salt',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/salt.jpg'
+    },
+    {
+      'name': 'Cumin, Ground',
+      'id': 'ground-cumin',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/ground-cumin.jpg'
+    },
+    {
+      'name': 'Powder, Onion',
       'id': 'onion-powder',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/onion-powder.jpg'
     },
     {
-      'name': 'Paprika',
-      'id': 'paprika',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/paprika.jpg'
-    },
-    {
-      'name': 'Cumin',
-      'id': 'cumin',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/ground-cumin.jpg'
-    },
-    {
-      'name': 'Oregano',
-      'id': 'oregano',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/oregano.jpg'
-    },
-    {
-      'name': 'Basil',
+      'name': 'Basil, Crushed',
       'id': 'basil',
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/basil.jpg'
     },
     {
-      'name': 'Thyme',
-      'id': 'thyme',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/thyme.jpg'
+      'name': 'Peppercorn Grinder',
+      'id': 'black-pepper',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/pepper.jpg'
     },
     {
-      'name': 'Bay Leaves',
-      'id': 'bay-leaves',
+      'name': 'Broth, Chicken, Aseptic',
+      'id': 'chicken-broth',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/bay-leaves.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/chicken-broth.jpg'
     },
     {
-      'name': 'Chili Powder',
-      'id': 'chili-powder',
+      'name': 'Cayenne Pepper',
+      'id': 'cayenne-pepper',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/chili-powder.jpg'
     },
     {
-      'name': 'Italian Seasoning',
-      'id': 'italian-seasoning',
+      'name': 'Red Pepper, Crushed',
+      'id': 'red-pepper-flakes',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/italian-seasoning.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/red-pepper-flakes.jpg'
     },
   ],
 };

@@ -1,12 +1,14 @@
 import 'dart:convert';
-import 'package:flutter_app/features/recipes/models/recipe.dart';
-import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:developer' as developer;
 
+import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+
 class SpoonacularRecipeRepository {
-  final String _baseUrl = 'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  final String _baseUrl =
+      'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
   final String? _apiKey = dotenv.env['RAPID_API_KEY'];
 
   Future<List<Recipe>> getRecipes(
@@ -26,6 +28,7 @@ class SpoonacularRecipeRepository {
       'sort':
           'min-missing-ingredients', // Prioritize recipes with less missing ingredients
       'sortDirection': 'asc',
+      'maxSodium': '400',
     };
 
     final uri = Uri.parse('$_baseUrl/recipes/complexSearch')
