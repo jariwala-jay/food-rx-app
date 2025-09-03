@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+// SET PANTRY ITEM DEFFAULTS, EXPIRY DATE, UNIT, AND QUANTITY HERE
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/utils/image_url_helper.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
@@ -257,21 +257,21 @@ class PantryItem {
       case 'canned_veggies':
         return UnitType.ounces;
       case 'grains':
-        return UnitType.grams;
+        return UnitType.pound;
       case 'protein':
         return UnitType.pound;
       case 'dairy':
         return UnitType.ounces;
       case 'seasonings':
-        return UnitType.tablespoon;
+        return UnitType.ounces;
       case 'oils':
-        return UnitType.tablespoon;
+        return UnitType.ounces;
       case 'baking':
         return UnitType.cup;
       case 'condiments':
-        return UnitType.tablespoon;
+        return UnitType.ounces;
       case 'beverages':
-        return UnitType.liter;
+        return UnitType.gallon;
       default:
         return UnitType.piece;
     }
@@ -320,4 +320,4 @@ class PantryItem {
   String get quantityDisplay {
     return 'QTY: ${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1)} ${unitLabel.toUpperCase()}';
   }
-} 
+}
