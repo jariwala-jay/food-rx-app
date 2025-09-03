@@ -69,9 +69,6 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
 2.  Add the following configuration details. You will need to replace the placeholder values with your own keys.
 
     ```env
-    # Spoonacular API Key for recipe and ingredient data
-    SPOONACULAR_API_KEY="YOUR_SPOONACULAR_API_KEY"
-
     # MongoDB Connection String
     MONGODB_URL="mongodb+srv://<user>:<password>@<cluster-uri>/<database-name>?retryWrites=true&w=majority"
 
@@ -80,6 +77,13 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
     DIALOGFLOW_AGENT_ID="your-dialogflow-agent-id"
     DIALOGFLOW_LOCATION="global"
     DIALOGFLOW_LANGUAGE_CODE="en"
+
+    # API KEYS
+    GEMINI_API_KEY="gemini-key"
+    RAPID_API_KEY="spoonacular-rapid-api-key"
+
+    # FLAGS
+    SHOW_SCALING_CONVERSION=false
     ```
 
 3.  **Dialogflow Service Account**: Place your Google Cloud service account JSON key file in `assets/dialogflow_auth.json`. This is required for the chatbot to authenticate with Google's services.
