@@ -257,7 +257,7 @@ class PantryItem {
       case 'canned_veggies':
         return UnitType.ounces;
       case 'grains':
-        return UnitType.grams;
+        return UnitType.pound;
       case 'protein':
         return UnitType.pound;
       case 'dairy':
@@ -320,4 +320,4 @@ class PantryItem {
   String get quantityDisplay {
     return 'QTY: ${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1)} ${unitLabel.toUpperCase()}';
   }
-} 
+}
