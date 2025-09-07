@@ -83,6 +83,9 @@ enum MedicalCondition {
 class RecipeFilter {
   final List<CuisineType> cuisines;
   final MealType? mealType;
+  final String? spoonacularMealType; // Spoonacular API meal type string
+  final List<String>?
+      spoonacularMealTypes; // Multiple Spoonacular API meal types
   final List<DietType> diets;
   final List<Intolerances> intolerances;
   final List<MedicalCondition> medicalConditions;
@@ -107,6 +110,8 @@ class RecipeFilter {
   const RecipeFilter({
     this.cuisines = const [],
     this.mealType,
+    this.spoonacularMealType,
+    this.spoonacularMealTypes,
     this.diets = const [],
     this.intolerances = const [],
     this.medicalConditions = const [],
@@ -132,6 +137,8 @@ class RecipeFilter {
   RecipeFilter copyWith({
     List<CuisineType>? cuisines,
     MealType? mealType,
+    String? spoonacularMealType,
+    List<String>? spoonacularMealTypes,
     List<DietType>? diets,
     List<Intolerances>? intolerances,
     List<MedicalCondition>? medicalConditions,
@@ -156,6 +163,8 @@ class RecipeFilter {
     return RecipeFilter(
       cuisines: cuisines ?? this.cuisines,
       mealType: mealType ?? this.mealType,
+      spoonacularMealType: spoonacularMealType ?? this.spoonacularMealType,
+      spoonacularMealTypes: spoonacularMealTypes ?? this.spoonacularMealTypes,
       diets: diets ?? this.diets,
       intolerances: intolerances ?? this.intolerances,
       medicalConditions: medicalConditions ?? this.medicalConditions,
@@ -183,6 +192,8 @@ class RecipeFilter {
     return {
       'cuisines': cuisines.map((e) => e.name).toList(),
       'mealType': mealType?.name,
+      'spoonacularMealType': spoonacularMealType,
+      'spoonacularMealTypes': spoonacularMealTypes,
       'diets': diets.map((e) => e.name).toList(),
       'intolerances': intolerances.map((e) => e.name).toList(),
       'medicalConditions': medicalConditions.map((e) => e.name).toList(),
@@ -220,6 +231,10 @@ class RecipeFilter {
               (meal) => meal.name == json['mealType'],
               orElse: () => MealType.mainCourse,
             )
+          : null,
+      spoonacularMealType: json['spoonacularMealType'],
+      spoonacularMealTypes: json['spoonacularMealTypes'] != null
+          ? List<String>.from(json['spoonacularMealTypes'])
           : null,
       diets: (json['diets'] as List<dynamic>?)
               ?.map((e) => DietType.values.firstWhere(
@@ -270,10 +285,12 @@ class RecipeFilter {
       switch (condition) {
         case MedicalCondition.hypertension:
           // DASH Diet Guidelines for Hypertension (practical approach)
-          constraints['maxSodium'] = 1500; // mg per day (more practical than 1500)
+          constraints['maxSodium'] =
+              1500; // mg per day (more practical than 1500)
           constraints['dashCompliant'] = true;
           constraints['veryHealthy'] = true;
-          constraints['maxSaturatedFat'] = 8; // g per serving (slightly more lenient)
+          constraints['maxSaturatedFat'] =
+              8; // g per serving (slightly more lenient)
           constraints['minPotassium'] = 300; // mg per serving (more achievable)
           break;
         case MedicalCondition.diabetes:
@@ -296,7 +313,8 @@ class RecipeFilter {
           // Weight management guidelines (very practical)
           constraints['maxCalories'] = 600; // per serving (increased from 500)
           constraints['minProtein'] = 10; // g per serving (reduced from 12)
-          constraints['maxSaturatedFat'] = 10; // g per serving (increased from 7)
+          constraints['maxSaturatedFat'] =
+              10; // g per serving (increased from 7)
           // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           // Remove lowFat constraint - too restrictive
@@ -308,14 +326,15 @@ class RecipeFilter {
   }
 
   // Get recommended diet type based on medical conditions and health goals
-  static String getRecommendedDietType(List<String> medicalConditions, List<String> healthGoals) {
+  static String getRecommendedDietType(
+      List<String> medicalConditions, List<String> healthGoals) {
     // DASH diet for hypertension and blood pressure goals
-    if (medicalConditions.contains('Hypertension') || 
+    if (medicalConditions.contains('Hypertension') ||
         medicalConditions.contains('hypertension') ||
         healthGoals.contains('Lower blood pressure')) {
       return 'DASH';
     }
-    
+
     // MyPlate for diabetes, obesity, and general health
     return 'MyPlate';
   }
@@ -360,7 +379,13 @@ class RecipeFilter {
       params['cuisine'] = cuisines.map((e) => e.name).join(',');
     }
 
-    if (mealType != null) {
+    if (spoonacularMealTypes != null && spoonacularMealTypes!.isNotEmpty) {
+      // Use the first meal type as primary, others can be handled in separate calls
+      params['type'] = spoonacularMealTypes!.first;
+    } else if (spoonacularMealType != null) {
+      params['type'] = spoonacularMealType!;
+    } else if (mealType != null) {
+      // Fallback to enum name if spoonacularMealType is not set
       params['type'] = mealType!.name;
     }
 
@@ -387,11 +412,19 @@ class RecipeFilter {
     // Add medical condition constraints
     final constraints = getMedicalConditionConstraints();
     constraints.forEach((key, value) {
-      if (key == 'maxSodium' || key == 'maxSugar' || key == 'maxCalories' || 
-          key == 'minProtein' || key == 'maxSaturatedFat' || key == 'minFiber' ||
-          key == 'minPotassium' || key == 'maxCarbs') {
+      if (key == 'maxSodium' ||
+          key == 'maxSugar' ||
+          key == 'maxCalories' ||
+          key == 'minProtein' ||
+          key == 'maxSaturatedFat' ||
+          key == 'minFiber' ||
+          key == 'minPotassium' ||
+          key == 'maxCarbs') {
         params[key] = value.toString();
-      } else if ((key == 'veryHealthy' || key == 'lowFat' || key == 'lowGlycemic') && value == true) {
+      } else if ((key == 'veryHealthy' ||
+              key == 'lowFat' ||
+              key == 'lowGlycemic') &&
+          value == true) {
         params[key] = 'true';
       }
     });
@@ -400,7 +433,10 @@ class RecipeFilter {
     if (dashCompliant) {
       final dashConstraints = getDashDietConstraints();
       dashConstraints.forEach((key, value) {
-        if (key == 'maxSodium' || key == 'minPotassium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+        if (key == 'maxSodium' ||
+            key == 'minPotassium' ||
+            key == 'maxSaturatedFat' ||
+            key == 'minFiber') {
           params[key] = value.toString();
         } else if (key == 'veryHealthy' || key == 'lowFat') {
           params[key] = 'true';
@@ -411,7 +447,9 @@ class RecipeFilter {
     if (myPlateCompliant) {
       final myPlateConstraints = getMyPlateDietConstraints();
       myPlateConstraints.forEach((key, value) {
-        if (key == 'maxSodium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+        if (key == 'maxSodium' ||
+            key == 'maxSaturatedFat' ||
+            key == 'minFiber') {
           params[key] = value.toString();
         } else if (key == 'veryHealthy') {
           params[key] = 'true';
