@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
+import 'package:flutter_app/core/utils/typography.dart';
 import 'diet_plans/personalized_diet_summary.dart';
 import 'diet_plans/dash_diet_intro.dart';
 import 'diet_plans/dash_diet_plan.dart';
