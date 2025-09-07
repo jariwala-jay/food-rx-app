@@ -71,6 +71,19 @@ class SignupProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPersonalizedDietPlan({
+    String? dietType,
+    int? targetCalories,
+    Map<String, dynamic>? selectedDietPlan,
+    Map<String, dynamic>? diagnostics,
+  }) {
+    _data.dietType = dietType ?? _data.dietType;
+    _data.targetCalories = targetCalories ?? _data.targetCalories;
+    _data.selectedDietPlan = selectedDietPlan ?? _data.selectedDietPlan;
+    _data.diagnostics = diagnostics ?? _data.diagnostics;
+    notifyListeners();
+  }
+
   void reset() {
     _currentStep = 0;
     _data.name = null;
@@ -86,6 +99,9 @@ class SignupProvider extends ChangeNotifier {
     _data.activityLevel = null;
     _data.healthGoals = [];
     _data.dietType = null;
+    _data.targetCalories = null;
+    _data.selectedDietPlan = null;
+    _data.diagnostics = null;
     _profilePhoto = null;
     notifyListeners();
   }
