@@ -12,6 +12,9 @@ class SignupData {
   String? activityLevel;
   List<String> healthGoals;
   String? dietType;
+  int? targetCalories;
+  Map<String, dynamic>? selectedDietPlan;
+  Map<String, dynamic>? diagnostics;
 
   SignupData({
     this.name,
@@ -27,6 +30,9 @@ class SignupData {
     this.activityLevel,
     this.healthGoals = const [],
     this.dietType,
+    this.targetCalories,
+    this.selectedDietPlan,
+    this.diagnostics,
   });
 
   Map<String, dynamic> toJson() {
@@ -42,6 +48,9 @@ class SignupData {
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,
+      'targetCalories': targetCalories,
+      'selectedDietPlan': selectedDietPlan,
+      'diagnostics': diagnostics,
     };
 
     // Only add dateOfBirth if it's not null and convert it to ISO string
