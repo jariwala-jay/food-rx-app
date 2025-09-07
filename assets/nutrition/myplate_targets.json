@@ -1,0 +1,101 @@
+[
+  {
+    "kcal": 1600,
+    "fruits": 1.5,
+    "vegetables": 2.0,
+    "grains": 5,
+    "protein": 5.0,
+    "dairy": 3,
+    "addedSugarsMax": 40,
+    "saturatedFatMax": 18,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 1800,
+    "fruits": 1.5,
+    "vegetables": 2.5,
+    "grains": 6,
+    "protein": 5.0,
+    "dairy": 3,
+    "addedSugarsMax": 45,
+    "saturatedFatMax": 20,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 2000,
+    "fruits": 2.0,
+    "vegetables": 2.5,
+    "grains": 6,
+    "protein": 5.5,
+    "dairy": 3,
+    "addedSugarsMax": 50,
+    "saturatedFatMax": 22,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 2200,
+    "fruits": 2.0,
+    "vegetables": 3.0,
+    "grains": 7,
+    "protein": 6.0,
+    "dairy": 3,
+    "addedSugarsMax": 55,
+    "saturatedFatMax": 24,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 2400,
+    "fruits": 2.0,
+    "vegetables": 3.0,
+    "grains": 8,
+    "protein": 6.5,
+    "dairy": 3,
+    "addedSugarsMax": 60,
+    "saturatedFatMax": 27,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 2600,
+    "fruits": 2.0,
+    "vegetables": 3.5,
+    "grains": 9,
+    "protein": 6.5,
+    "dairy": 3,
+    "addedSugarsMax": 65,
+    "saturatedFatMax": 29,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 2800,
+    "fruits": 2.5,
+    "vegetables": 3.5,
+    "grains": 10,
+    "protein": 7.0,
+    "dairy": 3,
+    "addedSugarsMax": 70,
+    "saturatedFatMax": 31,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 3000,
+    "fruits": 2.5,
+    "vegetables": 4.0,
+    "grains": 10,
+    "protein": 7.0,
+    "dairy": 3,
+    "addedSugarsMax": 75,
+    "saturatedFatMax": 33,
+    "sodiumMax": 2300
+  },
+  {
+    "kcal": 3200,
+    "fruits": 2.5,
+    "vegetables": 4.0,
+    "grains": 10,
+    "protein": 7.0,
+    "dairy": 3,
+    "addedSugarsMax": 80,
+    "saturatedFatMax": 36,
+    "sodiumMax": 2300
+  }
+]

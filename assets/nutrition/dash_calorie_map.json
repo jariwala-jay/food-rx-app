@@ -1,0 +1,39 @@
+{
+  "description": "DASH diet calorie recommendations by age, sex, and activity level",
+  "data": {
+    "women": {
+      "19-30": {
+        "sedentary": 2000,
+        "moderate": 2000,
+        "active": 2400
+      },
+      "31-50": {
+        "sedentary": 1800,
+        "moderate": 2000,
+        "active": 2200
+      },
+      "51+": {
+        "sedentary": 1600,
+        "moderate": 1800,
+        "active": 2000
+      }
+    },
+    "men": {
+      "19-30": {
+        "sedentary": 2400,
+        "moderate": 2600,
+        "active": 3000
+      },
+      "31-50": {
+        "sedentary": 2200,
+        "moderate": 2400,
+        "active": 2800
+      },
+      "51+": {
+        "sedentary": 2000,
+        "moderate": 2200,
+        "active": 2400
+      }
+    }
+  }
+}
