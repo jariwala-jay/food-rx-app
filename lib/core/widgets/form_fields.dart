@@ -603,20 +603,20 @@ class AppSearchAnchor extends StatelessWidget {
           hintText: hintText,
           leading: leading ?? Icon(Icons.search, color: Colors.grey[400]),
           trailing: trailing,
-          backgroundColor: MaterialStateProperty.all(Colors.white),
-          elevation: MaterialStateProperty.all(0.0),
-          shape: MaterialStateProperty.all(
+          backgroundColor: WidgetStateProperty.all(Colors.white),
+          elevation: WidgetStateProperty.all(0.0),
+          shape: WidgetStateProperty.all(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          hintStyle: MaterialStateProperty.all(
+          hintStyle: WidgetStateProperty.all(
             TextStyle(
               color: Colors.grey[400],
               fontSize: 16,
             ),
           ),
-          textStyle: MaterialStateProperty.all(
+          textStyle: WidgetStateProperty.all(
             const TextStyle(
               color: Colors.black,
               fontSize: 16,

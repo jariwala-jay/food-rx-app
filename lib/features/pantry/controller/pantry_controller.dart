@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
@@ -19,8 +17,11 @@ class PantryController extends ChangeNotifier {
   String? _error;
   String? _userId;
 
-  // Reference to AuthProvider
-  AuthController? _authProvider;
+  // Search and filtering state
+  String _searchQuery = '';
+  String? _selectedCategory;
+  List<PantryItem> _filteredPantryItems = [];
+  List<PantryItem> _filteredOtherItems = [];
 
   PantryController(
     this._mongoDBService, {
@@ -32,14 +33,14 @@ class PantryController extends ChangeNotifier {
   // Getters
   List<PantryItem> get pantryItems => _pantryItems;
   List<PantryItem> get otherItems => _otherItems;
+  List<PantryItem> get filteredPantryItems => _filteredPantryItems;
+  List<PantryItem> get filteredOtherItems => _filteredOtherItems;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasPantryItems => _pantryItems.isNotEmpty;
   bool get hasOtherItems => _otherItems.isNotEmpty;
-
-  void setAuthProvider(AuthController authProvider) {
-    _authProvider = authProvider;
-  }
+  String get searchQuery => _searchQuery;
+  String? get selectedCategory => _selectedCategory;
 
   // Initialize with the user's ID
   void initializeWithUser(String userId) {
@@ -69,10 +70,22 @@ class PantryController extends ChangeNotifier {
       _otherItems =
           otherItemsData.map((data) => PantryItem.fromMap(data)).toList();
 
+      // Sort main lists by expiration date - items expiring soonest first
+      _pantryItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      _otherItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+
+      // Apply current filters after loading
+      _applyFilters();
+
       _setLoading(false);
     } catch (e) {
       _setError('Failed to load pantry items: $e');
     }
+  }
+
+  // Public method to refresh items (can be called from other parts of the app)
+  Future<void> refreshItems() async {
+    await loadItems();
   }
 
   // Add a new pantry item
@@ -92,9 +105,16 @@ class PantryController extends ChangeNotifier {
       final newItem = item.copyWith(id: itemId);
       if (item.isPantryItem) {
         _pantryItems = [..._pantryItems, newItem];
+        _pantryItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       } else {
         _otherItems = [..._otherItems, newItem];
+        _otherItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       }
+
+      // Apply filters after adding new item
+      _applyFilters();
 
       _setLoading(false);
       notifyListeners();
@@ -124,6 +144,9 @@ class PantryController extends ChangeNotifier {
         _otherItems = _otherItems.where((item) => item.id != itemId).toList();
       }
 
+      // Apply filters after removing item
+      _applyFilters();
+
       _setLoading(false);
       notifyListeners();
     } catch (e) {
@@ -151,10 +174,17 @@ class PantryController extends ChangeNotifier {
       if (item.isPantryItem) {
         _pantryItems =
             _pantryItems.map((i) => i.id == item.id ? item : i).toList();
+        _pantryItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       } else {
         _otherItems =
             _otherItems.map((i) => i.id == item.id ? item : i).toList();
+        _otherItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       }
+
+      // Apply filters after updating item
+      _applyFilters();
 
       _setLoading(false);
       notifyListeners();
@@ -179,6 +209,96 @@ class PantryController extends ChangeNotifier {
       _setError('Failed to get expiring items: $e');
       return [];
     }
+  }
+
+  // Search and filtering methods
+  void updateSearchQuery(String query) {
+    _searchQuery = query.toLowerCase();
+    _applyFilters();
+  }
+
+  void updateSelectedCategory(String? category) {
+    _selectedCategory = category;
+    _applyFilters();
+  }
+
+  void clearFilters() {
+    _searchQuery = '';
+    _selectedCategory = null;
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    _filteredPantryItems = _pantryItems.where((item) {
+      bool matchesSearch = _searchQuery.isEmpty ||
+          item.name.toLowerCase().contains(_searchQuery);
+      bool matchesCategory = _selectedCategory == null ||
+          item.category.toLowerCase() == _selectedCategory!.toLowerCase();
+      return matchesSearch && matchesCategory;
+    }).toList();
+
+    _filteredOtherItems = _otherItems.where((item) {
+      bool matchesSearch = _searchQuery.isEmpty ||
+          item.name.toLowerCase().contains(_searchQuery);
+      bool matchesCategory = _selectedCategory == null ||
+          item.category.toLowerCase() == _selectedCategory!.toLowerCase();
+      return matchesSearch && matchesCategory;
+    }).toList();
+
+    // Sort by expiration date - items expiring soonest first
+    _filteredPantryItems
+        .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+    _filteredOtherItems
+        .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+
+    notifyListeners();
+  }
+
+  // Get available categories for filtering
+  List<String> getAvailableCategories(bool isPantryItem) {
+    final items = isPantryItem ? _pantryItems : _otherItems;
+    final categories = items.map((item) => item.category).toSet().toList();
+
+    // Define priority order for categories
+    final priorityOrder = isPantryItem
+        ? [
+            'fresh_fruits',
+            'fresh_veggies',
+            'protein',
+            'dairy',
+            'grains',
+            'canned_fruits',
+            'canned_veggies',
+            'seasonings',
+          ]
+        : [
+            'fresh_produce',
+            'protein_meat',
+            'dairy_eggs',
+            'pantry_staples',
+            'frozen_foods',
+            'snacks_beverages',
+            'essentials_condiments',
+            'miscellaneous',
+          ];
+
+    // Sort categories by priority, then alphabetically for unlisted categories
+    categories.sort((a, b) {
+      final aIndex = priorityOrder.indexOf(a);
+      final bIndex = priorityOrder.indexOf(b);
+
+      // If both are in priority list, sort by priority order
+      if (aIndex != -1 && bIndex != -1) {
+        return aIndex.compareTo(bIndex);
+      }
+      // If only one is in priority list, prioritize it
+      if (aIndex != -1) return -1;
+      if (bIndex != -1) return 1;
+      // If neither is in priority list, sort alphabetically
+      return a.compareTo(b);
+    });
+
+    return categories;
   }
 
   // Helper methods

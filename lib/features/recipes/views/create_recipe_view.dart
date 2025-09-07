@@ -476,7 +476,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       SnackBar(
         content: Text('Generating recipes based on $dietInfo...'),
         backgroundColor: Colors.orange,
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 2),
       ),
     );
   }

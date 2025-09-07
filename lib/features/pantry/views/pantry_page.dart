@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../controller/pantry_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
+import '../widgets/category_filter_chips.dart';
 
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);
@@ -59,19 +60,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     super.dispose();
   }
 
-  // Called when the top route has been popped and this route is now visible.
-  @override
-  void didPopNext() {
-    super.didPopNext();
-    final controller = context.read<PantryController>();
-    // Refresh items when returning to this page
-    // controller.initialize(context) might be too heavy if it re-initializes user, etc.
-    // A dedicated refresh or just loadItems might be better if initialize does more than load.
-    if (!controller.isLoading) {
-      controller.loadItems();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final pantryController = Provider.of<PantryController>(context);
@@ -94,7 +82,12 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _selectedTabIndex = 0),
+                        onTap: () {
+                          setState(() => _selectedTabIndex = 0);
+                          // Clear search when switching tabs
+                          pantryController.clearFilters();
+                          _searchController.clear();
+                        },
                         child: Container(
                           decoration: BoxDecoration(
                             color: _selectedTabIndex == 0
@@ -119,7 +112,12 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                     ),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _selectedTabIndex = 1),
+                        onTap: () {
+                          setState(() => _selectedTabIndex = 1);
+                          // Clear search when switching tabs
+                          pantryController.clearFilters();
+                          _searchController.clear();
+                        },
                         child: Container(
                           decoration: BoxDecoration(
                             color: _selectedTabIndex == 1
@@ -151,12 +149,22 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: AppSearchField(
                   controller: _searchController,
-                  hintText: 'Search here',
-                  suffixIcon: Icon(
-                    Icons.tune,
-                    color: Colors.grey[600],
-                  ),
+                  hintText: 'Search ingredients...',
+                  onChanged: (value) {
+                    pantryController.updateSearchQuery(value);
+                  },
                 ),
+              ),
+
+              // Category filter chips
+              CategoryFilterChips(
+                categories: pantryController
+                    .getAvailableCategories(_selectedTabIndex == 0),
+                selectedCategory: pantryController.selectedCategory,
+                onCategorySelected: (category) {
+                  pantryController.updateSelectedCategory(category);
+                },
+                isLoading: pantryController.isLoading,
               ),
 
               // Content
@@ -220,11 +228,50 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
       );
     }
 
-    // When there are items, show the list
+    // Check if filtered results are empty
+    if (controller.filteredPantryItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              controller.searchQuery.isNotEmpty ||
+                      controller.selectedCategory != null
+                  ? 'No items found matching your search'
+                  : 'No pantry items available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+              ),
+            ),
+            if (controller.searchQuery.isNotEmpty ||
+                controller.selectedCategory != null) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  controller.clearFilters();
+                  _searchController.clear();
+                },
+                child: const Text('Clear Filters'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // When there are items, show the filtered list
     return ListView.builder(
-      itemCount: controller.pantryItems.length,
+      itemCount: controller.filteredPantryItems.length,
       itemBuilder: (context, index) {
-        final item = controller.pantryItems[index];
+        final item = controller.filteredPantryItems[index];
         return _buildPantryItemTile(item);
       },
     );
@@ -278,11 +325,50 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
       );
     }
 
-    // When there are items, show the list
+    // Check if filtered results are empty
+    if (controller.filteredOtherItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              controller.searchQuery.isNotEmpty ||
+                      controller.selectedCategory != null
+                  ? 'No items found matching your search'
+                  : 'No other items available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+              ),
+            ),
+            if (controller.searchQuery.isNotEmpty ||
+                controller.selectedCategory != null) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  controller.clearFilters();
+                  _searchController.clear();
+                },
+                child: const Text('Clear Filters'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // When there are items, show the filtered list
     return ListView.builder(
-      itemCount: controller.otherItems.length,
+      itemCount: controller.filteredOtherItems.length,
       itemBuilder: (context, index) {
-        final item = controller.otherItems[index];
+        final item = controller.filteredOtherItems[index];
         return _buildPantryItemTile(item);
       },
     );
@@ -507,7 +593,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
   void _showEditItemDialog(PantryItem item) {
     final qtyController = TextEditingController(text: item.quantity.toString());
     DateTime selectedDate = item.expiryDate ?? DateTime.now();
-    UnitType selectedUnit = item.unit;
 
     showModalBottomSheet(
       context: context,

@@ -832,14 +832,14 @@ class UnitConversionService {
     if (_volumeToMl.containsKey(normTo)) {
       if (amountInMl != null) {
         finalAmount = amountInMl / _volumeToMl[normTo]!;
-        conversionPath += '→' + normTo;
+        conversionPath += '→$normTo';
       }
     }
     // To Weight
     else if (_weightToGrams.containsKey(normTo)) {
       if (amountInGrams != null) {
         finalAmount = amountInGrams / _weightToGrams[normTo]!;
-        conversionPath += '→' + normTo;
+        conversionPath += '→$normTo';
       }
     }
     // To Piece

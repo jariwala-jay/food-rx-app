@@ -59,8 +59,8 @@ class ObjectIdHelper {
     // Create a deterministic suffix based on the timestamp
     // This ensures consistency across app restarts
     final suffix = (timestamp % 0xFFFFFF).toRadixString(16).padLeft(6, '0');
-    final padding = '00000000'; // 8 characters
-    final additionalPadding = '00'; // 2 characters to make it 24 total
+    const padding = '00000000'; // 8 characters
+    const additionalPadding = '00'; // 2 characters to make it 24 total
     
     final hexString = timestampHex + suffix + padding + additionalPadding;
     

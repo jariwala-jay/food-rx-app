@@ -32,8 +32,8 @@ void main() {
             category: 'protein',
             quantity: 1.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 5)), // Newer
-            addedDate: DateTime.now().subtract(Duration(days: 2)),
+            expirationDate: DateTime.now().add(const Duration(days: 5)), // Newer
+            addedDate: DateTime.now().subtract(const Duration(days: 2)),
           ),
           PantryItem(
             id: '2',
@@ -42,8 +42,8 @@ void main() {
             category: 'protein',
             quantity: 1.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 2)), // Older
-            addedDate: DateTime.now().subtract(Duration(days: 5)),
+            expirationDate: DateTime.now().add(const Duration(days: 2)), // Older
+            addedDate: DateTime.now().subtract(const Duration(days: 5)),
           ),
         ];
 
@@ -78,8 +78,8 @@ void main() {
             category: 'grains',
             quantity: 100.0,
             unit: UnitType.grams,
-            expirationDate: DateTime.now().add(Duration(days: 1)), // Oldest
-            addedDate: DateTime.now().subtract(Duration(days: 3)),
+            expirationDate: DateTime.now().add(const Duration(days: 1)), // Oldest
+            addedDate: DateTime.now().subtract(const Duration(days: 3)),
           ),
           PantryItem(
             id: '2',
@@ -88,8 +88,8 @@ void main() {
             category: 'grains',
             quantity: 200.0,
             unit: UnitType.grams,
-            expirationDate: DateTime.now().add(Duration(days: 3)), // Newer
-            addedDate: DateTime.now().subtract(Duration(days: 1)),
+            expirationDate: DateTime.now().add(const Duration(days: 3)), // Newer
+            addedDate: DateTime.now().subtract(const Duration(days: 1)),
           ),
         ];
 
@@ -132,7 +132,7 @@ void main() {
             category: 'dairy',
             quantity: 1.0,
             unit: UnitType.liter,
-            expirationDate: DateTime.now().add(Duration(days: 3)),
+            expirationDate: DateTime.now().add(const Duration(days: 3)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -166,7 +166,7 @@ void main() {
             category: 'baking',
             quantity: 2.0,
             unit: UnitType.cup,
-            expirationDate: DateTime.now().add(Duration(days: 30)),
+            expirationDate: DateTime.now().add(const Duration(days: 30)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -200,7 +200,7 @@ void main() {
             category: 'protein',
             quantity: 1.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 3)),
+            expirationDate: DateTime.now().add(const Duration(days: 3)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -231,7 +231,7 @@ void main() {
             category: 'oils',
             quantity: 2.0,
             unit: UnitType.cup,
-            expirationDate: DateTime.now().add(Duration(days: 90)),
+            expirationDate: DateTime.now().add(const Duration(days: 90)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -286,7 +286,7 @@ void main() {
             category: 'grains',
             quantity: 500.0,
             unit: UnitType.grams,
-            expirationDate: DateTime.now().add(Duration(days: 30)),
+            expirationDate: DateTime.now().add(const Duration(days: 30)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -312,7 +312,7 @@ void main() {
             category: 'baking',
             quantity: 0.5,
             unit: UnitType.cup,
-            expirationDate: DateTime.now().add(Duration(days: 365)),
+            expirationDate: DateTime.now().add(const Duration(days: 365)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -346,7 +346,7 @@ void main() {
             category: 'fresh_fruits',
             quantity: 6.0,
             unit: UnitType.piece,
-            expirationDate: DateTime.now().add(Duration(days: 5)),
+            expirationDate: DateTime.now().add(const Duration(days: 5)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -381,7 +381,7 @@ void main() {
             category: 'protein',
             quantity: 2.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 5)),
+            expirationDate: DateTime.now().add(const Duration(days: 5)),
             addedDate: DateTime.now(),
           ),
           PantryItem(
@@ -391,7 +391,7 @@ void main() {
             category: 'grains',
             quantity: 500.0,
             unit: UnitType.grams,
-            expirationDate: DateTime.now().add(Duration(days: 30)),
+            expirationDate: DateTime.now().add(const Duration(days: 30)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -429,7 +429,7 @@ void main() {
             category: 'protein',
             quantity: 1.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 5)),
+            expirationDate: DateTime.now().add(const Duration(days: 5)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -468,7 +468,7 @@ void main() {
             category: 'baking',
             quantity: 1.0,
             unit: UnitType.cup,
-            expirationDate: DateTime.now().add(Duration(days: 30)),
+            expirationDate: DateTime.now().add(const Duration(days: 30)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -505,7 +505,7 @@ void main() {
             category: 'protein',
             quantity: 2.0,
             unit: UnitType.pound,
-            expirationDate: DateTime.now().add(Duration(days: 3)),
+            expirationDate: DateTime.now().add(const Duration(days: 3)),
             addedDate: DateTime.now(),
           ),
           PantryItem(
@@ -515,7 +515,7 @@ void main() {
             category: 'fresh_veggies',
             quantity: 3.0,
             unit: UnitType.piece,
-            expirationDate: DateTime.now().add(Duration(days: 7)),
+            expirationDate: DateTime.now().add(const Duration(days: 7)),
             addedDate: DateTime.now(),
           ),
           PantryItem(
@@ -525,7 +525,7 @@ void main() {
             category: 'canned_veggies',
             quantity: 24.0,
             unit: UnitType.ounces,
-            expirationDate: DateTime.now().add(Duration(days: 365)),
+            expirationDate: DateTime.now().add(const Duration(days: 365)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -576,7 +576,7 @@ void main() {
             category: 'grains',
             quantity: 500.0,
             unit: UnitType.grams,
-            expirationDate: DateTime.now().add(Duration(days: 30)),
+            expirationDate: DateTime.now().add(const Duration(days: 30)),
             addedDate: DateTime.now(),
           ),
         ];
@@ -598,8 +598,8 @@ void main() {
         expect(result.averageConfidence, greaterThanOrEqualTo(0.95)); // PRD requirement
         
         // Calculate stock variance (should be ≤5%)
-        final originalStock = 500.0;
-        final expectedRemaining = 300.0; // 500 - 200
+        const originalStock = 500.0;
+        const expectedRemaining = 300.0; // 500 - 200
         final actualRemaining = result.updatedItems[0].quantity;
         final variance = (actualRemaining - expectedRemaining).abs() / expectedRemaining;
         expect(variance, lessThanOrEqualTo(0.05)); // ≤5% variance

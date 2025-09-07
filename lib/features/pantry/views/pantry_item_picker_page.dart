@@ -9,6 +9,7 @@ import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
+import '../controller/pantry_controller.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
   final String categoryTitle;
@@ -100,7 +101,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<PantryItemPickerProvider>(context);
-    final primaryColor = Color(0xFFFF6A00);
+    const primaryColor = Color(0xFFFF6A00);
 
     developer.log('Building PantryItemPickerView for ${widget.categoryKey}, '
         'isLoading: ${provider.isLoading}, '
@@ -114,7 +115,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          icon:
+              const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -243,7 +245,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       _isTyping
                           ? 'No ingredients found for "${_searchController.text}"'
                           : 'No ingredients available in this category',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                      style: const TextStyle(color: Colors.grey, fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                     if (_isTyping)
@@ -257,7 +259,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                               _isTyping = false;
                             });
                           },
-                          child: Text(
+                          child: const Text(
                             'Clear search',
                             style: TextStyle(color: primaryColor),
                           ),
@@ -443,17 +445,29 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                   onPressed: () async {
                     final success = await provider.saveSelectedItemsToPantry();
                     if (mounted) {
+                      // Store context before async operations to avoid linter warnings
+                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(context);
+                      
                       if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        // Refresh the pantry controller to show new items
+                        try {
+                          final pantryController = Provider.of<PantryController>(context, listen: false);
+                          await pantryController.refreshItems();
+                        } catch (e) {
+                          developer.log('Failed to refresh pantry controller: $e');
+                        }
+                        
+                        scaffoldMessenger.showSnackBar(
                           const SnackBar(
                             content: Text('Items added to your pantry'),
                             backgroundColor: Colors.green,
                           ),
                         );
-                        Navigator.of(context).pop();
+                        navigator.pop();
                       } else {
                         if (provider.error != null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
                                   'Failed to save items: ${provider.error}'),

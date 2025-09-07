@@ -923,7 +923,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
 
     // Handle common fractions with readable display
-    final tolerance = 0.01;
+    const tolerance = 0.01;
 
     // Check for halves
     if ((amount - 0.5).abs() < tolerance) return '1/2';
@@ -1123,9 +1123,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       String displayUnit = unit;
       if (amount != 1.0) {
         // Simple pluralization rules
-        if (unit == 'cup' && amount != 1.0)
+        if (unit == 'cup' && amount != 1.0) {
           displayUnit = 'cups';
-        else if (unit == 'tablespoon' && amount != 1.0)
+        } else if (unit == 'tablespoon' && amount != 1.0)
           displayUnit = 'tablespoons';
         else if (unit == 'teaspoon' && amount != 1.0)
           displayUnit = 'teaspoons';
