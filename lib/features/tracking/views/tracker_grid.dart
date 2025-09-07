@@ -20,14 +20,30 @@ class TrackerGrid extends StatefulWidget {
   State<TrackerGrid> createState() => _TrackerGridState();
 }
 
-class _TrackerGridState extends State<TrackerGrid> {
+class _TrackerGridState extends State<TrackerGrid>
+    with SingleTickerProviderStateMixin {
   Timer? _loadingTimer;
   bool _showLoadingTimeout = false;
   bool _hasInitialized = false;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+    _animationController.repeat(reverse: true);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTrackers();
     });
@@ -36,6 +52,7 @@ class _TrackerGridState extends State<TrackerGrid> {
   @override
   void dispose() {
     _loadingTimer?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -80,6 +97,7 @@ class _TrackerGridState extends State<TrackerGrid> {
       builder: (context, trackerProvider, child) {
         if (!trackerProvider.isLoading) {
           _loadingTimer?.cancel();
+          _animationController.stop();
         }
 
         if (trackerProvider.isLoading) {
@@ -129,7 +147,8 @@ class _TrackerGridState extends State<TrackerGrid> {
               ),
             );
           }
-          return const Center(child: CircularProgressIndicator());
+          // Show a skeleton loading state that maintains layout
+          return _buildSkeletonLoading();
         }
 
         if (trackerProvider.error != null) {
@@ -225,7 +244,7 @@ class _TrackerGridState extends State<TrackerGrid> {
           );
         }
 
-        return SingleChildScrollView(
+        return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,14 +308,14 @@ class _TrackerGridState extends State<TrackerGrid> {
   }
 
   Widget _buildTrackerCard(BuildContext context, TrackerGoal tracker) {
-    return Consumer<TrackerProvider>(
-      builder: (context, provider, child) {
-        final foundTracker = provider.findTrackerById(tracker.id);
-        final currentTracker = foundTracker ?? tracker;
+    return Selector<TrackerProvider, TrackerGoal?>(
+      selector: (context, provider) => provider.findTrackerById(tracker.id),
+      builder: (context, currentTracker, child) {
+        final displayTracker = currentTracker ?? tracker;
         return TrackerCard(
-          key: ValueKey(currentTracker.id),
-          tracker: currentTracker,
-          onTap: () => _showEditDialog(context, currentTracker),
+          key: ValueKey(displayTracker.id),
+          tracker: displayTracker,
+          onTap: () => _showEditDialog(context, displayTracker),
         );
       },
     );
@@ -310,13 +329,133 @@ class _TrackerGridState extends State<TrackerGrid> {
         onUpdate: (newValue) async {
           try {
             await Provider.of<TrackerProvider>(context, listen: false)
-                .updateTrackerValue(tracker.id, newValue);
+                .updateTrackerValueOptimized(tracker.id, newValue);
             return true;
           } catch (e) {
             return Future.error(e);
           }
         },
       ),
+    );
+  }
+
+  Widget _buildSkeletonLoading() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Today\'s Top Goals',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF333333),
+            ),
+          ),
+          const SizedBox(height: 20),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 152 / 68,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: 8, // Show 4 daily skeleton cards
+            itemBuilder: (context, index) {
+              return _buildSkeletonCard();
+            },
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Weekly Goals',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF333333),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 152 / 68,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: 2, // Show 4 weekly skeleton cards
+            itemBuilder: (context, index) {
+              return _buildSkeletonCard();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkeletonCard() {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _animation.value,
+          child: Container(
+            width: 152,
+            height: 68,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  // Left - Skeleton circle
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade200,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Right - Skeleton text
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          height: 14,
+                          width: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 12,
+                          width: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
