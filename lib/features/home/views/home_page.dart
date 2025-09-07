@@ -12,7 +12,6 @@ import 'package:flutter_app/core/services/image_cache_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/tracking/views/tracker_grid.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
-import 'package:flutter_app/main.dart'; // REQUIRED: Import main.dart to access the global routeObserver
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,9 +20,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage>
-    with WidgetsBindingObserver, RouteAware {
-  // Add WidgetsBindingObserver and RouteAware mixins
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  // Add WidgetsBindingObserver mixin
   final _mongoDBService = MongoDBService();
   Uint8List? _profilePhotoData;
   // Flag to prevent duplicate initial data loads on first build
@@ -49,20 +47,12 @@ class _HomePageState extends State<HomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Subscribe to RouteAware. This enables didPopNext.
-    // Make sure 'routeObserver' is available from main.dart.
-    final ModalRoute<dynamic>? route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      // Ensure it's a PageRoute for RouteAware
-      routeObserver.subscribe(this, route);
-    }
   }
 
   @override
   void dispose() {
     // REQUIRED: Unsubscribe from observers to prevent memory leaks
     WidgetsBinding.instance.removeObserver(this);
-    routeObserver.unsubscribe(this);
     super.dispose();
   }
 
@@ -76,23 +66,6 @@ class _HomePageState extends State<HomePage>
       _loadTipsIfNeeded();
     }
   }
-
-  // --- RouteAware Methods ---
-  // Called when this route is popped, and the top-most route is now this route.
-  // This happens when navigating back to HomePage from another screen within the app.
-  @override
-  void didPopNext() {
-    print('Navigated back to Home page. Only refreshing tips if needed.');
-    _loadTipsIfNeeded();
-  }
-
-  // Other RouteAware methods (can be left empty if no specific action is needed)
-  @override
-  void didPush() {}
-  @override
-  void didPop() {}
-  @override
-  void didPushNext() {}
 
   // --- Consolidated Data Loading Method ---
   // This method will be called for initial load and on refreshes.
