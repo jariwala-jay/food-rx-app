@@ -317,15 +317,168 @@ class TrackerProvider extends ChangeNotifier {
       // Update the tracker value in the service
       await _trackerService.updateTrackerValue(trackerId, newValue);
 
-      // Always reload the specific tracker from the service to ensure consistency
-      // This ensures we get the most up-to-date value from the cache
-      await _reloadSpecificTracker(trackerId);
+      // Update the local tracker immediately for better UX
+      _updateLocalTrackerValue(trackerId, newValue);
     } catch (e) {
       _setError('Failed to update tracker: $e');
       // Try to reload the specific tracker even if update failed
       await _reloadSpecificTracker(trackerId);
     } finally {
       _setLoading(false);
+    }
+  }
+
+  // Optimized method for updating tracker values without loading states
+  Future<void> updateTrackerValueOptimized(
+      String trackerId, double newValue) async {
+    try {
+      // Update the local tracker immediately for instant UI response
+      _updateLocalTrackerValue(trackerId, newValue);
+
+      // Update the tracker value in the service in the background
+      await _trackerService.updateTrackerValue(trackerId, newValue);
+    } catch (e) {
+      // If service update fails, try to reload the specific tracker
+      await _reloadSpecificTracker(trackerId);
+    }
+  }
+
+  // Helper method to update local tracker value without full reload
+  void _updateLocalTrackerValue(String trackerId, double newValue) {
+    // Clean the tracker ID to handle ObjectId format
+    String cleanId = trackerId;
+    if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
+      cleanId = trackerId.substring(9, trackerId.length - 2);
+    }
+
+    // Update daily trackers
+    for (int i = 0; i < _dailyTrackers.length; i++) {
+      if (_dailyTrackers[i].id == trackerId ||
+          _dailyTrackers[i].id == cleanId) {
+        _dailyTrackers[i] = _dailyTrackers[i].copyWith(
+          currentValue: newValue,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Update weekly trackers if not found in daily
+    for (int i = 0; i < _weeklyTrackers.length; i++) {
+      if (_weeklyTrackers[i].id == trackerId ||
+          _weeklyTrackers[i].id == cleanId) {
+        _weeklyTrackers[i] = _weeklyTrackers[i].copyWith(
+          currentValue: newValue,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+  }
+
+  // Method to update a specific tracker's goal value without full reload
+  void updateTrackerGoal(String trackerId, double newGoalValue) {
+    // Clean the tracker ID to handle ObjectId format
+    String cleanId = trackerId;
+    if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
+      cleanId = trackerId.substring(9, trackerId.length - 2);
+    }
+
+    // Update daily trackers
+    for (int i = 0; i < _dailyTrackers.length; i++) {
+      if (_dailyTrackers[i].id == trackerId ||
+          _dailyTrackers[i].id == cleanId) {
+        _dailyTrackers[i] = _dailyTrackers[i].copyWith(
+          goalValue: newGoalValue,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Update weekly trackers if not found in daily
+    for (int i = 0; i < _weeklyTrackers.length; i++) {
+      if (_weeklyTrackers[i].id == trackerId ||
+          _weeklyTrackers[i].id == cleanId) {
+        _weeklyTrackers[i] = _weeklyTrackers[i].copyWith(
+          goalValue: newGoalValue,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+  }
+
+  // Method to update a specific tracker's name without full reload
+  void updateTrackerName(String trackerId, String newName) {
+    // Clean the tracker ID to handle ObjectId format
+    String cleanId = trackerId;
+    if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
+      cleanId = trackerId.substring(9, trackerId.length - 2);
+    }
+
+    // Update daily trackers
+    for (int i = 0; i < _dailyTrackers.length; i++) {
+      if (_dailyTrackers[i].id == trackerId ||
+          _dailyTrackers[i].id == cleanId) {
+        _dailyTrackers[i] = _dailyTrackers[i].copyWith(
+          name: newName,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Update weekly trackers if not found in daily
+    for (int i = 0; i < _weeklyTrackers.length; i++) {
+      if (_weeklyTrackers[i].id == trackerId ||
+          _weeklyTrackers[i].id == cleanId) {
+        _weeklyTrackers[i] = _weeklyTrackers[i].copyWith(
+          name: newName,
+          lastUpdated: DateTime.now(),
+        );
+        notifyListeners();
+        return;
+      }
+    }
+  }
+
+  // Method to update multiple trackers at once without full reload
+  void updateMultipleTrackers(Map<String, double> trackerUpdates) {
+    bool hasUpdates = false;
+    final now = DateTime.now();
+
+    // Update daily trackers
+    for (int i = 0; i < _dailyTrackers.length; i++) {
+      final tracker = _dailyTrackers[i];
+      if (trackerUpdates.containsKey(tracker.id)) {
+        _dailyTrackers[i] = tracker.copyWith(
+          currentValue: trackerUpdates[tracker.id]!,
+          lastUpdated: now,
+        );
+        hasUpdates = true;
+      }
+    }
+
+    // Update weekly trackers
+    for (int i = 0; i < _weeklyTrackers.length; i++) {
+      final tracker = _weeklyTrackers[i];
+      if (trackerUpdates.containsKey(tracker.id)) {
+        _weeklyTrackers[i] = tracker.copyWith(
+          currentValue: trackerUpdates[tracker.id]!,
+          lastUpdated: now,
+        );
+        hasUpdates = true;
+      }
+    }
+
+    if (hasUpdates) {
+      notifyListeners();
     }
   }
 
@@ -390,7 +543,7 @@ class TrackerProvider extends ChangeNotifier {
     }
 
     final newValue = currentValue + amount;
-    await updateTrackerValue(trackerId, newValue);
+    await updateTrackerValueOptimized(trackerId, newValue);
   }
 
   Future<void> resetDailyTrackers(String userId) async {
@@ -398,10 +551,13 @@ class TrackerProvider extends ChangeNotifier {
     try {
       await _trackerService.resetDailyTrackers(userId);
 
-      _dailyTrackers = _dailyTrackers
-          .map((tracker) =>
-              tracker.copyWith(currentValue: 0, lastUpdated: DateTime.now()))
-          .toList();
+      // Update local trackers immediately
+      for (int i = 0; i < _dailyTrackers.length; i++) {
+        _dailyTrackers[i] = _dailyTrackers[i].copyWith(
+          currentValue: 0,
+          lastUpdated: DateTime.now(),
+        );
+      }
 
       notifyListeners();
     } catch (e) {
@@ -416,10 +572,13 @@ class TrackerProvider extends ChangeNotifier {
     try {
       await _trackerService.resetWeeklyTrackers(userId);
 
-      _weeklyTrackers = _weeklyTrackers
-          .map((tracker) =>
-              tracker.copyWith(currentValue: 0, lastUpdated: DateTime.now()))
-          .toList();
+      // Update local trackers immediately
+      for (int i = 0; i < _weeklyTrackers.length; i++) {
+        _weeklyTrackers[i] = _weeklyTrackers[i].copyWith(
+          currentValue: 0,
+          lastUpdated: DateTime.now(),
+        );
+      }
 
       notifyListeners();
     } catch (e) {

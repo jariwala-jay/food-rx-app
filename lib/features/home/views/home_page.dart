@@ -70,10 +70,10 @@ class _HomePageState extends State<HomePage>
   // Called when the application's lifecycle state changes.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // If the app comes back to the foreground from background, reload data.
+    // If the app comes back to the foreground from background, only refresh tips if needed.
     if (state == AppLifecycleState.resumed) {
-      print('App resumed. Reloading tracker and tip data.');
-      _loadDataForRefresh();
+      print('App resumed. Only refreshing tips if needed.');
+      _loadTipsIfNeeded();
     }
   }
 
@@ -82,8 +82,8 @@ class _HomePageState extends State<HomePage>
   // This happens when navigating back to HomePage from another screen within the app.
   @override
   void didPopNext() {
-    print('Navigated back to Home page. Reloading tracker and tip data.');
-    _loadDataForRefresh();
+    print('Navigated back to Home page. Only refreshing tips if needed.');
+    _loadTipsIfNeeded();
   }
 
   // Other RouteAware methods (can be left empty if no specific action is needed)
@@ -122,6 +122,26 @@ class _HomePageState extends State<HomePage>
       // Optionally, clear existing data if user logs out or session expires
       // trackerProvider.clearError(); // Moved to TrackerProvider fix
       // You might want to reset tracker/tip state here if user data is absent
+    }
+  }
+
+  // --- Lightweight Tips Loading Method ---
+  // This method only loads tips without touching trackers to prevent unnecessary UI refreshes
+  Future<void> _loadTipsIfNeeded() async {
+    final tipProvider = Provider.of<TipProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthController>(context, listen: false);
+
+    if (tipProvider.isLoading) {
+      print('Tips already loading, skipping refresh.');
+      return;
+    }
+
+    final user = authProvider.currentUser;
+    if (user != null && user.id != null) {
+      // Only load tips, not trackers
+      await tipProvider.initializeTips(user.medicalConditions ?? [], user.id!);
+    } else {
+      print('User not logged in, cannot load tips.');
     }
   }
 
@@ -343,8 +363,6 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthController>(context);
-    final tipProvider = context.watch<TipProvider>();
-    final trackerProvider = context.watch<TrackerProvider>();
     final user = authProvider.currentUser;
     final dietType =
         user?.dietType ?? 'MyPlate'; // Default to MyPlate if not specified
@@ -429,51 +447,61 @@ class _HomePageState extends State<HomePage>
                 ),
               ),
 
-              // Trackers section
+              // Trackers section - isolated to only listen to TrackerProvider
               if (user != null && user.id != null)
-                TrackerGrid(userId: user.id!, dietType: dietType),
+                Consumer<TrackerProvider>(
+                  builder: (context, trackerProvider, child) {
+                    return Container(
+                      child: TrackerGrid(userId: user.id!, dietType: dietType),
+                    );
+                  },
+                ),
 
               // Activity section could go here
 
-              // Daily Tips Section
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Daily tips',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+              // Daily Tips Section - isolated to only listen to TipProvider
+              Consumer<TipProvider>(
+                builder: (context, tipProvider, child) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Daily tips',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (tipProvider.isLoading)
+                          const Center(
+                            child: CircularProgressIndicator(),
+                          )
+                        else if (tipProvider.shownTips.isEmpty)
+                          const Center(
+                            child: Text('No tips available'),
+                          )
+                        else
+                          ...tipProvider.shownTips.map((tip) {
+                            return Column(
+                              children: [
+                                _buildTipCard(
+                                  context,
+                                  tip.title,
+                                  tip.description,
+                                  tip.imageUrl,
+                                  onTap: () => _handleTipTap(tip),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            );
+                          }).toList(),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    if (tipProvider.isLoading)
-                      const Center(
-                        child: CircularProgressIndicator(),
-                      )
-                    else if (tipProvider.shownTips.isEmpty)
-                      const Center(
-                        child: Text('No tips available'),
-                      )
-                    else
-                      ...tipProvider.shownTips.map((tip) {
-                        return Column(
-                          children: [
-                            _buildTipCard(
-                              context,
-                              tip.title,
-                              tip.description,
-                              tip.imageUrl,
-                              onTap: () => _handleTipTap(tip),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        );
-                      }).toList(),
-                  ],
-                ),
+                  );
+                },
               ),
             ],
           ),
