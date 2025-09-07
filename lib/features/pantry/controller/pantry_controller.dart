@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
@@ -43,13 +42,6 @@ class PantryController extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   String? get selectedCategory => _selectedCategory;
 
-  // Reference to AuthProvider
-  AuthController? _authProvider;
-
-  void setAuthProvider(AuthController authProvider) {
-    _authProvider = authProvider;
-  }
-
   // Initialize with the user's ID
   void initializeWithUser(String userId) {
     if (_userId == userId) return; // Avoid re-initialization
@@ -89,6 +81,11 @@ class PantryController extends ChangeNotifier {
     } catch (e) {
       _setError('Failed to load pantry items: $e');
     }
+  }
+
+  // Public method to refresh items (can be called from other parts of the app)
+  Future<void> refreshItems() async {
+    await loadItems();
   }
 
   // Add a new pantry item

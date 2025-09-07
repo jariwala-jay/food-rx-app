@@ -60,19 +60,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     super.dispose();
   }
 
-  // Called when the top route has been popped and this route is now visible.
-  @override
-  void didPopNext() {
-    super.didPopNext();
-    final controller = context.read<PantryController>();
-    // Refresh items when returning to this page
-    // controller.initialize(context) might be too heavy if it re-initializes user, etc.
-    // A dedicated refresh or just loadItems might be better if initialize does more than load.
-    if (!controller.isLoading) {
-      controller.loadItems();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final pantryController = Provider.of<PantryController>(context);

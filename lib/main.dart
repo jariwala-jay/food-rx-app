@@ -100,11 +100,10 @@ void main() async {
                   context.read<IngredientSubstitutionService>(),
             ),
             update: (context, auth, pantry) {
-              pantry!.setAuthProvider(auth);
               if (auth.isAuthenticated) {
-                pantry.initializeWithUser(auth.currentUser!.id!);
+                pantry!.initializeWithUser(auth.currentUser!.id!);
               }
-              return pantry;
+              return pantry!;
             },
           ),
 

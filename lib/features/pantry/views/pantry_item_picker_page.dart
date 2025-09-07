@@ -9,6 +9,7 @@ import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
+import '../controller/pantry_controller.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
   final String categoryTitle;
@@ -444,17 +445,29 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                   onPressed: () async {
                     final success = await provider.saveSelectedItemsToPantry();
                     if (mounted) {
+                      // Store context before async operations to avoid linter warnings
+                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+                      final navigator = Navigator.of(context);
+                      
                       if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        // Refresh the pantry controller to show new items
+                        try {
+                          final pantryController = Provider.of<PantryController>(context, listen: false);
+                          await pantryController.refreshItems();
+                        } catch (e) {
+                          developer.log('Failed to refresh pantry controller: $e');
+                        }
+                        
+                        scaffoldMessenger.showSnackBar(
                           const SnackBar(
                             content: Text('Items added to your pantry'),
                             backgroundColor: Colors.green,
                           ),
                         );
-                        Navigator.of(context).pop();
+                        navigator.pop();
                       } else {
                         if (provider.error != null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
                                   'Failed to save items: ${provider.error}'),
