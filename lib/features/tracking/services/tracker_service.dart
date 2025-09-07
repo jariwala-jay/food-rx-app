@@ -175,12 +175,14 @@ class TrackerService {
   }
 
   // Initialize default trackers for a new user
-  Future<void> initializeUserTrackers(String userId, String dietType) async {
+  Future<void> initializeUserTrackers(String userId, String dietType,
+      {Map<String, dynamic>? personalizedDietPlan}) async {
     try {
       await _ensureMongoConnection();
 
       // Create default trackers
-      final defaultTrackers = _getDefaultTrackers(userId, dietType);
+      final defaultTrackers = _getDefaultTrackers(userId, dietType,
+          personalizedDietPlan: personalizedDietPlan);
 
       if (_useLocalFallback) {
         // Save default trackers locally
@@ -219,7 +221,10 @@ class TrackerService {
     } catch (e) {
       print('Error initializing trackers: $e');
       await _initializeLocalTrackers(
-          userId, dietType, _getDefaultTrackers(userId, dietType));
+          userId,
+          dietType,
+          _getDefaultTrackers(userId, dietType,
+              personalizedDietPlan: personalizedDietPlan));
     }
   }
 
@@ -232,6 +237,48 @@ class TrackerService {
         defaultTrackers.where((t) => t.isWeeklyGoal).toList();
     await _cacheTrackersLocally(
         dailyTrackers, weeklyTrackers, userId, dietType);
+  }
+
+  // Update existing trackers with personalized values
+  Future<void> updateTrackersWithPersonalizedPlan(String userId,
+      String dietType, Map<String, dynamic> personalizedDietPlan) async {
+    try {
+      await _ensureMongoConnection();
+
+      // Create new trackers with personalized values
+      final personalizedTrackers = _getDefaultTrackers(userId, dietType,
+          personalizedDietPlan: personalizedDietPlan);
+
+      if (_useLocalFallback) {
+        // Update local cache
+        final dailyTrackers =
+            personalizedTrackers.where((t) => !t.isWeeklyGoal).toList();
+        final weeklyTrackers =
+            personalizedTrackers.where((t) => t.isWeeklyGoal).toList();
+        await _cacheTrackersLocally(
+            dailyTrackers, weeklyTrackers, userId, dietType);
+        return;
+      }
+
+      final collection = await _collection;
+      if (collection == null) {
+        await _initializeLocalTrackers(userId, dietType, personalizedTrackers);
+        return;
+      }
+
+      // Delete existing trackers for this user
+      await collection.deleteMany({'userId': userId});
+
+      // Insert new personalized trackers
+      await _insertTrackersToMongoDB(
+          collection, personalizedTrackers, userId, dietType);
+    } catch (e) {
+      print('Error updating trackers with personalized plan: $e');
+      // Fallback to local update
+      final personalizedTrackers = _getDefaultTrackers(userId, dietType,
+          personalizedDietPlan: personalizedDietPlan);
+      await _initializeLocalTrackers(userId, dietType, personalizedTrackers);
+    }
   }
 
   // Insert trackers to MongoDB with proper error handling
@@ -278,11 +325,8 @@ class TrackerService {
 
   // Update a tracker's current value - improved approach
   Future<void> updateTrackerValue(String trackerId, double newValue) async {
-    print('Starting tracker update - ID: $trackerId, New Value: $newValue');
-
     // 1. ALWAYS update the local cache first for immediate response
     await _updateTrackerInLocalCache(trackerId, newValue);
-    print('Local cache updated successfully');
 
     // 2. Update MongoDB and ensure cache consistency
     try {
@@ -320,7 +364,6 @@ class TrackerService {
 
         // Update the specific tracker in cache
         await _updateSpecificTrackerInCache(updatedTracker);
-        print('Refreshed tracker $trackerId from MongoDB');
       }
     } catch (e) {
       print('Failed to refresh tracker from MongoDB: $e');
@@ -669,22 +712,44 @@ class TrackerService {
   }
 
   // Helper method to get default trackers based on diet type
-  List<TrackerGoal> _getDefaultTrackers(String userId, String dietType) {
+  List<TrackerGoal> _getDefaultTrackers(String userId, String dietType,
+      {Map<String, dynamic>? personalizedDietPlan}) {
     if (dietType == 'DASH') {
-      return _getDefaultDashTrackers(userId);
+      return _getDefaultDashTrackers(userId,
+          personalizedDietPlan: personalizedDietPlan);
     } else {
-      return _getDefaultMyPlateTrackers(userId);
+      return _getDefaultMyPlateTrackers(userId,
+          personalizedDietPlan: personalizedDietPlan);
     }
   }
 
   // Default trackers for DASH diet
-  List<TrackerGoal> _getDefaultDashTrackers(String userId) {
+  List<TrackerGoal> _getDefaultDashTrackers(String userId,
+      {Map<String, dynamic>? personalizedDietPlan}) {
+    // Use personalized values if available, otherwise fall back to defaults
+    final grains = personalizedDietPlan?['grainsMax']?.toDouble() ?? 6.0;
+    final vegetables =
+        personalizedDietPlan?['vegetablesMax']?.toDouble() ?? 4.0;
+    final fruits = personalizedDietPlan?['fruitsMax']?.toDouble() ?? 4.0;
+    final dairy = personalizedDietPlan?['dairyMax']?.toDouble() ?? 2.0;
+    final leanMeats = personalizedDietPlan?['leanMeatsMax']?.toDouble() ?? 6.0;
+    final oils = personalizedDietPlan?['oilsMax']?.toDouble() ?? 2.0;
+    final nutsLegumes =
+        personalizedDietPlan?['nutsLegumesPerWeek']?.toDouble() ?? 4.0;
+    final sweets = personalizedDietPlan?['sweetsMaxPerWeek']?.toDouble() ?? 5.0;
+
+    // Check if there are daily limits for sweets (2600+ kcal plans)
+    final sweetsMaxPerDay =
+        personalizedDietPlan?['sweetsMaxPerDay']?.toDouble();
+    final hasDailySweets = sweetsMaxPerDay != null && sweetsMaxPerDay > 0;
+    final sodium = personalizedDietPlan?['sodium']?.toDouble() ?? 1500.0;
+
     return [
       TrackerGoal(
         userId: userId,
         name: 'Veggies',
         category: TrackerCategory.veggies,
-        goalValue: 4.0,
+        goalValue: vegetables,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
@@ -694,7 +759,7 @@ class TrackerService {
         userId: userId,
         name: 'Fruits',
         category: TrackerCategory.fruits,
-        goalValue: 4.0,
+        goalValue: fruits,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
@@ -704,7 +769,7 @@ class TrackerService {
         userId: userId,
         name: 'Lean Meats/poultry/fish',
         category: TrackerCategory.leanMeat,
-        goalValue: 6.0,
+        goalValue: leanMeats,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
@@ -714,7 +779,7 @@ class TrackerService {
         userId: userId,
         name: 'Grains',
         category: TrackerCategory.grains,
-        goalValue: 6.0,
+        goalValue: grains,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
@@ -724,7 +789,7 @@ class TrackerService {
         userId: userId,
         name: 'Low-fat/fat-free Dairy',
         category: TrackerCategory.dairy,
-        goalValue: 2.0,
+        goalValue: dairy,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
@@ -734,7 +799,7 @@ class TrackerService {
         userId: userId,
         name: 'Fats/oils',
         category: TrackerCategory.fatsOils,
-        goalValue: 2.0,
+        goalValue: oils,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
@@ -754,18 +819,18 @@ class TrackerService {
         userId: userId,
         name: 'Sweets/added-sugar',
         category: TrackerCategory.sweets,
-        goalValue: 5.0,
+        goalValue: hasDailySweets ? sweetsMaxPerDay! : sweets,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
         dietType: 'DASH',
-        isWeeklyGoal: true,
+        isWeeklyGoal: !hasDailySweets,
       ),
       TrackerGoal(
         userId: userId,
         name: 'Nuts/seeds/legumes',
         category: TrackerCategory.nutsLegumes,
-        goalValue: 4.0,
+        goalValue: nutsLegumes,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
@@ -776,7 +841,7 @@ class TrackerService {
         userId: userId,
         name: 'Sodium',
         category: TrackerCategory.sodium,
-        goalValue: 1500.0, // Stricter DASH goal
+        goalValue: sodium,
         unit: TrackerUnit.mg,
         colorStart: const Color(0xFFB0BEC5), // Blue Grey
         colorEnd: const Color(0xFF78909C),
@@ -787,13 +852,26 @@ class TrackerService {
   }
 
   // Default trackers for MyPlate diet
-  List<TrackerGoal> _getDefaultMyPlateTrackers(String userId) {
+  List<TrackerGoal> _getDefaultMyPlateTrackers(String userId,
+      {Map<String, dynamic>? personalizedDietPlan}) {
+    // Use personalized values if available, otherwise fall back to defaults
+    final fruits = personalizedDietPlan?['fruits']?.toDouble() ?? 2.0;
+    final vegetables = personalizedDietPlan?['vegetables']?.toDouble() ?? 2.5;
+    final grains = personalizedDietPlan?['grains']?.toDouble() ?? 6.0;
+    final protein = personalizedDietPlan?['protein']?.toDouble() ?? 5.5;
+    final dairy = personalizedDietPlan?['dairy']?.toDouble() ?? 3.0;
+    final addedSugars =
+        personalizedDietPlan?['addedSugarsMax']?.toDouble() ?? 50.0;
+    final saturatedFat =
+        personalizedDietPlan?['saturatedFatMax']?.toDouble() ?? 22.0;
+    final sodium = personalizedDietPlan?['sodiumMax']?.toDouble() ?? 2300.0;
+
     return [
       TrackerGoal(
         userId: userId,
         name: 'Veggies',
         category: TrackerCategory.veggies,
-        goalValue: 2.5,
+        goalValue: vegetables,
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
@@ -803,7 +881,7 @@ class TrackerService {
         userId: userId,
         name: 'Fruits',
         category: TrackerCategory.fruits,
-        goalValue: 2.0,
+        goalValue: fruits,
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
@@ -813,7 +891,7 @@ class TrackerService {
         userId: userId,
         name: 'Protein',
         category: TrackerCategory.protein,
-        goalValue: 5.5,
+        goalValue: protein,
         unit: TrackerUnit.oz,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
@@ -823,7 +901,7 @@ class TrackerService {
         userId: userId,
         name: 'Grains',
         category: TrackerCategory.grains,
-        goalValue: 6.0,
+        goalValue: grains,
         unit: TrackerUnit.oz,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
@@ -833,7 +911,7 @@ class TrackerService {
         userId: userId,
         name: 'Dairy',
         category: TrackerCategory.dairy,
-        goalValue: 3.0,
+        goalValue: dairy,
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
@@ -847,6 +925,36 @@ class TrackerService {
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFF2196F3),
         colorEnd: const Color(0xFF90CAF9),
+        dietType: 'MyPlate',
+      ),
+      TrackerGoal(
+        userId: userId,
+        name: 'Sugar',
+        category: TrackerCategory.sweets,
+        goalValue: addedSugars,
+        unit: TrackerUnit.g,
+        colorStart: const Color(0xFF9C27B0),
+        colorEnd: const Color(0xFFCE93D8),
+        dietType: 'MyPlate',
+      ),
+      TrackerGoal(
+        userId: userId,
+        name: 'Fat',
+        category: TrackerCategory.fatsOils,
+        goalValue: saturatedFat,
+        unit: TrackerUnit.g,
+        colorStart: const Color(0xFFFF5722),
+        colorEnd: const Color(0xFFFFAB91),
+        dietType: 'MyPlate',
+      ),
+      TrackerGoal(
+        userId: userId,
+        name: 'Sodium',
+        category: TrackerCategory.sodium,
+        goalValue: sodium,
+        unit: TrackerUnit.mg,
+        colorStart: const Color(0xFFB0BEC5),
+        colorEnd: const Color(0xFF78909C),
         dietType: 'MyPlate',
       ),
     ];
@@ -881,8 +989,6 @@ class TrackerService {
       if (!result.isSuccess) {
         throw Exception('Update failed: ${result.writeError?.errmsg}');
       }
-
-      print('MongoDB update successful for tracker $trackerId');
     } catch (e) {
       print('MongoDB update failed for tracker $trackerId: $e');
       _useLocalFallback = true;
