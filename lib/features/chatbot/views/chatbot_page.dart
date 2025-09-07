@@ -206,7 +206,7 @@ class _ChatbotPageState extends State<ChatbotPage>
             const SizedBox(width: 8),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
                   "ChatBot",
                   style: TextStyle(

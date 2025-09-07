@@ -6,11 +6,10 @@ import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
-import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart' as domain_repo;
+import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart'
+    as domain_repo;
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
-import 'package:flutter_app/core/services/unit_conversion_service.dart';
-import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 
@@ -87,7 +86,7 @@ class RecipeController extends ChangeNotifier {
 
       await pantryController.loadItems();
       final pantryItems = pantryController.pantryItems;
-      
+
       // Create comprehensive user profile for recipe filtering
       final userProfile = {
         'dietType': user.dietType,
@@ -180,11 +179,13 @@ class RecipeController extends ChangeNotifier {
       }
 
       // Step 1: Deduct ingredients from pantry using comprehensive service
-      final scaledIngredients = recipe.extendedIngredients.map((ing) => {
-        'name': ing.nameClean,
-        'amount': ing.amount,
-        'unit': ing.unit, // Units are now clean from the source
-      }).toList();
+      final scaledIngredients = recipe.extendedIngredients
+          .map((ing) => {
+                'name': ing.nameClean,
+                'amount': ing.amount,
+                'unit': ing.unit, // Units are now clean from the source
+              })
+          .toList();
 
       if (kDebugMode) {
         print('\n📦 PANTRY DEDUCTION STARTING...');
@@ -193,7 +194,7 @@ class RecipeController extends ChangeNotifier {
           final ing = scaledIngredients[i];
           print('  ${i + 1}. ${ing['amount']} ${ing['unit']} ${ing['name']}');
         }
-        
+
         print('\nCurrent pantry state:');
         print('Pantry items: ${pantryController.pantryItems.length}');
         print('Other items: ${pantryController.otherItems.length}');
@@ -205,77 +206,91 @@ class RecipeController extends ChangeNotifier {
         }
       }
 
-      final deductionResult = await pantryDeductionService.deductIngredientsFromPantry(
+      final deductionResult =
+          await pantryDeductionService.deductIngredientsFromPantry(
         scaledIngredients: scaledIngredients,
-        pantryItems: [...pantryController.pantryItems, ...pantryController.otherItems],
+        pantryItems: [
+          ...pantryController.pantryItems,
+          ...pantryController.otherItems
+        ],
       );
 
       if (kDebugMode) {
         print('\n📦 PANTRY DEDUCTION COMPLETED!');
-        print('Total ingredients processed: ${deductionResult.totalIngredientsProcessed}');
+        print(
+            'Total ingredients processed: ${deductionResult.totalIngredientsProcessed}');
         print('Successful deductions: ${deductionResult.successfulDeductions}');
-        print('Failed deductions: ${deductionResult.totalIngredientsProcessed - deductionResult.successfulDeductions}');
-        print('Average confidence: ${(deductionResult.averageConfidence * 100).toStringAsFixed(1)}%');
+        print(
+            'Failed deductions: ${deductionResult.totalIngredientsProcessed - deductionResult.successfulDeductions}');
+        print(
+            'Average confidence: ${(deductionResult.averageConfidence * 100).toStringAsFixed(1)}%');
         print('Was successful: ${deductionResult.wasSuccessful}');
-        
+
         print('\nUpdated items (${deductionResult.updatedItems.length}):');
         for (var item in deductionResult.updatedItems) {
           print('  - ${item.name}: ${item.quantity} ${item.unit.name}');
         }
-        
+
         print('\nItems to remove (${deductionResult.itemsToRemove.length}):');
         for (var itemId in deductionResult.itemsToRemove) {
           print('  - Item ID: $itemId');
         }
-        
+
         print('\nIngredient-level results:');
         for (var result in deductionResult.ingredientResults) {
-          print('  - ${result.ingredientName}: ${result.wasDeducted ? "✅" : "❌"} (confidence: ${(result.confidence * 100).toStringAsFixed(1)}%)');
+          print(
+              '  - ${result.ingredientName}: ${result.wasDeducted ? "✅" : "❌"} (confidence: ${(result.confidence * 100).toStringAsFixed(1)}%)');
           if (!result.wasDeducted && result.remainingAmount > 0) {
-            print('    Missing: ${result.remainingAmount} ${result.requiredUnit}');
+            print(
+                '    Missing: ${result.remainingAmount} ${result.requiredUnit}');
           }
         }
       }
 
       // Step 2: Add to diet tracking (1 serving per person)
       final user = authProvider.currentUser;
-      final userDietType = user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
-      
+      final userDietType =
+          user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
+
       const servingsPerPerson = 1;
-      
+
       if (kDebugMode) {
         print('\n🥗 DIET TRACKING STARTING...');
         print('User diet type: $userDietType');
         print('Servings per person: $servingsPerPerson');
       }
-      
+
       // Aggregate servings by category to avoid duplicate updates
       final Map<TrackerCategory, double> categoryServings = {};
-      
+
       // Use the clean ingredient data directly from the recipe
       for (final ingredient in recipe.extendedIngredients) {
-        final categories = dietServingService.getCategoriesForIngredient(ingredient.nameClean, dietType: userDietType);
-        
+        final categories = dietServingService.getCategoriesForIngredient(
+            ingredient.nameClean,
+            dietType: userDietType);
+
         if (kDebugMode) {
-          print('Ingredient: ${ingredient.nameClean} (${ingredient.amount} ${ingredient.unit})');
+          print(
+              'Ingredient: ${ingredient.nameClean} (${ingredient.amount} ${ingredient.unit})');
           print('  Categories: ${categories.map((c) => c.name).join(', ')}');
         }
-        
+
         for (final category in categories) {
           double dietServings = 0.0;
-          
+
           // Skip any remaining malformed units (should be very rare now)
-          if (ingredient.unit.toLowerCase() == 'servings' || ingredient.unit.toLowerCase() == 'serving') {
+          if (ingredient.unit.toLowerCase() == 'servings' ||
+              ingredient.unit.toLowerCase() == 'serving') {
             if (kDebugMode) {
               print('  Skipping malformed unit: ${ingredient.unit}');
             }
             continue;
           }
-          
+
           // Calculate servings for the user's selected diet only
           // This is the amount per person (total recipe amount divided by servings)
           final perPersonAmount = ingredient.amount / recipe.servings;
-          
+
           dietServings = dietServingService.getServingsForTracker(
             ingredientName: ingredient.nameClean,
             amount: perPersonAmount * servingsPerPerson,
@@ -283,49 +298,54 @@ class RecipeController extends ChangeNotifier {
             category: category,
             dietType: userDietType,
           );
-          
+
           if (kDebugMode) {
             print('  Per person amount: $perPersonAmount');
             print('  Diet servings for ${category.name}: $dietServings');
           }
-          
+
           if (dietServings > 0) {
             // Round to 2 decimal places and aggregate
-            final roundedServings = double.parse(dietServings.toStringAsFixed(2));
-            categoryServings[category] = (categoryServings[category] ?? 0.0) + roundedServings;
+            final roundedServings =
+                double.parse(dietServings.toStringAsFixed(2));
+            categoryServings[category] =
+                (categoryServings[category] ?? 0.0) + roundedServings;
           }
         }
       }
-      
+
       // Add sodium tracking from nutrition data (DASH diet specific)
       if (userDietType == 'dash' && recipe.nutrition != null) {
         final sodiumNutrient = recipe.nutrition!.nutrients
             .where((n) => n.name.toLowerCase() == 'sodium')
             .firstOrNull;
-        
+
         if (sodiumNutrient != null) {
           // Convert sodium amount per serving to mg if needed
           // The nutrition data is typically per serving, so we multiply by servingsPerPerson
           double sodiumMg = sodiumNutrient.amount * servingsPerPerson;
-          
+
           // Convert to mg if in different units
           if (sodiumNutrient.unit.toLowerCase() == 'g') {
             sodiumMg *= 1000; // Convert grams to mg
-          } else if (sodiumNutrient.unit.toLowerCase() == 'mcg' || sodiumNutrient.unit.toLowerCase() == 'μg') {
+          } else if (sodiumNutrient.unit.toLowerCase() == 'mcg' ||
+              sodiumNutrient.unit.toLowerCase() == 'μg') {
             sodiumMg /= 1000; // Convert micrograms to mg
           }
-          
+
           if (sodiumMg > 0) {
             final roundedSodium = double.parse(sodiumMg.toStringAsFixed(2));
-            categoryServings[TrackerCategory.sodium] = (categoryServings[TrackerCategory.sodium] ?? 0.0) + roundedSodium;
-            
+            categoryServings[TrackerCategory.sodium] =
+                (categoryServings[TrackerCategory.sodium] ?? 0.0) +
+                    roundedSodium;
+
             if (kDebugMode) {
               print('Added sodium tracking: ${roundedSodium}mg');
             }
           }
         }
       }
-      
+
       if (kDebugMode) {
         print('\n🥗 DIET TRACKING SUMMARY:');
         print('Categories to update: ${categoryServings.length}');
@@ -333,17 +353,19 @@ class RecipeController extends ChangeNotifier {
           print('  ${entry.key.name}: ${entry.value}');
         }
       }
-      
+
       // Update tracker for each category
       for (final entry in categoryServings.entries) {
         final category = entry.key;
         final servings = entry.value;
-        
+
         // Find the matching tracker and update it
-        final matchingTracker = trackerProvider.findTrackerByCategory(category, userDietType);
+        final matchingTracker =
+            trackerProvider.findTrackerByCategory(category, userDietType);
         if (matchingTracker != null) {
           if (kDebugMode) {
-            print('Updating tracker ${matchingTracker.id} (${category.name}) with ${servings} servings');
+            print(
+                'Updating tracker ${matchingTracker.id} (${category.name}) with $servings servings');
           }
           await trackerProvider.incrementTracker(matchingTracker.id, servings);
         } else {
@@ -362,16 +384,20 @@ class RecipeController extends ChangeNotifier {
       // Step 4: Reload pantry to reflect changes
       if (kDebugMode) {
         print('\n📦 RELOADING PANTRY...');
-        print('Pantry items before reload: ${pantryController.pantryItems.length}');
-        print('Other items before reload: ${pantryController.otherItems.length}');
+        print(
+            'Pantry items before reload: ${pantryController.pantryItems.length}');
+        print(
+            'Other items before reload: ${pantryController.otherItems.length}');
       }
-      
+
       await pantryController.loadItems();
-      
+
       if (kDebugMode) {
-        print('Pantry items after reload: ${pantryController.pantryItems.length}');
-        print('Other items after reload: ${pantryController.otherItems.length}');
-        
+        print(
+            'Pantry items after reload: ${pantryController.pantryItems.length}');
+        print(
+            'Other items after reload: ${pantryController.otherItems.length}');
+
         print('\nFinal pantry state:');
         for (var item in pantryController.pantryItems) {
           print('  - ${item.name}: ${item.quantity} ${item.unit.name}');
@@ -383,11 +409,12 @@ class RecipeController extends ChangeNotifier {
 
       if (kDebugMode) {
         print('\n✅ RECIPE COOKING COMPLETED SUCCESSFULLY');
-        print('   Pantry deduction: ${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful');
-        print('   Diet tracking: ${categoryServings.length} categories updated');
+        print(
+            '   Pantry deduction: ${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful');
+        print(
+            '   Diet tracking: ${categoryServings.length} categories updated');
         print('===== RECIPE COOKING COMPLETE =====\n');
       }
-
     } catch (e) {
       _error = "Failed to cook recipe: $e";
       if (kDebugMode) {

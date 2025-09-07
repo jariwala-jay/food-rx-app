@@ -5,7 +5,6 @@ import 'package:flutter_app/features/education/widgets/article_card.dart';
 import 'package:flutter_app/features/education/widgets/category_chips.dart';
 import 'package:flutter_app/features/education/widgets/recommended_articles_section.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
-import 'dart:async';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 
 class EducationPage extends StatefulWidget {

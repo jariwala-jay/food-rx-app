@@ -63,7 +63,7 @@ class CategoryChips extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    final color = const Color(0xFFFF6A00); // App's theme color
+    const color = Color(0xFFFF6A00); // App's theme color
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(100),

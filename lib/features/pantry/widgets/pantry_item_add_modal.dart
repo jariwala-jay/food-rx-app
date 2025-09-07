@@ -111,7 +111,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = const Color(0xFFFF6A00);
+    const primaryColor = Color(0xFFFF6A00);
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),

@@ -62,7 +62,7 @@ class TrackerService {
 
   // Queue of pending tracker updates to MongoDB - now using a different approach
   final List<Map<String, dynamic>> _pendingUpdates = [];
-  bool _isProcessingQueue = false;
+  final bool _isProcessingQueue = false;
   final Completer<void>? _processingCompleter = null;
 
   // Cache trackers locally
@@ -320,7 +320,7 @@ class TrackerService {
 
         // Update the specific tracker in cache
         await _updateSpecificTrackerInCache(updatedTracker);
-        print('Refreshed tracker ${trackerId} from MongoDB');
+        print('Refreshed tracker $trackerId from MongoDB');
       }
     } catch (e) {
       print('Failed to refresh tracker from MongoDB: $e');

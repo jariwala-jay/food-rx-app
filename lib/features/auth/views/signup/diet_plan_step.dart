@@ -5,7 +5,6 @@ import 'diet_plans/dash_diet_intro.dart';
 import 'diet_plans/dash_diet_plan.dart';
 import 'diet_plans/my_plate_intro.dart';
 import 'diet_plans/my_plate_plan.dart';
-import 'package:flutter_app/core/utils/typography.dart';
 
 class DietPlanStep extends StatefulWidget {
   final VoidCallback onFinish;

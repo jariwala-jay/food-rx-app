@@ -100,7 +100,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<PantryItemPickerProvider>(context);
-    final primaryColor = Color(0xFFFF6A00);
+    const primaryColor = Color(0xFFFF6A00);
 
     developer.log('Building PantryItemPickerView for ${widget.categoryKey}, '
         'isLoading: ${provider.isLoading}, '
@@ -114,7 +114,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          icon:
+              const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -243,7 +244,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       _isTyping
                           ? 'No ingredients found for "${_searchController.text}"'
                           : 'No ingredients available in this category',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                      style: const TextStyle(color: Colors.grey, fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                     if (_isTyping)
@@ -257,7 +258,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                               _isTyping = false;
                             });
                           },
-                          child: Text(
+                          child: const Text(
                             'Clear search',
                             style: TextStyle(color: primaryColor),
                           ),

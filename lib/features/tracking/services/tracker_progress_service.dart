@@ -376,6 +376,6 @@ class TrackerAnalytics {
 
   @override
   String toString() {
-    return 'TrackerAnalytics($trackerName: ${completionRate.toStringAsFixed(1)}% completion, ${currentStreak} day streak)';
+    return 'TrackerAnalytics($trackerName: ${completionRate.toStringAsFixed(1)}% completion, $currentStreak day streak)';
   }
 }

@@ -1,6 +1,5 @@
 // lib/features/tracking/controller/tracker_provider.dart
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../models/tracker_goal.dart';
@@ -149,7 +148,7 @@ class TrackerProvider extends ChangeNotifier {
   Future<void> _initializeDefaultTrackers(
       String userId, String dietType) async {
     final prefs = await SharedPreferences.getInstance();
-    final initKey = 'tracker_init_${userId}';
+    final initKey = 'tracker_init_$userId';
     final alreadyInitializing = prefs.getBool(initKey) ?? false;
 
     if (!alreadyInitializing) {
@@ -171,7 +170,7 @@ class TrackerProvider extends ChangeNotifier {
       }
     } else {
       // Someone else is already initializing, wait and retry
-      await Future.delayed(Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 3));
       try {
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
@@ -460,16 +459,21 @@ class TrackerProvider extends ChangeNotifier {
     return _weeklyTrackers.where((t) => t.id == trackerId).firstOrNull;
   }
 
-  TrackerGoal? findTrackerByCategory(TrackerCategory category, String dietType) {
+  TrackerGoal? findTrackerByCategory(
+      TrackerCategory category, String dietType) {
     // First check daily trackers
     final dailyTracker = _dailyTrackers
-        .where((t) => t.category == category && t.dietType.toLowerCase() == dietType.toLowerCase())
+        .where((t) =>
+            t.category == category &&
+            t.dietType.toLowerCase() == dietType.toLowerCase())
         .firstOrNull;
     if (dailyTracker != null) return dailyTracker;
 
     // Then check weekly trackers
     return _weeklyTrackers
-        .where((t) => t.category == category && t.dietType.toLowerCase() == dietType.toLowerCase())
+        .where((t) =>
+            t.category == category &&
+            t.dietType.toLowerCase() == dietType.toLowerCase())
         .firstOrNull;
   }
 

@@ -291,12 +291,14 @@ class PantryItem {
       case 'grains':
         return now.add(const Duration(days: 180));
       case 'protein':
-        if (category.contains('fish') || category.contains('seafood'))
+        if (category.contains('fish') || category.contains('seafood')) {
           return now.add(const Duration(days: 2));
+        }
         if (category.contains('beef') ||
             category.contains('pork') ||
-            category.contains('chicken'))
+            category.contains('chicken')) {
           return now.add(const Duration(days: 3));
+        }
         return now.add(const Duration(days: 5));
       case 'dairy':
         return now.add(const Duration(days: 7));
