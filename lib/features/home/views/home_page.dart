@@ -112,7 +112,7 @@ class _HomePageState extends State<HomePage>
     if (user != null && user.id != null) {
       final dietType = user.dietType ?? 'MyPlate';
 
-      // Load Trackers
+      // Load Trackers - always use loadUserTrackers to preserve existing progress
       await trackerProvider.loadUserTrackers(user.id!, dietType);
 
       // Load Tips (can be run in parallel or after trackers)
