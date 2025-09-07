@@ -73,24 +73,6 @@ class _TrackerGridState extends State<TrackerGrid>
     });
   }
 
-  void _initializeTrackers() {
-    final provider = Provider.of<TrackerProvider>(context, listen: false);
-    provider.initializeUserTrackers(widget.userId, widget.dietType);
-
-    setState(() {
-      _showLoadingTimeout = false;
-    });
-
-    _loadingTimer?.cancel();
-    _loadingTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted) {
-        setState(() {
-          _showLoadingTimeout = true;
-        });
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<TrackerProvider>(
@@ -186,19 +168,9 @@ class _TrackerGridState extends State<TrackerGrid>
                   ),
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: _loadTrackers,
-                      child: const Text('Retry Loading'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _initializeTrackers,
-                      child: const Text('Initialize New'),
-                    ),
-                  ],
+                ElevatedButton(
+                  onPressed: _loadTrackers,
+                  child: const Text('Retry Loading'),
                 ),
               ],
             ),
@@ -209,39 +181,8 @@ class _TrackerGridState extends State<TrackerGrid>
         final weeklyTrackers = trackerProvider.weeklyTrackers;
 
         if (dailyTrackers.isEmpty && weeklyTrackers.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.track_changes, color: Colors.grey, size: 64),
-                const SizedBox(height: 16),
-                const Text(
-                  'No trackers found',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Let\'s set up your nutrition trackers',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _initializeTrackers,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Initialize Trackers'),
-                ),
-              ],
-            ),
-          );
+          // Show skeleton loading instead of manual initialization button
+          return _buildSkeletonLoading();
         }
 
         return Padding(
