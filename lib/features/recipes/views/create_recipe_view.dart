@@ -19,15 +19,59 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
   final List<CuisineType> _selectedCuisines = [];
   MealType? _selectedMealType;
+  String? _selectedMealTypeName; // Track the display name separately
   int? _servings;
   int? _cookingTimeHours;
   int? _cookingTimeMinutes;
 
+  // Popular cuisines that are commonly selected
+  static const List<CuisineType> _popularCuisines = [
+    CuisineType.american,
+    CuisineType.italian,
+    CuisineType.mexican,
+    CuisineType.chinese,
+    CuisineType.indian,
+    CuisineType.japanese,
+    CuisineType.mediterranean,
+    CuisineType.thai,
+    CuisineType.french,
+    CuisineType.korean,
+  ];
+
   @override
   void initState() {
     super.initState();
-    // The RecipeController is now initialized globally or on the main RecipePage.
-    // We don't need to re-initialize it here.
+    _prepopulateForm();
+  }
+
+  void _prepopulateForm() {
+    // Get user data for prepopulation
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final user = authController.currentUser;
+
+    if (user != null) {
+      // Prepopulate servings based on user profile (default to 2-4 people)
+      _servingsController.text = '1';
+      _servings = 1;
+
+      // Set default meal type based on current time
+      final now = DateTime.now();
+      final hour = now.hour;
+
+      if (hour >= 6 && hour < 11) {
+        _selectedMealType = MealType.breakfast;
+        _selectedMealTypeName = 'Breakfast';
+      } else if (hour >= 11 && hour < 16) {
+        _selectedMealType = MealType.mainCourse; // Lunch
+        _selectedMealTypeName = 'Lunch';
+      } else if (hour >= 16 && hour < 22) {
+        _selectedMealType = MealType.mainCourse; // Dinner
+        _selectedMealTypeName = 'Dinner';
+      } else {
+        _selectedMealType = MealType.snack;
+        _selectedMealTypeName = 'Snacks';
+      }
+    }
   }
 
   @override
@@ -157,7 +201,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
           children: [
             Expanded(
               child: Text(
-                _selectedMealType?.displayName ?? 'Select Meal Type',
+                _selectedMealTypeName ?? 'Select Meal Type',
                 style: TextStyle(
                   fontSize: 16,
                   color: _selectedMealType == null
@@ -344,24 +388,34 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
             const Divider(height: 1),
             Expanded(
               child: ListView.builder(
-                itemCount: CuisineType.values.length,
+                itemCount: _popularCuisines.length,
                 itemBuilder: (context, index) {
-                  final cuisine = CuisineType.values[index];
-                  final isSelected = _selectedCuisines.contains(cuisine);
+                  final cuisine = _popularCuisines[index];
 
-                  return CheckboxListTile(
-                    title: Text(cuisine.displayName),
-                    value: isSelected,
-                    onChanged: (bool? value) {
-                      setState(() {
-                        if (value == true) {
-                          _selectedCuisines.add(cuisine);
-                        } else {
-                          _selectedCuisines.remove(cuisine);
-                        }
-                      });
+                  return StatefulBuilder(
+                    builder: (context, setStateNew) {
+                      final isSelected = _selectedCuisines.contains(cuisine);
+
+                      return CheckboxListTile(
+                        title: Text(cuisine.displayName),
+                        value: isSelected,
+                        onChanged: (bool? value) {
+                          setStateNew(() {
+                            if (value == true) {
+                              if (!_selectedCuisines.contains(cuisine)) {
+                                _selectedCuisines.add(cuisine);
+                              }
+                            } else {
+                              _selectedCuisines.remove(cuisine);
+                            }
+                          });
+                          // Also update the main widget state
+                          setState(() {});
+                        },
+                        activeColor: const Color(0xFFFF6A00),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      );
                     },
-                    activeColor: const Color(0xFFFF6A00),
                   );
                 },
               ),
@@ -395,15 +449,16 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
               ),
             ),
             const Divider(height: 1),
-            ...MealType.values.map((mealType) => ListTile(
-                  title: Text(mealType.displayName),
+            ..._getSimplifiedMealTypeOptions().map((option) => ListTile(
+                  title: Text(option['name']),
                   onTap: () {
                     setState(() {
-                      _selectedMealType = mealType;
+                      _selectedMealType = option['mealType'];
+                      _selectedMealTypeName = option['name'];
                     });
                     Navigator.pop(context);
                   },
-                  trailing: _selectedMealType == mealType
+                  trailing: _selectedMealTypeName == option['name']
                       ? const Icon(Icons.check, color: Color(0xFFFF6A00))
                       : null,
                 )),
@@ -412,6 +467,69 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
         ),
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _getSimplifiedMealTypeOptions() {
+    return [
+      {
+        'name': 'Breakfast',
+        'mealType': MealType.breakfast,
+        'spoonacularTypes': ['breakfast']
+      },
+      {
+        'name': 'Lunch',
+        'mealType': MealType.mainCourse,
+        'spoonacularTypes': ['main course', 'salad', 'soup']
+      },
+      {
+        'name': 'Dinner',
+        'mealType': MealType.mainCourse,
+        'spoonacularTypes': [
+          'main course',
+          'side dish',
+          'appetizer',
+          'salad',
+          'soup'
+        ]
+      },
+      {
+        'name': 'Snacks',
+        'mealType': MealType.snack,
+        'spoonacularTypes': ['snack', 'fingerfood']
+      },
+      {
+        'name': 'Desserts',
+        'mealType': MealType.dessert,
+        'spoonacularTypes': ['dessert']
+      },
+      {
+        'name': 'Beverages',
+        'mealType': MealType.beverage,
+        'spoonacularTypes': ['beverage', 'drink']
+      },
+    ];
+  }
+
+  /// Maps user-facing meal type selection to Spoonacular API meal types
+  List<String>? _getSpoonacularMealTypes(String? mealTypeName) {
+    if (mealTypeName == null) return null;
+
+    switch (mealTypeName) {
+      case 'Breakfast':
+        return ['breakfast'];
+      case 'Lunch':
+        return ['main course', 'salad', 'soup'];
+      case 'Dinner':
+        return ['main course', 'side dish', 'appetizer', 'salad', 'soup'];
+      case 'Snacks':
+        return ['snack', 'fingerfood'];
+      case 'Desserts':
+        return ['dessert'];
+      case 'Beverages':
+        return ['beverage', 'drink'];
+      default:
+        return ['main course']; // Default fallback
+    }
   }
 
   void _generateRecipe() async {
@@ -425,18 +543,18 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     // Get user profile for intelligent filtering
     final authController = Provider.of<AuthController>(context, listen: false);
     final user = authController.currentUser;
-    
+
     // Determine diet compliance based on user profile
     bool dashCompliant = false;
     bool myPlateCompliant = false;
-    
+
     if (user != null) {
       final medicalConditions = user.medicalConditions ?? [];
       final healthGoals = user.healthGoals;
-      
+
       // Auto-detect diet type based on medical conditions and health goals
-      if (user.dietType == 'DASH' || 
-          medicalConditions.contains('Hypertension') || 
+      if (user.dietType == 'DASH' ||
+          medicalConditions.contains('Hypertension') ||
           healthGoals.contains('Lower blood pressure')) {
         dashCompliant = true;
       } else {
@@ -445,9 +563,15 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     }
 
     // Create filter with user selections and intelligent defaults
+    // Map the user-facing meal type to the appropriate Spoonacular meal types
+    final spoonacularMealTypes =
+        _getSpoonacularMealTypes(_selectedMealTypeName);
+
     final filter = RecipeFilter(
       cuisines: _selectedCuisines,
-      mealType: _selectedMealType,
+      mealType: _selectedMealType, // This will be used internally
+      spoonacularMealTypes:
+          spoonacularMealTypes, // This will be used for Spoonacular API
       servings: _servings,
       maxReadyTime: totalMinutes,
       includeIngredients: true,
@@ -456,6 +580,14 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       myPlateCompliant: myPlateCompliant,
       veryHealthy: true, // Always prefer healthier options
     );
+
+    // Add debug information about meal type mapping
+    if (kDebugMode) {
+      print('🎯 Meal Type Mapping:');
+      print('  User Selection: $_selectedMealTypeName');
+      print('  Spoonacular Types: $spoonacularMealTypes');
+      print('  Internal MealType: $_selectedMealType');
+    }
 
     if (kDebugMode) {
       print('🎯 CreateRecipeView: Starting recipe generation...');
@@ -471,69 +603,16 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     Navigator.pop(context);
 
     // Show feedback with diet-specific information
-    final dietInfo = dashCompliant ? 'DASH diet' : myPlateCompliant ? 'MyPlate guidelines' : 'your preferences';
+    final dietInfo = dashCompliant
+        ? 'DASH diet'
+        : myPlateCompliant
+            ? 'MyPlate guidelines'
+            : 'your preferences';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Generating recipes based on $dietInfo...'),
         backgroundColor: Colors.orange,
         duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showDebugInfo(BuildContext context, RecipeController controller) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Debug Information'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('User ID: ${controller.currentUser?.id ?? 'Not loaded'}'),
-                const SizedBox(height: 8),
-                Text('Pantry Items Count: ${controller.pantryItems.length}'),
-                const SizedBox(height: 8),
-                Text('Is Loading: ${controller.isLoading}'),
-                const SizedBox(height: 8),
-                Text('Error: ${controller.error ?? 'None'}'),
-                const SizedBox(height: 16),
-                const Text('Pantry Items:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (controller.pantryItems.isEmpty)
-                  const Text('No pantry items found')
-                else
-                  ...controller.pantryItems.take(20).map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '• ${item.name} (${item.quantity} ${item.unitLabel}) - isPantryItem: ${item.isPantryItem}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      )),
-                if (controller.pantryItems.length > 20)
-                  Text(
-                      '... and ${controller.pantryItems.length - 20} more items'),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              controller.refreshPantryItems();
-              Navigator.pop(context);
-            },
-            child: const Text('Refresh & Close'),
-          ),
-        ],
       ),
     );
   }
