@@ -289,10 +289,10 @@ class _TrackerGridState extends State<TrackerGrid> {
   }
 
   Widget _buildTrackerCard(BuildContext context, TrackerGoal tracker) {
-    return Selector<TrackerProvider, TrackerGoal?>(
-      selector: (_, provider) => provider.findTrackerById(tracker.id),
-      builder: (context, updatedTracker, _) {
-        final currentTracker = updatedTracker ?? tracker;
+    return Consumer<TrackerProvider>(
+      builder: (context, provider, child) {
+        final foundTracker = provider.findTrackerById(tracker.id);
+        final currentTracker = foundTracker ?? tracker;
         return TrackerCard(
           key: ValueKey(currentTracker.id),
           tracker: currentTracker,

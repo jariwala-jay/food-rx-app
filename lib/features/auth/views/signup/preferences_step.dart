@@ -3,6 +3,8 @@ import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/services/nutrition_content_loader.dart';
+import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:provider/provider.dart';
 
 class PreferencesStep extends StatefulWidget {
@@ -64,13 +66,42 @@ class _PreferencesStepState extends State<PreferencesStep> {
               healthGoals: _selectedHealthGoals,
             );
 
-        // Set dietType before registration
+        // Generate personalized diet plan
         final signupProvider = context.read<SignupProvider>();
         final signupData = signupProvider.data;
-        final bool isDashDiet =
-            signupData.medicalConditions.contains('Hypertension') ||
-                signupData.healthGoals.contains('Lower blood pressure');
-        signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+
+        try {
+          // Load nutrition content and create personalization service
+          final nutritionContent = await NutritionContentLoader.load();
+          final personalizationService =
+              PersonalizationService(nutritionContent);
+
+          // Generate personalized diet plan
+          final result = personalizationService.personalize(
+            dob: signupData.dateOfBirth!,
+            sex: signupData.sex!,
+            heightFeet: signupData.heightFeet!,
+            heightInches: signupData.heightInches!,
+            weightLb: signupData.weight!,
+            activityLevel: signupData.activityLevel!,
+            medicalConditions: signupData.medicalConditions,
+            healthGoals: signupData.healthGoals,
+          );
+
+          // Set personalized diet plan
+          signupProvider.setPersonalizedDietPlan(
+            dietType: result.dietType,
+            targetCalories: result.targetCalories,
+            selectedDietPlan: result.selectedDietPlan,
+            diagnostics: result.diagnostics,
+          );
+        } catch (e) {
+          // Fallback to static diet assignment if personalization fails
+          final bool isDashDiet =
+              signupData.medicalConditions.contains('Hypertension') ||
+                  signupData.healthGoals.contains('Lower blood pressure');
+          signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+        }
 
         // Get all collected data
         final profilePhoto = signupProvider.profilePhoto;

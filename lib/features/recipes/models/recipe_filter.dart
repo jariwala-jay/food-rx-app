@@ -270,10 +270,12 @@ class RecipeFilter {
       switch (condition) {
         case MedicalCondition.hypertension:
           // DASH Diet Guidelines for Hypertension (practical approach)
-          constraints['maxSodium'] = 1500; // mg per day (more practical than 1500)
+          constraints['maxSodium'] =
+              1500; // mg per day (more practical than 1500)
           constraints['dashCompliant'] = true;
           constraints['veryHealthy'] = true;
-          constraints['maxSaturatedFat'] = 8; // g per serving (slightly more lenient)
+          constraints['maxSaturatedFat'] =
+              8; // g per serving (slightly more lenient)
           constraints['minPotassium'] = 300; // mg per serving (more achievable)
           break;
         case MedicalCondition.diabetes:
@@ -296,7 +298,8 @@ class RecipeFilter {
           // Weight management guidelines (very practical)
           constraints['maxCalories'] = 600; // per serving (increased from 500)
           constraints['minProtein'] = 10; // g per serving (reduced from 12)
-          constraints['maxSaturatedFat'] = 10; // g per serving (increased from 7)
+          constraints['maxSaturatedFat'] =
+              10; // g per serving (increased from 7)
           // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           // Remove lowFat constraint - too restrictive
@@ -308,14 +311,15 @@ class RecipeFilter {
   }
 
   // Get recommended diet type based on medical conditions and health goals
-  static String getRecommendedDietType(List<String> medicalConditions, List<String> healthGoals) {
+  static String getRecommendedDietType(
+      List<String> medicalConditions, List<String> healthGoals) {
     // DASH diet for hypertension and blood pressure goals
-    if (medicalConditions.contains('Hypertension') || 
+    if (medicalConditions.contains('Hypertension') ||
         medicalConditions.contains('hypertension') ||
         healthGoals.contains('Lower blood pressure')) {
       return 'DASH';
     }
-    
+
     // MyPlate for diabetes, obesity, and general health
     return 'MyPlate';
   }
@@ -323,7 +327,7 @@ class RecipeFilter {
   // Get DASH diet specific constraints
   Map<String, dynamic> getDashDietConstraints() {
     return {
-      'maxSodium': 1500, // mg per day (more practical than 1500)
+      'maxSodium': 1500, // mg per day
       'minPotassium': 300, // mg per serving (more achievable)
       'maxSaturatedFat': 8, // g per serving (slightly more lenient)
       'minFiber': 2, // g per serving (more achievable)
@@ -341,8 +345,9 @@ class RecipeFilter {
   // Get MyPlate diet specific constraints
   Map<String, dynamic> getMyPlateDietConstraints() {
     return {
-      'maxSodium': 2300, // mg per day (general guideline)
-      'maxSaturatedFat': 15, // g per serving (increased from 10)
+      'maxSodium': 2300, // mg per day
+      'maxSaturatedFat': 15, // g per day
+      'maxSugar': 50, // g per day
       // Remove minFiber constraint - too restrictive when combined with medical conditions
       'veryHealthy': true,
       // Balanced nutrition approach
@@ -387,11 +392,19 @@ class RecipeFilter {
     // Add medical condition constraints
     final constraints = getMedicalConditionConstraints();
     constraints.forEach((key, value) {
-      if (key == 'maxSodium' || key == 'maxSugar' || key == 'maxCalories' || 
-          key == 'minProtein' || key == 'maxSaturatedFat' || key == 'minFiber' ||
-          key == 'minPotassium' || key == 'maxCarbs') {
+      if (key == 'maxSodium' ||
+          key == 'maxSugar' ||
+          key == 'maxCalories' ||
+          key == 'minProtein' ||
+          key == 'maxSaturatedFat' ||
+          key == 'minFiber' ||
+          key == 'minPotassium' ||
+          key == 'maxCarbs') {
         params[key] = value.toString();
-      } else if ((key == 'veryHealthy' || key == 'lowFat' || key == 'lowGlycemic') && value == true) {
+      } else if ((key == 'veryHealthy' ||
+              key == 'lowFat' ||
+              key == 'lowGlycemic') &&
+          value == true) {
         params[key] = 'true';
       }
     });
@@ -400,7 +413,10 @@ class RecipeFilter {
     if (dashCompliant) {
       final dashConstraints = getDashDietConstraints();
       dashConstraints.forEach((key, value) {
-        if (key == 'maxSodium' || key == 'minPotassium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+        if (key == 'maxSodium' ||
+            key == 'minPotassium' ||
+            key == 'maxSaturatedFat' ||
+            key == 'minFiber') {
           params[key] = value.toString();
         } else if (key == 'veryHealthy' || key == 'lowFat') {
           params[key] = 'true';
@@ -411,7 +427,10 @@ class RecipeFilter {
     if (myPlateCompliant) {
       final myPlateConstraints = getMyPlateDietConstraints();
       myPlateConstraints.forEach((key, value) {
-        if (key == 'maxSodium' || key == 'maxSaturatedFat' || key == 'minFiber') {
+        if (key == 'maxSodium' ||
+            key == 'maxSaturatedFat' ||
+            key == 'maxSugar' ||
+            key == 'minFiber') {
           params[key] = value.toString();
         } else if (key == 'veryHealthy') {
           params[key] = 'true';

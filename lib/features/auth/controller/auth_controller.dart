@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/nutrition_content_loader.dart';
+import 'package:flutter_app/core/services/personalization_service.dart';
+import 'package:flutter_app/core/services/replan_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
@@ -11,11 +14,14 @@ class AuthController with ChangeNotifier {
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
+  ReplanService? _replanService;
+  ReplanTrigger? _pendingReplanTrigger;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
+  ReplanTrigger? get pendingReplanTrigger => _pendingReplanTrigger;
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -23,6 +29,16 @@ class AuthController with ChangeNotifier {
 
     try {
       await _mongoDBService.initialize();
+
+      // Initialize re-plan service
+      try {
+        final nutritionContent = await NutritionContentLoader.load();
+        final personalizationService = PersonalizationService(nutritionContent);
+        _replanService = ReplanService(personalizationService);
+      } catch (e) {
+        print('Warning: Failed to initialize re-plan service: $e');
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
       final userEmail = prefs.getString('user_email');
@@ -55,7 +71,7 @@ class AuthController with ChangeNotifier {
 
   UserModel _createUserModel(Map<String, dynamic> userData) {
     // Use robust ObjectId handling for ID conversion
-    final id = userData['_id'] != null 
+    final id = userData['_id'] != null
         ? ObjectIdHelper.toHexString(userData['_id'])
         : ObjectIdHelper.generateNew().toHexString();
 
@@ -152,7 +168,18 @@ class AuthController with ChangeNotifier {
       await _mongoDBService.updateUserProfile(_currentUser!.id!, updates);
       final updatedUser = await _mongoDBService.findUserById(_currentUser!.id!);
       if (updatedUser != null) {
+        final oldUser = _currentUser!;
         _currentUser = _createUserModel(updatedUser);
+
+        // Check for re-plan triggers
+        if (_replanService != null) {
+          final trigger =
+              await _replanService!.checkReplanTriggers(oldUser, _currentUser!);
+          if (trigger != null) {
+            _pendingReplanTrigger = trigger;
+            notifyListeners();
+          }
+        }
       }
     } catch (e) {
       _error = 'Failed to update profile: $e';
@@ -198,5 +225,60 @@ class AuthController with ChangeNotifier {
       _error = 'Failed to get profile photo: $e';
       return null;
     }
+  }
+
+  /// Generate a new personalized diet plan
+  Future<bool> regenerateDietPlan() async {
+    if (_currentUser == null || _replanService == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await _replanService!.generateNewPlan(_currentUser!);
+
+      // Update user with new diet plan
+      await _mongoDBService.updateUserProfile(_currentUser!.id!, {
+        'dietType': result.dietType,
+        'targetCalories': result.targetCalories,
+        'selectedDietPlan': result.selectedDietPlan,
+        'diagnostics': result.diagnostics,
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+
+      // Refresh user data
+      final updatedUser = await _mongoDBService.findUserById(_currentUser!.id!);
+      if (updatedUser != null) {
+        _currentUser = _createUserModel(updatedUser);
+      }
+
+      // Clear pending trigger
+      _pendingReplanTrigger = null;
+      return true;
+    } catch (e) {
+      _error = 'Failed to regenerate diet plan: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Dismiss the pending re-plan trigger
+  void dismissReplanTrigger() {
+    _pendingReplanTrigger = null;
+    notifyListeners();
+  }
+
+  /// Check if user should be offered re-planning
+  bool shouldOfferReplan() {
+    if (_currentUser == null || _replanService == null) return false;
+    return _replanService!.shouldOfferReplan(_currentUser!);
+  }
+
+  /// Get re-plan suggestions
+  List<String> getReplanSuggestions() {
+    if (_currentUser == null || _replanService == null) return [];
+    return _replanService!.getReplanSuggestions(_currentUser!);
   }
 }

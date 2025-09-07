@@ -6,7 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:developer' as developer;
 
 class SpoonacularRecipeRepository {
-  final String _baseUrl = 'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  final String _baseUrl =
+      'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
   final String? _apiKey = dotenv.env['RAPID_API_KEY'];
 
   Future<List<Recipe>> getRecipes(
@@ -82,7 +83,8 @@ class SpoonacularRecipeRepository {
       Recipe.fromJson({
         'id': 1,
         'title': 'Demo Vegetable Stir Fry',
-        'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop',
+        'image':
+            'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop',
         'readyInMinutes': 20,
         'servings': 4,
         'sourceUrl': 'https://example.com/recipe1',

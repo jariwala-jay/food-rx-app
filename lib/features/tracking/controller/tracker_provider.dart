@@ -31,14 +31,16 @@ class TrackerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> initializeUserTrackers(String userId, String dietType) async {
+  Future<void> initializeUserTrackers(String userId, String dietType,
+      {Map<String, dynamic>? personalizedDietPlan}) async {
     _setError(null);
     _setLoading(true);
     try {
       // This call to _trackerService.initializeUserTrackers should handle provisioning
       // default trackers if none exist for the user on the backend.
       await _trackerService
-          .initializeUserTrackers(userId, dietType)
+          .initializeUserTrackers(userId, dietType,
+              personalizedDietPlan: personalizedDietPlan)
           .timeout(const Duration(seconds: 20), onTimeout: () {
         throw TimeoutException(
             'Tracker initialization timed out after 20 seconds');
@@ -61,7 +63,8 @@ class TrackerProvider extends ChangeNotifier {
       if (_retryCount < _maxRetries) {
         _retryCount++;
         await Future.delayed(Duration(seconds: 2 * _retryCount));
-        await initializeUserTrackers(userId, dietType);
+        await initializeUserTrackers(userId, dietType,
+            personalizedDietPlan: personalizedDietPlan);
       }
     } finally {
       _setLoading(false);
@@ -145,8 +148,8 @@ class TrackerProvider extends ChangeNotifier {
   }
 
   // Try to initialize default trackers
-  Future<void> _initializeDefaultTrackers(
-      String userId, String dietType) async {
+  Future<void> _initializeDefaultTrackers(String userId, String dietType,
+      {Map<String, dynamic>? personalizedDietPlan}) async {
     final prefs = await SharedPreferences.getInstance();
     final initKey = 'tracker_init_$userId';
     final alreadyInitializing = prefs.getBool(initKey) ?? false;
@@ -156,7 +159,8 @@ class TrackerProvider extends ChangeNotifier {
 
       try {
         await _trackerService
-            .initializeUserTrackers(userId, dietType)
+            .initializeUserTrackers(userId, dietType,
+                personalizedDietPlan: personalizedDietPlan)
             .timeout(const Duration(seconds: 30));
 
         _dailyTrackers =
@@ -309,43 +313,16 @@ class TrackerProvider extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
 
-    // Find the tracker before updating to avoid multiple UI refreshes
-    final dailyIndex = _dailyTrackers.indexWhere((t) => t.id == trackerId);
-    final weeklyIndex = _weeklyTrackers.indexWhere((t) => t.id == trackerId);
-
     try {
-      // First update the database
+      // Update the tracker value in the service
       await _trackerService.updateTrackerValue(trackerId, newValue);
 
-      // Only update local state if database update was successful
-      bool updated = false;
-
-      if (dailyIndex >= 0) {
-        _dailyTrackers[dailyIndex] = _dailyTrackers[dailyIndex].copyWith(
-          currentValue: newValue,
-          lastUpdated: DateTime.now(),
-        );
-        updated = true;
-      }
-
-      if (weeklyIndex >= 0) {
-        _weeklyTrackers[weeklyIndex] = _weeklyTrackers[weeklyIndex].copyWith(
-          currentValue: newValue,
-          lastUpdated: DateTime.now(),
-        );
-        updated = true;
-      }
-
-      if (updated) {
-        // Only notify listeners once - avoid calling loadUserTrackers which refreshes everything
-        notifyListeners();
-      } else {
-        // If we couldn't find the tracker locally, reload from database
-        await _reloadSpecificTracker(trackerId);
-      }
+      // Always reload the specific tracker from the service to ensure consistency
+      // This ensures we get the most up-to-date value from the cache
+      await _reloadSpecificTracker(trackerId);
     } catch (e) {
       _setError('Failed to update tracker: $e');
-      // Only reload the specific tracker that failed instead of all trackers
+      // Try to reload the specific tracker even if update failed
       await _reloadSpecificTracker(trackerId);
     } finally {
       _setLoading(false);
@@ -392,6 +369,7 @@ class TrackerProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
+      print('Error reloading tracker ${trackerId}: $e');
       _setError('Failed to reload tracker: $e');
     }
   }
@@ -452,11 +430,27 @@ class TrackerProvider extends ChangeNotifier {
   }
 
   TrackerGoal? findTrackerById(String trackerId) {
-    final dailyTracker =
-        _dailyTrackers.where((t) => t.id == trackerId).firstOrNull;
-    if (dailyTracker != null) return dailyTracker;
+    // Clean the tracker ID to handle ObjectId format
+    String cleanId = trackerId;
+    if (trackerId.startsWith('ObjectId("') && trackerId.endsWith('")')) {
+      cleanId = trackerId.substring(9, trackerId.length - 2);
+    }
 
-    return _weeklyTrackers.where((t) => t.id == trackerId).firstOrNull;
+    final dailyTracker = _dailyTrackers
+        .where((t) => t.id == trackerId || t.id == cleanId)
+        .firstOrNull;
+    if (dailyTracker != null) {
+      return dailyTracker;
+    }
+
+    final weeklyTracker = _weeklyTrackers
+        .where((t) => t.id == trackerId || t.id == cleanId)
+        .firstOrNull;
+    if (weeklyTracker != null) {
+      return weeklyTracker;
+    }
+
+    return null;
   }
 
   TrackerGoal? findTrackerByCategory(
@@ -511,6 +505,25 @@ class TrackerProvider extends ChangeNotifier {
     } catch (e) {
       print('Error getting weekly summary: $e');
       return [];
+    }
+  }
+
+  /// Update trackers with personalized diet plan
+  Future<void> updateTrackersWithPersonalizedPlan(String userId,
+      String dietType, Map<String, dynamic> personalizedDietPlan) async {
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      await _trackerService.updateTrackersWithPersonalizedPlan(
+          userId, dietType, personalizedDietPlan);
+
+      // Reload trackers to get the updated values
+      await loadUserTrackers(userId, dietType);
+    } catch (e) {
+      _setError('Failed to update trackers with personalized plan: $e');
+    } finally {
+      _setLoading(false);
     }
   }
 
