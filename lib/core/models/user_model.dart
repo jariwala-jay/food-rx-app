@@ -7,9 +7,12 @@ class UserModel {
 
   // Basic Health Information
   final int? age;
+  final DateTime? dateOfBirth;
   final String? gender;
   final double? height;
   final String? heightUnit; // cm or inches
+  final double? heightFeet;
+  final double? heightInches;
   final double? weight;
   final String? weightUnit; // kg or lbs
   final String? activityLevel; // not active, light, moderate, very active
@@ -54,9 +57,12 @@ class UserModel {
     this.profilePhotoId,
     // Health Info
     this.age,
+    this.dateOfBirth,
     this.gender,
     this.height,
     this.heightUnit,
+    this.heightFeet,
+    this.heightInches,
     this.weight,
     this.weightUnit,
     this.activityLevel,
@@ -99,9 +105,14 @@ class UserModel {
       profilePhotoId: json['profilePhotoId'],
       // Health Info
       age: json['age'],
+      dateOfBirth: json['dateOfBirth'] is String
+          ? DateTime.parse(json['dateOfBirth'])
+          : json['dateOfBirth'],
       gender: json['gender'],
       height: json['height']?.toDouble(),
       heightUnit: json['heightUnit'],
+      heightFeet: json['heightFeet']?.toDouble(),
+      heightInches: json['heightInches']?.toDouble(),
       weight: json['weight']?.toDouble(),
       weightUnit: json['weightUnit'],
       activityLevel: json['activityLevel'],
@@ -152,9 +163,12 @@ class UserModel {
       'profilePhotoId': profilePhotoId,
       // Health Info
       'age': age,
+      'dateOfBirth': dateOfBirth?.toIso8601String(),
       'gender': gender,
       'height': height,
       'heightUnit': heightUnit,
+      'heightFeet': heightFeet,
+      'heightInches': heightInches,
       'weight': weight,
       'weightUnit': weightUnit,
       'activityLevel': activityLevel,
@@ -190,9 +204,12 @@ class UserModel {
     String? profilePhotoId,
     // Health Info
     int? age,
+    DateTime? dateOfBirth,
     String? gender,
     double? height,
     String? heightUnit,
+    double? heightFeet,
+    double? heightInches,
     double? weight,
     String? weightUnit,
     String? activityLevel,
@@ -226,9 +243,12 @@ class UserModel {
       profilePhotoId: profilePhotoId ?? this.profilePhotoId,
       // Health Info
       age: age ?? this.age,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       gender: gender ?? this.gender,
       height: height ?? this.height,
       heightUnit: heightUnit ?? this.heightUnit,
+      heightFeet: heightFeet ?? this.heightFeet,
+      heightInches: heightInches ?? this.heightInches,
       weight: weight ?? this.weight,
       weightUnit: weightUnit ?? this.weightUnit,
       activityLevel: activityLevel ?? this.activityLevel,
