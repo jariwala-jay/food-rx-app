@@ -77,6 +77,7 @@ flutter:
     - assets/icons/food_pantry_icons/
     - assets/icons/other_pantry_icons/
     - assets/icons/tracker_icons/
+    - assets/nutrition/
     - assets/images/profile_pic.png
     - assets/images/blood_pressure.png
     - assets/images/healthy_diet.png
