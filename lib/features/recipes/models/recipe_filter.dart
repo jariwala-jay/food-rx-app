@@ -342,7 +342,7 @@ class RecipeFilter {
   // Get DASH diet specific constraints
   Map<String, dynamic> getDashDietConstraints() {
     return {
-      'maxSodium': 1500, // mg per day (more practical than 1500)
+      'maxSodium': 1500, // mg per day
       'minPotassium': 300, // mg per serving (more achievable)
       'maxSaturatedFat': 8, // g per serving (slightly more lenient)
       'minFiber': 2, // g per serving (more achievable)
@@ -360,8 +360,9 @@ class RecipeFilter {
   // Get MyPlate diet specific constraints
   Map<String, dynamic> getMyPlateDietConstraints() {
     return {
-      'maxSodium': 2300, // mg per day (general guideline)
-      'maxSaturatedFat': 15, // g per serving (increased from 10)
+      'maxSodium': 2300, // mg per day
+      'maxSaturatedFat': 15, // g per day
+      'maxSugar': 50, // g per day
       // Remove minFiber constraint - too restrictive when combined with medical conditions
       'veryHealthy': true,
       // Balanced nutrition approach
@@ -449,6 +450,7 @@ class RecipeFilter {
       myPlateConstraints.forEach((key, value) {
         if (key == 'maxSodium' ||
             key == 'maxSaturatedFat' ||
+            key == 'maxSugar' ||
             key == 'minFiber') {
           params[key] = value.toString();
         } else if (key == 'veryHealthy') {
