@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/services/nutrition_content_loader.dart';
+import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:provider/provider.dart';
 
 class PreferencesStep extends StatefulWidget {
@@ -22,36 +25,22 @@ class _PreferencesStepState extends State<PreferencesStep> {
   final _formKey = GlobalKey<FormState>();
   List<String> _selectedFoodAllergies = [];
   String? _activityLevel;
-  List<String> _selectedFavoriteCuisines = [];
-  final _dailyFruitIntakeController = TextEditingController();
-  final _dailyVegetableIntakeController = TextEditingController();
-  String? _dailyWaterIntake;
+  List<String> _selectedHealthGoals = [];
   bool _isLoading = false;
 
   final List<String> _activityLevels = [
-    'Not Active',
+    'Sedentary',
     'Lightly Active',
     'Moderately Active',
     'Very Active',
   ];
 
-  final List<String> _cuisines = [
-    'American',
-    'Mexican',
-    'Italian',
-    'Chinese',
-    'Indian',
-    'French',
-    'Thai',
-    'Japanese',
-    'Mediterranean',
-    'Korean',
-  ];
-
-  final List<String> _waterIntakeOptions = [
-    '0 glasses',
-    'Less than 8 glasses',
-    '8 or more glasses',
+  final List<String> _healthGoals = [
+    'Avoid diabetes',
+    'Lower blood pressure',
+    'Lower cholesterol',
+    'Lower blood glucose (Sugar)',
+    'Lose weight',
   ];
 
   @override
@@ -60,33 +49,94 @@ class _PreferencesStepState extends State<PreferencesStep> {
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
     _activityLevel = signupData.activityLevel;
-    _selectedFavoriteCuisines = List.from(signupData.favoriteCuisines);
-    _dailyFruitIntakeController.text = signupData.dailyFruitIntake ?? '';
-    _dailyVegetableIntakeController.text =
-        signupData.dailyVegetableIntake ?? '';
-    _dailyWaterIntake = signupData.dailyWaterIntake;
+    _selectedHealthGoals = List.from(signupData.healthGoals);
   }
 
-  @override
-  void dispose() {
-    _dailyFruitIntakeController.dispose();
-    _dailyVegetableIntakeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleNext() async {
+  Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
-      // Update preferences in SignupProvider
-      context.read<SignupProvider>().updatePreferences(
-            foodAllergies: _selectedFoodAllergies,
-            activityLevel: _activityLevel,
-            favoriteCuisines: _selectedFavoriteCuisines,
-            dailyFruitIntake: _dailyFruitIntakeController.text.trim(),
-            dailyVegetableIntake: _dailyVegetableIntakeController.text.trim(),
-            dailyWaterIntake: _dailyWaterIntake,
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Update preferences in SignupProvider
+        context.read<SignupProvider>().updatePreferences(
+              foodAllergies: _selectedFoodAllergies,
+              activityLevel: _activityLevel,
+              healthGoals: _selectedHealthGoals,
+            );
+
+        // Generate personalized diet plan
+        final signupProvider = context.read<SignupProvider>();
+        final signupData = signupProvider.data;
+
+        try {
+          // Load nutrition content and create personalization service
+          final nutritionContent = await NutritionContentLoader.load();
+          final personalizationService =
+              PersonalizationService(nutritionContent);
+
+          // Generate personalized diet plan
+          final result = personalizationService.personalize(
+            dob: signupData.dateOfBirth!,
+            sex: signupData.sex!,
+            heightFeet: signupData.heightFeet!,
+            heightInches: signupData.heightInches!,
+            weightLb: signupData.weight!,
+            activityLevel: signupData.activityLevel!,
+            medicalConditions: signupData.medicalConditions,
+            healthGoals: signupData.healthGoals,
           );
 
-      widget.onSubmit();
+          // Set personalized diet plan
+          signupProvider.setPersonalizedDietPlan(
+            dietType: result.dietType,
+            targetCalories: result.targetCalories,
+            selectedDietPlan: result.selectedDietPlan,
+            diagnostics: result.diagnostics,
+          );
+        } catch (e) {
+          // Fallback to static diet assignment if personalization fails
+          final bool isDashDiet =
+              signupData.medicalConditions.contains('Hypertension') ||
+                  signupData.healthGoals.contains('Lower blood pressure');
+          signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+        }
+
+        // Get all collected data
+        final profilePhoto = signupProvider.profilePhoto;
+        final authController = context.read<AuthController>();
+
+        // Register the user with all collected data
+        final success = await authController.register(
+          email: signupData.email!,
+          password: signupData.password!,
+          userData: signupData.toJson(),
+          profilePhoto: profilePhoto,
+        );
+
+        if (success) {
+          widget.onSubmit();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(authController.error ?? 'Registration failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -102,52 +152,13 @@ class _PreferencesStepState extends State<PreferencesStep> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 24),
-                  // Favorite Cuisines
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppDropdownField(
-                          label: 'Favorite',
-                          value: null,
-                          options: _cuisines,
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                if (!_selectedFavoriteCuisines
-                                    .contains(value)) {
-                                  _selectedFavoriteCuisines.add(value);
-                                }
-                              });
-                            }
-                          },
-                          hintText: 'Select Cuisines',
-                        ),
-                        if (_selectedFavoriteCuisines.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          AppChipGroup(
-                            values: _selectedFavoriteCuisines,
-                            onChanged: (values) {
-                              setState(() {
-                                _selectedFavoriteCuisines = values;
-                              });
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
+                  const Text('Your Preferences', style: AppTypography.bg_24_b),
+                  Text(
+                    'Help us understand your preferences for personalized recommendations',
+                    style: AppTypography.bg_14_r
+                        .copyWith(color: const Color(0xFF90909A)),
                   ),
-                  // Food Allergies
+                  const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -203,70 +214,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       ],
                     ),
                   ),
-                  // Daily Intake
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Daily Intake',
-                          style: AppTypography.bg_16_m,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AppFormField(
-                                hintText: 'Fruits',
-                                controller: _dailyFruitIntakeController,
-                                keyboardType: TextInputType.text,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppFormField(
-                                hintText: 'Vegetables',
-                                controller: _dailyVegetableIntakeController,
-                                keyboardType: TextInputType.text,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Daily Water Intake
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: AppDropdownField(
-                      label: 'Daily Water Intake',
-                      value: _dailyWaterIntake,
-                      options: _waterIntakeOptions,
-                      onChanged: (value) {
-                        setState(() {
-                          _dailyWaterIntake = value;
-                        });
-                      },
-                      hintText: 'Select Water Intake',
-                    ),
-                  ),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -286,6 +233,27 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       onChanged: (value) {
                         setState(() {
                           _activityLevel = value;
+                        });
+                      },
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: ShapeDecoration(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: AppCheckboxGroup(
+                      label: 'Health Goal',
+                      selectedValues: _selectedHealthGoals,
+                      options: _healthGoals,
+                      onChanged: (values) {
+                        setState(() {
+                          _selectedHealthGoals = values;
                         });
                       },
                     ),
@@ -338,7 +306,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           ),
                           elevation: 0,
                         ),
-                        onPressed: _isLoading ? null : _handleNext,
+                        onPressed: _isLoading ? null : _handleSubmit,
                         child: _isLoading
                             ? const SizedBox(
                                 width: 24,
@@ -349,7 +317,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 ),
                               )
                             : const Text(
-                                'Next',
+                                'Submit',
                                 style: AppTypography.bg_16_sb,
                               ),
                       ),
