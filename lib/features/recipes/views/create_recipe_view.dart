@@ -15,9 +15,10 @@ class CreateRecipeView extends StatefulWidget {
 class _CreateRecipeViewState extends State<CreateRecipeView> {
   final _formKey = GlobalKey<FormState>();
   final _servingsController = TextEditingController();
-  final _cookingTimeController = TextEditingController();
+  final _cookingTimeHoursController = TextEditingController();
+  final _cookingTimeMinutesController = TextEditingController();
 
-  final List<CuisineType> _selectedCuisines = [];
+  List<CuisineType> _selectedCuisines = [];
   MealType? _selectedMealType;
   String? _selectedMealTypeName; // Track the display name separately
   int? _servings;
@@ -50,9 +51,22 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     final user = authController.currentUser;
 
     if (user != null) {
-      // Prepopulate servings based on user profile (default to 2-4 people)
-      _servingsController.text = '1';
-      _servings = 1;
+      // Prepopulate cuisines based on user's favorite cuisines
+      _selectedCuisines =
+          _mapUserCuisinesToCuisineTypes(user.favoriteCuisines ?? []);
+
+      // Prepopulate servings based on user's cooking preferences
+      final cookingForPeople = user.cookingForPeople;
+      if (cookingForPeople != null && cookingForPeople.isNotEmpty) {
+        _servingsController.text = cookingForPeople;
+        _servings = int.tryParse(cookingForPeople);
+      } else {
+        _servingsController.text = '1';
+        _servings = 1;
+      }
+
+      // Prepopulate cooking time based on user's preferred meal prep time
+      _prepopulateCookingTime(user.preferredMealPrepTime);
 
       // Set default meal type based on current time
       final now = DateTime.now();
@@ -77,8 +91,59 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
   @override
   void dispose() {
     _servingsController.dispose();
-    _cookingTimeController.dispose();
+    _cookingTimeHoursController.dispose();
+    _cookingTimeMinutesController.dispose();
     super.dispose();
+  }
+
+  /// Maps user's favorite cuisines (strings) to CuisineType enums
+  List<CuisineType> _mapUserCuisinesToCuisineTypes(List<String> userCuisines) {
+    final Map<String, CuisineType> cuisineMap = {
+      'American': CuisineType.american,
+      'Mexican': CuisineType.mexican,
+      'Italian': CuisineType.italian,
+      'Chinese': CuisineType.chinese,
+      'Indian': CuisineType.indian,
+      'French': CuisineType.french,
+      'Thai': CuisineType.thai,
+      'Japanese': CuisineType.japanese,
+      'Mediterranean': CuisineType.mediterranean,
+      'Korean': CuisineType.korean,
+    };
+
+    return userCuisines
+        .where((cuisine) => cuisineMap.containsKey(cuisine))
+        .map((cuisine) => cuisineMap[cuisine]!)
+        .toList();
+  }
+
+  /// Prepopulates cooking time based on user's preferred meal prep time
+  void _prepopulateCookingTime(String? preferredMealPrepTime) {
+    if (preferredMealPrepTime == null) return;
+
+    switch (preferredMealPrepTime) {
+      case 'Up to 15 minutes':
+        _cookingTimeHours = 0;
+        _cookingTimeMinutes = 15;
+        break;
+      case 'Up to 30 minutes':
+        _cookingTimeHours = 0;
+        _cookingTimeMinutes = 30;
+        break;
+      case 'Up to one hour':
+        _cookingTimeHours = 1;
+        _cookingTimeMinutes = 0;
+        break;
+      default:
+        // Default to 30 minutes if no match
+        _cookingTimeHours = 0;
+        _cookingTimeMinutes = 30;
+    }
+
+    // Update the text controllers
+    _cookingTimeHoursController.text = _cookingTimeHours?.toString() ?? '';
+    _cookingTimeMinutesController.text =
+        _cookingTimeMinutes?.toString().padLeft(2, '0') ?? '';
   }
 
   @override
@@ -258,6 +323,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
         children: [
           Expanded(
             child: TextFormField(
+              controller: _cookingTimeHoursController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 hintText: 'HH',
@@ -282,6 +348,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
           ),
           Expanded(
             child: TextFormField(
+              controller: _cookingTimeMinutesController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 hintText: 'MM',
