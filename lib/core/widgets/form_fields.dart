@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 
 class AppFormField extends StatelessWidget {
-  final String label;
+  final String? label;
   final String hintText;
   final TextEditingController controller;
   final String? Function(String?)? validator;
@@ -20,7 +20,7 @@ class AppFormField extends StatelessWidget {
 
   const AppFormField({
     super.key,
-    required this.label,
+    this.label,
     required this.hintText,
     required this.controller,
     this.validator,
@@ -40,11 +40,13 @@ class AppFormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.bg_16_m,
-        ),
-        const SizedBox(height: 8),
+        if (label != null) ...[
+          Text(
+            label!,
+            style: AppTypography.bg_16_m,
+          ),
+          const SizedBox(height: 8),
+        ],
         TextFormField(
           controller: controller,
           validator: validator,
@@ -245,19 +247,21 @@ class AppChipGroup extends StatelessWidget {
 }
 
 class AppDropdownField extends StatefulWidget {
-  final String label;
+  final String? label;
   final String? value;
   final List<String> options;
   final ValueChanged<String?>? onChanged;
   final String hintText;
+  final bool showSearchBar;
 
   const AppDropdownField({
     super.key,
-    required this.label,
+    this.label,
     required this.value,
     required this.options,
     required this.onChanged,
     required this.hintText,
+    this.showSearchBar = false,
   });
 
   @override
@@ -303,9 +307,9 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.label.isNotEmpty) ...[
+        if (widget.label != null && widget.label!.isNotEmpty) ...[
           Text(
-            widget.label,
+            widget.label!,
             style: AppTypography.bg_16_m,
           ),
           const SizedBox(height: 8),
@@ -364,34 +368,35 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextField(
-                          controller: _searchController,
-                          focusNode: _focusNode,
-                          decoration: InputDecoration(
-                            hintText: 'Search here',
-                            hintStyle: AppTypography.bg_14_r.copyWith(
-                              color: const Color(0xFF90909A),
+                      if (widget.showSearchBar)
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _focusNode,
+                            decoration: InputDecoration(
+                              hintText: 'Search here',
+                              hintStyle: AppTypography.bg_14_r.copyWith(
+                                color: const Color(0xFF90909A),
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                color: Color(0xFF90909A),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF7F7F8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
                             ),
-                            prefixIcon: const Icon(
-                              Icons.search,
-                              color: Color(0xFF90909A),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: const Color(0xFFF7F7F8),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
+                            onChanged: _filterOptions,
                           ),
-                          onChanged: _filterOptions,
                         ),
-                      ),
                       Container(
                         constraints: const BoxConstraints(maxHeight: 200),
                         child: ListView.builder(
