@@ -44,11 +44,32 @@ class SignupProvider extends ChangeNotifier {
   void updatePreferences({
     List<String>? foodAllergies,
     String? activityLevel,
-    List<String>? healthGoals,
+    List<String>? favoriteCuisines,
+    String? dailyFruitIntake,
+    String? dailyVegetableIntake,
+    String? dailyWaterIntake,
   }) {
     _data.foodAllergies = foodAllergies ?? _data.foodAllergies;
     _data.activityLevel = activityLevel ?? _data.activityLevel;
+    _data.favoriteCuisines = favoriteCuisines ?? _data.favoriteCuisines;
+    _data.dailyFruitIntake = dailyFruitIntake ?? _data.dailyFruitIntake;
+    _data.dailyVegetableIntake =
+        dailyVegetableIntake ?? _data.dailyVegetableIntake;
+    _data.dailyWaterIntake = dailyWaterIntake ?? _data.dailyWaterIntake;
+    notifyListeners();
+  }
+
+  void updateOtherDetails({
+    List<String>? healthGoals,
+    String? preferredMealPrepTime,
+    String? cookingForPeople,
+    String? cookingSkill,
+  }) {
     _data.healthGoals = healthGoals ?? _data.healthGoals;
+    _data.preferredMealPrepTime =
+        preferredMealPrepTime ?? _data.preferredMealPrepTime;
+    _data.cookingForPeople = cookingForPeople ?? _data.cookingForPeople;
+    _data.cookingSkill = cookingSkill ?? _data.cookingSkill;
     notifyListeners();
   }
 
@@ -86,6 +107,13 @@ class SignupProvider extends ChangeNotifier {
     _data.activityLevel = null;
     _data.healthGoals = [];
     _data.dietType = null;
+    _data.favoriteCuisines = [];
+    _data.dailyFruitIntake = null;
+    _data.dailyVegetableIntake = null;
+    _data.dailyWaterIntake = null;
+    _data.preferredMealPrepTime = null;
+    _data.cookingForPeople = null;
+    _data.cookingSkill = null;
     _profilePhoto = null;
     notifyListeners();
   }
