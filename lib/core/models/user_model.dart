@@ -12,7 +12,7 @@ class UserModel {
   final String? heightUnit; // cm or inches
   final double? weight;
   final String? weightUnit; // kg or lbs
-  final String? activityLevel; // sedentary, light, moderate, very active
+  final String? activityLevel; // not active, light, moderate, very active
   final List<String>? medicalConditions;
   final List<String>? allergies;
 
@@ -20,6 +20,13 @@ class UserModel {
   final String? dietType; // DASH or MyPlate
   final List<String>? excludedIngredients;
   final List<String>? foodRestrictions;
+  final List<String>? favoriteCuisines;
+  final String? dailyFruitIntake;
+  final String? dailyVegetableIntake;
+  final String? dailyWaterIntake;
+  final String? preferredMealPrepTime;
+  final String? cookingForPeople;
+  final String? cookingSkill;
 
   // Diet Plan Details
   final Map<String, dynamic>? selectedDietPlan;
@@ -59,6 +66,13 @@ class UserModel {
     this.dietType,
     this.excludedIngredients,
     this.foodRestrictions,
+    this.favoriteCuisines,
+    this.dailyFruitIntake,
+    this.dailyVegetableIntake,
+    this.dailyWaterIntake,
+    this.preferredMealPrepTime,
+    this.cookingForPeople,
+    this.cookingSkill,
     // Diet Plan
     this.selectedDietPlan,
     this.targetCalories,
@@ -97,6 +111,13 @@ class UserModel {
       dietType: json['dietType'],
       excludedIngredients: List<String>.from(json['excludedIngredients'] ?? []),
       foodRestrictions: List<String>.from(json['foodRestrictions'] ?? []),
+      favoriteCuisines: List<String>.from(json['favoriteCuisines'] ?? []),
+      dailyFruitIntake: json['dailyFruitIntake'],
+      dailyVegetableIntake: json['dailyVegetableIntake'],
+      dailyWaterIntake: json['dailyWaterIntake'],
+      preferredMealPrepTime: json['preferredMealPrepTime'],
+      cookingForPeople: json['cookingForPeople'],
+      cookingSkill: json['cookingSkill'],
       // Diet Plan
       selectedDietPlan: json['selectedDietPlan'],
       targetCalories: json['targetCalories'],

@@ -12,6 +12,15 @@ class SignupData {
   String? activityLevel;
   List<String> healthGoals;
   String? dietType;
+  // New fields for preferences step
+  List<String> favoriteCuisines;
+  String? dailyFruitIntake;
+  String? dailyVegetableIntake;
+  String? dailyWaterIntake;
+  // New fields for other details step
+  String? preferredMealPrepTime;
+  String? cookingForPeople;
+  String? cookingSkill;
 
   SignupData({
     this.name,
@@ -27,6 +36,13 @@ class SignupData {
     this.activityLevel,
     this.healthGoals = const [],
     this.dietType,
+    this.favoriteCuisines = const [],
+    this.dailyFruitIntake,
+    this.dailyVegetableIntake,
+    this.dailyWaterIntake,
+    this.preferredMealPrepTime,
+    this.cookingForPeople,
+    this.cookingSkill,
   });
 
   Map<String, dynamic> toJson() {
@@ -42,6 +58,13 @@ class SignupData {
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,
+      'favoriteCuisines': favoriteCuisines,
+      'dailyFruitIntake': dailyFruitIntake,
+      'dailyVegetableIntake': dailyVegetableIntake,
+      'dailyWaterIntake': dailyWaterIntake,
+      'preferredMealPrepTime': preferredMealPrepTime,
+      'cookingForPeople': cookingForPeople,
+      'cookingSkill': cookingSkill,
     };
 
     // Only add dateOfBirth if it's not null and convert it to ISO string
