@@ -25,7 +25,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
     if (showPantryPicker) {
       content = PantryCategoryPicker(
         key: const ValueKey('food-pantry-picker'),
-        title: 'Add Food Pantry Items',
+        title: 'Add FoodRx Items',
         categories: foodPantryCategories,
         onBack: () => setState(() => showPantryPicker = false),
         isFoodPantryItem: true,
@@ -33,7 +33,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
     } else if (showOtherPantryPicker) {
       content = PantryCategoryPicker(
         key: const ValueKey('other-pantry-picker'),
-        title: 'Other Pantry Items',
+        title: 'Add Home Items',
         categories: otherPantryItemCategories,
         onBack: () => setState(() => showOtherPantryPicker = false),
         isFoodPantryItem: false,
@@ -57,13 +57,13 @@ class _AddActionSheetState extends State<AddActionSheet> {
           ),
           ModalActionButton(
             iconAsset: 'assets/icons/pantry_add.svg',
-            label: 'Add Food Pantry Items',
+            label: 'Add FoodRx Items',
             shouldClose: false,
             onTap: () => setState(() => showPantryPicker = true),
           ),
           ModalActionButton(
             iconAsset: 'assets/icons/shopping_cart.svg',
-            label: 'Add Other pantry Items',
+            label: 'Add Home Items',
             shouldClose: false,
             onTap: () => setState(() => showOtherPantryPicker = true),
           ),
