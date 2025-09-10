@@ -88,13 +88,6 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Health Information',
-                      style: AppTypography.bg_24_b),
-                  Text(
-                    'Please provide your health details for better recommendations',
-                    style: AppTypography.bg_14_r
-                        .copyWith(color: const Color(0xFF90909A)),
-                  ),
                   const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
