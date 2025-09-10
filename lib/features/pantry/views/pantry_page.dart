@@ -97,7 +97,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                           ),
                           child: Center(
                             child: Text(
-                              'Pantry Items',
+                              'FoodRx Items',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -127,7 +127,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                           ),
                           child: Center(
                             child: Text(
-                              'Other Items',
+                              'Home Items',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -211,7 +211,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Your Pantry is Empty. Add items to get started!',
+              'Your FoodRx Items list is Empty. Add items to get started!',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey,
@@ -219,7 +219,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               ),
             ),
             const SizedBox(height: 20),
-            _buildAddButton('Add Pantry Items', () {
+            _buildAddButton('Add FoodRx Items', () {
               // Show modal to add a new pantry item
               _showAddItemDialog(true);
             }),
@@ -308,7 +308,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Your Other Items list is empty. Add items here that don\'t fit in your pantry.',
+              'Your Home Items list is empty. Add what you have at home or bought from grocery store.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey,
@@ -316,7 +316,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               ),
             ),
             const SizedBox(height: 20),
-            _buildAddButton('Add Other Items', () {
+            _buildAddButton('Add Home Items', () {
               // Show modal to add a new other item
               _showAddItemDialog(false);
             }),

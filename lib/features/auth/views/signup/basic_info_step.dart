@@ -120,12 +120,6 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Create Account', style: AppTypography.bg_24_b),
-                  Text(
-                    'Please fill in the details below to create your account',
-                    style: AppTypography.bg_14_r
-                        .copyWith(color: const Color(0xFF90909A)),
-                  ),
                   const SizedBox(height: 24),
                   if (_error != null)
                     Container(
