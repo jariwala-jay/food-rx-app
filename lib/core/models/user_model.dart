@@ -37,6 +37,8 @@ class UserModel {
   final Map<String, double>? macroNutrients; // proteins, carbs, fats
   final Map<String, String>? mealTimings;
   final bool? requiresGroceryList;
+  final Map<String, dynamic>?
+      diagnostics; // Personalization diagnostics including diet rule
 
   // System Fields
   final DateTime? createdAt;
@@ -85,6 +87,7 @@ class UserModel {
     this.macroNutrients,
     this.mealTimings,
     this.requiresGroceryList,
+    this.diagnostics,
     // System Fields
     this.createdAt,
     this.updatedAt,
@@ -135,6 +138,7 @@ class UserModel {
       macroNutrients: Map<String, double>.from(json['macroNutrients'] ?? {}),
       mealTimings: Map<String, String>.from(json['mealTimings'] ?? {}),
       requiresGroceryList: json['requiresGroceryList'],
+      diagnostics: json['diagnostics'],
       // System Fields
       createdAt: json['createdAt'] is String
           ? DateTime.parse(json['createdAt'])
@@ -184,6 +188,7 @@ class UserModel {
       'macroNutrients': macroNutrients,
       'mealTimings': mealTimings,
       'requiresGroceryList': requiresGroceryList,
+      'diagnostics': diagnostics,
       // System Fields
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -225,6 +230,7 @@ class UserModel {
     Map<String, double>? macroNutrients,
     Map<String, String>? mealTimings,
     bool? requiresGroceryList,
+    Map<String, dynamic>? diagnostics,
     // System Fields
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -264,6 +270,7 @@ class UserModel {
       macroNutrients: macroNutrients ?? this.macroNutrients,
       mealTimings: mealTimings ?? this.mealTimings,
       requiresGroceryList: requiresGroceryList ?? this.requiresGroceryList,
+      diagnostics: diagnostics ?? this.diagnostics,
       // System Fields
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
