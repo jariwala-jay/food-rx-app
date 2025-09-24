@@ -6,6 +6,7 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
+import 'package:flutter_app/core/services/diet_constraints_service.dart';
 import 'package:flutter/foundation.dart';
 
 class RecipeGenerationService {
@@ -13,16 +14,19 @@ class RecipeGenerationService {
   final UnitConversionService _unitConversionService;
   final FoodCategoryService _foodCategoryService;
   final IngredientSubstitutionService _ingredientSubstitutionService;
+  final DietConstraintsService _dietConstraintsService;
 
   RecipeGenerationService({
     required RecipeRepository recipeRepository,
     required UnitConversionService unitConversionService,
     required FoodCategoryService foodCategoryService,
     required IngredientSubstitutionService ingredientSubstitutionService,
+    required DietConstraintsService dietConstraintsService,
   })  : _recipeRepository = recipeRepository,
         _unitConversionService = unitConversionService,
         _foodCategoryService = foodCategoryService,
-        _ingredientSubstitutionService = ingredientSubstitutionService;
+        _ingredientSubstitutionService = ingredientSubstitutionService,
+        _dietConstraintsService = dietConstraintsService;
 
   Future<List<Recipe>> generateRecipes({
     required RecipeFilter filter,
@@ -35,7 +39,8 @@ class RecipeGenerationService {
     final enhancedFilter = _enhanceFilterWithUserProfile(filter, userProfile);
 
     // 2. Fetch recipes from the repository with enhanced filter
-    final recipes = await _recipeRepository.getRecipes(enhancedFilter, pantryIngredientNames);
+    final recipes = await _recipeRepository.getRecipes(
+        enhancedFilter, pantryIngredientNames);
 
     if (kDebugMode) {
       print('\n🔍 RECIPE GENERATION DEBUG:');
@@ -45,22 +50,23 @@ class RecipeGenerationService {
 
     // 3. Perform local validation and enhancement
     final validatedRecipes = <Recipe>[];
-    
+
     for (var recipe in recipes) {
       if (kDebugMode) {
         print('\n📋 Validating recipe: ${recipe.title}');
       }
-      
+
       // a. Check if pantry has enough ingredients
       if (!_hasEnoughIngredients(recipe, pantryItems)) {
         if (kDebugMode) {
-          print('  ❌ Not enough ingredients (missed: ${recipe.missedIngredientCount})');
+          print(
+              '  ❌ Not enough ingredients (missed: ${recipe.missedIngredientCount})');
         }
         continue;
       }
 
       // b. Validate against health constraints (DASH, MyPlate, etc.)
-      if (!_isHealthCompliant(recipe, userProfile)) {
+      if (!(await _isHealthCompliant(recipe, userProfile))) {
         if (kDebugMode) {
           print('  ❌ Not health compliant');
         }
@@ -95,9 +101,10 @@ class RecipeGenerationService {
     // 4. Sort recipes by health score and ingredient availability
     validatedRecipes.sort((a, b) {
       // Primary sort: by used ingredient count (more available ingredients first)
-      final usedIngredientComparison = (b.usedIngredientCount ?? 0).compareTo(a.usedIngredientCount ?? 0);
+      final usedIngredientComparison =
+          (b.usedIngredientCount ?? 0).compareTo(a.usedIngredientCount ?? 0);
       if (usedIngredientComparison != 0) return usedIngredientComparison;
-      
+
       // Secondary sort: by health score (healthier recipes first)
       return b.healthScore.compareTo(a.healthScore);
     });
@@ -105,63 +112,93 @@ class RecipeGenerationService {
     return validatedRecipes;
   }
 
-  /// Enhance filter with user-specific dietary constraints based on medical conditions and diet type
-  RecipeFilter _enhanceFilterWithUserProfile(RecipeFilter filter, Map<String, dynamic> userProfile) {
-    final medicalConditions = List<String>.from(userProfile['medicalConditions'] ?? []);
+  /// Enhance filter with user-specific dietary constraints based on diet assignment matrix
+  RecipeFilter _enhanceFilterWithUserProfile(
+      RecipeFilter filter, Map<String, dynamic> userProfile) {
+    final medicalConditions =
+        List<String>.from(userProfile['medicalConditions'] ?? []);
     final healthGoals = List<String>.from(userProfile['healthGoals'] ?? []);
     final dietType = userProfile['dietType'] as String?;
     final allergies = List<String>.from(userProfile['allergies'] ?? []);
+    final dietRule = userProfile['diet_rule'] as Map<String, dynamic>?;
 
     // Convert medical conditions to filter enum
-    final medicalConditionEnums = medicalConditions.map((condition) {
-      switch (condition.toLowerCase()) {
-        case 'hypertension':
-          return MedicalCondition.hypertension;
-        case 'diabetes':
-          return MedicalCondition.diabetes;
-        case 'pre-diabetes':
-        case 'prediabetes':
-          return MedicalCondition.prediabetes;
-        case 'overweight/obesity':
-        case 'obesity':
-          return MedicalCondition.obesity;
-        default:
-          return null;
-      }
-    }).where((condition) => condition != null).cast<MedicalCondition>().toList();
+    final medicalConditionEnums = medicalConditions
+        .map((condition) {
+          switch (condition.toLowerCase()) {
+            case 'hypertension':
+              return MedicalCondition.hypertension;
+            case 'diabetes':
+              return MedicalCondition.diabetes;
+            case 'pre-diabetes':
+            case 'prediabetes':
+              return MedicalCondition.prediabetes;
+            case 'overweight/obesity':
+            case 'obesity':
+              return MedicalCondition.obesity;
+            default:
+              return null;
+          }
+        })
+        .where((condition) => condition != null)
+        .cast<MedicalCondition>()
+        .toList();
 
     // Convert allergies to intolerances
-    final intoleranceEnums = allergies.map((allergy) {
-      switch (allergy.toLowerCase()) {
-        case 'dairy':
-          return Intolerances.dairy;
-        case 'eggs':
-          return Intolerances.egg;
-        case 'gluten':
-        case 'wheat':
-          return Intolerances.gluten;
-        case 'peanuts':
-          return Intolerances.peanut;
-        case 'tree nuts':
-          return Intolerances.treeNut;
-        case 'soy':
-          return Intolerances.soy;
-        case 'fish':
-        case 'shellfish':
-          return Intolerances.seafood;
-        default:
-          return null;
-      }
-    }).where((intolerance) => intolerance != null).cast<Intolerances>().toList();
+    final intoleranceEnums = allergies
+        .map((allergy) {
+          switch (allergy.toLowerCase()) {
+            case 'dairy':
+              return Intolerances.dairy;
+            case 'eggs':
+              return Intolerances.egg;
+            case 'gluten':
+            case 'wheat':
+              return Intolerances.gluten;
+            case 'peanuts':
+              return Intolerances.peanut;
+            case 'tree nuts':
+              return Intolerances.treeNut;
+            case 'soy':
+              return Intolerances.soy;
+            case 'fish':
+            case 'shellfish':
+              return Intolerances.seafood;
+            default:
+              return null;
+          }
+        })
+        .where((intolerance) => intolerance != null)
+        .cast<Intolerances>()
+        .toList();
 
-    // Determine diet compliance based on user's diet type and medical conditions
+    // Determine diet compliance based on diet rule from matrix
     bool dashCompliant = false;
     bool myPlateCompliant = false;
-    
-    if (dietType == 'DASH' || medicalConditions.contains('Hypertension') || healthGoals.contains('Lower blood pressure')) {
-      dashCompliant = true;
+    int? maxSodium;
+
+    if (dietRule != null) {
+      final diet = dietRule['diet'] as String;
+      if (diet == 'DASH') {
+        dashCompliant = true;
+      } else if (diet == 'MyPlate') {
+        myPlateCompliant = true;
+      }
+
+      // Get sodium constraint from diet rule
+      final sodiumCap = dietRule['sodium_mg_max'];
+      if (sodiumCap is int) {
+        maxSodium = (sodiumCap / 3).round(); // Convert daily to per-serving
+      }
     } else {
-      myPlateCompliant = true;
+      // Fallback to old logic if no diet rule
+      if (dietType == 'DASH' ||
+          medicalConditions.contains('Hypertension') ||
+          healthGoals.contains('Lower blood pressure')) {
+        dashCompliant = true;
+      } else {
+        myPlateCompliant = true;
+      }
     }
 
     return filter.copyWith(
@@ -169,6 +206,7 @@ class RecipeGenerationService {
       intolerances: [...filter.intolerances, ...intoleranceEnums],
       dashCompliant: dashCompliant,
       myPlateCompliant: myPlateCompliant,
+      maxSodium: maxSodium,
       veryHealthy: true, // Always prefer healthier options
     );
   }
@@ -186,67 +224,33 @@ class RecipeGenerationService {
     return recipe.extendedIngredients.isNotEmpty;
   }
 
-  bool _isHealthCompliant(Recipe recipe, Map<String, dynamic> userProfile) {
-    final dietPlan = userProfile['dietType'];
-    
-    if (dietPlan == 'DASH') {
-      return _isDashCompliant(recipe);
-    } else if (dietPlan == 'MyPlate') {
-      return _isMyPlateCompliant(recipe);
+  Future<bool> _isHealthCompliant(
+      Recipe recipe, Map<String, dynamic> userProfile) async {
+    final dietRule = userProfile['diet_rule'] as Map<String, dynamic>?;
+    if (dietRule == null) {
+      return true; // Default to allowing recipe if no diet rule
     }
-    
-    return true; // Default to allowing recipe if no specific diet plan
-  }
 
-  bool _isDashCompliant(Recipe recipe) {
     final nutrition = recipe.nutrition;
     if (nutrition == null) {
       return true; // Allow if nutrition data is not available
     }
 
-    // DASH diet guidelines per serving (more practical limits)
-    final sodium = _getNutrientAmount(nutrition, 'Sodium');
-    final saturatedFat = _getNutrientAmount(nutrition, 'Saturated Fat');
-    final fiber = _getNutrientAmount(nutrition, 'Fiber');
-    final potassium = _getNutrientAmount(nutrition, 'Potassium');
+    // Get constraints for the diet rule
+    final constraints =
+        await _dietConstraintsService.getConstraintsForRule(dietRule);
 
-    // DASH compliance checks (more practical)
-    if (sodium > 800) {
-      return false; // Max 800mg sodium per serving (more practical than 600mg)
-    }
-    if (saturatedFat > 8) {
-      return false; // Max 8g saturated fat per serving (slightly more lenient)
-    }
-    if (fiber < 2) {
-      return false; // Min 2g fiber per serving (more achievable)
-    }
-    
-    return true;
+    // Validate recipe against constraints
+    return await _dietConstraintsService.validateRecipe(
+        nutrition.toMap(), constraints);
   }
 
-  bool _isMyPlateCompliant(Recipe recipe) {
+  bool _isMedicalConditionCompliant(
+      Recipe recipe, Map<String, dynamic> userProfile) {
+    final medicalConditions =
+        List<String>.from(userProfile['medicalConditions'] ?? []);
     final nutrition = recipe.nutrition;
-    if (nutrition == null) return true; // Allow if nutrition data is not available
 
-    // MyPlate guidelines per serving (more flexible than DASH)
-    final sodium = _getNutrientAmount(nutrition, 'Sodium');
-    final saturatedFat = _getNutrientAmount(nutrition, 'Saturated Fat');
-    final sugar = _getNutrientAmount(nutrition, 'Sugar');
-    final calories = _getNutrientAmount(nutrition, 'Calories');
-
-    // MyPlate compliance checks (more lenient)
-    if (sodium > 800) return false; // Max 800mg sodium per serving (2300mg/day ÷ 3 meals)
-    if (saturatedFat > 10) return false; // Max 10g saturated fat per serving
-    if (sugar > 30) return false; // Max 30g sugar per serving
-    if (calories > 600) return false; // Max 600 calories per serving for main dishes
-
-    return true;
-  }
-
-  bool _isMedicalConditionCompliant(Recipe recipe, Map<String, dynamic> userProfile) {
-    final medicalConditions = List<String>.from(userProfile['medicalConditions'] ?? []);
-    final nutrition = recipe.nutrition;
-    
     if (nutrition == null) {
       if (kDebugMode) {
         print('    ℹ️ No nutrition data - allowing recipe');
@@ -258,7 +262,7 @@ class RecipeGenerationService {
       if (kDebugMode) {
         print('    🏥 Checking condition: $condition');
       }
-      
+
       switch (condition.toLowerCase()) {
         case 'diabetes':
         case 'pre-diabetes':
@@ -302,7 +306,8 @@ class RecipeGenerationService {
     final fiber = _getNutrientAmount(nutrition, 'Fiber');
 
     if (kDebugMode) {
-      print('      📊 Diabetes check - Sugar: ${sugar}g, Carbs: ${carbs}g, Fiber: ${fiber}g');
+      print(
+          '      📊 Diabetes check - Sugar: ${sugar}g, Carbs: ${carbs}g, Fiber: ${fiber}g');
     }
 
     // ADA guidelines for diabetes (using the new relaxed limits from RecipeFilter)
@@ -344,7 +349,6 @@ class RecipeGenerationService {
   bool _isHypertensionCompliant(Recipe recipe, Nutrition nutrition) {
     final sodium = _getNutrientAmount(nutrition, 'Sodium');
     final saturatedFat = _getNutrientAmount(nutrition, 'Saturated Fat');
-    final potassium = _getNutrientAmount(nutrition, 'Potassium');
 
     // DASH guidelines for hypertension (practical approach)
     if (sodium > 800) {
@@ -369,15 +373,18 @@ class RecipeGenerationService {
     }
   }
 
-  Recipe _enhanceRecipeWithPantryData(Recipe recipe, List<PantryItem> pantryItems) {
+  Recipe _enhanceRecipeWithPantryData(
+      Recipe recipe, List<PantryItem> pantryItems) {
     // The usedIngredients list from Spoonacular tells us what we have.
-    final usedPantryItemNames = recipe.usedIngredients.map((i) => i.name).toSet();
+    final usedPantryItemNames =
+        recipe.usedIngredients.map((i) => i.name).toSet();
 
     final expiringPantryItems = pantryItems
         .where((pantryItem) =>
             usedPantryItemNames.contains(pantryItem.name) &&
             pantryItem.expiryDate != null &&
-            pantryItem.expiryDate!.isBefore(DateTime.now().add(const Duration(days: 2))))
+            pantryItem.expiryDate!
+                .isBefore(DateTime.now().add(const Duration(days: 2))))
         .map((pantryItem) => pantryItem.name)
         .toList();
 

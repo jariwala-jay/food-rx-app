@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/typography.dart';
-import 'package:flutter_app/features/navigation/views/main_screen.dart';
 
 class MyPlatePlan extends StatelessWidget {
   final VoidCallback onFinish;
@@ -261,14 +260,7 @@ class MyPlatePlan extends StatelessWidget {
                         borderRadius: BorderRadius.circular(24),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const MainScreen()),
-                        (route) => false,
-                      );
-                    },
+                    onPressed: onFinish,
                     child: Text(
                       "Let's get Started!",
                       style:

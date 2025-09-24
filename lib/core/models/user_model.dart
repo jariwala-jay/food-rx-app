@@ -7,9 +7,12 @@ class UserModel {
 
   // Basic Health Information
   final int? age;
+  final DateTime? dateOfBirth;
   final String? gender;
   final double? height;
   final String? heightUnit; // cm or inches
+  final double? heightFeet;
+  final double? heightInches;
   final double? weight;
   final String? weightUnit; // kg or lbs
   final String? activityLevel; // not active, light, moderate, very active
@@ -34,6 +37,8 @@ class UserModel {
   final Map<String, double>? macroNutrients; // proteins, carbs, fats
   final Map<String, String>? mealTimings;
   final bool? requiresGroceryList;
+  final Map<String, dynamic>?
+      diagnostics; // Personalization diagnostics including diet rule
 
   // System Fields
   final DateTime? createdAt;
@@ -54,9 +59,12 @@ class UserModel {
     this.profilePhotoId,
     // Health Info
     this.age,
+    this.dateOfBirth,
     this.gender,
     this.height,
     this.heightUnit,
+    this.heightFeet,
+    this.heightInches,
     this.weight,
     this.weightUnit,
     this.activityLevel,
@@ -79,6 +87,7 @@ class UserModel {
     this.macroNutrients,
     this.mealTimings,
     this.requiresGroceryList,
+    this.diagnostics,
     // System Fields
     this.createdAt,
     this.updatedAt,
@@ -99,9 +108,14 @@ class UserModel {
       profilePhotoId: json['profilePhotoId'],
       // Health Info
       age: json['age'],
+      dateOfBirth: json['dateOfBirth'] is String
+          ? DateTime.parse(json['dateOfBirth'])
+          : json['dateOfBirth'],
       gender: json['gender'],
       height: json['height']?.toDouble(),
       heightUnit: json['heightUnit'],
+      heightFeet: json['heightFeet']?.toDouble(),
+      heightInches: json['heightInches']?.toDouble(),
       weight: json['weight']?.toDouble(),
       weightUnit: json['weightUnit'],
       activityLevel: json['activityLevel'],
@@ -124,6 +138,7 @@ class UserModel {
       macroNutrients: Map<String, double>.from(json['macroNutrients'] ?? {}),
       mealTimings: Map<String, String>.from(json['mealTimings'] ?? {}),
       requiresGroceryList: json['requiresGroceryList'],
+      diagnostics: json['diagnostics'],
       // System Fields
       createdAt: json['createdAt'] is String
           ? DateTime.parse(json['createdAt'])
@@ -152,9 +167,12 @@ class UserModel {
       'profilePhotoId': profilePhotoId,
       // Health Info
       'age': age,
+      'dateOfBirth': dateOfBirth?.toIso8601String(),
       'gender': gender,
       'height': height,
       'heightUnit': heightUnit,
+      'heightFeet': heightFeet,
+      'heightInches': heightInches,
       'weight': weight,
       'weightUnit': weightUnit,
       'activityLevel': activityLevel,
@@ -170,6 +188,7 @@ class UserModel {
       'macroNutrients': macroNutrients,
       'mealTimings': mealTimings,
       'requiresGroceryList': requiresGroceryList,
+      'diagnostics': diagnostics,
       // System Fields
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -190,9 +209,12 @@ class UserModel {
     String? profilePhotoId,
     // Health Info
     int? age,
+    DateTime? dateOfBirth,
     String? gender,
     double? height,
     String? heightUnit,
+    double? heightFeet,
+    double? heightInches,
     double? weight,
     String? weightUnit,
     String? activityLevel,
@@ -208,6 +230,7 @@ class UserModel {
     Map<String, double>? macroNutrients,
     Map<String, String>? mealTimings,
     bool? requiresGroceryList,
+    Map<String, dynamic>? diagnostics,
     // System Fields
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -226,9 +249,12 @@ class UserModel {
       profilePhotoId: profilePhotoId ?? this.profilePhotoId,
       // Health Info
       age: age ?? this.age,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       gender: gender ?? this.gender,
       height: height ?? this.height,
       heightUnit: heightUnit ?? this.heightUnit,
+      heightFeet: heightFeet ?? this.heightFeet,
+      heightInches: heightInches ?? this.heightInches,
       weight: weight ?? this.weight,
       weightUnit: weightUnit ?? this.weightUnit,
       activityLevel: activityLevel ?? this.activityLevel,
@@ -244,6 +270,7 @@ class UserModel {
       macroNutrients: macroNutrients ?? this.macroNutrients,
       mealTimings: mealTimings ?? this.mealTimings,
       requiresGroceryList: requiresGroceryList ?? this.requiresGroceryList,
+      diagnostics: diagnostics ?? this.diagnostics,
       // System Fields
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
