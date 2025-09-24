@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'nutrition_content_loader.dart';
 
 class PersonalizationResult {
@@ -16,6 +15,34 @@ class PersonalizationService {
 
   PersonalizationService(this.content);
 
+  // Configurable default floors/caps
+  static const int kDefaultSodiumDASH = 2300;
+  static const int kDefaultSodiumMyPlate = 2300;
+  static const int kHypertensionSodiumCap = 1500; // safeguard
+
+  /// Matches a diet rule based on medical conditions and health goals
+  Map<String, dynamic> _matchDietRule(List rules,
+      {required String dm, required String ht, required String ow}) {
+    int score(Map r) {
+      int s = 0;
+      s += (r['diabetes_prediabetes'] == 'ANY' ||
+              r['diabetes_prediabetes'] == dm)
+          ? (r['diabetes_prediabetes'] == 'ANY' ? 1 : 2)
+          : -99;
+      s += (r['hypertension'] == 'ANY' || r['hypertension'] == ht)
+          ? (r['hypertension'] == 'ANY' ? 1 : 2)
+          : -99;
+      s += (r['overweight_obese'] == 'ANY' || r['overweight_obese'] == ow)
+          ? (r['overweight_obese'] == 'ANY' ? 1 : 2)
+          : -99;
+      return s;
+    }
+
+    final sorted = List<Map<String, dynamic>>.from(rules)
+      ..sort((a, b) => score(b).compareTo(score(a)));
+    return sorted.first;
+  }
+
   PersonalizationResult personalize({
     required DateTime dob,
     required String sex, // 'male' | 'female'
@@ -31,45 +58,76 @@ class PersonalizationService {
     final heightCm = (heightFeet * 12 + heightInches) * 2.54;
     final weightKg = weightLb / 2.205;
 
-    final isDash = medicalConditions
-            .map((s) => s.toLowerCase())
-            .contains('hypertension') ||
-        healthGoals
-            .map((s) => s.toLowerCase())
-            .contains('lower blood pressure');
+    // Determine medical condition flags
+    final dm =
+        medicalConditions.any((m) => m.toLowerCase().contains('diabetes'))
+            ? 'YES'
+            : 'NO';
+    final ht =
+        medicalConditions.any((m) => m.toLowerCase().contains('hypertension'))
+            ? 'YES'
+            : 'NO';
+    final ow = medicalConditions.any((m) =>
+            m.toLowerCase().contains('obesity') ||
+            m.toLowerCase().contains('overweight'))
+        ? 'YES'
+        : 'NO';
 
-    if (isDash) {
+    // Match diet rule using matrix
+    final rule =
+        _matchDietRule(content.dietAssignmentRules, dm: dm, ht: ht, ow: ow);
+    final chosenDiet = (rule['diet'] as String).trim();
+
+    // Sodium cap logic with hypertension safeguard
+    int sodiumCapFromRule() {
+      final cap = rule['sodium_mg_max'];
+      if (cap is int) return cap;
+      if (cap is num) return cap.toInt();
+      // fallback defaults by framework; with HTN safeguard
+      if (ht == 'YES') return kHypertensionSodiumCap;
+      return chosenDiet == 'DASH' ? kDefaultSodiumDASH : kDefaultSodiumMyPlate;
+    }
+
+    if (chosenDiet == 'DASH') {
       final maintenance = _dashMaintenanceKcal(age, sex, activityLevel);
-      final wl =
-          medicalConditions.any((m) => m.toLowerCase().contains('obesity')) ||
-              healthGoals.map((s) => s.toLowerCase()).contains('weight loss');
-      final kcal = wl ? _dashStepDown(maintenance) : maintenance;
+      final wantingWL = ow == 'YES' ||
+          healthGoals.any((g) => g.toLowerCase().contains('weight'));
+      final kcal = wantingWL ? _dashStepDown(maintenance, sex) : maintenance;
       final tier = _nearestDashTier(kcal);
       final plan = _dashPlanFor(tier);
-      return PersonalizationResult('DASH', tier, plan, {
+
+      // Apply sodium cap from rule/safeguard
+      plan['sodium_mg_per_day_max'] = sodiumCapFromRule();
+
+      final diagnostics = {
         'maintenance': maintenance,
         'tier': tier,
-        'mode': wl ? 'step-down' : 'maintain'
-      });
+        'diet_rule': rule
+      };
+      return PersonalizationResult('DASH', tier, plan, diagnostics);
     } else {
       final bmr = _msjBmr(sex, age, heightCm, weightKg);
       final pal = _pal(activityLevel);
       final tdee = bmr * pal;
-      final wl =
-          medicalConditions.any((m) => m.toLowerCase().contains('obesity')) ||
-              healthGoals.map((s) => s.toLowerCase()).contains('weight loss');
-      final target = wl
-          ? max(tdee - 500, sex.toLowerCase() == 'male' ? 1500 : 1200)
-          : tdee;
+      final wantingWL = ow == 'YES' ||
+          healthGoals.any((g) => g.toLowerCase().contains('weight'));
+      final floor = sex.toLowerCase() == 'male' ? 1500 : 1200;
+      final target =
+          wantingWL ? (tdee - 500).clamp(floor, 10000).toDouble() : tdee;
       final tier = _nearestMyPlateTier(target);
       final plan = _myPlatePlanFor(tier);
-      return PersonalizationResult('MyPlate', tier, plan, {
+
+      // Apply sodium cap from rule/safeguard (MyPlate)
+      plan['sodium_mg_per_day_max'] = sodiumCapFromRule();
+
+      final diagnostics = {
         'bmr': bmr,
         'pal': pal,
         'tdee': tdee,
         'tier': tier,
-        'mode': wl ? '-500' : 'maintain'
-      });
+        'diet_rule': rule
+      };
+      return PersonalizationResult('MyPlate', tier, plan, diagnostics);
     }
   }
 
@@ -106,15 +164,16 @@ class PersonalizationService {
     }
   }
 
-  int _dashStepDown(int maintenance) {
+  int _dashStepDown(int maintenance, String sex) {
     final tiers = [1200, 1400, 1600, 1800, 2000, 2600, 3100];
-    // Find the next lower tier that's >= 1200 (minimum floor)
+    final floor = sex.toLowerCase() == 'male' ? 1500 : 1200;
+    // Find the next lower tier that's >= floor
     for (int i = tiers.length - 1; i >= 0; i--) {
-      if (tiers[i] < maintenance && tiers[i] >= 1200) {
+      if (tiers[i] < maintenance && tiers[i] >= floor) {
         return tiers[i];
       }
     }
-    return 1200; // fallback to minimum
+    return floor; // fallback to minimum floor
   }
 
   int _nearestDashTier(num kcal) {

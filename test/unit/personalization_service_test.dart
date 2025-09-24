@@ -70,7 +70,9 @@ void main() {
         expect(result.diagnostics, containsPair('maintenance', isA<int>()));
       });
 
-      test('should select DASH diet for blood pressure goal', () {
+      test(
+          'should select MyPlate diet for blood pressure goal without hypertension',
+          () {
         final result = service.personalize(
           dob: DateTime(1985, 5, 15),
           sex: 'female',
@@ -82,7 +84,7 @@ void main() {
           healthGoals: ['Lower blood pressure'],
         );
 
-        expect(result.dietType, equals('DASH'));
+        expect(result.dietType, equals('MyPlate'));
       });
 
       test(
@@ -213,7 +215,7 @@ void main() {
         );
 
         expect(result.dietType, equals('DASH'));
-        expect(result.diagnostics['mode'], equals('step-down'));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
         expect(
             result.targetCalories, lessThan(result.diagnostics['maintenance']));
       });
@@ -277,7 +279,7 @@ void main() {
         );
 
         expect(result.dietType, equals('MyPlate'));
-        expect(result.diagnostics['mode'], equals('-500'));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
         expect(result.targetCalories, lessThan(result.diagnostics['tdee']));
         // Target calories should be rounded to nearest tier, not exactly TDEE - 500
         expect(result.targetCalories, greaterThan(0));
@@ -472,10 +474,12 @@ void main() {
           healthGoals: ['Weight loss', 'Lower blood pressure'],
         );
 
-        // Should prioritize DASH due to hypertension/blood pressure
+        // Should prioritize DASH due to hypertension (matrix rule: DM=YES, HTN=YES)
         expect(result.dietType, equals('DASH'));
-        expect(result.diagnostics['mode'],
-            equals('step-down')); // Due to obesity/weight loss
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('YES'));
+        expect(rule['hypertension'], equals('YES'));
       });
 
       test('should handle empty medical conditions and health goals', () {
@@ -492,6 +496,136 @@ void main() {
 
         expect(result.dietType, equals('MyPlate')); // Default to MyPlate
         expect(result.targetCalories, greaterThan(0));
+      });
+    });
+
+    group('Matrix-Driven Diet Assignment Tests', () {
+      test('should assign DASH for DM=YES, HTN=YES with 1500 sodium cap', () {
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: ['Diabetes', 'Hypertension'],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('DASH'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(1500));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('YES'));
+        expect(rule['hypertension'], equals('YES'));
+        expect(rule['diet'], equals('DASH'));
+      });
+
+      test('should assign MyPlate for DM=YES, HTN=NO with 2300 sodium cap', () {
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: ['Diabetes'],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('MyPlate'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(2300));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('YES'));
+        expect(rule['hypertension'], equals('NO'));
+        expect(rule['diet'], equals('MyPlate'));
+      });
+
+      test('should assign DASH for DM=NO, HTN=YES with 1500 sodium cap', () {
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: ['Hypertension'],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('DASH'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(1500));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('NO'));
+        expect(rule['hypertension'], equals('YES'));
+        expect(rule['diet'], equals('DASH'));
+      });
+
+      test(
+          'should assign MyPlate for DM=NO, HTN=NO, OW=YES with 2300 sodium cap',
+          () {
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: ['Obesity'],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('MyPlate'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(2300));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('NO'));
+        expect(rule['hypertension'], equals('NO'));
+        expect(rule['overweight_obese'], equals('YES'));
+        expect(rule['diet'], equals('MyPlate'));
+      });
+
+      test(
+          'should assign MyPlate for DM=NO, HTN=NO, OW=NO with 2300 sodium cap',
+          () {
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: [],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('MyPlate'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(2300));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
+        final rule = result.diagnostics['diet_rule'] as Map;
+        expect(rule['diabetes_prediabetes'], equals('NO'));
+        expect(rule['hypertension'], equals('NO'));
+        expect(rule['overweight_obese'], equals('NO'));
+        expect(rule['diet'], equals('MyPlate'));
+      });
+
+      test('should apply hypertension safeguard for missing sodium cap', () {
+        // This test verifies the safeguard works even if a rule doesn't specify sodium_mg_max
+        final result = service.personalize(
+          dob: DateTime(1990, 1, 1),
+          sex: 'male',
+          heightFeet: 6.0,
+          heightInches: 0.0,
+          weightLb: 180.0,
+          activityLevel: 'moderate',
+          medicalConditions: ['Hypertension'],
+          healthGoals: [],
+        );
+
+        expect(result.dietType, equals('DASH'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(1500));
       });
     });
 
@@ -517,7 +651,8 @@ void main() {
         expect(result.selectedDietPlan, containsPair('dairyMax', isA<int>()));
         expect(
             result.selectedDietPlan, containsPair('leanMeatsMax', isA<int>()));
-        expect(result.selectedDietPlan, containsPair('sodium', isA<int>()));
+        expect(result.selectedDietPlan,
+            containsPair('sodium_mg_per_day_max', isA<int>()));
       });
 
       test('should return valid MyPlate plan content', () {
@@ -540,7 +675,8 @@ void main() {
         expect(result.selectedDietPlan, containsPair('grains', isA<int>()));
         expect(result.selectedDietPlan, containsPair('protein', isA<double>()));
         expect(result.selectedDietPlan, containsPair('dairy', isA<int>()));
-        expect(result.selectedDietPlan, containsPair('sodiumMax', isA<int>()));
+        expect(result.selectedDietPlan,
+            containsPair('sodium_mg_per_day_max', isA<int>()));
         expect(result.selectedDietPlan,
             containsPair('addedSugarsMax', isA<int>()));
         expect(result.selectedDietPlan,
