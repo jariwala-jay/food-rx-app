@@ -118,10 +118,10 @@ void main() {
           healthGoals: ['Blood sugar control'],
         );
 
-        expect(result.dietType, equals('MyPlate'));
-        expect(result.diagnostics, containsPair('bmr', isA<double>()));
-        expect(result.diagnostics, containsPair('pal', isA<double>()));
-        expect(result.diagnostics, containsPair('tdee', isA<double>()));
+        expect(result.dietType, equals('DASH'));
+        expect(result.diagnostics, containsPair('maintenance', isA<num>()));
+        expect(result.diagnostics, containsPair('tier', isA<int>()));
+        expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
       });
 
       test('should select MyPlate diet for obesity', () {
@@ -230,7 +230,7 @@ void main() {
           heightInches: 0.0, // 182.88 cm
           weightLb: 180.0, // 81.65 kg
           activityLevel: 'moderate',
-          medicalConditions: ['Diabetes'],
+          medicalConditions: ['Obesity'],
           healthGoals: [],
         );
 
@@ -252,7 +252,7 @@ void main() {
           heightInches: 6.0, // 167.64 cm
           weightLb: 140.0, // 63.5 kg
           activityLevel: 'light',
-          medicalConditions: ['Diabetes'],
+          medicalConditions: ['Obesity'],
           healthGoals: [],
         );
 
@@ -325,7 +325,7 @@ void main() {
             healthGoals: [],
           );
 
-          expect(result.dietType, equals('MyPlate'));
+          expect(result.dietType, equals('DASH'));
           expect(tiers, contains(result.targetCalories));
         }
       });
@@ -376,7 +376,7 @@ void main() {
           healthGoals: [],
         );
 
-        expect(result.dietType, equals('MyPlate'));
+        expect(result.dietType, equals('DASH'));
         expect(result.targetCalories, greaterThan(0));
       });
 
@@ -392,7 +392,7 @@ void main() {
           healthGoals: [],
         );
 
-        expect(result.dietType, equals('MyPlate'));
+        expect(result.dietType, equals('DASH'));
         expect(result.targetCalories, greaterThan(0));
       });
 
@@ -408,7 +408,7 @@ void main() {
           healthGoals: [],
         );
 
-        expect(result.dietType, equals('MyPlate'));
+        expect(result.dietType, equals('DASH'));
         expect(result.targetCalories, greaterThan(0));
       });
 
@@ -450,7 +450,7 @@ void main() {
             healthGoals: [],
           );
 
-          expect(result.dietType, equals('MyPlate'));
+          expect(result.dietType, equals('DASH'));
           expect(result.targetCalories, greaterThan(0));
 
           if (result.diagnostics.containsKey('pal')) {
@@ -521,7 +521,7 @@ void main() {
         expect(rule['diet'], equals('DASH'));
       });
 
-      test('should assign MyPlate for DM=YES, HTN=NO with 2300 sodium cap', () {
+      test('should assign DASH for DM=YES, HTN=NO with 1500 sodium cap', () {
         final result = service.personalize(
           dob: DateTime(1990, 1, 1),
           sex: 'male',
@@ -533,13 +533,13 @@ void main() {
           healthGoals: [],
         );
 
-        expect(result.dietType, equals('MyPlate'));
-        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(2300));
+        expect(result.dietType, equals('DASH'));
+        expect(result.selectedDietPlan['sodium_mg_per_day_max'], equals(1500));
         expect(result.diagnostics, containsPair('diet_rule', isA<Map>()));
         final rule = result.diagnostics['diet_rule'] as Map;
         expect(rule['diabetes_prediabetes'], equals('YES'));
         expect(rule['hypertension'], equals('NO'));
-        expect(rule['diet'], equals('MyPlate'));
+        expect(rule['diet'], equals('DASH'));
       });
 
       test('should assign DASH for DM=NO, HTN=YES with 1500 sodium cap', () {
@@ -663,7 +663,7 @@ void main() {
           heightInches: 0.0,
           weightLb: 180.0,
           activityLevel: 'moderate',
-          medicalConditions: ['Diabetes'],
+          medicalConditions: ['Obesity'],
           healthGoals: [],
         );
 
