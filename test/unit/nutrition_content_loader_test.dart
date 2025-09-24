@@ -40,6 +40,29 @@ void main() {
       expect(men19_30, containsPair('active', 3000));
     });
 
+    test('should load diet assignment rules correctly', () async {
+      final content = await NutritionContentLoader.load();
+
+      expect(content.dietAssignmentRules, isA<List<dynamic>>());
+      expect(content.dietAssignmentRules.length, greaterThan(0));
+
+      // Test that rules have required fields
+      for (final rule in content.dietAssignmentRules) {
+        expect(rule, containsPair('diabetes_prediabetes', isA<String>()));
+        expect(rule, containsPair('hypertension', isA<String>()));
+        expect(rule, containsPair('overweight_obese', isA<String>()));
+        expect(rule, containsPair('diet', isA<String>()));
+        expect(rule['diet'], isIn(['DASH', 'MyPlate']));
+      }
+
+      // Test specific rule: DM=YES, HTN=YES should be DASH with 1500 sodium
+      final dmHtnRule = content.dietAssignmentRules.firstWhere((rule) =>
+          rule['diabetes_prediabetes'] == 'YES' &&
+          rule['hypertension'] == 'YES');
+      expect(dmHtnRule['diet'], equals('DASH'));
+      expect(dmHtnRule['sodium_mg_max'], equals(1500));
+    });
+
     test('should load DASH servings correctly', () async {
       final content = await NutritionContentLoader.load();
 

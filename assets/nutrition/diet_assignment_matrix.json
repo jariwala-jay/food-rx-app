@@ -1,0 +1,41 @@
+{
+  "rules": [
+    {
+      "diabetes_prediabetes": "YES",
+      "hypertension": "YES",
+      "overweight_obese": "ANY",
+      "diet": "DASH",
+      "sodium_mg_max": 1500,
+      "glycemic_index_max": 69
+    },
+    {
+      "diabetes_prediabetes": "YES",
+      "hypertension": "NO",
+      "overweight_obese": "ANY",
+      "diet": "DASH",
+      "sodium_mg_max": 1500,
+      "glycemic_index_max": 69
+    },
+    {
+      "diabetes_prediabetes": "NO",
+      "hypertension": "YES",
+      "overweight_obese": "ANY",
+      "diet": "DASH",
+      "sodium_mg_max": 1500
+    },
+    {
+      "diabetes_prediabetes": "NO",
+      "hypertension": "NO",
+      "overweight_obese": "YES",
+      "diet": "MyPlate",
+      "sodium_mg_max": 2300
+    },
+    {
+      "diabetes_prediabetes": "NO",
+      "hypertension": "NO",
+      "overweight_obese": "NO",
+      "diet": "MyPlate",
+      "sodium_mg_max": 2300
+    }
+  ]
+}
