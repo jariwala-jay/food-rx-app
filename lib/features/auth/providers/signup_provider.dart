@@ -44,6 +44,7 @@ class SignupProvider extends ChangeNotifier {
   void updatePreferences({
     List<String>? foodAllergies,
     String? activityLevel,
+    List<String>? healthGoals,
     List<String>? favoriteCuisines,
     String? dailyFruitIntake,
     String? dailyVegetableIntake,
@@ -51,6 +52,7 @@ class SignupProvider extends ChangeNotifier {
   }) {
     _data.foodAllergies = foodAllergies ?? _data.foodAllergies;
     _data.activityLevel = activityLevel ?? _data.activityLevel;
+    _data.healthGoals = healthGoals ?? _data.healthGoals;
     _data.favoriteCuisines = favoriteCuisines ?? _data.favoriteCuisines;
     _data.dailyFruitIntake = dailyFruitIntake ?? _data.dailyFruitIntake;
     _data.dailyVegetableIntake =
