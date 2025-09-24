@@ -23,6 +23,13 @@ class Nutrition {
       'ingredients': ingredients.map((e) => e.toJson()).toList(),
     };
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'nutrients': nutrients.map((e) => e.toJson()).toList(),
+      'ingredients': ingredients.map((e) => e.toJson()).toList(),
+    };
+  }
 }
 
 class Nutrient {

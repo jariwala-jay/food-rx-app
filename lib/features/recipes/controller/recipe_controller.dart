@@ -99,6 +99,8 @@ class RecipeController extends ChangeNotifier {
         'age': user.age,
         'gender': user.gender,
         'targetCalories': user.targetCalories,
+        'diet_rule': user.diagnostics?[
+            'diet_rule'], // Include diet rule from personalization
       };
 
       _recipes = await recipeGenerationService.generateRecipes(

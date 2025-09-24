@@ -27,6 +27,7 @@ import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/diet_constraints_service.dart';
 import 'package:flutter_app/features/home/services/tip_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
@@ -62,10 +63,13 @@ void main() async {
           Provider<PantryDeductionService>(
               create: (context) => PantryDeductionService(
                   conversionService: context.read<UnitConversionService>(),
-                  substitutionService: context.read<IngredientSubstitutionService>())),
+                  substitutionService:
+                      context.read<IngredientSubstitutionService>())),
           Provider<DietServingService>(
               create: (context) => DietServingService(
                   conversionService: context.read<UnitConversionService>())),
+          Provider<DietConstraintsService>(
+              create: (context) => DietConstraintsService()),
 
           // Feature-specific Repositories
           Provider<ArticleRepository>(
@@ -117,8 +121,8 @@ void main() async {
                 return articleController;
               }),
 
-          ChangeNotifierProxyProvider3<AuthController, PantryController, TrackerProvider,
-              RecipeController>(
+          ChangeNotifierProxyProvider3<AuthController, PantryController,
+              TrackerProvider, RecipeController>(
             create: (context) => RecipeController(
               recipeGenerationService: RecipeGenerationService(
                 recipeRepository: context.read<RecipeRepository>(),
@@ -126,6 +130,7 @@ void main() async {
                 foodCategoryService: context.read<FoodCategoryService>(),
                 ingredientSubstitutionService:
                     context.read<IngredientSubstitutionService>(),
+                dietConstraintsService: context.read<DietConstraintsService>(),
               ),
               recipeRepository: context.read<RecipeRepository>(),
               pantryDeductionService: context.read<PantryDeductionService>(),
