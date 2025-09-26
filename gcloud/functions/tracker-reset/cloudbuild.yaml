@@ -1,0 +1,80 @@
+steps:
+  # Deploy Daily Tracker Reset Function
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "functions"
+      - "deploy"
+      - "resetDailyTrackers"
+      - "--runtime=nodejs18"
+      - "--trigger-topic=daily-tracker-reset-topic"
+      - "--source=."
+      - "--entry-point=resetDailyTrackers"
+      - "--memory=512MB"
+      - "--timeout=540s"
+      - "--region=us-central1"
+      - "--set-env-vars=MONGODB_URI=${_MONGODB_URI},DB_NAME=${_DB_NAME}"
+    dir: "gcloud/functions/tracker-reset"
+
+  # Deploy Weekly Tracker Reset Function
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "functions"
+      - "deploy"
+      - "resetWeeklyTrackers"
+      - "--runtime=nodejs18"
+      - "--trigger-topic=weekly-tracker-reset-topic"
+      - "--source=."
+      - "--entry-point=resetWeeklyTrackers"
+      - "--memory=512MB"
+      - "--timeout=540s"
+      - "--region=us-central1"
+      - "--set-env-vars=MONGODB_URI=${_MONGODB_URI},DB_NAME=${_DB_NAME}"
+    dir: "gcloud/functions/tracker-reset"
+
+  # Create Pub/Sub topics
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "pubsub"
+      - "topics"
+      - "create"
+      - "daily-tracker-reset-topic"
+      - "--project=${PROJECT_ID}"
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "pubsub"
+      - "topics"
+      - "create"
+      - "weekly-tracker-reset-topic"
+      - "--project=${PROJECT_ID}"
+
+  # Create Cloud Scheduler jobs
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "scheduler"
+      - "jobs"
+      - "create"
+      - "pubsub"
+      - "daily-tracker-reset-job"
+      - "--schedule=0 5 * * *"
+      - "--topic=daily-tracker-reset-topic"
+      - '--message-body={"trigger":"daily-reset"}'
+      - "--time-zone=America/New_York"
+      - "--project=${PROJECT_ID}"
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "scheduler"
+      - "jobs"
+      - "create"
+      - "pubsub"
+      - "weekly-tracker-reset-job"
+      - "--schedule=0 5 * * 0"
+      - "--topic=weekly-tracker-reset-topic"
+      - '--message-body={"trigger":"weekly-reset"}'
+      - "--time-zone=America/New_York"
+      - "--project=${PROJECT_ID}"
+
+substitutions:
+  _MONGODB_URI: "your-mongodb-connection-string"
+  _DB_NAME: "test"
