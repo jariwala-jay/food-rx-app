@@ -24,9 +24,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         actions: [
           Consumer<NotificationManager>(
@@ -174,8 +175,11 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      elevation: isRead ? 1 : 3,
-      color: isRead ? Colors.white : Colors.blue[50],
+      elevation: isRead ? 1 : 2,
+      color: isRead ? Colors.white : Colors.orange[50],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: _getCategoryColor(notification.category),
@@ -218,7 +222,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: Colors.red,
+                  color: Colors.orange,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -317,25 +321,62 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   void _handleNotificationAction(AppNotification notification) {
-    // Handle different notification actions
+    // Handle different notification actions with helpful messages
     switch (notification.type) {
       case NotificationType.pantryExpiry:
-        // Navigate to pantry page
-        Navigator.pushNamed(context, '/pantry');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Check the Pantry tab for expiring items'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Go to Pantry',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.pop(context); // Close notification center
+                // The user will need to manually tap the pantry tab
+              },
+            ),
+          ),
+        );
         break;
       case NotificationType.education:
-        // Navigate to recipe page
-        Navigator.pushNamed(context, '/recipes');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Check the Education tab for health tips'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Go to Education',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.pop(context); // Close notification center
+              },
+            ),
+          ),
+        );
         break;
       case NotificationType.healthGoal:
-        // Navigate to tracking page
-        Navigator.pushNamed(context, '/tracking');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Check the Home tab for your health goals'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Go to Home',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.pop(context); // Close notification center
+              },
+            ),
+          ),
+        );
         break;
       case NotificationType.system:
-        // Default action - could show a snackbar
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Notification: ${notification.title}'),
+            backgroundColor: Colors.orange,
             duration: const Duration(seconds: 2),
           ),
         );
