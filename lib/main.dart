@@ -37,6 +37,8 @@ import 'package:flutter_app/features/home/services/tip_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
+import 'package:flutter_app/core/services/notification_service.dart';
+import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
@@ -51,6 +53,10 @@ void main() async {
 
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
+
+    // Initialize notification service
+    final notificationService = NotificationService();
+    await notificationService.initialize();
 
     // Register ShowcaseView for guided tours
     ShowcaseView.register(
@@ -103,6 +109,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
           ChangeNotifierProvider(create: (_) => SignupProvider()),
           ChangeNotifierProvider(create: (_) => TrackerProvider()),
+          ChangeNotifierProvider(create: (_) => NotificationManager()),
 
           // Dependent Controllers (as ProxyProviders)
           ChangeNotifierProvider(
