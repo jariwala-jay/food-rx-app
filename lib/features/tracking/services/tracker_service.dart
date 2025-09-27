@@ -13,7 +13,8 @@ import 'dart:async';
 class TrackerService {
   final MongoDBService _mongoDBService;
   final TrackerProgressService _progressService;
-  final HealthGoalNotificationService _healthGoalNotificationService = HealthGoalNotificationService();
+  final HealthGoalNotificationService _healthGoalNotificationService =
+      HealthGoalNotificationService();
   static final TrackerService _instance = TrackerService._internal();
 
   // Local cache of trackers
@@ -339,7 +340,7 @@ class TrackerService {
         // 3. After successful MongoDB update, refresh the specific tracker from DB
         // to ensure cache consistency
         await _refreshTrackerFromMongoDB(trackerId);
-        
+
         // 4. Trigger health goal notifications
         await _triggerHealthGoalNotifications(trackerId, newValue);
       }
@@ -982,7 +983,8 @@ class TrackerService {
   }
 
   // Trigger health goal notifications when tracker values are updated
-  Future<void> _triggerHealthGoalNotifications(String trackerId, double newValue) async {
+  Future<void> _triggerHealthGoalNotifications(
+      String trackerId, double newValue) async {
     try {
       // Get the tracker to find the userId
       final tracker = _cachedDailyTrackers.firstWhere(
@@ -994,14 +996,15 @@ class TrackerService {
       );
 
       // Check for immediate progress milestones
-      await _healthGoalNotificationService.checkDailyProgressMilestones(tracker.userId);
-      
+      await _healthGoalNotificationService
+          .checkDailyProgressMilestones(tracker.userId);
+
       // Check for goal completions
       await _healthGoalNotificationService.checkGoalCompletions(tracker.userId);
-      
+
       // Check for streak achievements
-      await _healthGoalNotificationService.checkStreakAchievements(tracker.userId);
-      
+      await _healthGoalNotificationService
+          .checkStreakAchievements(tracker.userId);
     } catch (e) {
       print('Error triggering health goal notifications: $e');
     }

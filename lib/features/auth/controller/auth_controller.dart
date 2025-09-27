@@ -31,7 +31,8 @@ class AuthController with ChangeNotifier {
   NotificationManager? get notificationManager => _notificationManager;
   NotificationTriggerService? get notificationTriggerService =>
       _notificationTriggerService;
-  HealthGoalNotificationService? get healthGoalNotificationService => _healthGoalNotificationService;
+  HealthGoalNotificationService? get healthGoalNotificationService =>
+      _healthGoalNotificationService;
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -324,15 +325,17 @@ class AuthController with ChangeNotifier {
       await _notificationTriggerService!.checkReengagement(userId);
       await _notificationTriggerService!.checkPantryExpirationAlerts(userId);
       await _notificationTriggerService!.checkLowStockAlerts(userId);
-      
+
       // Initialize health goal notification service
       _healthGoalNotificationService = HealthGoalNotificationService();
-      
+
       // Check for health goal notifications
-      await _healthGoalNotificationService!.checkDailyProgressMilestones(userId);
+      await _healthGoalNotificationService!
+          .checkDailyProgressMilestones(userId);
       await _healthGoalNotificationService!.checkStreakAchievements(userId);
       await _healthGoalNotificationService!.checkGoalCompletions(userId);
-      await _healthGoalNotificationService!.checkMotivationNotifications(userId);
+      await _healthGoalNotificationService!
+          .checkMotivationNotifications(userId);
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
     }
