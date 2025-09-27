@@ -63,10 +63,46 @@ async function connectToMongo() {
 }
 
 /**
+ * Main entry point for notification delivery
+ * This function handles different types of notification delivery
+ */
+exports.notificationDelivery = async (req, res) => {
+  try {
+    const { type, userId } = req.body || {};
+    
+    console.log(`[Notification Delivery] Processing ${type} delivery`);
+    
+    let result;
+    
+    switch (type) {
+      case 'scheduled':
+        result = await sendScheduledNotifications();
+        break;
+      case 'urgent':
+        if (!userId) {
+          return res.status(400).json({ error: 'userId is required for urgent notifications' });
+        }
+        result = await sendUrgentNotification(userId);
+        break;
+      case 'test':
+        result = { status: 'success', message: 'Test notification delivery is working!' };
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid delivery type. Use: scheduled, urgent, or test' });
+    }
+    
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in notification delivery:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
  * Send scheduled notifications
  * Triggered by Cloud Scheduler every hour
  */
-exports.sendScheduledNotifications = async (pubSubEvent, context) => {
+async function sendScheduledNotifications() {
   let db;
   try {
     await initializeFirebase();
@@ -226,7 +262,7 @@ exports.sendScheduledNotifications = async (pubSubEvent, context) => {
  * Send urgent notifications immediately
  * Triggered by pantry expiry alerts or other urgent events
  */
-exports.sendUrgentNotification = async (pubSubEvent, context) => {
+async function sendUrgentNotification(userId) {
   let db;
   try {
     await initializeFirebase();
