@@ -39,7 +39,6 @@ import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
-import 'package:flutter_app/core/services/notification_navigation_handler.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
