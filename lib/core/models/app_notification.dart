@@ -26,6 +26,8 @@ enum NotificationCategory {
   bookmarkReminder,
   lowStock,
   recipeSuggestion,
+  motivation,
+  goalAdjustment,
 }
 
 class AppNotification {

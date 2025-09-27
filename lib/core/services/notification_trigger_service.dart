@@ -251,7 +251,7 @@ class NotificationTriggerService {
     String title, 
     String message
   ) async {
-    await _createNotification(
+    await createNotification(
       userId: userId,
       type: NotificationType.system,
       category: NotificationCategory.mealReminder,
@@ -272,7 +272,7 @@ class NotificationTriggerService {
     String message, 
     String actionType
   ) async {
-    await _createNotification(
+    await createNotification(
       userId: userId,
       type: NotificationType.system,
       category: NotificationCategory.onboarding,
@@ -299,7 +299,7 @@ class NotificationTriggerService {
       message = "It's been $daysSinceLastLogin days since you last tracked your meals. Let's get back on track today!";
     }
     
-    await _createNotification(
+    await createNotification(
       userId: userId,
       type: NotificationType.system,
       category: NotificationCategory.reengagement,
@@ -322,7 +322,7 @@ class NotificationTriggerService {
     String urgency,
     String itemId
   ) async {
-    await _createNotification(
+    await createNotification(
       userId: userId,
       type: NotificationType.pantryExpiry,
       category: NotificationCategory.expiryAlert,
@@ -345,7 +345,7 @@ class NotificationTriggerService {
   Future<void> _createLowStockNotification(String userId, List<String> lowStockCategories) async {
     final categoryNames = lowStockCategories.map((cat) => _getCategoryDisplayName(cat)).join(', ');
     
-    await _createNotification(
+    await createNotification(
       userId: userId,
       type: NotificationType.pantryExpiry,
       category: NotificationCategory.lowStock,
