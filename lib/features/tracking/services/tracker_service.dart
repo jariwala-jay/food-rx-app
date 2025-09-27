@@ -1,6 +1,7 @@
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/health_goal_notification_service.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
@@ -12,6 +13,7 @@ import 'dart:async';
 class TrackerService {
   final MongoDBService _mongoDBService;
   final TrackerProgressService _progressService;
+  final HealthGoalNotificationService _healthGoalNotificationService = HealthGoalNotificationService();
   static final TrackerService _instance = TrackerService._internal();
 
   // Local cache of trackers
@@ -337,6 +339,9 @@ class TrackerService {
         // 3. After successful MongoDB update, refresh the specific tracker from DB
         // to ensure cache consistency
         await _refreshTrackerFromMongoDB(trackerId);
+        
+        // 4. Trigger health goal notifications
+        await _triggerHealthGoalNotifications(trackerId, newValue);
       }
     } catch (e) {
       print('MongoDB update failed, continuing with local cache: $e');
@@ -973,6 +978,32 @@ class TrackerService {
       print('MongoDB update failed for tracker $trackerId: $e');
       _useLocalFallback = true;
       rethrow;
+    }
+  }
+
+  // Trigger health goal notifications when tracker values are updated
+  Future<void> _triggerHealthGoalNotifications(String trackerId, double newValue) async {
+    try {
+      // Get the tracker to find the userId
+      final tracker = _cachedDailyTrackers.firstWhere(
+        (t) => t.id == trackerId,
+        orElse: () => _cachedWeeklyTrackers.firstWhere(
+          (t) => t.id == trackerId,
+          orElse: () => throw Exception('Tracker not found'),
+        ),
+      );
+
+      // Check for immediate progress milestones
+      await _healthGoalNotificationService.checkDailyProgressMilestones(tracker.userId);
+      
+      // Check for goal completions
+      await _healthGoalNotificationService.checkGoalCompletions(tracker.userId);
+      
+      // Check for streak achievements
+      await _healthGoalNotificationService.checkStreakAchievements(tracker.userId);
+      
+    } catch (e) {
+      print('Error triggering health goal notifications: $e');
     }
   }
 }

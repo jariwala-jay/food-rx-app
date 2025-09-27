@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+// import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,32 +17,34 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = 
+  // final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final MongoDBService _mongoDBService = MongoDBService();
-  final NotificationNavigationHandler _navigationHandler = NotificationNavigationHandler();
+  final NotificationNavigationHandler _navigationHandler =
+      NotificationNavigationHandler();
 
   String? _fcmToken;
-  StreamSubscription<RemoteMessage>? _messageSubscription;
-  StreamSubscription<RemoteMessage>? _backgroundMessageSubscription;
+  // StreamSubscription<RemoteMessage>? _messageSubscription;
+  // StreamSubscription<RemoteMessage>? _backgroundMessageSubscription;
 
   // Initialize the notification service
   Future<void> initialize() async {
     try {
-      // Initialize Firebase if not already initialized
-      await Firebase.initializeApp();
+      // TODO: Temporarily disable Firebase initialization due to iOS build issues
+      // await Firebase.initializeApp();
 
       // Initialize local notifications
       await _initializeLocalNotifications();
 
-      // Request FCM token
-      await _requestFCMToken();
+      // TODO: Temporarily disable FCM token request
+      // await _requestFCMToken();
 
-      // Set up message handlers
-      await _setupMessageHandlers();
+      // TODO: Temporarily disable message handlers
+      // await _setupMessageHandlers();
 
-      debugPrint('NotificationService initialized successfully');
+      debugPrint(
+          'NotificationService initialized successfully (Firebase disabled for iOS compatibility)');
     } catch (e) {
       debugPrint('Error initializing NotificationService: $e');
       rethrow;
@@ -86,6 +88,8 @@ class NotificationService {
   }
 
   // Request FCM token
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<void> _requestFCMToken() async {
     try {
       _fcmToken = await _firebaseMessaging.getToken();
@@ -98,8 +102,11 @@ class NotificationService {
       debugPrint('Error getting FCM token: $e');
     }
   }
+  */
 
   // Set up message handlers
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<void> _setupMessageHandlers() async {
     // Handle foreground messages
     _messageSubscription =
@@ -116,8 +123,11 @@ class NotificationService {
       _handleBackgroundMessage(initialMessage);
     }
   }
+  */
 
   // Handle foreground messages
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('Received foreground message: ${message.messageId}');
 
@@ -130,8 +140,11 @@ class NotificationService {
       NotificationAction.delivered,
     );
   }
+  */
 
   // Handle background messages
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
     debugPrint('Received background message: ${message.messageId}');
 
@@ -144,8 +157,11 @@ class NotificationService {
     // Handle navigation based on notification data
     _handleNotificationNavigation(message.data);
   }
+  */
 
   // Show local notification
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<void> _showLocalNotification(RemoteMessage message) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
@@ -178,15 +194,16 @@ class NotificationService {
       payload: jsonEncode(message.data),
     );
   }
+  */
 
   // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
-    
+
     if (response.payload != null) {
       final Map<String, dynamic> data = jsonDecode(response.payload!);
       _handleNotificationNavigation(data);
-      
+
       // Track analytics
       _trackNotificationAction(
         data['notificationId'] ?? '',
@@ -211,11 +228,11 @@ class NotificationService {
         ),
         title: data['title'] ?? '',
         message: data['body'] ?? '',
-        actionData: data['actionData'] != null 
+        actionData: data['actionData'] != null
             ? Map<String, dynamic>.from(jsonDecode(data['actionData']))
             : null,
       );
-      
+
       _navigationHandler.handleNotificationTap(notification);
     } catch (e) {
       debugPrint('Error handling notification navigation: $e');
@@ -223,6 +240,8 @@ class NotificationService {
   }
 
   // Request notification permissions
+  // TODO: Temporarily disabled due to iOS build issues
+  /*
   Future<bool> requestPermissions() async {
     try {
       final NotificationSettings settings =
@@ -237,6 +256,27 @@ class NotificationService {
 
       return settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional;
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+      return false;
+    }
+  }
+  */
+
+  // Temporary simplified permissions method
+  Future<bool> requestPermissions() async {
+    try {
+      // For now, just request local notification permissions
+      final bool? result = await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+
+      return result ?? false;
     } catch (e) {
       debugPrint('Error requesting permissions: $e');
       return false;
@@ -334,14 +374,18 @@ class NotificationService {
 
   // Dispose resources
   void dispose() {
-    _messageSubscription?.cancel();
-    _backgroundMessageSubscription?.cancel();
+    // TODO: Temporarily disabled due to iOS build issues
+    // _messageSubscription?.cancel();
+    // _backgroundMessageSubscription?.cancel();
   }
 }
 
 // Top-level function for background message handling
+// TODO: Temporarily disabled due to iOS build issues
+/*
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   debugPrint('Handling background message: ${message.messageId}');
 }
+*/
