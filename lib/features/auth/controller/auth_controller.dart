@@ -6,6 +6,8 @@ import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
+import 'package:flutter_app/core/services/notification_manager.dart';
+import 'package:flutter_app/core/services/notification_trigger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
@@ -16,12 +18,17 @@ class AuthController with ChangeNotifier {
   String? _error;
   ReplanService? _replanService;
   ReplanTrigger? _pendingReplanTrigger;
+  NotificationManager? _notificationManager;
+  NotificationTriggerService? _notificationTriggerService;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAuthenticated => _currentUser != null;
   ReplanTrigger? get pendingReplanTrigger => _pendingReplanTrigger;
+  NotificationManager? get notificationManager => _notificationManager;
+  NotificationTriggerService? get notificationTriggerService =>
+      _notificationTriggerService;
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -54,6 +61,9 @@ class AuthController with ChangeNotifier {
           final userData = await _mongoDBService.findUserById(userId);
           if (userData != null && userData['email'] == userEmail) {
             _currentUser = _createUserModel(userData);
+
+            // Initialize notification services
+            await _initializeNotificationServices(_currentUser!.id!);
           } else {
             await _mongoDBService.clearSession();
           }
@@ -128,6 +138,10 @@ class AuthController with ChangeNotifier {
         final userData = await _mongoDBService.findUserByEmail(email);
         if (userData != null) {
           _currentUser = _createUserModel(userData);
+
+          // Initialize notification services
+          await _initializeNotificationServices(_currentUser!.id!);
+
           return true;
         }
       }
@@ -148,6 +162,12 @@ class AuthController with ChangeNotifier {
 
     try {
       await _mongoDBService.clearSession();
+
+      // Clean up notification services
+      _notificationManager?.dispose();
+      _notificationManager = null;
+      _notificationTriggerService = null;
+
       _currentUser = null;
     } catch (e) {
       _error = 'Logout failed: $e';
@@ -282,5 +302,26 @@ class AuthController with ChangeNotifier {
   List<String> getReplanSuggestions() {
     if (_currentUser == null || _replanService == null) return [];
     return _replanService!.getReplanSuggestions(_currentUser!);
+  }
+
+  /// Initialize notification services for the user
+  Future<void> _initializeNotificationServices(String userId) async {
+    try {
+      // Initialize notification manager
+      _notificationManager = NotificationManager();
+      await _notificationManager!.initialize(userId);
+
+      // Initialize notification trigger service
+      _notificationTriggerService = NotificationTriggerService();
+      await _notificationTriggerService!.initialize(userId);
+
+      // Check for immediate notification triggers
+      await _notificationTriggerService!.checkOnboardingStatus(userId);
+      await _notificationTriggerService!.checkReengagement(userId);
+      await _notificationTriggerService!.checkPantryExpirationAlerts(userId);
+      await _notificationTriggerService!.checkLowStockAlerts(userId);
+    } catch (e) {
+      debugPrint('Error initializing notification services: $e');
+    }
   }
 }

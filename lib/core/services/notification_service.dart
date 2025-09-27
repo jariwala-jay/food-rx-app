@@ -5,9 +5,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_app/core/models/app_notification.dart';
 import 'package:flutter_app/core/models/notification_preferences.dart';
 import 'package:flutter_app/core/models/notification_analytics.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/notification_navigation_handler.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class NotificationService {
@@ -16,9 +18,10 @@ class NotificationService {
   NotificationService._internal();
 
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
+  final FlutterLocalNotificationsPlugin _localNotifications = 
       FlutterLocalNotificationsPlugin();
   final MongoDBService _mongoDBService = MongoDBService();
+  final NotificationNavigationHandler _navigationHandler = NotificationNavigationHandler();
 
   String? _fcmToken;
   StreamSubscription<RemoteMessage>? _messageSubscription;
@@ -179,11 +182,11 @@ class NotificationService {
   // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
-
+    
     if (response.payload != null) {
       final Map<String, dynamic> data = jsonDecode(response.payload!);
       _handleNotificationNavigation(data);
-
+      
       // Track analytics
       _trackNotificationAction(
         data['notificationId'] ?? '',
@@ -194,17 +197,29 @@ class NotificationService {
 
   // Handle notification navigation
   void _handleNotificationNavigation(Map<String, dynamic> data) {
-    // This will be implemented based on your app's navigation structure
-    // For now, we'll just log the data
-    debugPrint('Navigation data: $data');
-
-    // TODO: Implement navigation logic based on notification type
-    // Example:
-    // if (data['type'] == 'recipe') {
-    //   Navigator.pushNamed(context, '/recipe', arguments: data['recipeId']);
-    // } else if (data['type'] == 'pantry') {
-    //   Navigator.pushNamed(context, '/pantry');
-    // }
+    try {
+      // Create a mock notification object for navigation
+      final notification = AppNotification(
+        userId: '',
+        type: NotificationType.values.firstWhere(
+          (e) => e.toString().split('.').last == data['type'],
+          orElse: () => NotificationType.system,
+        ),
+        category: NotificationCategory.values.firstWhere(
+          (e) => e.toString().split('.').last == data['category'],
+          orElse: () => NotificationCategory.tip,
+        ),
+        title: data['title'] ?? '',
+        message: data['body'] ?? '',
+        actionData: data['actionData'] != null 
+            ? Map<String, dynamic>.from(jsonDecode(data['actionData']))
+            : null,
+      );
+      
+      _navigationHandler.handleNotificationTap(notification);
+    } catch (e) {
+      debugPrint('Error handling notification navigation: $e');
+    }
   }
 
   // Request notification permissions
