@@ -16,7 +16,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     super.initState();
     // Load notifications when the page opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final notificationManager = Provider.of<NotificationManager>(context, listen: false);
+      final notificationManager =
+          Provider.of<NotificationManager>(context, listen: false);
       notificationManager.loadNotifications();
     });
   }
@@ -27,7 +28,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.orange,
+        backgroundColor: const Color(0xFFFF6A00),
         foregroundColor: Colors.white,
         actions: [
           Consumer<NotificationManager>(
@@ -111,8 +112,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                     notificationManager.error!,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -146,8 +147,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                     'You\'ll see your health progress updates, pantry alerts, and personalized tips here.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
                   ),
                 ],
               ),
@@ -160,7 +161,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notification = notifications[index];
-                return _buildNotificationCard(notification, notificationManager);
+                return _buildNotificationCard(
+                    notification, notificationManager);
               },
             ),
           );
@@ -169,10 +171,11 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     );
   }
 
-  Widget _buildNotificationCard(AppNotification notification, NotificationManager notificationManager) {
+  Widget _buildNotificationCard(
+      AppNotification notification, NotificationManager notificationManager) {
     final isRead = notification.isRead;
     final timeAgo = _getTimeAgo(notification.createdAt);
-    
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       elevation: isRead ? 1 : 2,
@@ -222,7 +225,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: Colors.orange,
+                  color: const Color(0xFFFF6A00),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -230,7 +233,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           if (!isRead) {
             await notificationManager.markAsRead(notification.id);
           }
-          
+
           // Handle notification action if needed
           if (notification.actionData != null) {
             _handleNotificationAction(notification);
@@ -327,7 +330,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Check the Pantry tab for expiring items'),
-            backgroundColor: Colors.orange,
+            backgroundColor: const Color(0xFFFF6A00),
             duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: 'Go to Pantry',
@@ -344,7 +347,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Check the Education tab for health tips'),
-            backgroundColor: Colors.orange,
+            backgroundColor: const Color(0xFFFF6A00),
             duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: 'Go to Education',
@@ -360,7 +363,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Check the Home tab for your health goals'),
-            backgroundColor: Colors.orange,
+            backgroundColor: const Color(0xFFFF6A00),
             duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: 'Go to Home',
@@ -376,7 +379,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Notification: ${notification.title}'),
-            backgroundColor: Colors.orange,
+            backgroundColor: const Color(0xFFFF6A00),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -384,7 +387,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     }
   }
 
-  Future<void> _showNotificationOptions(AppNotification notification, NotificationManager notificationManager) async {
+  Future<void> _showNotificationOptions(AppNotification notification,
+      NotificationManager notificationManager) async {
     final result = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => Container(

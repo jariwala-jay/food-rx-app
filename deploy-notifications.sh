@@ -53,7 +53,8 @@ gcloud functions deploy notification-scheduler \
   --memory 256MB \
   --timeout 540s \
   --set-env-vars MONGODB_URI="$MONGODB_URI" \
-  --region us-central1
+  --region us-central1 \
+  --entry-point notificationScheduler
 
 echo "✅ notification-scheduler deployed successfully"
 
@@ -67,7 +68,8 @@ gcloud functions deploy notification-delivery \
   --memory 256MB \
   --timeout 540s \
   --set-env-vars MONGODB_URI="$MONGODB_URI" \
-  --region us-central1
+  --region us-central1 \
+  --entry-point notificationDelivery
 
 echo "✅ notification-delivery deployed successfully"
 

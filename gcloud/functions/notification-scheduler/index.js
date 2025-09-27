@@ -43,9 +43,45 @@ async function connectToMongo() {
 }
 
 /**
+ * Main entry point for notification scheduling
+ * This function handles different types of scheduled notifications
+ */
+exports.notificationScheduler = async (req, res) => {
+  try {
+    const { type } = req.body || {};
+    
+    console.log(`[Notification Scheduler] Processing ${type} notifications`);
+    
+    let result;
+    
+    switch (type) {
+      case 'morning':
+        result = await generateMorningNotifications();
+        break;
+      case 'afternoon':
+        result = await generateAfternoonNotifications();
+        break;
+      case 'evening':
+        result = await generateEveningNotifications();
+        break;
+      case 'test':
+        result = { status: 'success', message: 'Test notification scheduler is working!' };
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid notification type. Use: morning, afternoon, evening, or test' });
+    }
+    
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in notification scheduler:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
  * Generate notifications for morning (8 AM UTC = 6 AM EST)
  */
-exports.generateMorningNotifications = async (pubSubEvent, context) => {
+async function generateMorningNotifications() {
   let db;
   try {
     db = await connectToMongo();
@@ -182,7 +218,7 @@ exports.generateMorningNotifications = async (pubSubEvent, context) => {
 /**
  * Generate notifications for afternoon (1 PM UTC = 11 AM EST)
  */
-exports.generateAfternoonNotifications = async (pubSubEvent, context) => {
+async function generateAfternoonNotifications() {
   let db;
   try {
     db = await connectToMongo();
@@ -280,7 +316,7 @@ exports.generateAfternoonNotifications = async (pubSubEvent, context) => {
 /**
  * Generate notifications for evening (6 PM UTC = 4 PM EST)
  */
-exports.generateEveningNotifications = async (pubSubEvent, context) => {
+async function generateEveningNotifications() {
   let db;
   try {
     db = await connectToMongo();
