@@ -69,31 +69,38 @@ async function connectToMongo() {
 exports.notificationDelivery = async (req, res) => {
   try {
     const { type, userId } = req.body || {};
-    
+
     console.log(`[Notification Delivery] Processing ${type} delivery`);
-    
+
     let result;
-    
+
     switch (type) {
-      case 'scheduled':
+      case "scheduled":
         result = await sendScheduledNotifications();
         break;
-      case 'urgent':
+      case "urgent":
         if (!userId) {
-          return res.status(400).json({ error: 'userId is required for urgent notifications' });
+          return res
+            .status(400)
+            .json({ error: "userId is required for urgent notifications" });
         }
         result = await sendUrgentNotification(userId);
         break;
-      case 'test':
-        result = { status: 'success', message: 'Test notification delivery is working!' };
+      case "test":
+        result = {
+          status: "success",
+          message: "Test notification delivery is working!",
+        };
         break;
       default:
-        return res.status(400).json({ error: 'Invalid delivery type. Use: scheduled, urgent, or test' });
+        return res.status(400).json({
+          error: "Invalid delivery type. Use: scheduled, urgent, or test",
+        });
     }
-    
+
     res.status(200).json(result);
   } catch (error) {
-    console.error('Error in notification delivery:', error);
+    console.error("Error in notification delivery:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -138,7 +145,7 @@ async function sendScheduledNotifications() {
       try {
         // Get user's FCM token
         const user = await usersCollection.findOne(
-          { _id: ObjectIdHelper.parseObjectId(notification.userId) },
+          { _id: new ObjectId(notification.userId) },
           { projection: { fcmToken: 1, name: 1 } }
         );
 
@@ -256,7 +263,7 @@ async function sendScheduledNotifications() {
     console.error("Error in notification delivery:", error);
     throw new Error(`Notification delivery failed: ${error.message}`);
   }
-};
+}
 
 /**
  * Send urgent notifications immediately
@@ -274,26 +281,34 @@ async function sendUrgentNotification(userId) {
       "notification_analytics"
     );
 
-    console.log("[Urgent Notification] Processing urgent notification");
-
-    // Parse the notification data from Pub/Sub message
-    const notificationData = JSON.parse(
-      Buffer.from(pubSubEvent.data, "base64").toString()
+    console.log(
+      "[Urgent Notification] Processing urgent notification for user:",
+      userId
     );
 
+    // Create a test urgent notification (since we're calling directly)
+    const notificationData = {
+      userId: userId,
+      title: "🚨 Urgent Alert",
+      message: "This is a test urgent notification!",
+      type: "system",
+      category: "tip",
+      actionData: null,
+      priority: "high",
+    };
+
     const {
-      userId,
       title,
       message,
       type,
       category,
       actionData,
-      priority = "urgent",
+      priority = "high",
     } = notificationData;
 
     // Get user's FCM token
     const user = await usersCollection.findOne(
-      { _id: ObjectIdHelper.parseObjectId(userId) },
+      { _id: new ObjectId(userId) },
       { projection: { fcmToken: 1, name: 1 } }
     );
 
@@ -343,12 +358,12 @@ async function sendUrgentNotification(userId) {
       apns: {
         payload: {
           aps: {
-            badge: 1,
-            sound: "default",
             alert: {
               title: title,
               body: message,
             },
+            sound: "default",
+            badge: 1,
           },
         },
       },
@@ -390,7 +405,7 @@ async function sendUrgentNotification(userId) {
     console.error("Error in urgent notification delivery:", error);
     throw new Error(`Urgent notification delivery failed: ${error.message}`);
   }
-};
+}
 
 /**
  * Helper function to get notification color based on type
@@ -421,13 +436,3 @@ function getAndroidPriority(priority) {
 /**
  * Helper function to parse ObjectId safely
  */
-function ObjectIdHelper() {
-  return {
-    parseObjectId: function (id) {
-      if (typeof id === "string") {
-        return new ObjectId(id);
-      }
-      return id;
-    },
-  };
-}

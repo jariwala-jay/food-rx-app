@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
@@ -46,12 +48,24 @@ void main() async {
     await dotenv.load(fileName: ".env");
     DialogflowService.initialize();
 
+    // Initialize Firebase first (before any Firebase services)
+    try {
+      await Firebase.initializeApp();
+      debugPrint('✅ Firebase initialized successfully');
+    } catch (e) {
+      debugPrint('❌ Firebase initialization failed: $e');
+      // Continue without Firebase - the app will use local notifications only
+    }
+
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
 
     // Initialize notification service
     final notificationService = NotificationService();
     await notificationService.initialize();
+
+    // Register background message handler (both platforms)
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     runApp(
       MultiProvider(
