@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-// import 'package:firebase_core/firebase_core.dart';
-// import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,7 +18,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  // final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  FirebaseMessaging? _firebaseMessaging;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final MongoDBService _mongoDBService = MongoDBService();
@@ -25,26 +26,63 @@ class NotificationService {
       NotificationNavigationHandler();
 
   String? _fcmToken;
-  // StreamSubscription<RemoteMessage>? _messageSubscription;
-  // StreamSubscription<RemoteMessage>? _backgroundMessageSubscription;
+  StreamSubscription<RemoteMessage>? _messageSubscription;
+  StreamSubscription<RemoteMessage>? _backgroundMessageSubscription;
 
   // Initialize the notification service
   Future<void> initialize() async {
     try {
-      // TODO: Temporarily disable Firebase initialization due to iOS build issues
-      // await Firebase.initializeApp();
-
-      // Initialize local notifications
+      // Initialize local notifications first (works on all platforms)
       await _initializeLocalNotifications();
 
-      // TODO: Temporarily disable FCM token request
-      // await _requestFCMToken();
-
-      // TODO: Temporarily disable message handlers
-      // await _setupMessageHandlers();
-
-      debugPrint(
-          'NotificationService initialized successfully (Firebase disabled for iOS compatibility)');
+      // Platform-specific initialization
+      if (Platform.isIOS) {
+        // iOS: Try Firebase first, fallback to local notifications if it fails
+        try {
+          // Check if Firebase is initialized
+          try {
+            Firebase.app(); // This will throw if not initialized
+            _firebaseMessaging = FirebaseMessaging.instance;
+            await _requestFCMToken();
+            await _setupMessageHandlers();
+            debugPrint(
+                'NotificationService initialized (iOS - Firebase enabled)');
+          } catch (e) {
+            debugPrint(
+                'Firebase not initialized, using local notifications only: $e');
+            debugPrint(
+                'NotificationService initialized (iOS - Local notifications only)');
+          }
+        } catch (firebaseError) {
+          debugPrint(
+              'Firebase initialization failed on iOS, falling back to local notifications: $firebaseError');
+          debugPrint(
+              'NotificationService initialized (iOS - Local notifications only)');
+        }
+      } else {
+        // Android: Use Firebase + local notifications
+        try {
+          // Check if Firebase is initialized
+          try {
+            Firebase.app(); // This will throw if not initialized
+            _firebaseMessaging = FirebaseMessaging.instance;
+            await _requestFCMToken();
+            await _setupMessageHandlers();
+            debugPrint(
+                'NotificationService initialized (Android - Firebase enabled)');
+          } catch (e) {
+            debugPrint(
+                'Firebase not initialized, using local notifications only: $e');
+            debugPrint(
+                'NotificationService initialized (Android - Local notifications only)');
+          }
+        } catch (firebaseError) {
+          debugPrint(
+              'Firebase initialization failed, falling back to local notifications: $firebaseError');
+          debugPrint(
+              'NotificationService initialized (Android - Local notifications only)');
+        }
+      }
     } catch (e) {
       debugPrint('Error initializing NotificationService: $e');
       rethrow;
@@ -86,44 +124,6 @@ class NotificationService {
           );
     }
   }
-
-  // Request FCM token
-  // TODO: Temporarily disabled due to iOS build issues
-  /*
-  Future<void> _requestFCMToken() async {
-    try {
-      _fcmToken = await _firebaseMessaging.getToken();
-      debugPrint('FCM Token: $_fcmToken');
-
-      // Store token in SharedPreferences for persistence
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_token', _fcmToken ?? '');
-    } catch (e) {
-      debugPrint('Error getting FCM token: $e');
-    }
-  }
-  */
-
-  // Set up message handlers
-  // TODO: Temporarily disabled due to iOS build issues
-  /*
-  Future<void> _setupMessageHandlers() async {
-    // Handle foreground messages
-    _messageSubscription =
-        FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // Handle background messages
-    _backgroundMessageSubscription =
-        FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
-
-    // Handle notification tap when app is terminated
-    final RemoteMessage? initialMessage =
-        await _firebaseMessaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleBackgroundMessage(initialMessage);
-    }
-  }
-  */
 
   // Handle foreground messages
   // TODO: Temporarily disabled due to iOS build issues
@@ -240,34 +240,24 @@ class NotificationService {
   }
 
   // Request notification permissions
-  // TODO: Temporarily disabled due to iOS build issues
-  /*
   Future<bool> requestPermissions() async {
     try {
+      if (_firebaseMessaging == null) {
+        debugPrint('FirebaseMessaging not initialized');
+        return false;
+      }
+
+      // Request Firebase permissions
       final NotificationSettings settings =
-          await _firebaseMessaging.requestPermission(
+          await _firebaseMessaging!.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
 
-      debugPrint('Permission status: ${settings.authorizationStatus}');
-
-      return settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional;
-    } catch (e) {
-      debugPrint('Error requesting permissions: $e');
-      return false;
-    }
-  }
-  */
-
-  // Temporary simplified permissions method
-  Future<bool> requestPermissions() async {
-    try {
-      // For now, just request local notification permissions
-      final bool? result = await _localNotifications
+      // Request local notification permissions
+      final bool? localResult = await _localNotifications
           .resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(
@@ -276,11 +266,187 @@ class NotificationService {
             sound: true,
           );
 
-      return result ?? false;
+      final bool firebaseGranted =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional;
+      final bool localGranted = localResult ?? false;
+
+      debugPrint('Firebase permissions: $firebaseGranted');
+      debugPrint('Local permissions: $localGranted');
+
+      return firebaseGranted && localGranted;
     } catch (e) {
       debugPrint('Error requesting permissions: $e');
       return false;
     }
+  }
+
+  // Request FCM token and save it
+  Future<void> _requestFCMToken() async {
+    try {
+      if (_firebaseMessaging == null) {
+        debugPrint('FirebaseMessaging not initialized');
+        return;
+      }
+
+      // Request permissions first on iOS
+      if (Platform.isIOS) {
+        final NotificationSettings settings =
+            await _firebaseMessaging!.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
+
+        if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+            settings.authorizationStatus != AuthorizationStatus.provisional) {
+          debugPrint('❌ Notification permissions not granted on iOS');
+          return;
+        }
+        debugPrint('✅ Notification permissions granted on iOS');
+
+        // Wait a bit for APNs token to be set
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Check if APNs token is available
+        final apnsToken = await _firebaseMessaging!.getAPNSToken();
+        if (apnsToken == null) {
+          debugPrint('⚠️ APNs token not available yet, retrying...');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+
+      _fcmToken = await _firebaseMessaging!.getToken();
+      debugPrint('🔑 FCM Token Generated: $_fcmToken');
+
+      if (_fcmToken != null) {
+        // Save token to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', _fcmToken!);
+        debugPrint('💾 FCM Token saved to SharedPreferences');
+
+        // Store in MongoDB for current user
+        await _storeFCMTokenInDatabase(_fcmToken!);
+      }
+    } catch (e) {
+      debugPrint('❌ Error getting FCM token: $e');
+    }
+  }
+
+  // Store FCM token in MongoDB
+  Future<void> _storeFCMTokenInDatabase(String token) async {
+    try {
+      await _mongoDBService.ensureConnection();
+      final usersCollection = _mongoDBService.usersCollection;
+
+      // Get current user ID from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs
+          .getString('user_id'); // Changed from 'current_user_id' to 'user_id'
+
+      if (userId != null) {
+        await usersCollection.updateOne(
+          {'_id': ObjectIdHelper.parseObjectId(userId)},
+          {
+            '\$set': {
+              'fcmToken': token,
+              'updatedAt': DateTime.now().toIso8601String()
+            }
+          },
+        );
+        debugPrint('✅ FCM Token stored in MongoDB for user: $userId');
+      } else {
+        debugPrint('⚠️ No current user ID found, cannot store FCM token');
+      }
+    } catch (e) {
+      debugPrint('❌ Error storing FCM token in database: $e');
+    }
+  }
+
+  // Setup message handlers
+  Future<void> _setupMessageHandlers() async {
+    if (_firebaseMessaging == null) {
+      debugPrint('FirebaseMessaging not initialized');
+      return;
+    }
+
+    // Handle foreground messages
+    _messageSubscription =
+        FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+    // Handle background messages
+    _backgroundMessageSubscription =
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
+
+    // Handle notification tap when app is terminated
+    final RemoteMessage? initialMessage =
+        await _firebaseMessaging!.getInitialMessage();
+    if (initialMessage != null) {
+      _handleBackgroundMessage(initialMessage);
+    }
+  }
+
+  // Handle foreground messages
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    debugPrint('Received foreground message: ${message.messageId}');
+
+    // Show local notification
+    await _showLocalNotification(message);
+  }
+
+  // Handle background messages
+  Future<void> _handleBackgroundMessage(RemoteMessage message) async {
+    debugPrint('Received background message: ${message.messageId}');
+
+    // Handle navigation based on notification data
+    if (message.data.isNotEmpty) {
+      // Create a temporary AppNotification from message data for navigation
+      final notification = AppNotification(
+        id: message.messageId ??
+            'temp_${DateTime.now().millisecondsSinceEpoch}',
+        userId: message.data['userId'] ?? '',
+        type: NotificationType.values.firstWhere(
+          (type) => type.toString().split('.').last == message.data['type'],
+          orElse: () => NotificationType.system,
+        ),
+        category: NotificationCategory.values.firstWhere(
+          (category) =>
+              category.toString().split('.').last == message.data['category'],
+          orElse: () => NotificationCategory.tip,
+        ),
+        title: message.notification?.title ?? 'Notification',
+        message: message.notification?.body ?? 'You have a new notification',
+        priority: NotificationPriority.medium,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      _navigationHandler.handleNotificationTap(notification);
+    }
+  }
+
+  // Show local notification
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'high_importance_channel',
+      'High Importance Notifications',
+      channelDescription: 'This channel is used for important notifications.',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await _localNotifications.show(
+      message.hashCode,
+      message.notification?.title ?? 'New Notification',
+      message.notification?.body ?? 'You have a new notification',
+      platformChannelSpecifics,
+      payload: jsonEncode(message.data),
+    );
   }
 
   // Get notification preferences
@@ -374,18 +540,14 @@ class NotificationService {
 
   // Dispose resources
   void dispose() {
-    // TODO: Temporarily disabled due to iOS build issues
-    // _messageSubscription?.cancel();
-    // _backgroundMessageSubscription?.cancel();
+    _messageSubscription?.cancel();
+    _backgroundMessageSubscription?.cancel();
   }
 }
 
 // Top-level function for background message handling
-// TODO: Temporarily disabled due to iOS build issues
-/*
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   debugPrint('Handling background message: ${message.messageId}');
 }
-*/
