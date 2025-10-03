@@ -85,9 +85,6 @@ class DietConstraintsService {
   /// Get DASH-specific constraints
   Map<String, dynamic> _getDashConstraints() {
     return {
-      'maxSaturatedFatPerServing': 8, // g per serving
-      'minFiberPerServing': 2, // g per serving
-      'minPotassiumPerServing': 300, // mg per serving
       'veryHealthy': true,
       'lowFat': true,
     };
@@ -96,11 +93,7 @@ class DietConstraintsService {
   /// Get MyPlate-specific constraints
   Map<String, dynamic> _getMyPlateConstraints() {
     return {
-      'maxSaturatedFatPerServing': 10, // g per serving
-      'maxSugarPerServing': 30, // g per serving
-      'maxCaloriesPerServing': 600, // calories per serving
       'veryHealthy': true,
-      'balancedNutrition': true,
     };
   }
 

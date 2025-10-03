@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/services/personalization_service.dart';
+import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:provider/provider.dart';
 
 class OtherDetailsStep extends StatefulWidget {
@@ -126,13 +129,50 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
               cookingSkill: _cookingSkill,
             );
 
-        // Keep dietType consistent if needed for the next step
+        // Generate personalized diet plan
         final signupProvider = context.read<SignupProvider>();
         final signupData = signupProvider.data;
-        final bool isDashDiet =
-            signupData.medicalConditions.contains('Hypertension') ||
-                signupData.healthGoals.contains('Lower blood pressure');
-        signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+
+        try {
+          // Load nutrition content and create personalization service
+          final nutritionContent = await NutritionContentLoader.load();
+          final personalizationService =
+              PersonalizationService(nutritionContent);
+
+          final personalizationResult = personalizationService.personalize(
+            dob: signupData.dateOfBirth!,
+            sex: signupData.sex!,
+            heightFeet: signupData.heightFeet!,
+            heightInches: signupData.heightInches!,
+            weightLb: signupData.weight!,
+            activityLevel: signupData.activityLevel!,
+            medicalConditions: signupData.medicalConditions,
+            healthGoals: signupData.healthGoals,
+          );
+
+          // Set the personalized diet plan
+          signupProvider.setPersonalizedDietPlan(
+            dietType: personalizationResult.dietType,
+            targetCalories: personalizationResult.targetCalories,
+            selectedDietPlan: personalizationResult.selectedDietPlan,
+            diagnostics: personalizationResult.diagnostics,
+          );
+
+          if (kDebugMode) {
+            print(
+                'Generated personalized plan: ${personalizationResult.dietType} with ${personalizationResult.targetCalories} calories');
+          }
+        } catch (e) {
+          // Fallback to simple diet type selection if personalization fails
+          final bool isDashDiet =
+              signupData.medicalConditions.contains('Hypertension') ||
+                  signupData.healthGoals.contains('Lower blood pressure');
+          signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+
+          if (kDebugMode) {
+            print('Personalization failed, using fallback: $e');
+          }
+        }
 
         // Move to next step; actual registration happens at the end
         widget.onSubmit();
@@ -146,10 +186,11 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
           );
         }
       } finally {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }

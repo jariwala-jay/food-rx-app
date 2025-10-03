@@ -287,37 +287,20 @@ class RecipeFilter {
           // DASH Diet Guidelines for Hypertension (practical approach)
           constraints['maxSodium'] =
               1500; // mg per day (more practical than 1500)
-          constraints['dashCompliant'] = true;
           constraints['veryHealthy'] = true;
-          constraints['maxSaturatedFat'] =
-              8; // g per serving (slightly more lenient)
-          constraints['minPotassium'] = 300; // mg per serving (more achievable)
           break;
         case MedicalCondition.diabetes:
           // ADA Guidelines for Diabetes (very practical approach)
-          constraints['maxSugar'] = 45; // g per serving (increased from 35)
-          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
-          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.prediabetes:
-          // Pre-diabetes prevention guidelines (very practical)
-          constraints['maxSugar'] = 45; // g per serving (increased from 35)
-          constraints['maxCarbs'] = 75; // g per serving (increased from 60)
-          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
           constraints['maxSodium'] = 2300; // mg per day
           break;
         case MedicalCondition.obesity:
           // Weight management guidelines (very practical)
-          constraints['maxCalories'] = 600; // per serving (increased from 500)
-          constraints['minProtein'] = 10; // g per serving (reduced from 12)
-          constraints['maxSaturatedFat'] =
-              10; // g per serving (increased from 7)
-          // Remove minFiber constraint - let MyPlate handle it
           constraints['veryHealthy'] = true;
-          // Remove lowFat constraint - too restrictive
           break;
       }
     }
@@ -343,9 +326,6 @@ class RecipeFilter {
   Map<String, dynamic> getDashDietConstraints() {
     return {
       'maxSodium': 1500, // mg per day
-      'minPotassium': 300, // mg per serving (more achievable)
-      'maxSaturatedFat': 8, // g per serving (slightly more lenient)
-      'minFiber': 2, // g per serving (more achievable)
       'veryHealthy': true,
       'lowFat': true,
       // Emphasize these food groups
@@ -361,12 +341,8 @@ class RecipeFilter {
   Map<String, dynamic> getMyPlateDietConstraints() {
     return {
       'maxSodium': 2300, // mg per day
-      'maxSaturatedFat': 15, // g per day
-      'maxSugar': 50, // g per day
-      // Remove minFiber constraint - too restrictive when combined with medical conditions
       'veryHealthy': true,
       // Balanced nutrition approach
-      'balancedNutrition': true,
       'emphasizeVariety': true,
       'portionControl': true,
     };
