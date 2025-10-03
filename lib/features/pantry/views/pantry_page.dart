@@ -6,6 +6,7 @@ import '../controller/pantry_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import '../widgets/category_filter_chips.dart';
+import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
 
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);
@@ -220,8 +221,8 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add FoodRx Items', () {
-              // Show modal to add a new pantry item
-              _showAddItemDialog(true);
+              // Show action sheet to add pantry items
+              _showAddActionSheet();
             }),
           ],
         ),
@@ -317,8 +318,8 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add Home Items', () {
-              // Show modal to add a new other item
-              _showAddItemDialog(false);
+              // Show action sheet to add home items
+              _showAddActionSheet();
             }),
           ],
         ),
@@ -512,81 +513,12 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     );
   }
 
-  void _showAddItemDialog(bool isPantryItem) {
-    // TODO: Implement a proper form in a modal bottom sheet
-    // This is a placeholder implementation
+  void _showAddActionSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isPantryItem ? 'Add Pantry Item' : 'Add Other Item',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'This is a placeholder. In a real app, add a form here to collect item details.',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6A00),
-                    ),
-                    onPressed: () {
-                      // Demo addition of a mock item
-                      final newItem = PantryItem(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        name:
-                            isPantryItem ? 'New Pantry Item' : 'New Other Item',
-                        category: 'General',
-                        quantity: 1.0,
-                        unit: UnitType.piece,
-                        expirationDate:
-                            DateTime.now().add(const Duration(days: 5)),
-                        isPantryItem: isPantryItem,
-                        imageUrl:
-                            'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg',
-                      );
-
-                      context.read<PantryController>().addPantryItem(newItem);
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Add Item',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => const AddActionSheet(),
     );
   }
 
