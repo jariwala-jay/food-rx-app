@@ -186,7 +186,7 @@ class _RecipePageState extends State<RecipePage> {
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'Find recipes based on your pantry items',
+                            'Turn Your Pantry into Delicious Meals',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.grey,
@@ -194,7 +194,7 @@ class _RecipePageState extends State<RecipePage> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          _buildButton('Discover Recipes', () {
+                          _buildButton('Generate Recipes', () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -211,18 +211,6 @@ class _RecipePageState extends State<RecipePage> {
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const CreateRecipeView(),
-            ),
-          );
-        },
-        backgroundColor: const Color(0xFFFF6A00),
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
