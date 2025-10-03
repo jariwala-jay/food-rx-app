@@ -38,6 +38,7 @@ class RecipeController extends ChangeNotifier {
   RecipeFilter _currentFilter = const RecipeFilter();
   bool _isLoading = false;
   String? _error;
+  bool _hasAttemptedGeneration = false;
 
   // Getters
   List<Recipe> get recipes => _recipes;
@@ -45,6 +46,7 @@ class RecipeController extends ChangeNotifier {
   RecipeFilter get currentFilter => _currentFilter;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get hasAttemptedGeneration => _hasAttemptedGeneration;
   UserModel? get currentUser => authProvider.currentUser;
   List<PantryItem> get pantryItems => pantryController.pantryItems;
 
@@ -73,6 +75,7 @@ class RecipeController extends ChangeNotifier {
   Future<void> generateRecipes({RecipeFilter? filter}) async {
     _isLoading = true;
     _error = null;
+    _hasAttemptedGeneration = true; // Mark that generation has been attempted
     if (filter != null) {
       _currentFilter = filter;
     }
@@ -103,11 +106,23 @@ class RecipeController extends ChangeNotifier {
             'diet_rule'], // Include diet rule from personalization
       };
 
-      _recipes = await recipeGenerationService.generateRecipes(
+      final generatedRecipes = await recipeGenerationService.generateRecipes(
         filter: _currentFilter,
         pantryItems: pantryItems,
         userProfile: userProfile,
       );
+
+      // Check if all recipes were filtered out during validation
+      if (generatedRecipes.isEmpty) {
+        _recipes = [];
+        // Don't set error - let the empty state handle this case
+        if (kDebugMode) {
+          print(
+              'All recipes were filtered out during dietary/pantry validation');
+        }
+      } else {
+        _recipes = generatedRecipes;
+      }
     } catch (e) {
       _error = "Failed to generate recipes: $e";
       if (kDebugMode) {
@@ -430,6 +445,13 @@ class RecipeController extends ChangeNotifier {
   }
 
   void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  void resetGenerationAttempt() {
+    _hasAttemptedGeneration = false;
+    _recipes = [];
     _error = null;
     notifyListeners();
   }
