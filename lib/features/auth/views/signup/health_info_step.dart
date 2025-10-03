@@ -244,18 +244,19 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             'Overweight/Obesity',
                             'None',
                           ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                if (value == 'None') {
-                                  _selectedMedicalConditions = [];
-                                } else if (!_selectedMedicalConditions
-                                    .contains(value)) {
-                                  _selectedMedicalConditions.add(value);
-                                }
-                              });
-                            }
+                          multiSelect: true,
+                          selectedValues: _selectedMedicalConditions,
+                          onChangedMulti: (values) {
+                            setState(() {
+                              // Allow explicit 'None' as a value but not with others
+                              if (values.contains('None')) {
+                                _selectedMedicalConditions = ['None'];
+                              } else {
+                                _selectedMedicalConditions = values;
+                              }
+                            });
                           },
+                          onChanged: (_) {},
                           hintText: 'Select Disease',
                         ),
                         if (_selectedMedicalConditions.isNotEmpty) ...[
@@ -264,7 +265,13 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             values: _selectedMedicalConditions,
                             onChanged: (values) {
                               setState(() {
-                                _selectedMedicalConditions = values;
+                                // Respect 'None' exclusivity
+                                if (values.contains('None') &&
+                                    values.length > 1) {
+                                  _selectedMedicalConditions = ['None'];
+                                } else {
+                                  _selectedMedicalConditions = values;
+                                }
                               });
                             },
                           ),
@@ -322,6 +329,45 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                         ),
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
+                            // Required field validations
+                            if (_selectedSex == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please select your sex'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                            if (_heightFeet == null || _heightInches == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please select your height'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                            if (_weightController.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter your weight'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                            if (_selectedMedicalConditions.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Please select your medical conditions (or None)'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+
                             try {
                               final dateOfBirth = _dobController.text.isNotEmpty
                                   ? DateFormat('MM/dd/yyyy')

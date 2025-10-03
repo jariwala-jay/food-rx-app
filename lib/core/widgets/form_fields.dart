@@ -253,6 +253,10 @@ class AppDropdownField extends StatefulWidget {
   final ValueChanged<String?>? onChanged;
   final String hintText;
   final bool showSearchBar;
+  final bool useBottomSheet;
+  final bool multiSelect;
+  final List<String>? selectedValues;
+  final ValueChanged<List<String>>? onChangedMulti;
 
   const AppDropdownField({
     super.key,
@@ -262,6 +266,10 @@ class AppDropdownField extends StatefulWidget {
     required this.onChanged,
     required this.hintText,
     this.showSearchBar = false,
+    this.useBottomSheet = true,
+    this.multiSelect = false,
+    this.selectedValues,
+    this.onChangedMulti,
   });
 
   @override
@@ -270,9 +278,11 @@ class AppDropdownField extends StatefulWidget {
 
 class _AppDropdownFieldState extends State<AppDropdownField> {
   final TextEditingController _searchController = TextEditingController();
-  bool _isExpanded = false;
   List<String> _filteredOptions = [];
   final FocusNode _focusNode = FocusNode();
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  bool _isExpanded = false;
 
   @override
   void initState() {
@@ -289,6 +299,9 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
 
   @override
   void dispose() {
+    // Avoid setState in dispose; just tear down overlay and controllers safely
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -314,56 +327,230 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
           ),
           const SizedBox(height: 8),
         ],
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _isExpanded = !_isExpanded;
-              if (_isExpanded) {
-                _focusNode.requestFocus();
+        CompositedTransformTarget(
+          link: _layerLink,
+          child: GestureDetector(
+            onTap: () {
+              if (widget.useBottomSheet) {
+                _openBottomSheet();
+              } else {
+                if (_isExpanded) {
+                  _removeOverlay();
+                } else {
+                  _showOverlay();
+                }
               }
-            });
-          },
-          child: Column(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F7F8),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.value ?? widget.hintText,
-                        style: widget.value != null
-                            ? AppTypography.bg_14_r
-                            : AppTypography.bg_14_r.copyWith(
-                                color: const Color(0xFF90909A),
-                              ),
-                      ),
-                    ),
-                    const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Color(0xFF90909A),
-                    ),
-                  ],
-                ),
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F8),
+                borderRadius: BorderRadius.circular(8),
               ),
-              if (_isExpanded)
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.value ?? widget.hintText,
+                      style: widget.value != null
+                          ? AppTypography.bg_14_r
+                          : AppTypography.bg_14_r.copyWith(
+                              color: const Color(0xFF90909A),
+                            ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF90909A),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openBottomSheet() async {
+    List<String> localFiltered = List<String>.from(widget.options);
+    final controller = TextEditingController();
+    final Set<String> tempSelected =
+        Set<String>.from(widget.selectedValues ?? const <String>[]);
+
+    final result = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setModalState) {
+          return Container(
+            height: MediaQuery.of(sheetContext).size.height * 0.7,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
                 Container(
-                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.label ?? 'Select',
+                        style: AppTypography.bg_16_m,
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          if (widget.multiSelect) {
+                            Navigator.pop(sheetContext, tempSelected.toList());
+                          } else {
+                            Navigator.pop(sheetContext);
+                          }
+                        },
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                if (widget.showSearchBar)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: TextField(
+                      controller: controller,
+                      decoration: InputDecoration(
+                        hintText: 'Search here',
+                        hintStyle: AppTypography.bg_14_r
+                            .copyWith(color: const Color(0xFF90909A)),
+                        prefixIcon:
+                            const Icon(Icons.search, color: Color(0xFF90909A)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                      ),
+                      onChanged: (q) {
+                        localFiltered = widget.options
+                            .where((o) =>
+                                o.toLowerCase().contains(q.toLowerCase()))
+                            .toList();
+                        setModalState(() {});
+                      },
+                    ),
+                  ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: localFiltered.length,
+                    itemBuilder: (itemContext, index) {
+                      final option = localFiltered[index];
+                      if (widget.multiSelect) {
+                        final isChecked = tempSelected.contains(option);
+                        return CheckboxListTile(
+                          title: Text(option, style: AppTypography.bg_14_r),
+                          value: isChecked,
+                          onChanged: (v) {
+                            if (v == true) {
+                              tempSelected.add(option);
+                            } else {
+                              tempSelected.remove(option);
+                            }
+                            setModalState(() {});
+                          },
+                          activeColor: const Color(0xFFFF6A00),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        );
+                      } else {
+                        return ListTile(
+                          title: Text(option, style: AppTypography.bg_14_r),
+                          onTap: () => Navigator.pop(sheetContext, option),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (result != null) {
+      if (widget.multiSelect) {
+        final List<String> selectedList = List<String>.from(result);
+        widget.onChangedMulti?.call(selectedList);
+      } else {
+        widget.onChanged?.call(result as String);
+      }
+      setState(() {});
+    }
+  }
+
+  void _showOverlay() {
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() {
+      _isExpanded = true;
+    });
+    if (widget.showSearchBar) {
+      // Delay focus to ensure overlay is built
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) _focusNode.requestFocus();
+      });
+    }
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isExpanded = false;
+      _searchController.clear();
+      _filteredOptions = widget.options;
+    });
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Tap-away barrier
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _removeOverlay,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 4),
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 240),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -397,8 +584,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                             onChanged: _filterOptions,
                           ),
                         ),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 200),
+                      Flexible(
                         child: ListView.builder(
                           shrinkWrap: true,
                           padding: EdgeInsets.zero,
@@ -408,11 +594,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                             return InkWell(
                               onTap: () {
                                 widget.onChanged?.call(option);
-                                setState(() {
-                                  _isExpanded = false;
-                                  _searchController.clear();
-                                  _filteredOptions = widget.options;
-                                });
+                                _removeOverlay();
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
@@ -431,10 +613,11 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                     ],
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

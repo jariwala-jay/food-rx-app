@@ -5,6 +5,9 @@ import 'package:flutter_app/features/auth/views/signup/preferences_step.dart';
 import 'package:flutter_app/features/auth/views/signup/other_details_step.dart';
 import 'package:flutter_app/features/auth/views/signup/diet_plan_step.dart';
 import 'package:flutter_app/features/auth/widgets/signup_progress_indicator.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/auth/providers/signup_provider.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -31,8 +34,45 @@ class _SignupPageState extends State<SignupPage> {
     });
   }
 
-  void _handleSubmit() {
-    Navigator.pushReplacementNamed(context, '/home');
+  Future<void> _handleSubmit() async {
+    // Perform final registration here using collected data
+    try {
+      final signupProvider = context.read<SignupProvider>();
+      final authController = context.read<AuthController>();
+      final signupData = signupProvider.data;
+      final profilePhoto = signupProvider.profilePhoto;
+
+      final success = await authController.register(
+        email: signupData.email!,
+        password: signupData.password!,
+        userData: signupData.toJson(),
+        profilePhoto: profilePhoto,
+      );
+
+      if (success) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(authController.error ?? 'Registration failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
