@@ -428,7 +428,7 @@ class _RecipePageState extends State<RecipePage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cook Recipe'),
         content: Text(
-          'Are you sure you want to cook "${recipe.title}"? This will deduct the used pantry items from your inventory.',
+          'Are you sure you want to cook "${recipe.title}"? This will deduct available ingredients from pantry and track ALL recipe ingredients for nutrition.',
         ),
         actions: [
           TextButton(
@@ -478,7 +478,7 @@ class _RecipePageState extends State<RecipePage> {
                   scaffoldMessenger.showSnackBar(
                     const SnackBar(
                       content: Text(
-                          'Recipe cooked successfully! Pantry and trackers updated.'),
+                          'Recipe cooked successfully! Available pantry items deducted and ALL recipe ingredients tracked for nutrition.'),
                       backgroundColor: Colors.green,
                       duration: Duration(seconds: 4),
                     ),

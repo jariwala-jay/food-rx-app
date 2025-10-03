@@ -180,7 +180,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       }
 
       // Step 2: Add to diet tracking (1 serving per person)
-      // ONLY track ingredients that were successfully deducted from pantry
+      // Track ALL ingredients from the recipe for dietary purposes
+      // This is separate from pantry deduction - we track nutrition regardless
       final user = authController.currentUser;
       final userDietType =
           user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
@@ -190,50 +191,17 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       if (kDebugMode) {
         print('\n🥗 DIET TRACKING...');
         print('User diet type: $userDietType');
-        print('Only tracking successfully deducted ingredients:');
-      }
-
-      // Create a set of successfully deducted ingredient names for quick lookup
-      final successfullyDeductedNames = <String>{};
-      for (var updatedItem in deductionResult.updatedItems) {
-        // Find matching recipe ingredient names
-        for (final ingredient in _adjustedRecipe.extendedIngredients) {
-          if (ingredient.nameClean
-                  .toLowerCase()
-                  .contains(updatedItem.name.toLowerCase()) ||
-              updatedItem.name
-                  .toLowerCase()
-                  .contains(ingredient.nameClean.toLowerCase())) {
-            successfullyDeductedNames.add(ingredient.nameClean);
-          }
-        }
-      }
-
-      if (kDebugMode) {
-        print(
-            'Successfully deducted ingredients: ${successfullyDeductedNames.join(', ')}');
-        print(
-            'Total ingredients in recipe: ${_adjustedRecipe.extendedIngredients.length}');
-        print('Will track: ${successfullyDeductedNames.length} ingredients');
+        print('Tracking ALL recipe ingredients for dietary purposes:');
       }
 
       // Aggregate servings by category to avoid duplicate updates
       final Map<TrackerCategory, double> categoryServings = {};
 
       // Use the clean ingredient data directly from the recipe
-      // BUT only track ingredients that were successfully deducted
+      // Track ALL ingredients regardless of pantry availability
       for (final ingredient in _adjustedRecipe.extendedIngredients) {
-        // Skip ingredients that were NOT successfully deducted from pantry
-        if (!successfullyDeductedNames.contains(ingredient.nameClean)) {
-          if (kDebugMode) {
-            print(
-                '  ⏭️ Skipping ${ingredient.nameClean} (not deducted from pantry)');
-          }
-          continue;
-        }
-
         if (kDebugMode) {
-          print('  ✅ Tracking ${ingredient.nameClean} (successfully deducted)');
+          print('  ✅ Tracking ${ingredient.nameClean} (recipe ingredient)');
         }
         final categories = _dietService.getCategoriesForIngredient(
             ingredient.nameClean,
@@ -316,7 +284,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         print(
             '   Pantry changes: ${deductionResult.updatedItems.length} updated, ${deductionResult.itemsToRemove.length} removed');
         print(
-            '   Diet tracking: ${categoryServings.length} categories updated');
+            '   Diet tracking: ${categoryServings.length} categories updated (ALL recipe ingredients tracked)');
         print('===== RECIPE DETAIL PAGE COOKING COMPLETE =====\n');
       }
 
@@ -325,7 +293,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Recipe cooked! Ingredients deducted from pantry (${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful) and added to diet tracking.',
+              'Recipe cooked! Ingredients deducted from pantry (${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful) and ALL recipe ingredients added to diet tracking.',
             ),
             backgroundColor: Colors.green,
           ),
