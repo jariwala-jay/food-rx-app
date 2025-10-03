@@ -64,13 +64,19 @@ enum TrackerCategory {
   sweets,
   nutsLegumes,
   sodium,
-  cholesterol,
-  fiber,
   other
 }
 
 /// Units for trackers
 enum TrackerUnit { cups, servings, oz, g, mg, ml, percent, count }
+
+/// Check if a tracker category requires manual numeric entry instead of pantry selection
+bool isManualEntryCategory(TrackerCategory category) {
+  return category == TrackerCategory.sodium ||
+      category == TrackerCategory.fatsOils ||
+      category == TrackerCategory.water ||
+      category == TrackerCategory.other;
+}
 
 /// TrackerGoal represents a nutritional target that a user should aim for
 class TrackerGoal {

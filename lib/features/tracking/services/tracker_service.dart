@@ -767,7 +767,7 @@ class TrackerService {
       ),
       TrackerGoal(
         userId: userId,
-        name: 'Lean Meats/poultry/fish',
+        name: 'Protein',
         category: TrackerCategory.leanMeat,
         goalValue: leanMeats,
         unit: TrackerUnit.servings,
@@ -787,7 +787,7 @@ class TrackerService {
       ),
       TrackerGoal(
         userId: userId,
-        name: 'Low-fat/fat-free Dairy',
+        name: 'Dairy',
         category: TrackerCategory.dairy,
         goalValue: dairy,
         unit: TrackerUnit.servings,
@@ -817,7 +817,7 @@ class TrackerService {
       ),
       TrackerGoal(
         userId: userId,
-        name: 'Sweets/added-sugar',
+        name: 'Sweets',
         category: TrackerCategory.sweets,
         goalValue: hasDailySweets ? sweetsMaxPerDay! : sweets,
         unit: TrackerUnit.servings,
@@ -828,7 +828,7 @@ class TrackerService {
       ),
       TrackerGoal(
         userId: userId,
-        name: 'Nuts/seeds/legumes',
+        name: 'Nuts',
         category: TrackerCategory.nutsLegumes,
         goalValue: nutsLegumes,
         unit: TrackerUnit.servings,

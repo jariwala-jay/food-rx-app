@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import '../controller/tracker_provider.dart';
 import '../models/tracker_goal.dart';
 import '../widgets/tracker_card.dart';
-import '../widgets/tracker_edit_dialog.dart';
+import '../widgets/pantry_tracker_logging_modal.dart';
+import '../widgets/manual_tracker_logging_modal.dart';
 
 class TrackerGrid extends StatefulWidget {
   final String userId;
@@ -263,21 +264,44 @@ class _TrackerGridState extends State<TrackerGrid>
   }
 
   void _showEditDialog(BuildContext context, TrackerGoal tracker) {
-    showDialog(
-      context: context,
-      builder: (context) => TrackerEditDialog(
-        tracker: tracker,
-        onUpdate: (newValue) async {
-          try {
-            await Provider.of<TrackerProvider>(context, listen: false)
-                .updateTrackerValueOptimized(tracker.id, newValue);
-            return true;
-          } catch (e) {
-            return Future.error(e);
-          }
-        },
-      ),
-    );
+    // Check if this category should use manual entry or pantry selection
+    if (isManualEntryCategory(tracker.category)) {
+      // Show manual numeric input modal
+      showDialog(
+        context: context,
+        builder: (context) => ManualTrackerLoggingModal(
+          tracker: tracker,
+          onLog: (newValue) async {
+            try {
+              await Provider.of<TrackerProvider>(context, listen: false)
+                  .updateTrackerValueOptimized(
+                      tracker.id, tracker.currentValue + newValue);
+              return true;
+            } catch (e) {
+              return Future.error(e);
+            }
+          },
+        ),
+      );
+    } else {
+      // Show pantry-based selection modal
+      showDialog(
+        context: context,
+        builder: (context) => PantryTrackerLoggingModal(
+          tracker: tracker,
+          onLog: (newValue) async {
+            try {
+              await Provider.of<TrackerProvider>(context, listen: false)
+                  .updateTrackerValueOptimized(
+                      tracker.id, tracker.currentValue + newValue);
+              return true;
+            } catch (e) {
+              return Future.error(e);
+            }
+          },
+        ),
+      );
+    }
   }
 
   Widget _buildSkeletonLoading() {
