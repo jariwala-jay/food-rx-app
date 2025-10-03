@@ -71,7 +71,8 @@ class TrackerProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> loadUserTrackers(String userId, String dietType) async {
+  Future<void> loadUserTrackers(String userId, String dietType,
+      {Map<String, dynamic>? personalizedDietPlan}) async {
     _setError(null);
     _setLoading(true);
     try {
@@ -116,7 +117,31 @@ class TrackerProvider extends ChangeNotifier {
       // If after all attempts, trackers are empty, re-initialize defaults
       // (This serves as a client-side fallback if backend provisioning fails for new users)
       if (_dailyTrackers.isEmpty && _weeklyTrackers.isEmpty) {
-        await _initializeDefaultTrackers(userId, dietType);
+        await _initializeDefaultTrackers(userId, dietType,
+            personalizedDietPlan: personalizedDietPlan);
+      } else if (personalizedDietPlan != null) {
+        // Check if trackers need to be updated with personalized values
+        // If trackers exist but seem to have default values, update them
+        final hasDefaultValues = _dailyTrackers.any((tracker) {
+          if (tracker.category.name == 'veggies' && tracker.goalValue == 4.0)
+            return true;
+          if (tracker.category.name == 'fruits' && tracker.goalValue == 4.0)
+            return true;
+          if (tracker.category.name == 'grains' && tracker.goalValue == 6.0)
+            return true;
+          return false;
+        });
+
+        if (hasDefaultValues) {
+          // Update trackers with personalized values
+          await _trackerService.updateTrackersWithPersonalizedPlan(
+              userId, dietType, personalizedDietPlan);
+          // Reload trackers after update
+          _dailyTrackers =
+              await _trackerService.getDailyTrackers(userId, dietType);
+          _weeklyTrackers =
+              await _trackerService.getWeeklyTrackers(userId, dietType);
+        }
       }
 
       _retryCount = 0;

@@ -5,7 +5,6 @@ import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/features/recipes/views/create_recipe_view.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app/features/recipes/models/nutrition.dart';
 import 'package:flutter_app/features/recipes/views/saved_recipes_page.dart';
 
 // State class for efficient rebuilds
@@ -13,12 +12,16 @@ class RecipePageState {
   final List<Recipe> recipes;
   final bool isLoading;
   final String? error;
+  final bool hasAttemptedGeneration;
+  final bool isGeneratingRecipes; // NEW: Tracks actual recipe generation
   final List<String> userMedicalConditionsDisplay;
 
   const RecipePageState({
     required this.recipes,
     required this.isLoading,
     required this.error,
+    required this.hasAttemptedGeneration,
+    required this.isGeneratingRecipes,
     required this.userMedicalConditionsDisplay,
   });
 
@@ -29,6 +32,8 @@ class RecipePageState {
         other.recipes.length == recipes.length &&
         other.isLoading == isLoading &&
         other.error == error &&
+        other.hasAttemptedGeneration == hasAttemptedGeneration &&
+        other.isGeneratingRecipes == isGeneratingRecipes &&
         other.userMedicalConditionsDisplay.length ==
             userMedicalConditionsDisplay.length;
   }
@@ -38,6 +43,8 @@ class RecipePageState {
     return recipes.length.hashCode ^
         isLoading.hashCode ^
         error.hashCode ^
+        hasAttemptedGeneration.hashCode ^
+        isGeneratingRecipes.hashCode ^
         userMedicalConditionsDisplay.length.hashCode;
   }
 }
@@ -49,12 +56,29 @@ class RecipePage extends StatefulWidget {
   State<RecipePage> createState() => _RecipePageState();
 }
 
-class _RecipePageState extends State<RecipePage> {
+class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
   bool _hasInitialized = false;
+  late AnimationController _fadeAnimationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize animations
+    _fadeAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeAnimationController,
+      curve: Curves.easeInOut,
+    ));
+
     // Initialize the recipe controller when the page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasInitialized) {
@@ -62,6 +86,12 @@ class _RecipePageState extends State<RecipePage> {
         Provider.of<RecipeController>(context, listen: false).initialize();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _fadeAnimationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -106,110 +136,125 @@ class _RecipePageState extends State<RecipePage> {
                     recipes: controller.recipes,
                     isLoading: controller.isLoading,
                     error: controller.error,
+                    hasAttemptedGeneration: controller.hasAttemptedGeneration,
+                    isGeneratingRecipes: controller.isLoading ||
+                        _isGenerationInProgress(controller), // NEW
                     userMedicalConditionsDisplay:
                         controller.userMedicalConditionsDisplay,
                   ),
                   builder: (context, state, child) {
                     if (kDebugMode) {
                       print(
-                          '🏗️ RecipePage Selector rebuild: ${state.recipes.length} recipes, loading: ${state.isLoading}');
+                          '🏗️ RecipePage Selector rebuild: ${state.recipes.length} recipes, loading: ${state.isLoading}, generating: ${state.isGeneratingRecipes}, error: ${state.error}, hasAttempted: ${state.hasAttemptedGeneration}');
                     }
 
-                    if (state.isLoading) {
-                      return _buildLoadingState();
+                    // Always show loading state when loading OR generating recipes
+                    if (state.isGeneratingRecipes) {
+                      if (kDebugMode) {
+                        print(
+                            '⏳ Showing loading state - recipes being generated');
+                      }
+                      return _buildAnimatedLoadingState();
                     }
 
-                    if (state.error != null) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Something went wrong',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              state.error!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {
-                                final controller =
-                                    Provider.of<RecipeController>(context,
-                                        listen: false);
-                                controller.clearError();
-                                // Only initialize if not already initialized
-                                if (!_hasInitialized) {
-                                  _hasInitialized = true;
-                                  controller.initialize();
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFF6A00),
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Try Again'),
-                            ),
-                          ],
-                        ),
+                    // Prioritize showing recipes if they exist, even if there was an error
+                    if (state.recipes.isNotEmpty) {
+                      if (kDebugMode) {
+                        print('🍽️ Showing ${state.recipes.length} recipes');
+                      }
+                      _fadeAnimationController.forward();
+                      return FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: _buildRecipeList(state),
                       );
                     }
 
-                    if (state.recipes.isNotEmpty) {
-                      return _buildRecipeList(state);
+                    // Only show error state if loading is complete AND there are no recipes AND there's an error AND generation was attempted
+                    if (state.error != null && state.hasAttemptedGeneration) {
+                      if (kDebugMode) {
+                        print('🚨 Showing error state: ${state.error}');
+                      }
+                      return _buildErrorState(state.error!, context);
                     }
 
-                    // Empty state - show discovery option
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.restaurant_menu,
-                            size: 80,
-                            color: Colors.grey[300],
-                          ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Turn Your Pantry into Delicious Meals',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          _buildButton('Generate Recipes', () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const CreateRecipeView(),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    );
+                    // Only show empty state if generation has been attempted and no results and no error and no longer generating
+                    if (state.hasAttemptedGeneration &&
+                        !state.isGeneratingRecipes) {
+                      if (kDebugMode) {
+                        print(
+                            '📝 Showing empty state - generation completed with no recipes');
+                      }
+                      return _buildEmptyState(context);
+                    }
+
+                    // Default behavior for users who haven't generated recipes yet
+                    if (kDebugMode) {
+                      print('🎯 Showing default discovery for new users');
+                    }
+                    return _buildDefaultDiscovery();
                   },
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // Helper method to detect if generation is in progress
+  bool _isGenerationInProgress(RecipeController controller) {
+    // Consider generation in progress ONLY if:
+    // 1. Currently loading (still calling API/extracting recipes)
+    // 2. Has attempted but no recipes yet AND no evidence of completion
+    return controller.isLoading ||
+        (controller.hasAttemptedGeneration &&
+            controller.recipes.isEmpty &&
+            controller.error == null &&
+            !_hasGenerationCompleted(controller));
+  }
+
+  // Check if generation has completed but resulted in no recipes
+  bool _hasGenerationCompleted(RecipeController controller) {
+    // If not loading anymore, generation is complete regardless of results
+    return !controller.isLoading;
+  }
+
+  Widget _buildAnimatedLoadingState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Simple circular progress indicator
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+              strokeWidth: 3,
+            ),
+            const SizedBox(height: 24),
+
+            Text(
+              'Finding Perfect Recipes for You...',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Text(
+              _getLoadingMessage(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -306,242 +351,208 @@ class _RecipePageState extends State<RecipePage> {
     );
   }
 
-  void _showRecipeDetails(Recipe recipe) {
-    // This is now handled by the GestureDetector on the card
-  }
-
-  String _formatIngredient(RecipeIngredient ingredient) {
-    String amount;
-    // Format the amount to show decimals only if necessary
-    if (ingredient.amount == ingredient.amount.truncate()) {
-      amount = ingredient.amount.toInt().toString();
-    } else {
-      amount = ingredient.amount.toStringAsFixed(2);
-    }
-
-    // Handle pluralization of the unit
-    String unit = ingredient.unit;
-    if (ingredient.amount > 1 && !unit.endsWith('s')) {
-      if (unit.isNotEmpty) {
-        unit = '${unit}s';
-      }
-    }
-
-    return '$amount $unit ${ingredient.name}';
-  }
-
-  Widget _buildNutritionSummary(Recipe recipe) {
-    final nutrition = recipe.nutrition;
-    if (nutrition == null) return const SizedBox.shrink();
-
-    // Helper to find a nutrient by name
-    Nutrient? findNutrient(String name) {
-      try {
-        return nutrition.nutrients.firstWhere(
-          (n) => n.name.toLowerCase() == name.toLowerCase(),
-        );
-      } catch (e) {
-        return null; // Not found
-      }
-    }
-
-    final calories = findNutrient('calories');
-    final protein = findNutrient('protein');
-    final fat = findNutrient('fat');
-    final carbs = findNutrient('carbohydrates');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Nutrition Facts (per serving)',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          recipe.summary.replaceAll(RegExp(r'<[^>]*>'), ''),
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
-        ),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 4,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          children: [
-            if (calories != null)
-              _buildNutritionTile(
-                  'Calories', '${calories.amount.toInt()}', Colors.orange),
-            if (protein != null)
-              _buildNutritionTile(
-                  'Protein', '${protein.amount.toInt()}g', Colors.green),
-            if (fat != null)
-              _buildNutritionTile('Fat', '${fat.amount.toInt()}g', Colors.blue),
-            if (carbs != null)
-              _buildNutritionTile(
-                  'Carbs', '${carbs.amount.toInt()}g', Colors.red),
-          ],
-        )
-      ],
-    );
-  }
-
-  Widget _buildNutritionTile(String title, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 4,
-            backgroundColor: color,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _cookRecipe(Recipe recipe) {
-    final controller = Provider.of<RecipeController>(context, listen: false);
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cook Recipe'),
-        content: Text(
-          'Are you sure you want to cook "${recipe.title}"? This will deduct available ingredients from pantry and track ALL recipe ingredients for nutrition.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              // Capture the ScaffoldMessenger and Navigator from a context that will remain valid.
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
-              final navigator = Navigator.of(context);
-
-              // Pop the dialog first, then the modal sheet.
-              Navigator.pop(dialogContext);
-              navigator.pop();
-
-              // Show loading indicator using the captured ScaffoldMessenger.
-              scaffoldMessenger.showSnackBar(
-                const SnackBar(
-                  content: Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ),
-                      SizedBox(width: 16),
-                      Text('Cooking recipe and updating trackers...'),
-                    ],
-                  ),
-                  duration: Duration(seconds: 3),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-
-              try {
-                await controller.cookRecipe(recipe);
-
-                // Check if the widget is still in the tree before showing another SnackBar.
-                if (!mounted) return;
-
-                if (controller.error == null) {
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Recipe cooked successfully! Available pantry items deducted and ALL recipe ingredients tracked for nutrition.'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 4),
-                    ),
-                  );
-                } else {
-                  scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text(controller.error!),
-                      backgroundColor: Colors.red,
-                      duration: const Duration(seconds: 4),
-                    ),
-                  );
-                }
-              } catch (e) {
-                // Handle any unexpected errors
-                if (!mounted) return;
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Error cooking recipe: $e'),
-                    backgroundColor: Colors.red,
-                    duration: const Duration(seconds: 4),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6A00),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Cook'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadingState() {
+  Widget _buildDefaultDiscovery() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(
-            color: Color(0xFFFF6A00),
+          Icon(
+            Icons.restaurant_menu,
+            size: 80,
+            color: Colors.grey[300],
           ),
           const SizedBox(height: 20),
           const Text(
-            'Finding makeable recipes...',
+            'Turn Your Pantry into Delicious Meals',
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Colors.grey,
+              fontSize: 16,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Analyzing your pantry for the best matches',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
-          ),
+          const SizedBox(height: 20),
+          _buildButton('Generate Recipes', () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CreateRecipeView(),
+              ),
+            );
+          }),
         ],
       ),
     );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.restaurant_menu,
+              size: 80,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 20),
+
+            // Enhanced empty state messaging
+            Text(
+              'No Recipes Available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              _getEmptyStateMessage(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            _buildButton('Generate Recipes', () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreateRecipeView(),
+                ),
+              );
+            }),
+
+            const SizedBox(height: 16),
+
+            TextButton(
+              onPressed: () {
+                final controller =
+                    Provider.of<RecipeController>(context, listen: false);
+                controller.generateRecipes();
+              },
+              child: Text(
+                'Try Again',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getEmptyStateMessage() {
+    final controller = Provider.of<RecipeController>(context, listen: false);
+    final pantryItems = controller.pantryItems;
+
+    if (pantryItems.isEmpty) {
+      return 'Start by adding ingredients to your pantry.\nThen we can suggest personalized recipes based on your dietary needs and preferences.';
+    } else if (controller.error != null) {
+      return 'We encountered an issue loading recipes.\nPlease check your connection and try again.';
+    } else {
+      return 'No recipes met all your dietary constraints and pantry requirements.\nThis can happen when recipes don’t match your health conditions or available ingredients.\nTry adding more ingredients or generate custom recipes with relaxed filters.';
+    }
+  }
+
+  Widget _buildErrorState(String error, BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 80,
+              color: Colors.red[300],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Unable to Load Recipes',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.red[700],
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Please check your internet connection or try again later.\nOur recipe engine may be temporarily unavailable.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                final controller =
+                    Provider.of<RecipeController>(context, listen: false);
+                controller.clearError();
+                // Only initialize if not already initialized
+                if (!_hasInitialized) {
+                  _hasInitialized = true;
+                  controller.initialize();
+                }
+                // Also try to generate recipes again
+                controller.generateRecipes();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6A00),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text('Retry'),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreateRecipeView(),
+                  ),
+                );
+              },
+              child: Text(
+                'Generate Custom Recipes',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getLoadingMessage() {
+    final controller = Provider.of<RecipeController>(context, listen: false);
+    final pantryItems = controller.pantryItems;
+
+    if (pantryItems.isEmpty) {
+      return 'Loading your pantry items and creating personalized recommendations...';
+    } else {
+      return 'Analyzing your pantry and filtering recipes based on your dietary preferences and health goals...';
+    }
   }
 }

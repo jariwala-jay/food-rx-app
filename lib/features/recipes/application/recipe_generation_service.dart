@@ -96,6 +96,12 @@ class RecipeGenerationService {
       print('API recipes: ${recipes.length}');
       print('Validated recipes: ${validatedRecipes.length}');
       print('Filtered out: ${recipes.length - validatedRecipes.length}');
+
+      if (recipes.length > 0 && validatedRecipes.isEmpty) {
+        print('⚠️  All recipes were filtered out during validation!');
+        print(
+            '   This is expected behavior if recipes don\'t meet dietary constraints.');
+      }
     }
 
     // 4. Sort recipes by health score and ingredient availability
