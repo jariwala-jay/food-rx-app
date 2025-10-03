@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:provider/provider.dart';
@@ -70,6 +69,55 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
       });
 
       try {
+        // Required validations with neutral defaults
+        if (_selectedHealthGoals.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select at least one health goal'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_preferredMealPrepTime == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select preferred meal prep time'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_cookingForPeopleController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter how many people you cook for'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_cookingSkill == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please rate your cooking skill'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
         // Update other details in SignupProvider
         context.read<SignupProvider>().updateOtherDetails(
               healthGoals: _selectedHealthGoals,
@@ -78,7 +126,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
               cookingSkill: _cookingSkill,
             );
 
-        // Set dietType before registration
+        // Keep dietType consistent if needed for the next step
         final signupProvider = context.read<SignupProvider>();
         final signupData = signupProvider.data;
         final bool isDashDiet =
@@ -86,30 +134,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                 signupData.healthGoals.contains('Lower blood pressure');
         signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
 
-        // Get all collected data
-        final profilePhoto = signupProvider.profilePhoto;
-        final authController = context.read<AuthController>();
-
-        // Register the user with all collected data
-        final success = await authController.register(
-          email: signupData.email!,
-          password: signupData.password!,
-          userData: signupData.toJson(),
-          profilePhoto: profilePhoto,
-        );
-
-        if (success) {
-          widget.onSubmit();
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(authController.error ?? 'Registration failed'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
+        // Move to next step; actual registration happens at the end
+        widget.onSubmit();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -120,6 +146,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
           );
         }
       } finally {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
         });

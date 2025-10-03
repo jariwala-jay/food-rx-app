@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/utils/typography.dart';
-import 'diet_plans/personalized_diet_summary.dart';
 import 'diet_plans/dash_diet_intro.dart';
 import 'diet_plans/dash_diet_plan.dart';
 import 'diet_plans/my_plate_intro.dart';
@@ -21,43 +20,23 @@ class DietPlanStep extends StatefulWidget {
 }
 
 class _DietPlanStepState extends State<DietPlanStep> {
-  int _currentStep = 0; // 0: intro, 1: details, 2: personalized summary
+  int _currentStep = 0; // 0: intro, 1: details
 
   @override
   Widget build(BuildContext context) {
     final signupData = context.read<SignupProvider>().data;
 
-    // Step 2: Show personalized summary
-    if (_currentStep == 2 &&
-        signupData.dietType != null &&
-        signupData.targetCalories != null &&
-        signupData.selectedDietPlan != null) {
-      return PersonalizedDietSummary(
-        dietType: signupData.dietType!,
-        targetCalories: signupData.targetCalories!,
-        selectedDietPlan: signupData.selectedDietPlan!,
-        diagnostics: signupData.diagnostics ?? {},
-        onFinish: widget.onFinish,
-      );
-    }
+    // We no longer show the personalized summary screen.
 
     // Step 1: Show plan details
     if (_currentStep == 1 && signupData.dietType != null) {
       if (signupData.dietType == 'DASH') {
         return DashDietPlan(
-          onFinish: () {
-            setState(() {
-              _currentStep = 2; // Move to personalized summary
-            });
-          },
+          onFinish: widget.onFinish,
         );
       } else {
         return MyPlatePlan(
-          onFinish: () {
-            setState(() {
-              _currentStep = 2; // Move to personalized summary
-            });
-          },
+          onFinish: widget.onFinish,
         );
       }
     }

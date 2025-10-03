@@ -81,6 +81,56 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       });
 
       try {
+        // Additional required field validations
+        if (_nameController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your name'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_emailController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your email'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_passwordController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter your password'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_confirmPasswordController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please confirm your password'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+
         // Store the data in SignupProvider instead of registering
         context.read<SignupProvider>().updateBasicInfo(
               name: _nameController.text,
@@ -101,6 +151,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           ),
         );
       } finally {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
         });

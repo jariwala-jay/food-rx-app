@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
-import 'package:flutter_app/core/services/nutrition_content_loader.dart';
-import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:provider/provider.dart';
 
 class PreferencesStep extends StatefulWidget {
@@ -25,22 +22,47 @@ class _PreferencesStepState extends State<PreferencesStep> {
   final _formKey = GlobalKey<FormState>();
   List<String> _selectedFoodAllergies = [];
   String? _activityLevel;
-  List<String> _selectedHealthGoals = [];
+  // New preference fields
+  List<String> _favoriteCuisines = [];
+  String? _dailyFruitIntake;
+  String? _dailyVegetableIntake;
+  String? _dailyWaterIntake;
   bool _isLoading = false;
 
   final List<String> _activityLevels = [
-    'Sedentary',
-    'Lightly Active',
-    'Moderately Active',
+    'Not Active',
+    'Light',
+    'Moderate',
     'Very Active',
   ];
 
-  final List<String> _healthGoals = [
-    'Avoid diabetes',
-    'Lower blood pressure',
-    'Lower cholesterol',
-    'Lower blood glucose (Sugar)',
-    'Lose weight',
+  // Health goals are collected in Other Details step
+
+  final List<String> _cuisineOptions = [
+    'American',
+    'Mexican',
+    'Italian',
+    'Indian',
+    'Chinese',
+    'Thai',
+    'Mediterranean',
+    'Middle Eastern',
+    'Japanese',
+    'Korean',
+    'Vietnamese',
+    'Greek',
+    'French',
+    'Spanish',
+    "No preference",
+  ];
+
+  final List<String> _dailyIntakeOptions = [
+    '0 servings',
+    '1 serving',
+    '2 servings',
+    '3 servings',
+    '4 servings',
+    '5+ servings',
   ];
 
   @override
@@ -49,7 +71,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
     _activityLevel = signupData.activityLevel;
-    _selectedHealthGoals = List.from(signupData.healthGoals);
+    _favoriteCuisines = List.from(signupData.favoriteCuisines);
+    _dailyFruitIntake = signupData.dailyFruitIntake;
+    _dailyVegetableIntake = signupData.dailyVegetableIntake;
+    _dailyWaterIntake = signupData.dailyWaterIntake;
   }
 
   Future<void> _handleSubmit() async {
@@ -59,72 +84,63 @@ class _PreferencesStepState extends State<PreferencesStep> {
       });
 
       try {
+        // Required field checks and defaults
+        if (_activityLevel == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select your activity level'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_dailyFruitIntake == null || _dailyVegetableIntake == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select daily fruit and vegetable intake'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (_dailyWaterIntake == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select daily water intake'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        // Ensure multi-selects have a value (with explicit neutral choices)
+        if (_favoriteCuisines.isEmpty) {
+          _favoriteCuisines = ["No preference"];
+        }
+        if (_selectedFoodAllergies.isEmpty) {
+          _selectedFoodAllergies = ["None"];
+        }
+
         // Update preferences in SignupProvider
         context.read<SignupProvider>().updatePreferences(
               foodAllergies: _selectedFoodAllergies,
               activityLevel: _activityLevel,
-              healthGoals: _selectedHealthGoals,
+              favoriteCuisines: _favoriteCuisines,
+              dailyFruitIntake: _dailyFruitIntake,
+              dailyVegetableIntake: _dailyVegetableIntake,
+              dailyWaterIntake: _dailyWaterIntake,
             );
 
-        // Generate personalized diet plan
-        final signupProvider = context.read<SignupProvider>();
-        final signupData = signupProvider.data;
-
-        try {
-          // Load nutrition content and create personalization service
-          final nutritionContent = await NutritionContentLoader.load();
-          final personalizationService =
-              PersonalizationService(nutritionContent);
-
-          // Generate personalized diet plan
-          final result = personalizationService.personalize(
-            dob: signupData.dateOfBirth!,
-            sex: signupData.sex!,
-            heightFeet: signupData.heightFeet!,
-            heightInches: signupData.heightInches!,
-            weightLb: signupData.weight!,
-            activityLevel: signupData.activityLevel!,
-            medicalConditions: signupData.medicalConditions,
-            healthGoals: signupData.healthGoals,
-          );
-
-          // Set personalized diet plan
-          signupProvider.setPersonalizedDietPlan(
-            dietType: result.dietType,
-            targetCalories: result.targetCalories,
-            selectedDietPlan: result.selectedDietPlan,
-            diagnostics: result.diagnostics,
-          );
-        } catch (e) {
-          // Fallback to static diet assignment if personalization fails
-          final bool isDashDiet =
-              signupData.medicalConditions.contains('Hypertension') ||
-                  signupData.healthGoals.contains('Lower blood pressure');
-          signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
-        }
-
-        // Get all collected data
-        final profilePhoto = signupProvider.profilePhoto;
-        final authController = context.read<AuthController>();
-
-        // Register the user with all collected data
-        final success = await authController.register(
-          email: signupData.email!,
-          password: signupData.password!,
-          userData: signupData.toJson(),
-          profilePhoto: profilePhoto,
-        );
-
-        if (success) {
-          widget.onSubmit();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(authController.error ?? 'Registration failed'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        // Advance to next step
+        widget.onSubmit();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -133,6 +149,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
           ),
         );
       } finally {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
         });
@@ -159,6 +176,50 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         .copyWith(color: const Color(0xFF90909A)),
                   ),
                   const SizedBox(height: 24),
+                  // Favorite Cuisines (multi-select modal)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: ShapeDecoration(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppDropdownField(
+                          label: 'Favorite',
+                          value: null,
+                          options: _cuisineOptions,
+                          onChanged: (_) {},
+                          hintText: 'Select cuisines',
+                          showSearchBar: true,
+                          multiSelect: true,
+                          selectedValues: _favoriteCuisines,
+                          onChangedMulti: (values) {
+                            setState(() {
+                              _favoriteCuisines = values;
+                            });
+                          },
+                        ),
+                        if (_favoriteCuisines.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          AppChipGroup(
+                            values: _favoriteCuisines,
+                            onChanged: (values) {
+                              setState(() {
+                                _favoriteCuisines = values;
+                              });
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Food Allergies (multi-select modal)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -184,21 +245,17 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             'Wheat',
                             'Fish',
                             'Shellfish',
-                            'None',
                           ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                if (value == 'None') {
-                                  _selectedFoodAllergies = [];
-                                } else if (!_selectedFoodAllergies
-                                    .contains(value)) {
-                                  _selectedFoodAllergies.add(value);
-                                }
-                              });
-                            }
-                          },
+                          onChanged: (_) {},
                           hintText: 'Food Allergies',
+                          showSearchBar: true,
+                          multiSelect: true,
+                          selectedValues: _selectedFoodAllergies,
+                          onChangedMulti: (values) {
+                            setState(() {
+                              _selectedFoodAllergies = values;
+                            });
+                          },
                         ),
                         if (_selectedFoodAllergies.isNotEmpty) ...[
                           const SizedBox(height: 8),
@@ -214,6 +271,83 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       ],
                     ),
                   ),
+
+                  // Daily Intake (Fruit & Vegetable)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: ShapeDecoration(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Daily Intake',
+                            style: AppTypography.bg_16_m),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppDropdownField(
+                                value: _dailyFruitIntake,
+                                options: _dailyIntakeOptions,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _dailyFruitIntake = value;
+                                  });
+                                },
+                                hintText: 'Fruit',
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppDropdownField(
+                                value: _dailyVegetableIntake,
+                                options: _dailyIntakeOptions,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _dailyVegetableIntake = value;
+                                  });
+                                },
+                                hintText: 'Vegetable',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Daily Water Intake (Radio)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: ShapeDecoration(
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: AppRadioGroup<String>(
+                      label: 'Daily Water Intake',
+                      value: _dailyWaterIntake,
+                      options: const [
+                        {'0 glass': '0 glass'},
+                        {'less than 8 glass': 'less than 8 glass'},
+                        {'8 or more glass': '8 or more glass'},
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _dailyWaterIntake = value;
+                        });
+                      },
+                    ),
+                  ),
+                  // Activity Level
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -233,27 +367,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       onChanged: (value) {
                         setState(() {
                           _activityLevel = value;
-                        });
-                      },
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: AppCheckboxGroup(
-                      label: 'Health Goal',
-                      selectedValues: _selectedHealthGoals,
-                      options: _healthGoals,
-                      onChanged: (values) {
-                        setState(() {
-                          _selectedHealthGoals = values;
                         });
                       },
                     ),
@@ -317,7 +430,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 ),
                               )
                             : const Text(
-                                'Submit',
+                                'Next',
                                 style: AppTypography.bg_16_sb,
                               ),
                       ),
