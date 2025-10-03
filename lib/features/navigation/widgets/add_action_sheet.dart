@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'modal_action_button.dart';
 import 'package:flutter_app/features/pantry/widgets/pantry_category_picker.dart';
 import 'package:flutter_app/core/constants/pantry_categories.dart';
+import 'package:flutter_app/features/recipes/views/create_recipe_view.dart';
 
 class AddActionSheet extends StatefulWidget {
   const AddActionSheet({Key? key}) : super(key: key);
@@ -48,7 +49,15 @@ class _AddActionSheetState extends State<AddActionSheet> {
           ModalActionButton(
             iconAsset: 'assets/icons/gen_recipe.svg',
             label: 'Generate Recipe',
-            onTap: () {},
+            shouldClose: false,
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateRecipeView(),
+                ),
+              );
+            },
           ),
           ModalActionButton(
             iconAsset: 'assets/icons/activity.svg',

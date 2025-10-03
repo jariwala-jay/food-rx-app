@@ -4,6 +4,7 @@ import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/features/navigation/views/main_screen.dart';
 
 class CreateRecipeView extends StatefulWidget {
   const CreateRecipeView({Key? key}) : super(key: key);
@@ -663,11 +664,14 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     // Get controller and generate recipes
     final controller = Provider.of<RecipeController>(context, listen: false);
 
-    // Start generation and navigate back immediately
+    // Start generation and navigate to Recipe tab
     controller.generateRecipes(filter: filter);
 
     if (!mounted) return;
-    Navigator.pop(context);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+      (route) => false,
+    );
 
     // Show feedback with diet-specific information
     final dietInfo = dashCompliant

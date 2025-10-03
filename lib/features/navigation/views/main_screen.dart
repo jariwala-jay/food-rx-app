@@ -7,7 +7,8 @@ import 'package:flutter_app/features/recipes/views/recipe_page.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -22,6 +23,12 @@ class _MainScreenState extends State<MainScreen> {
     const RecipePage(),
     const EducationPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+  }
 
   void _handleAddTap() async {
     setState(() => _isAddActive = true);
