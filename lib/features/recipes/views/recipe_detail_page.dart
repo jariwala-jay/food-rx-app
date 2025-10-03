@@ -368,38 +368,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          if (_scalingResult != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_circle,
-                          color: Colors.green, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${(_scalingResult!['scalingMetadata']['overallConfidence']).toStringAsFixed(0)}% confidence',
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
