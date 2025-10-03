@@ -565,10 +565,43 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                     onPressed: () async {
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: selectedDate,
+                        initialDate: selectedDate.isBefore(DateTime.now())
+                            ? DateTime.now()
+                            : selectedDate,
                         firstDate: DateTime.now(),
                         lastDate:
                             DateTime.now().add(const Duration(days: 365 * 5)),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: Color(0xFFFF6A00),
+                                onPrimary: Colors.white,
+                                surface: Colors.white,
+                                onSurface: Color(0xFF2C2C2C),
+                                onSurfaceVariant: Colors.white,
+                              ),
+                              datePickerTheme: DatePickerThemeData(
+                                backgroundColor: Colors.white,
+                                headerBackgroundColor: Colors.white,
+                                headerForegroundColor: Color(0xFF2C2C2C),
+                                weekdayStyle: TextStyle(
+                                  color: Color(0xFF8E8E93),
+                                ),
+                                dayStyle: TextStyle(
+                                  color: Color(0xFF2C2C2C),
+                                ),
+                                cancelButtonStyle: TextButton.styleFrom(
+                                  foregroundColor: Color(0xFFFF6A00),
+                                ),
+                                confirmButtonStyle: TextButton.styleFrom(
+                                  foregroundColor: Color(0xFFFF6A00),
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
                       );
                       if (picked != null && mounted) {
                         // Check mounted before setState
@@ -579,7 +612,10 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                     },
                     child: Text(
                       '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF6A00),
+                      ),
                     ),
                   ),
                 ],
@@ -590,6 +626,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF6A00),
+                    ),
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
