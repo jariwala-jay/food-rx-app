@@ -278,13 +278,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   const BorderRadius.vertical(top: Radius.circular(12)),
               child: Image(
                 image: ImageCacheService().getImageProvider(imageUrl),
-                height: 200,
+                height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;
                   return Container(
-                    height: 200,
+                    height: 120,
                     color: Colors.grey[300],
                     child: const Center(
                       child: CircularProgressIndicator(),
@@ -293,7 +293,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 },
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    height: 200,
+                    height: 120,
                     color: Colors.grey[300],
                     child: const Icon(
                       Icons.image_not_supported,
@@ -304,27 +304,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -432,7 +438,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               // Activity section could go here
 
-              // Daily Tips Section - isolated to only listen to TipProvider
+              // Daily Tips Section - horizontal scrollable view
               Consumer<TipProvider>(
                 builder: (context, tipProvider, child) {
                   return Padding(
@@ -449,28 +455,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                         const SizedBox(height: 16),
                         if (tipProvider.isLoading)
-                          const Center(
-                            child: CircularProgressIndicator(),
+                          const SizedBox(
+                            height: 201,
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
                           )
                         else if (tipProvider.shownTips.isEmpty)
-                          const Center(
-                            child: Text('No tips available'),
+                          const SizedBox(
+                            height: 201,
+                            child: Center(
+                              child: Text('No tips available'),
+                            ),
                           )
                         else
-                          ...tipProvider.shownTips.map((tip) {
-                            return Column(
-                              children: [
-                                _buildTipCard(
-                                  context,
-                                  tip.title,
-                                  tip.description,
-                                  tip.imageUrl,
-                                  onTap: () => _handleTipTap(tip),
-                                ),
-                                const SizedBox(height: 16),
-                              ],
-                            );
-                          }).toList(),
+                          SizedBox(
+                            height: 201,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: tipProvider.shownTips.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(width: 16),
+                              itemBuilder: (context, index) {
+                                final tip = tipProvider.shownTips[index];
+                                return SizedBox(
+                                  width: 216,
+                                  child: _buildTipCard(
+                                    context,
+                                    tip.title,
+                                    tip.description,
+                                    tip.imageUrl,
+                                    onTap: () => _handleTipTap(tip),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   );
