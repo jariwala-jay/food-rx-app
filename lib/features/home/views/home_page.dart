@@ -85,8 +85,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (user != null && user.id != null) {
       final dietType = user.dietType ?? 'MyPlate';
 
-      // Load Trackers - always use loadUserTrackers to preserve existing progress
-      await trackerProvider.loadUserTrackers(user.id!, dietType);
+      // Load Trackers - use personalized diet plan if available
+      final personalizedDietPlan = user.selectedDietPlan;
+      await trackerProvider.loadUserTrackers(user.id!, dietType,
+          personalizedDietPlan: personalizedDietPlan);
 
       // Load Tips (can be run in parallel or after trackers)
       await tipProvider.initializeTips(user.medicalConditions ?? [], user.id!);
