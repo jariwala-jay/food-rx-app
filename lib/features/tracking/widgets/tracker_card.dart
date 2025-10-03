@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math;
 import '../models/tracker_goal.dart';
+import 'tracker_serving_info_modal.dart';
+import 'package:flutter_app/core/utils/app_colors.dart';
 
 class TrackerCard extends StatelessWidget {
   final TrackerGoal tracker;
@@ -144,17 +146,45 @@ class TrackerCard extends StatelessWidget {
             ),
 
             // Info icon positioned in top-right
-            const Positioned(
-              top: 0,
-              right: 0,
-              child: Icon(
-                Icons.info_outline,
-                color: Color(0xFFD8D8D8),
-                size: 16,
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => _showInfoModal(context),
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.info_outline,
+                    color: AppColors.textLight,
+                    size: 12,
+                  ),
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showInfoModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => TrackerServingInfoModal(
+        category: tracker.category,
+        dietType: tracker.dietType,
       ),
     );
   }
