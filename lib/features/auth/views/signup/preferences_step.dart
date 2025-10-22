@@ -337,8 +337,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       value: _dailyWaterIntake,
                       options: const [
                         {'0 glass': '0 glass'},
-                        {'less than 8 glass': 'less than 8 glass'},
-                        {'8 or more glass': '8 or more glass'},
+                        {'less than 8 glasses': 'less than 8 glasses'},
+                        {'8 or more glasses': '8 or more glasses'},
                       ],
                       onChanged: (value) {
                         setState(() {

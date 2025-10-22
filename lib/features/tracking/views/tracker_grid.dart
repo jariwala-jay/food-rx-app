@@ -192,7 +192,7 @@ class _TrackerGridState extends State<TrackerGrid>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Today\'s Top Goals',
+                'Meal Plan Goals',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -311,7 +311,7 @@ class _TrackerGridState extends State<TrackerGrid>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Today\'s Top Goals',
+            'Meal Plan Goals',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,

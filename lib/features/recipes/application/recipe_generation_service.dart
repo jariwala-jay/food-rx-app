@@ -338,16 +338,7 @@ class RecipeGenerationService {
   }
 
   bool _isObesityCompliant(Recipe recipe, Nutrition nutrition) {
-    final calories = _getNutrientAmount(nutrition, 'Calories');
-    final saturatedFat = _getNutrientAmount(nutrition, 'Saturated Fat');
-    final protein = _getNutrientAmount(nutrition, 'Protein');
-    final fiber = _getNutrientAmount(nutrition, 'Fiber');
-
-    // Weight management guidelines
-    if (calories > 400) return false; // Max 400 calories per serving
-    if (saturatedFat > 5) return false; // Max 5g saturated fat per serving
-    if (protein < 15) return false; // Min 15g protein per serving (satiety)
-    if (fiber < 5) return false; // Min 5g fiber per serving (satiety)
+    // No specific constraints for obesity
 
     return true;
   }
