@@ -6,6 +6,8 @@ import 'diet_plans/dash_diet_intro.dart';
 import 'diet_plans/dash_diet_plan.dart';
 import 'diet_plans/my_plate_intro.dart';
 import 'diet_plans/my_plate_plan.dart';
+import 'diet_plans/diabetes_plate_intro.dart';
+import 'diet_plans/diabetes_plate_plan.dart';
 
 class DietPlanStep extends StatefulWidget {
   final VoidCallback onFinish;
@@ -25,40 +27,28 @@ class _DietPlanStepState extends State<DietPlanStep> {
   @override
   Widget build(BuildContext context) {
     final signupData = context.read<SignupProvider>().data;
-
-    // We no longer show the personalized summary screen.
+    final myPlanType = signupData.myPlanType;
 
     // Step 1: Show plan details
-    if (_currentStep == 1 && signupData.dietType != null) {
-      if (signupData.dietType == 'DASH') {
-        return DashDietPlan(
-          onFinish: widget.onFinish,
-        );
+    if (_currentStep == 1 && myPlanType != null) {
+      if (myPlanType == 'DiabetesPlate') {
+        return DiabetesPlatePlan(onFinish: widget.onFinish);
+      } else if (myPlanType == 'DASH') {
+        return DashDietPlan(onFinish: widget.onFinish);
       } else {
-        return MyPlatePlan(
-          onFinish: widget.onFinish,
-        );
+        return MyPlatePlan(onFinish: widget.onFinish);
       }
     }
 
     // Step 0: Show intro page
-    if (signupData.dietType != null) {
-      if (signupData.dietType == 'DASH') {
-        return DashDietIntro(
-          onNext: () {
-            setState(() {
-              _currentStep = 1; // Move to details page
-            });
-          },
-        );
+    if (myPlanType != null) {
+      if (myPlanType == 'DiabetesPlate') {
+        return DiabetesPlateIntro(
+            onNext: () => setState(() => _currentStep = 1));
+      } else if (myPlanType == 'DASH') {
+        return DashDietIntro(onNext: () => setState(() => _currentStep = 1));
       } else {
-        return MyPlateIntro(
-          onNext: () {
-            setState(() {
-              _currentStep = 1; // Move to details page
-            });
-          },
-        );
+        return MyPlateIntro(onNext: () => setState(() => _currentStep = 1));
       }
     }
 
