@@ -12,6 +12,8 @@ class SignupData {
   String? activityLevel;
   List<String> healthGoals;
   String? dietType;
+  String? myPlanType;
+  bool showGlycemicIndex = false;
   // New fields for preferences step
   List<String> favoriteCuisines;
   String? dailyFruitIntake;
@@ -39,6 +41,8 @@ class SignupData {
     this.activityLevel,
     this.healthGoals = const [],
     this.dietType,
+    this.myPlanType,
+    this.showGlycemicIndex = false,
     this.favoriteCuisines = const [],
     this.dailyFruitIntake,
     this.dailyVegetableIntake,
@@ -64,6 +68,8 @@ class SignupData {
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,
+      'myPlanType': myPlanType,
+      'showGlycemicIndex': showGlycemicIndex,
       'favoriteCuisines': favoriteCuisines,
       'dailyFruitIntake': dailyFruitIntake,
       'dailyVegetableIntake': dailyVegetableIntake,

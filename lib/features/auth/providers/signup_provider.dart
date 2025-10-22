@@ -96,11 +96,15 @@ class SignupProvider extends ChangeNotifier {
 
   void setPersonalizedDietPlan({
     String? dietType,
+    String? myPlanType,
+    bool? showGlycemicIndex,
     int? targetCalories,
     Map<String, dynamic>? selectedDietPlan,
     Map<String, dynamic>? diagnostics,
   }) {
     _data.dietType = dietType ?? _data.dietType;
+    _data.myPlanType = myPlanType ?? _data.myPlanType;
+    _data.showGlycemicIndex = showGlycemicIndex ?? _data.showGlycemicIndex;
     _data.targetCalories = targetCalories ?? _data.targetCalories;
     _data.selectedDietPlan = selectedDietPlan ?? _data.selectedDietPlan;
     _data.diagnostics = diagnostics ?? _data.diagnostics;

@@ -240,6 +240,8 @@ class AuthController with ChangeNotifier {
       // Update user with new diet plan
       await _mongoDBService.updateUserProfile(_currentUser!.id!, {
         'dietType': result.dietType,
+        'myPlanType': result.myPlanType,
+        'showGlycemicIndex': result.showGlycemicIndex,
         'targetCalories': result.targetCalories,
         'selectedDietPlan': result.selectedDietPlan,
         'diagnostics': result.diagnostics,

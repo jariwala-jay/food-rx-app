@@ -21,6 +21,8 @@ class UserModel {
 
   // Diet Preferences
   final String? dietType; // DASH or MyPlate
+  final String? myPlanType; // "DASH", "MyPlate", "DiabetesPlate"
+  final bool? showGlycemicIndex; // true if diabetes detected
   final List<String>? excludedIngredients;
   final List<String>? foodRestrictions;
   final List<String>? favoriteCuisines;
@@ -72,6 +74,8 @@ class UserModel {
     this.allergies,
     // Diet Preferences
     this.dietType,
+    this.myPlanType,
+    this.showGlycemicIndex,
     this.excludedIngredients,
     this.foodRestrictions,
     this.favoriteCuisines,
@@ -123,6 +127,8 @@ class UserModel {
       allergies: List<String>.from(json['allergies'] ?? []),
       // Diet Preferences
       dietType: json['dietType'],
+      myPlanType: json['myPlanType'],
+      showGlycemicIndex: json['showGlycemicIndex'],
       excludedIngredients: List<String>.from(json['excludedIngredients'] ?? []),
       foodRestrictions: List<String>.from(json['foodRestrictions'] ?? []),
       favoriteCuisines: List<String>.from(json['favoriteCuisines'] ?? []),
@@ -180,6 +186,8 @@ class UserModel {
       'allergies': allergies,
       // Diet Preferences
       'dietType': dietType,
+      'myPlanType': myPlanType,
+      'showGlycemicIndex': showGlycemicIndex,
       'excludedIngredients': excludedIngredients,
       'foodRestrictions': foodRestrictions,
       // Diet Plan
@@ -222,6 +230,8 @@ class UserModel {
     List<String>? allergies,
     // Diet Preferences
     String? dietType,
+    String? myPlanType,
+    bool? showGlycemicIndex,
     List<String>? excludedIngredients,
     List<String>? foodRestrictions,
     // Diet Plan
@@ -262,6 +272,8 @@ class UserModel {
       allergies: allergies ?? this.allergies,
       // Diet Preferences
       dietType: dietType ?? this.dietType,
+      myPlanType: myPlanType ?? this.myPlanType,
+      showGlycemicIndex: showGlycemicIndex ?? this.showGlycemicIndex,
       excludedIngredients: excludedIngredients ?? this.excludedIngredients,
       foodRestrictions: foodRestrictions ?? this.foodRestrictions,
       // Diet Plan

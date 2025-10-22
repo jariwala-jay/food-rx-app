@@ -2,12 +2,14 @@ import 'nutrition_content_loader.dart';
 
 class PersonalizationResult {
   final String dietType; // 'DASH' | 'MyPlate'
+  final String myPlanType; // 'DASH' | 'MyPlate' | 'DiabetesPlate'
+  final bool showGlycemicIndex; // true if diabetes detected
   final int targetCalories; // tier kcal
   final Map<String, dynamic> selectedDietPlan; // servings/targets
   final Map<String, dynamic> diagnostics; // bmr, pal, tdee, maintenance, rules
 
-  PersonalizationResult(this.dietType, this.targetCalories,
-      this.selectedDietPlan, this.diagnostics);
+  PersonalizationResult(this.dietType, this.myPlanType, this.showGlycemicIndex,
+      this.targetCalories, this.selectedDietPlan, this.diagnostics);
 }
 
 class PersonalizationService {
@@ -78,6 +80,10 @@ class PersonalizationService {
         _matchDietRule(content.dietAssignmentRules, dm: dm, ht: ht, ow: ow);
     final chosenDiet = (rule['diet'] as String).trim();
 
+    // Determine myPlanType and showGlycemicIndex
+    final myPlanType = _determineMyPlanType(chosenDiet, dm);
+    final showGlycemicIndex = rule.containsKey('glycemic_index_max');
+
     // Sodium cap logic with hypertension safeguard
     int sodiumCapFromRule() {
       final cap = rule['sodium_mg_max'];
@@ -104,7 +110,8 @@ class PersonalizationService {
         'tier': tier,
         'diet_rule': rule
       };
-      return PersonalizationResult('DASH', tier, plan, diagnostics);
+      return PersonalizationResult(
+          'DASH', myPlanType, showGlycemicIndex, tier, plan, diagnostics);
     } else {
       final bmr = _msjBmr(sex, age, heightCm, weightKg);
       final pal = _pal(activityLevel);
@@ -127,8 +134,17 @@ class PersonalizationService {
         'tier': tier,
         'diet_rule': rule
       };
-      return PersonalizationResult('MyPlate', tier, plan, diagnostics);
+      return PersonalizationResult(
+          'MyPlate', myPlanType, showGlycemicIndex, tier, plan, diagnostics);
     }
+  }
+
+  // Determine myPlanType based on diet and diabetes status
+  String _determineMyPlanType(String dietType, String diabetesStatus) {
+    if (diabetesStatus == 'YES') {
+      return 'DiabetesPlate'; // Educational content for diabetes
+    }
+    return dietType; // Otherwise same as diet (DASH or MyPlate)
   }
 
   // ---- helpers (DASH) ----
