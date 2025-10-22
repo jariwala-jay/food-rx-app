@@ -11,6 +11,8 @@ import 'package:flutter_app/features/education/models/article.dart';
 import 'package:flutter_app/features/education/repositories/article_repository.dart';
 import 'package:flutter_app/features/education/repositories/mongo_article_repository.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
+import 'package:flutter_app/features/home/views/meal_plan_page.dart';
+import 'package:flutter_app/features/home/views/diet_plan_viewer_page.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 import 'package:flutter_app/features/pantry/repositories/spoonacular_ingredient_repository.dart';
@@ -190,6 +192,15 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginPage(),
         '/home': (context) => const MainScreen(),
         '/chatbot': (context) => const ChatbotPage(),
+        '/meal-plan': (context) => const MealPlanPage(),
+        '/diet-plan-viewer': (context) {
+          final args =
+              ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+          return DietPlanViewerPage(
+            myPlanType: args['myPlanType']!,
+            displayName: args['displayName']!,
+          );
+        },
         '/article-detail': (context) {
           final article = ModalRoute.of(context)!.settings.arguments as Article;
           return ArticleDetailPage(article: article);
