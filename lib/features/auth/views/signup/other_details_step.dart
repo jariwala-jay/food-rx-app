@@ -153,6 +153,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
           // Set the personalized diet plan
           signupProvider.setPersonalizedDietPlan(
             dietType: personalizationResult.dietType,
+            myPlanType: personalizationResult.myPlanType,
+            showGlycemicIndex: personalizationResult.showGlycemicIndex,
             targetCalories: personalizationResult.targetCalories,
             selectedDietPlan: personalizationResult.selectedDietPlan,
             diagnostics: personalizationResult.diagnostics,

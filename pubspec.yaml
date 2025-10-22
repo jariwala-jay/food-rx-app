@@ -80,6 +80,11 @@ flutter:
     - assets/icons/tracker_icons/
     - assets/nutrition/
     - assets/nutrition/diet_assignment_matrix.json
+    - assets/nutrition/screenshots/
+    - assets/nutrition/screenshots/dash/
+    - assets/nutrition/screenshots/myplate/
+    - assets/nutrition/screenshots/diabetes_plate/
+    - assets/nutrition/screenshots/glycemic_index/
     - assets/images/profile_pic.png
     - assets/images/blood_pressure.png
     - assets/images/healthy_diet.png
