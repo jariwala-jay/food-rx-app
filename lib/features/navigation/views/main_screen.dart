@@ -5,6 +5,7 @@ import 'package:flutter_app/features/navigation/widgets/custom_nav_bar.dart';
 import 'package:flutter_app/features/pantry/views/pantry_page.dart';
 import 'package:flutter_app/features/recipes/views/recipe_page.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
@@ -98,60 +99,49 @@ class _MainScreenState extends State<MainScreen> {
                   children: _pages,
                 ),
                 // DEBUG: Tour control buttons
-                Positioned(
-                  top: 50,
-                  right: 16,
-                  child: Column(
-                    children: [
-                      Consumer<ForcedTourProvider>(
-                        builder: (context, tourProvider, child) {
-                          return ElevatedButton(
-                            onPressed: () {
-                              tourProvider.startTour();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                            ),
-                            child: const Text('Start Tour',
-                                style: TextStyle(fontSize: 12)),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 4),
-                      Consumer<ForcedTourProvider>(
-                        builder: (context, tourProvider, child) {
-                          return ElevatedButton(
-                            onPressed: () async {
-                              await tourProvider.resetTour();
-                              // Restart the tour after reset
-                              if (context.mounted) {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) {
-                                  print(
-                                      '🎯 DEBUG: Restarting tour after reset');
-                                  tourProvider.startTour();
-                                  ShowcaseView.get()
-                                      .startShowCase([TourKeys.trackersKey]);
-                                });
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                            ),
-                            child: const Text('Reset Tour',
-                                style: TextStyle(fontSize: 12)),
-                          );
-                        },
-                      ),
-                    ],
+                if (dotenv.env['SHOW_TOUR_DEBUG_BUTTON'] == 'true')
+                  Positioned(
+                    top: 50,
+                    right: 16,
+                    child: Column(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            tourProvider.startTour();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                          ),
+                          child: const Text('Start Tour',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(height: 4),
+                        ElevatedButton(
+                          onPressed: () async {
+                            await tourProvider.resetTour();
+                            if (context.mounted) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                tourProvider.startTour();
+                                ShowcaseView.get()
+                                    .startShowCase([TourKeys.trackersKey]);
+                              });
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                          ),
+                          child: const Text('Reset Tour',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
             bottomNavigationBar: Padding(

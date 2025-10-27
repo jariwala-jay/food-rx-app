@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:flutter_app/features/education/controller/article_controller.dart';
 
 class CustomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -211,40 +212,54 @@ class CustomNavBar extends StatelessWidget {
                     print(
                         '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
 
-                    // Navigate to Education page
+                    // Complete the recipes step (if we're coming from recipes)
+                    if (tourProvider.isOnStep(TourStep.recipes)) {
+                      tourProvider.completeCurrentStep();
+                    }
+
+                    // Navigate to Education page - let EducationPage initState handle showcase trigger
                     onEducationTap();
 
-                    // Trigger education showcase after navigation
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        try {
+                    // Trigger appropriate showcase after navigation
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      try {
+                        final articleController =
+                            Provider.of<ArticleController>(context,
+                                listen: false);
+
+                        if (articleController.recommendedArticles.isNotEmpty) {
                           ShowcaseView.get()
                               .startShowCase([TourKeys.recommendedArticlesKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered recommended articles showcase');
-                        } catch (e) {
-                          print(
-                              '🎯 CustomNavBar: Error triggering recommended articles showcase: $e');
                         }
-                      });
+                      } catch (e) {}
                     });
                   },
                   onToolTipClick: () {
                     print(
                         '🎯 CustomNavBar: User clicked on Education tab tooltip');
+                    final tourProvider =
+                        Provider.of<ForcedTourProvider>(context, listen: false);
+
+                    // Complete the recipes step (if we're coming from recipes)
+                    if (tourProvider.isOnStep(TourStep.recipes)) {
+                      tourProvider.completeCurrentStep();
+                    }
+
+                    // Navigate to Education page - let EducationPage initState handle showcase trigger
                     onEducationTap();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        try {
+
+                    // Trigger appropriate showcase after navigation
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      try {
+                        final articleController =
+                            Provider.of<ArticleController>(context,
+                                listen: false);
+
+                        if (articleController.recommendedArticles.isNotEmpty) {
                           ShowcaseView.get()
                               .startShowCase([TourKeys.recommendedArticlesKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered recommended articles showcase');
-                        } catch (e) {
-                          print(
-                              '🎯 CustomNavBar: Error triggering recommended articles showcase: $e');
                         }
-                      });
+                      } catch (e) {}
                     });
                   },
                   disposeOnTap: true,

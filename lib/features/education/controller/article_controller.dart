@@ -140,11 +140,23 @@ class ArticleController extends ChangeNotifier {
 
     try {
       final allArticles = await _articleRepository.getArticles();
-      _recommendedArticles = allArticles
-          .where(
-            (article) => user.medicalConditions!.contains(article.category),
-          )
-          .toList();
+
+      // Normalize medical conditions for comparison (handle case sensitivity and hyphens)
+      final normalizedConditions = user.medicalConditions!.map((condition) {
+        // Convert to lowercase and replace hyphens
+        return condition.toLowerCase().replaceAll('-', '').replaceAll(' ', '');
+      }).toList();
+
+      _recommendedArticles = allArticles.where(
+        (article) {
+          // Normalize article category the same way
+          final normalizedCategory = article.category
+              .toLowerCase()
+              .replaceAll('-', '')
+              .replaceAll(' ', '');
+          return normalizedConditions.contains(normalizedCategory);
+        },
+      ).toList();
     } catch (e) {
       _error = 'Failed to load recommended articles: $e';
     } finally {
@@ -262,8 +274,8 @@ class ArticleController extends ChangeNotifier {
     if (recommendedIndex != -1) {
       _recommendedArticles[recommendedIndex] =
           _recommendedArticles[recommendedIndex].copyWith(
-            isBookmarked: isBookmarked,
-          );
+        isBookmarked: isBookmarked,
+      );
     }
 
     if (isBookmarked) {
