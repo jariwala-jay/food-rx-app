@@ -12,6 +12,9 @@ import 'package:flutter_app/core/services/image_cache_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/tracking/views/tracker_grid.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -348,160 +351,240 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final dietType =
         user?.dietType ?? 'MyPlate'; // Default to MyPlate if not specified
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F8),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profile Header
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+    return Consumer<ForcedTourProvider>(
+      builder: (context, tourProvider, child) {
+        Widget content = Scaffold(
+          backgroundColor: const Color(0xFFF7F7F8),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Profile Header
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundImage: _profilePhotoData != null
-                              ? MemoryImage(_profilePhotoData!)
-                              : const AssetImage(
-                                      'assets/images/profile_pic.png')
-                                  as ImageProvider,
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
                           children: [
-                            Text(
-                              'Hi, Good Morning',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundImage: _profilePhotoData != null
+                                  ? MemoryImage(_profilePhotoData!)
+                                  : const AssetImage(
+                                          'assets/images/profile_pic.png')
+                                      as ImageProvider,
                             ),
-                            Text(
-                              authProvider.currentUser?.name ?? 'Guest',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hi, Good Morning',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  authProvider.currentUser?.name ?? 'Guest',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_outlined),
+                              onPressed: () {},
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.logout),
+                              onPressed: () async {
+                                try {
+                                  await authProvider.logout();
+                                  if (mounted) {
+                                    Navigator.of(context)
+                                        .pushNamedAndRemoveUntil(
+                                      '/login',
+                                      (route) => false,
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Logout failed: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
                             ),
                           ],
                         ),
                       ],
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined),
-                          onPressed: () {},
+                  ),
+
+                  // Trackers section
+                  if (user != null && user.id != null)
+                    Showcase(
+                      key: TourKeys.trackersKey,
+                      title: 'Track Your Nutrition',
+                      description:
+                          'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
+                      targetShapeBorder: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      tooltipBackgroundColor: Colors.white,
+                      textColor: Colors.black,
+                      overlayColor: Colors.black54,
+                      overlayOpacity: 0.8,
+                      onTargetClick: () {
+                        print('🎯 HomePage: User clicked on trackers showcase');
+                        final tourProvider = Provider.of<ForcedTourProvider>(
+                            context,
+                            listen: false);
+                        tourProvider.completeCurrentStep();
+
+                        // Trigger the next showcase step
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          ShowCaseWidget.of(context)
+                              .startShowCase([TourKeys.dailyTipsKey]);
+                        });
+                      },
+                      disposeOnTap: true,
+                      child: Consumer<TrackerProvider>(
+                        builder: (context, trackerProvider, child) {
+                          return TrackerGrid(
+                              userId: user.id!, dietType: dietType);
+                        },
+                      ),
+                    ),
+
+                  // Activity section could go here
+
+                  // Daily Tips Section - horizontal scrollable view
+                  Builder(
+                    builder: (context) {
+                      print('🎯 HomePage: Building daily tips showcase');
+                      return Showcase(
+                        key: TourKeys.dailyTipsKey,
+                        title: 'Daily Health Tips',
+                        description:
+                            'Get personalized health tips and recommendations based on your condition and goals.',
+                        targetShapeBorder: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.logout),
-                          onPressed: () async {
-                            try {
-                              await authProvider.logout();
-                              if (mounted) {
-                                Navigator.of(context).pushNamedAndRemoveUntil(
-                                  '/login',
-                                  (route) => false,
-                                );
+                        tooltipBackgroundColor: Colors.white,
+                        textColor: Colors.black,
+                        overlayColor: Colors.black54,
+                        overlayOpacity: 0.8,
+                        onTargetClick: () {
+                          print(
+                              '🎯 HomePage: User clicked on daily tips showcase');
+                          final tourProvider = Provider.of<ForcedTourProvider>(
+                              context,
+                              listen: false);
+                          tourProvider.completeCurrentStep();
+
+                          // Trigger the next showcase step (My Plan button)
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            print(
+                                '🎯 HomePage: Triggering My Plan button showcase');
+                            // Add a small delay to ensure the UI has rendered
+                            Future.delayed(const Duration(milliseconds: 500),
+                                () {
+                              try {
+                                ShowCaseWidget.of(context)
+                                    .startShowCase([TourKeys.myPlanButtonKey]);
+                                print(
+                                    '🎯 HomePage: My Plan showcase triggered successfully');
+                              } catch (e) {
+                                print(
+                                    '🎯 HomePage: Error triggering My Plan showcase: $e');
                               }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Logout failed: $e'),
-                                    backgroundColor: Colors.red,
+                            });
+                          });
+                        },
+                        disposeOnTap: true,
+                        child: Consumer<TipProvider>(
+                          builder: (context, tipProvider, child) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Daily tips',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                );
-                              }
-                            }
+                                  const SizedBox(height: 16),
+                                  if (tipProvider.isLoading)
+                                    const SizedBox(
+                                      height: 201,
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    )
+                                  else if (tipProvider.shownTips.isEmpty)
+                                    const SizedBox(
+                                      height: 201,
+                                      child: Center(
+                                        child: Text('No tips available'),
+                                      ),
+                                    )
+                                  else
+                                    SizedBox(
+                                      height: 201,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: tipProvider.shownTips.length,
+                                        separatorBuilder: (context, index) =>
+                                            const SizedBox(width: 16),
+                                        itemBuilder: (context, index) {
+                                          final tip =
+                                              tipProvider.shownTips[index];
+                                          return SizedBox(
+                                            width: 216,
+                                            child: _buildTipCard(
+                                              context,
+                                              tip.title,
+                                              tip.description,
+                                              tip.imageUrl,
+                                              onTap: () => _handleTipTap(tip),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
                           },
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      );
+                    },
+                  ),
+                ],
               ),
-
-              // Trackers section - isolated to only listen to TrackerProvider
-              if (user != null && user.id != null)
-                Consumer<TrackerProvider>(
-                  builder: (context, trackerProvider, child) {
-                    return Container(
-                      child: TrackerGrid(userId: user.id!, dietType: dietType),
-                    );
-                  },
-                ),
-
-              // Activity section could go here
-
-              // Daily Tips Section - horizontal scrollable view
-              Consumer<TipProvider>(
-                builder: (context, tipProvider, child) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Daily tips',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (tipProvider.isLoading)
-                          const SizedBox(
-                            height: 201,
-                            child: Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        else if (tipProvider.shownTips.isEmpty)
-                          const SizedBox(
-                            height: 201,
-                            child: Center(
-                              child: Text('No tips available'),
-                            ),
-                          )
-                        else
-                          SizedBox(
-                            height: 201,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: tipProvider.shownTips.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(width: 16),
-                              itemBuilder: (context, index) {
-                                final tip = tipProvider.shownTips[index];
-                                return SizedBox(
-                                  width: 216,
-                                  child: _buildTipCard(
-                                    context,
-                                    tip.title,
-                                    tip.description,
-                                    tip.imageUrl,
-                                    onTap: () => _handleTipTap(tip),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+
+        return content;
+      },
     );
   }
 }

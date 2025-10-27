@@ -4,7 +4,8 @@ import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
-import 'package:flutter_app/features/navigation/views/main_screen.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class CreateRecipeView extends StatefulWidget {
   const CreateRecipeView({Key? key}) : super(key: key);
@@ -668,10 +669,35 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     controller.generateRecipes(filter: filter);
 
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
-      (route) => false,
-    );
+
+    // Pop back to MainScreen - the Recipe tab is already selected
+    Navigator.of(context).pop();
+
+    // Wait for recipes to be generated, then trigger showcase
+    // Poll for recipes with increasing delays
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      if (controller.recipes.isNotEmpty) {
+        try {
+          ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
+          print('🎯 CreateRecipeView: Triggered recipes showcase');
+        } catch (e) {
+          print('🎯 CreateRecipeView: Error: $e');
+        }
+      }
+    });
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      if (controller.recipes.isNotEmpty) {
+        try {
+          ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
+          print('🎯 CreateRecipeView: Triggered recipes showcase (retry)');
+        } catch (e) {
+          print('🎯 CreateRecipeView: Error (retry): $e');
+        }
+      }
+    });
 
     // Show feedback with diet-specific information
     final dietInfo = dashCompliant

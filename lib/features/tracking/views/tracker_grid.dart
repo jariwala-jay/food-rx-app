@@ -6,6 +6,8 @@ import '../models/tracker_goal.dart';
 import '../widgets/tracker_card.dart';
 import '../widgets/pantry_tracker_logging_modal.dart';
 import '../widgets/manual_tracker_logging_modal.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart' as showcaseview;
 
 class TrackerGrid extends StatefulWidget {
   final String userId;
@@ -183,8 +185,12 @@ class _TrackerGridState extends State<TrackerGrid>
 
         if (dailyTrackers.isEmpty && weeklyTrackers.isEmpty) {
           // Show skeleton loading instead of manual initialization button
+          print('🎯 TrackerGrid: Showing skeleton loading (no trackers)');
           return _buildSkeletonLoading();
         }
+
+        print(
+            '🎯 TrackerGrid: Showing main tracker display with ${dailyTrackers.length} daily trackers');
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -202,27 +208,58 @@ class _TrackerGridState extends State<TrackerGrid>
                       color: Color(0xFF333333),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/meal-plan');
+                  Builder(
+                    builder: (context) {
+                      print('🎯 TrackerGrid: Building My Plan showcase widget');
+                      return showcaseview.Showcase(
+                        key: TourKeys.myPlanButtonKey,
+                        title: 'View Your Diet Plan',
+                        description:
+                            'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
+                        targetShapeBorder: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
+                        ),
+                        tooltipBackgroundColor: Colors.white,
+                        textColor: Colors.black,
+                        overlayColor: Colors.black54,
+                        overlayOpacity: 0.8,
+                        onTargetClick: () {
+                          print(
+                              '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
+                          // Navigate to meal plan page - don't complete step yet
+                          Navigator.pushNamed(context, '/meal-plan');
+                          // Step will be completed when user clicks "Continue Tour" on diet plan page
+                        },
+                        disposeOnTap: true,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            print(
+                                '🎯 TrackerGrid: User clicked on My Plan button');
+                            // Navigate to meal plan page - don't complete step yet
+                            Navigator.pushNamed(context, '/meal-plan');
+                            // Step will be completed when user clicks "Continue Tour" on diet plan page
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color(0xFFFF6B35), // Orange color
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'My Plan',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B35), // Orange color
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'My Plan',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -348,27 +385,59 @@ class _TrackerGridState extends State<TrackerGrid>
                   color: Color(0xFF333333),
                 ),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/meal-plan');
+              Builder(
+                builder: (context) {
+                  print(
+                      '🎯 TrackerGrid: Building My Plan showcase widget (skeleton)');
+                  return showcaseview.Showcase(
+                    key: TourKeys.myPlanButtonKey,
+                    title: 'View Your Diet Plan',
+                    description:
+                        'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
+                    targetShapeBorder: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(20)),
+                    ),
+                    tooltipBackgroundColor: Colors.white,
+                    textColor: Colors.black,
+                    overlayColor: Colors.black54,
+                    overlayOpacity: 0.8,
+                    onTargetClick: () {
+                      print(
+                          '🎯 TrackerGrid: User tapped on My Plan showcase (skeleton) - navigating');
+                      // Navigate to meal plan page - don't complete step yet
+                      Navigator.pushNamed(context, '/meal-plan');
+                      // Step will be completed when user clicks "Continue Tour" on diet plan page
+                    },
+                    disposeOnTap: true,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        print(
+                            '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
+                        // Navigate to meal plan page - don't complete step yet
+                        Navigator.pushNamed(context, '/meal-plan');
+                        // Step will be completed when user clicks "Continue Tour" on diet plan page
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFFFF6B35), // Orange color
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'My Plan',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35), // Orange color
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'My Plan',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
               ),
             ],
           ),

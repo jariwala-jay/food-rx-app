@@ -53,6 +53,9 @@ class UserModel {
   // Health Goals
   final List<String> healthGoals;
 
+  // Tour completion
+  final bool hasCompletedTour;
+
   UserModel({
     this.id,
     required this.email,
@@ -101,6 +104,8 @@ class UserModel {
     this.lockUntil,
     // Health Goals
     this.healthGoals = const [],
+    // Tour completion
+    this.hasCompletedTour = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -162,6 +167,8 @@ class UserModel {
           : json['lockUntil'],
       // Health Goals
       healthGoals: List<String>.from(json['healthGoals'] ?? []),
+      // Tour completion
+      hasCompletedTour: json['hasCompletedTour'] ?? false,
     );
   }
 
@@ -206,6 +213,8 @@ class UserModel {
       'lockUntil': lockUntil?.toIso8601String(),
       // Health Goals
       'healthGoals': healthGoals,
+      // Tour completion
+      'hasCompletedTour': hasCompletedTour,
     };
   }
 
@@ -250,6 +259,8 @@ class UserModel {
     DateTime? lockUntil,
     // Health Goals
     List<String>? healthGoals,
+    // Tour completion
+    bool? hasCompletedTour,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -292,6 +303,8 @@ class UserModel {
       lockUntil: lockUntil ?? this.lockUntil,
       // Health Goals
       healthGoals: healthGoals ?? this.healthGoals,
+      // Tour completion
+      hasCompletedTour: hasCompletedTour ?? this.hasCompletedTour,
     );
   }
 }

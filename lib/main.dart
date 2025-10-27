@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
@@ -25,6 +26,8 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository_impl
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/features/home/providers/tip_provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/services/forced_tour_service.dart';
 import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
@@ -98,6 +101,15 @@ void main() async {
               create: (context) =>
                   TipProvider(TipService(context.read<MongoDBService>()))),
 
+          // Forced Tour Provider
+          ChangeNotifierProvider<ForcedTourProvider>(
+            create: (context) => ForcedTourProvider(
+              tourService: ForcedTourService(
+                authController: context.read<AuthController>(),
+              ),
+            ),
+          ),
+
           ChangeNotifierProxyProvider<AuthController, PantryController>(
             create: (context) => PantryController(
               context.read<MongoDBService>(),
@@ -163,50 +175,53 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Food RX',
-      theme: ThemeData(
-        primarySwatch: Colors.orange,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      navigatorObservers: [routeObserver],
-      home: Consumer<AuthController>(
-        builder: (context, authController, _) {
-          if (authController.isLoading) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
+    return ShowCaseWidget(
+      builder: (context) => MaterialApp(
+        title: 'Food RX',
+        theme: ThemeData(
+          primarySwatch: Colors.orange,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        navigatorObservers: [routeObserver],
+        home: Consumer<AuthController>(
+          builder: (context, authController, _) {
+            if (authController.isLoading) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
+            if (authController.isAuthenticated) {
+              return const MainScreen();
+            }
+
+            return const LoginPage();
+          },
+        ),
+        routes: {
+          '/signup': (context) => const SignupPage(),
+          '/login': (context) => const LoginPage(),
+          '/home': (context) => const MainScreen(),
+          '/chatbot': (context) => const ChatbotPage(),
+          '/meal-plan': (context) => const MealPlanPage(),
+          '/diet-plan-viewer': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments
+                as Map<String, String>;
+            return DietPlanViewerPage(
+              myPlanType: args['myPlanType']!,
+              displayName: args['displayName']!,
             );
-          }
-
-          if (authController.isAuthenticated) {
-            return const MainScreen();
-          }
-
-          return const LoginPage();
+          },
+          '/article-detail': (context) {
+            final article =
+                ModalRoute.of(context)!.settings.arguments as Article;
+            return ArticleDetailPage(article: article);
+          },
         },
+        navigatorKey: GlobalKey<NavigatorState>(),
       ),
-      routes: {
-        '/signup': (context) => const SignupPage(),
-        '/login': (context) => const LoginPage(),
-        '/home': (context) => const MainScreen(),
-        '/chatbot': (context) => const ChatbotPage(),
-        '/meal-plan': (context) => const MealPlanPage(),
-        '/diet-plan-viewer': (context) {
-          final args =
-              ModalRoute.of(context)!.settings.arguments as Map<String, String>;
-          return DietPlanViewerPage(
-            myPlanType: args['myPlanType']!,
-            displayName: args['displayName']!,
-          );
-        },
-        '/article-detail': (context) {
-          final article = ModalRoute.of(context)!.settings.arguments as Article;
-          return ArticleDetailPage(article: article);
-        },
-      },
-      navigatorKey: GlobalKey<NavigatorState>(),
     );
   }
 }

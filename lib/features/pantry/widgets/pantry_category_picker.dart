@@ -43,39 +43,46 @@ class PantryCategoryPicker extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        ...categories.map((cat) => ListTile(
-              leading: SvgPicture.asset(cat['icon']!, width: 40, height: 40),
-              title: Text(
-                cat['title']!,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 15,
-                  color: Colors.black,
-                ),
-              ),
-              subtitle: cat['subtitle'] != null && cat['subtitle']!.isNotEmpty
-                  ? Text(
-                      cat['subtitle']!,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: categories
+              .map((cat) => ListTile(
+                    leading:
+                        SvgPicture.asset(cat['icon']!, width: 40, height: 40),
+                    title: Text(
+                      cat['title']!,
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        color: Colors.black,
                       ),
-                    )
-                  : null,
-              trailing:
-                  const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PantryItemPickerPage(
-                      categoryTitle: cat['title']!,
-                      categoryKey: cat['key']!,
-                      isFoodPantryItem: isFoodPantryItem,
                     ),
-                  ),
-                );
-              },
-            )),
+                    subtitle:
+                        cat['subtitle'] != null && cat['subtitle']!.isNotEmpty
+                            ? Text(
+                                cat['subtitle']!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              )
+                            : null,
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        color: Colors.grey),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PantryItemPickerPage(
+                            categoryTitle: cat['title']!,
+                            categoryKey: cat['key']!,
+                            isFoodPantryItem: isFoodPantryItem,
+                          ),
+                        ),
+                      );
+                    },
+                  ))
+              .toList(),
+        ),
       ],
     );
   }

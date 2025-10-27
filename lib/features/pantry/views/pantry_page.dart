@@ -7,6 +7,9 @@ import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import '../widgets/category_filter_chips.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);
@@ -73,75 +76,106 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           child: Column(
             children: [
               // Segmented control
-              Container(
-                height: 46,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+              Showcase(
+                key: TourKeys.pantryTabToggleKey,
+                title: 'Toggle Food Items',
+                description:
+                    'Switch between FoodRx Items and Home Items to manage different types of pantry items.',
+                targetShapeBorder: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedTabIndex = 0);
-                          // Clear search when switching tabs
-                          pantryController.clearFilters();
-                          _searchController.clear();
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _selectedTabIndex == 0
-                                ? const Color(0xFFFF6A00)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'FoodRx Items',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: _selectedTabIndex == 0
-                                    ? Colors.white
-                                    : Colors.grey,
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                overlayColor: Colors.black54,
+                overlayOpacity: 0.8,
+                onTargetClick: () {
+                  print('🎯 PantryPage: User clicked on tab toggle showcase');
+                  // Don't complete step here - just show the toggle info
+                  // The pantry items showcase will complete the step
+
+                  // Trigger pantry items showcase after this
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      ShowCaseWidget.of(context)
+                          .startShowCase([TourKeys.pantryItemsKey]);
+                      print('🎯 PantryPage: Triggered pantry items showcase');
+                    } catch (e) {
+                      print(
+                          '🎯 PantryPage: Error triggering pantry items showcase: $e');
+                    }
+                  });
+                },
+                disposeOnTap: true,
+                child: Container(
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedTabIndex = 0);
+                            // Clear search when switching tabs
+                            pantryController.clearFilters();
+                            _searchController.clear();
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _selectedTabIndex == 0
+                                  ? const Color(0xFFFF6A00)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'FoodRx Items',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: _selectedTabIndex == 0
+                                      ? Colors.white
+                                      : Colors.grey,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedTabIndex = 1);
-                          // Clear search when switching tabs
-                          pantryController.clearFilters();
-                          _searchController.clear();
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _selectedTabIndex == 1
-                                ? const Color(0xFFFF6A00)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Home Items',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: _selectedTabIndex == 1
-                                    ? Colors.white
-                                    : Colors.grey,
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedTabIndex = 1);
+                            // Clear search when switching tabs
+                            pantryController.clearFilters();
+                            _searchController.clear();
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _selectedTabIndex == 1
+                                  ? const Color(0xFFFF6A00)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Home Items',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: _selectedTabIndex == 1
+                                      ? Colors.white
+                                      : Colors.grey,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 
@@ -269,12 +303,64 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     }
 
     // When there are items, show the filtered list
-    return ListView.builder(
-      itemCount: controller.filteredPantryItems.length,
-      itemBuilder: (context, index) {
-        final item = controller.filteredPantryItems[index];
-        return _buildPantryItemTile(item);
+    return Showcase(
+      key: TourKeys.pantryItemsKey,
+      title: 'Your Pantry Items',
+      description:
+          'Here you can see all the food items you\'ve added to your pantry. You can filter by category and manage your inventory.',
+      targetShapeBorder: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
+      tooltipBackgroundColor: Colors.white,
+      textColor: Colors.black,
+      overlayColor: Colors.black54,
+      overlayOpacity: 0.8,
+      onTargetClick: () {
+        print('🎯 PantryPage: User clicked on pantry items showcase');
+        final tourProvider =
+            Provider.of<ForcedTourProvider>(context, listen: false);
+        print(
+            '🎯 PantryPage: Current step before completion: ${tourProvider.currentStep}');
+
+        // Only complete if we're on the pantryItems step
+        // If we're already on recipes, skip completion
+        if (tourProvider.isOnStep(TourStep.pantryItems)) {
+          tourProvider.completeCurrentStep();
+          print('🎯 PantryPage: Completed pantryItems step');
+        } else {
+          print(
+              '🎯 PantryPage: Already past pantryItems step, skipping completion');
+        }
+
+        print(
+            '🎯 PantryPage: Current step after completion: ${tourProvider.currentStep}');
+
+        // Trigger recipes tab showcase
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            try {
+              ShowCaseWidget.of(context)
+                  .startShowCase([TourKeys.recipesTabKey]);
+              print('🎯 PantryPage: Triggered recipes tab showcase');
+              final stepAfterTrigger =
+                  Provider.of<ForcedTourProvider>(context, listen: false)
+                      .currentStep;
+              print(
+                  '🎯 PantryPage: Step after triggering recipes tab: $stepAfterTrigger');
+            } catch (e) {
+              print('🎯 PantryPage: Error triggering recipes tab showcase: $e');
+            }
+          });
+        });
       },
+      disposeOnTap: true,
+      child: ListView.builder(
+        itemCount: controller.filteredPantryItems.length,
+        itemBuilder: (context, index) {
+          final item = controller.filteredPantryItems[index];
+          return _buildPantryItemTile(item);
+        },
+      ),
     );
   }
 

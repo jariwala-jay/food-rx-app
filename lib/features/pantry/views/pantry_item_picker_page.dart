@@ -448,22 +448,30 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       // Store context before async operations to avoid linter warnings
                       final scaffoldMessenger = ScaffoldMessenger.of(context);
                       final navigator = Navigator.of(context);
-                      
+
                       if (success) {
                         // Refresh the pantry controller to show new items
                         try {
-                          final pantryController = Provider.of<PantryController>(context, listen: false);
+                          final pantryController =
+                              Provider.of<PantryController>(context,
+                                  listen: false);
                           await pantryController.refreshItems();
                         } catch (e) {
-                          developer.log('Failed to refresh pantry controller: $e');
+                          developer
+                              .log('Failed to refresh pantry controller: $e');
                         }
-                        
+
                         scaffoldMessenger.showSnackBar(
                           const SnackBar(
                             content: Text('Items added to your pantry'),
                             backgroundColor: Colors.green,
                           ),
                         );
+
+                        // Don't complete step here - it was already completed when adding items
+                        // The step completion happens in the pantry items showcase
+
+                        // Pop back to category picker
                         navigator.pop();
                       } else {
                         if (provider.error != null) {

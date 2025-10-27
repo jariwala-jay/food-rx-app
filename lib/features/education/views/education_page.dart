@@ -6,6 +6,9 @@ import 'package:flutter_app/features/education/widgets/category_chips.dart';
 import 'package:flutter_app/features/education/widgets/recommended_articles_section.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({Key? key}) : super(key: key);
@@ -22,6 +25,30 @@ class _EducationPageState extends State<EducationPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ArticleController>(context, listen: false).initialize();
+
+      // Check if tour is on education step and trigger recommended articles showcase
+      final tourProvider =
+          Provider.of<ForcedTourProvider>(context, listen: false);
+      print(
+          '🎯 EducationPage: Tour active: ${tourProvider.isTourActive}, Current step: ${tourProvider.currentStep}, Is on education step: ${tourProvider.isOnStep(TourStep.education)}');
+
+      if (tourProvider.isOnStep(TourStep.education)) {
+        // Trigger recommended articles showcase
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            try {
+              ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
+              print('🎯 EducationPage: Auto-triggered education showcase');
+            } catch (e) {
+              print('🎯 EducationPage: Error auto-triggering showcase: $e');
+            }
+          }
+        });
+      } else if (tourProvider.isTourActive) {
+        // If tour is active but not on education step, log it
+        print(
+            '🎯 EducationPage: Tour is active but not on education step. Current: ${tourProvider.currentStep}');
+      }
     });
   }
 
@@ -33,7 +60,27 @@ class _EducationPageState extends State<EducationPage> {
 
   @override
   Widget build(BuildContext context) {
+    print('🎯 EducationPage: Building...');
     final controller = Provider.of<ArticleController>(context);
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+
+    // Trigger education showcase when page becomes visible and tour is on education step
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print(
+          '🎯 EducationPage: Build callback - Tour active: ${tourProvider.isTourActive}, Step: ${tourProvider.currentStep}');
+      if (tourProvider.isOnStep(TourStep.education)) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          try {
+            ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
+            print('🎯 EducationPage: Triggered education showcase from build');
+          } catch (e) {
+            print('🎯 EducationPage: Error triggering showcase: $e');
+          }
+        });
+      }
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       body: SafeArea(
@@ -101,8 +148,29 @@ class _EducationPageState extends State<EducationPage> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: RecommendedArticlesSection(
-                  articles: controller.recommendedArticles),
+              child: Showcase(
+                key: TourKeys.recommendedArticlesKey,
+                title: 'Recommended Articles',
+                description:
+                    'These articles are specially selected for your health condition and goals.',
+                targetShapeBorder: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                overlayColor: Colors.black54,
+                overlayOpacity: 0.8,
+                onTargetClick: () {
+                  print(
+                      '🎯 EducationPage: User clicked on recommended articles showcase');
+                  // Complete the tour
+                  Provider.of<ForcedTourProvider>(context, listen: false)
+                      .completeTour();
+                },
+                disposeOnTap: true,
+                child: RecommendedArticlesSection(
+                    articles: controller.recommendedArticles),
+              ),
             ),
           ),
         SliverPersistentHeader(
@@ -134,27 +202,48 @@ class _EducationPageState extends State<EducationPage> {
         else
           SliverPadding(
             padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final article = controller.articles[index];
-                  return ArticleCard(
-                    article: article,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ArticleDetailPage(article: article),
-                        ),
-                      );
-                    },
-                    onBookmarkTap: () {
-                      controller.toggleBookmark(article.id);
-                    },
-                  );
-                },
-                childCount: controller.articles.length,
+            sliver: Showcase(
+              key: TourKeys.articlesListKey,
+              title: 'Browse All Articles',
+              description:
+                  'Scroll through articles by category or bookmark your favorites to read later.',
+              targetShapeBorder: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              tooltipBackgroundColor: Colors.white,
+              textColor: Colors.black,
+              overlayColor: Colors.black54,
+              overlayOpacity: 0.8,
+              onTargetClick: () {
+                print(
+                    '🎯 EducationPage: User clicked on articles list showcase');
+                // Complete the tour
+                Provider.of<ForcedTourProvider>(context, listen: false)
+                    .completeTour();
+              },
+              disposeOnTap: true,
+              child: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final article = controller.articles[index];
+                    return ArticleCard(
+                      article: article,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                ArticleDetailPage(article: article),
+                          ),
+                        );
+                      },
+                      onBookmarkTap: () {
+                        controller.toggleBookmark(article.id);
+                      },
+                    );
+                  },
+                  childCount: controller.articles.length,
+                ),
               ),
             ),
           ),

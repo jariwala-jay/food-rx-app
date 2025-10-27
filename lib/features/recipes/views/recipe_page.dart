@@ -6,6 +6,9 @@ import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/features/recipes/views/create_recipe_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/recipes/views/saved_recipes_page.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 // State class for efficient rebuilds
 class RecipePageState {
@@ -162,6 +165,28 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                       if (kDebugMode) {
                         print('🍽️ Showing ${state.recipes.length} recipes');
                       }
+
+                      // Trigger recipes showcase when recipes first appear if tour is active
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final tourProvider = Provider.of<ForcedTourProvider>(
+                            context,
+                            listen: false);
+                        print(
+                            '🎯 RecipePage: Recipes loaded, tour active: ${tourProvider.isTourActive}, current step: ${tourProvider.currentStep}');
+                        // Only trigger if we're on the recipes step
+                        if (tourProvider.isOnStep(TourStep.recipes)) {
+                          try {
+                            ShowCaseWidget.of(context)
+                                .startShowCase([TourKeys.recipesKey]);
+                            print(
+                                '🎯 RecipePage: Triggered recipes showcase (on recipes step)');
+                          } catch (e) {
+                            print(
+                                '🎯 RecipePage: Error triggering showcase: $e');
+                          }
+                        }
+                      });
+
                       _fadeAnimationController.forward();
                       return FadeTransition(
                         opacity: _fadeAnimation,
@@ -308,12 +333,61 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
         const SizedBox(height: 16),
         Expanded(
-          child: ListView.builder(
-            itemCount: state.recipes.length,
-            itemBuilder: (context, index) {
-              final Recipe recipe = state.recipes[index];
-              return RecipeCard(recipe: recipe);
+          child: Showcase(
+            key: TourKeys.recipesKey,
+            title: 'Your Personalized Recipes',
+            description:
+                'These recipes were generated just for you based on your health conditions, meal plan, and pantry items.',
+            targetShapeBorder: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            tooltipBackgroundColor: Colors.white,
+            textColor: Colors.black,
+            overlayColor: Colors.black54,
+            overlayOpacity: 0.8,
+            onTargetClick: () {
+              print('🎯 RecipePage: User clicked on recipes showcase');
+              final tourProvider =
+                  Provider.of<ForcedTourProvider>(context, listen: false);
+              print(
+                  '🎯 RecipePage: Current step before completion: ${tourProvider.currentStep}');
+
+              // Only complete the step if we're on the recipes step
+              // If we're already on education, the tour has progressed too far
+              if (tourProvider.isOnStep(TourStep.recipes)) {
+                tourProvider.completeCurrentStep();
+                print('🎯 RecipePage: Completed recipes step');
+
+                // Trigger education tab showcase after completing step
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  try {
+                    ShowCaseWidget.of(context)
+                        .startShowCase([TourKeys.educationTabKey]);
+                    print('🎯 RecipePage: Triggered education tab showcase');
+                  } catch (e) {
+                    print(
+                        '🎯 RecipePage: Error triggering education tab showcase: $e');
+                  }
+                });
+              } else {
+                print(
+                    '🎯 RecipePage: Already past recipes step, skipping completion');
+                // If we're past recipes step, just complete the tour
+                tourProvider.completeTour();
+              }
             },
+            disposeOnTap: true,
+            child: Consumer<RecipeController>(
+              builder: (context, controller, child) {
+                return ListView.builder(
+                  itemCount: controller.recipes.length,
+                  itemBuilder: (context, index) {
+                    final Recipe recipe = controller.recipes[index];
+                    return RecipeCard(recipe: recipe);
+                  },
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -371,14 +445,39 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 20),
-          _buildButton('Generate Recipes', () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const CreateRecipeView(),
-              ),
-            );
-          }),
+          Showcase(
+            key: TourKeys.generateRecipeButtonKey,
+            title: 'Generate Recipes',
+            description:
+                'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+            targetShapeBorder: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(24)),
+            ),
+            tooltipBackgroundColor: Colors.white,
+            textColor: Colors.black,
+            overlayColor: Colors.black54,
+            overlayOpacity: 0.8,
+            onTargetClick: () {
+              print('🎯 RecipePage: User clicked on Generate Recipes showcase');
+              // Don't complete step here - let them explore the recipe creation
+              // The tour will end after this step
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreateRecipeView(),
+                ),
+              );
+            },
+            disposeOnTap: true,
+            child: _buildButton('Generate Recipes', () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreateRecipeView(),
+                ),
+              );
+            }),
+          ),
         ],
       ),
     );
