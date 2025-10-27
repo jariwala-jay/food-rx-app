@@ -84,7 +84,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context)
+                          ShowcaseView.get()
                               .startShowCase([TourKeys.pantryTabToggleKey]);
                           print(
                               '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
@@ -107,7 +107,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context)
+                          ShowcaseView.get()
                               .startShowCase([TourKeys.pantryTabToggleKey]);
                           print(
                               '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
@@ -154,7 +154,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context).startShowCase(
+                          ShowcaseView.get().startShowCase(
                               [TourKeys.generateRecipeButtonKey]);
                           print(
                               '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
@@ -172,7 +172,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context).startShowCase(
+                          ShowcaseView.get().startShowCase(
                               [TourKeys.generateRecipeButtonKey]);
                           print(
                               '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
@@ -218,7 +218,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context)
+                          ShowcaseView.get()
                               .startShowCase([TourKeys.recommendedArticlesKey]);
                           print(
                               '🎯 CustomNavBar: Triggered recommended articles showcase');
@@ -236,7 +236,7 @@ class CustomNavBar extends StatelessWidget {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
-                          ShowCaseWidget.of(context)
+                          ShowcaseView.get()
                               .startShowCase([TourKeys.recommendedArticlesKey]);
                           print(
                               '🎯 CustomNavBar: Triggered recommended articles showcase');
@@ -281,7 +281,7 @@ class CustomNavBar extends StatelessWidget {
 
                 // Trigger the next showcase step (Add FoodRx Items) after action sheet opens
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ShowCaseWidget.of(context)
+                  ShowcaseView.get()
                       .startShowCase([TourKeys.addFoodRxItemsKey]);
                 });
               },
@@ -295,7 +295,7 @@ class CustomNavBar extends StatelessWidget {
 
                 // Trigger the next showcase step (Add FoodRx Items) after action sheet opens
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ShowCaseWidget.of(context)
+                  ShowcaseView.get()
                       .startShowCase([TourKeys.addFoodRxItemsKey]);
                 });
               },

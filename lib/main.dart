@@ -52,6 +52,14 @@ void main() async {
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
 
+    // Register ShowcaseView for guided tours
+    ShowcaseView.register(
+      onFinish: () {},
+      autoPlay: false,
+      enableAutoScroll: true,
+      disableBarrierInteraction: true,
+    );
+
     runApp(
       MultiProvider(
         providers: [
@@ -175,57 +183,50 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      onFinish: () {},
-      autoPlay: false,
-      enableAutoScroll: true,
-      disableBarrierInteraction: true,
-      builder: (context) => MaterialApp(
-        title: 'Food RX',
-        theme: ThemeData(
-          primarySwatch: Colors.orange,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-        ),
-        navigatorObservers: [routeObserver],
-        home: Consumer<AuthController>(
-          builder: (context, authController, _) {
-            if (authController.isLoading) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            }
-
-            if (authController.isAuthenticated) {
-              return const MainScreen();
-            }
-
-            return const LoginPage();
-          },
-        ),
-        routes: {
-          '/signup': (context) => const SignupPage(),
-          '/login': (context) => const LoginPage(),
-          '/home': (context) => const MainScreen(),
-          '/chatbot': (context) => const ChatbotPage(),
-          '/meal-plan': (context) => const MealPlanPage(),
-          '/diet-plan-viewer': (context) {
-            final args = ModalRoute.of(context)!.settings.arguments
-                as Map<String, String>;
-            return DietPlanViewerPage(
-              myPlanType: args['myPlanType']!,
-              displayName: args['displayName']!,
-            );
-          },
-          '/article-detail': (context) {
-            final article =
-                ModalRoute.of(context)!.settings.arguments as Article;
-            return ArticleDetailPage(article: article);
-          },
-        },
-        navigatorKey: GlobalKey<NavigatorState>(),
+    return MaterialApp(
+      title: 'Food RX',
+      theme: ThemeData(
+        primarySwatch: Colors.orange,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
+      navigatorObservers: [routeObserver],
+      home: Consumer<AuthController>(
+        builder: (context, authController, _) {
+          if (authController.isLoading) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (authController.isAuthenticated) {
+            return const MainScreen();
+          }
+
+          return const LoginPage();
+        },
+      ),
+      routes: {
+        '/signup': (context) => const SignupPage(),
+        '/login': (context) => const LoginPage(),
+        '/home': (context) => const MainScreen(),
+        '/chatbot': (context) => const ChatbotPage(),
+        '/meal-plan': (context) => const MealPlanPage(),
+        '/diet-plan-viewer': (context) {
+          final args =
+              ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+          return DietPlanViewerPage(
+            myPlanType: args['myPlanType']!,
+            displayName: args['displayName']!,
+          );
+        },
+        '/article-detail': (context) {
+          final article = ModalRoute.of(context)!.settings.arguments as Article;
+          return ArticleDetailPage(article: article);
+        },
+      },
+      navigatorKey: GlobalKey<NavigatorState>(),
     );
   }
 }

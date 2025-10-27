@@ -176,7 +176,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                         // Only trigger if we're on the recipes step
                         if (tourProvider.isOnStep(TourStep.recipes)) {
                           try {
-                            ShowCaseWidget.of(context)
+                            ShowcaseView.get()
                                 .startShowCase([TourKeys.recipesKey]);
                             print(
                                 '🎯 RecipePage: Triggered recipes showcase (on recipes step)');
@@ -358,7 +358,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 // Trigger education tab showcase after completing step
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   try {
-                    ShowCaseWidget.of(context)
+                    ShowcaseView.get()
                         .startShowCase([TourKeys.educationTabKey]);
                   } catch (e) {
                     print(
@@ -379,7 +379,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 tourProvider.completeCurrentStep();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   try {
-                    ShowCaseWidget.of(context)
+                    ShowcaseView.get()
                         .startShowCase([TourKeys.educationTabKey]);
                   } catch (e) {
                     print(

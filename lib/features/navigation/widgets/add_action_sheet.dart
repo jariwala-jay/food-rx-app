@@ -93,7 +93,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
                   // Trigger category list showcase after opening
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     try {
-                      ShowCaseWidget.of(context)
+                      ShowcaseView.get()
                           .startShowCase([TourKeys.pantryCategoryListKey]);
                       print(
                           '🎯 AddActionSheet: Triggered category list showcase');
@@ -109,7 +109,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
                   setState(() => showPantryPicker = true);
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     try {
-                      ShowCaseWidget.of(context)
+                      ShowcaseView.get()
                           .startShowCase([TourKeys.pantryCategoryListKey]);
                       print(
                           '🎯 AddActionSheet: Triggered category list showcase');

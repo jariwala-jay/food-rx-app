@@ -37,7 +37,7 @@ class _EducationPageState extends State<EducationPage> {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             try {
-              ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
+              ShowcaseView.get().startShowCase([TourKeys.educationKey]);
             } catch (e) {}
           }
         });
@@ -68,7 +68,7 @@ class _EducationPageState extends State<EducationPage> {
       if (tourProvider.isOnStep(TourStep.education)) {
         Future.delayed(const Duration(milliseconds: 300), () {
           try {
-            ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
+            ShowcaseView.get().startShowCase([TourKeys.educationKey]);
           } catch (e) {}
         });
       }

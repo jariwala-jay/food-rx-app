@@ -677,7 +677,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (!mounted) return;
       if (controller.recipes.isNotEmpty) {
         try {
-          ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
+          ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
         } catch (e) {
         }
       }
@@ -687,7 +687,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (!mounted) return;
       if (controller.recipes.isNotEmpty) {
         try {
-          ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
+          ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
         } catch (e) {
         }
       }

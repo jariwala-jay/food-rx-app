@@ -45,7 +45,7 @@ class _MainScreenState extends State<MainScreen> {
 
         // Start the showcase sequence using the correct v5.0.1 API
         // Start with just the first step
-        ShowCaseWidget.of(context).startShowCase([TourKeys.trackersKey]);
+        ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
       }
     });
   }
@@ -75,7 +75,7 @@ class _MainScreenState extends State<MainScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 500), () {
           try {
-            ShowCaseWidget.of(context).startShowCase([TourKeys.pantryTabKey]);
+            ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
             print(
                 '🎯 MainScreen: Triggered Pantry tab showcase - step: $currentStep');
           } catch (e) {}
@@ -133,7 +133,7 @@ class _MainScreenState extends State<MainScreen> {
                                   print(
                                       '🎯 DEBUG: Restarting tour after reset');
                                   tourProvider.startTour();
-                                  ShowCaseWidget.of(context)
+                                  ShowcaseView.get()
                                       .startShowCase([TourKeys.trackersKey]);
                                 });
                               }

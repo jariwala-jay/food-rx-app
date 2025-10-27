@@ -216,7 +216,7 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
                         // Trigger the next showcase step (Add Button) after navigation
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           try {
-                            ShowCaseWidget.of(context)
+                            ShowcaseView.get()
                                 .startShowCase([TourKeys.addButtonKey]);
                             print(
                                 '🎯 ScreenshotViewer: Triggered Add Button showcase after diet plan');

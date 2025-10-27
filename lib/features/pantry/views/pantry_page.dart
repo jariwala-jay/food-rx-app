@@ -95,7 +95,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                   // Trigger pantry items showcase after this
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     try {
-                      ShowCaseWidget.of(context)
+                      ShowcaseView.get()
                           .startShowCase([TourKeys.pantryItemsKey]);
                     } catch (e) {
                       print(
@@ -106,7 +106,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 onToolTipClick: () {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     try {
-                      ShowCaseWidget.of(context)
+                      ShowcaseView.get()
                           .startShowCase([TourKeys.pantryItemsKey]);
                     } catch (e) {
                       print(
@@ -346,7 +346,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
             try {
-              ShowCaseWidget.of(context)
+              ShowcaseView.get()
                   .startShowCase([TourKeys.recipesTabKey]);
               final stepAfterTrigger =
                   Provider.of<ForcedTourProvider>(context, listen: false)
@@ -372,7 +372,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
             try {
-              ShowCaseWidget.of(context)
+              ShowcaseView.get()
                   .startShowCase([TourKeys.recipesTabKey]);
             } catch (e) {}
           });

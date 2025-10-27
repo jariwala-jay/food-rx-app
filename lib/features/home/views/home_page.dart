@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     // Trigger the next showcase step
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ShowCaseWidget.of(context).startShowCase([TourKeys.dailyTipsKey]);
+      ShowcaseView.get().startShowCase([TourKeys.dailyTipsKey]);
     });
   }
 
@@ -48,7 +48,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 500), () {
         try {
-          ShowCaseWidget.of(context).startShowCase([TourKeys.myPlanButtonKey]);
+          ShowcaseView.get().startShowCase([TourKeys.myPlanButtonKey]);
         } catch (e) {}
       });
     });
