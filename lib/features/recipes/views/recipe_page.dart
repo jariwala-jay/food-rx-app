@@ -209,12 +209,27 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                         print(
                             '📝 Showing empty state - generation completed with no recipes');
                       }
+
+                      // Trigger recipes showcase when showing empty state if tour is active
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final tourProvider = Provider.of<ForcedTourProvider>(
+                            context,
+                            listen: false);
+                        if (tourProvider.isOnStep(TourStep.recipes)) {
+                          try {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.recipesKey]);
+                          } catch (e) {
+                            // Silently handle error
+                          }
+                        }
+                      });
+
                       return _buildEmptyState(context);
                     }
 
                     // Default behavior for users who haven't generated recipes yet
-                    if (kDebugMode) {
-                    }
+                    if (kDebugMode) {}
                     return _buildDefaultDiscovery();
                   },
                 ),
@@ -518,39 +533,119 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 20),
 
-            // Enhanced empty state messaging
-            Text(
-              'No Recipes Available',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+            // Enhanced empty state messaging with showcase
+            Showcase(
+              key: TourKeys.recipesKey,
+              title: 'No Recipes Available',
+              description:
+                  'Try adding more pantry items or removing all cuisine preferences and try again later.',
+              targetShapeBorder: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
-            ),
-
-            const SizedBox(height: 12),
-
-            Text(
-              _getEmptyStateMessage(),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-                height: 1.4,
+              tooltipBackgroundColor: Colors.white,
+              textColor: Colors.black,
+              overlayColor: Colors.black54,
+              overlayOpacity: 0.8,
+              onTargetClick: () {
+                final tourProvider =
+                    Provider.of<ForcedTourProvider>(context, listen: false);
+                if (tourProvider.isOnStep(TourStep.recipes)) {
+                  tourProvider.completeCurrentStep();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      ShowcaseView.get()
+                          .startShowCase([TourKeys.educationTabKey]);
+                    } catch (e) {
+                      // Silently handle error
+                    }
+                  });
+                } else {
+                  tourProvider.completeTour();
+                }
+              },
+              onToolTipClick: () {
+                final tourProvider =
+                    Provider.of<ForcedTourProvider>(context, listen: false);
+                if (tourProvider.isOnStep(TourStep.recipes)) {
+                  tourProvider.completeCurrentStep();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      ShowcaseView.get()
+                          .startShowCase([TourKeys.educationTabKey]);
+                    } catch (e) {
+                      // Silently handle error
+                    }
+                  });
+                } else {
+                  tourProvider.completeTour();
+                }
+              },
+              disposeOnTap: true,
+              child: Column(
+                children: [
+                  Text(
+                    'No Recipes Available',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _getEmptyStateMessage(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 32),
 
-            _buildButton('Generate Recipes', () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreateRecipeView(),
-                ),
-              );
-            }),
+            Showcase(
+              key: TourKeys.generateRecipeButtonKey,
+              title: 'Generate Recipes',
+              description:
+                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+              targetShapeBorder: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+              ),
+              tooltipBackgroundColor: Colors.white,
+              textColor: Colors.black,
+              overlayColor: Colors.black54,
+              overlayOpacity: 0.8,
+              onTargetClick: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreateRecipeView(),
+                  ),
+                );
+              },
+              onToolTipClick: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreateRecipeView(),
+                  ),
+                );
+              },
+              disposeOnTap: true,
+              child: _buildButton('Generate Recipes', () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreateRecipeView(),
+                  ),
+                );
+              }),
+            ),
 
             const SizedBox(height: 16),
 

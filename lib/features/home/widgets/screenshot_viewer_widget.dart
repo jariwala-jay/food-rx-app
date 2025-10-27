@@ -218,13 +218,13 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
                           try {
                             ShowcaseView.get()
                                 .startShowCase([TourKeys.addButtonKey]);
-                            print(
-                                '🎯 ScreenshotViewer: Triggered Add Button showcase after diet plan');
                           } catch (e) {
-                            print(
-                                '🎯 ScreenshotViewer: Error triggering Add Button showcase: $e');
+                            // Silently handle error
                           }
                         });
+                      } else if (isLastPage && !isTourActive) {
+                        // Just go back to home when tour is not active
+                        Navigator.of(context).pop();
                       } else if (!isLastPage) {
                         _nextPage();
                       }
@@ -238,8 +238,11 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-                    child: Text(
-                        isLastPage && isTourActive ? 'Continue Tour' : 'Next'),
+                    child: Text(isLastPage && isTourActive
+                        ? 'Finish'
+                        : isLastPage
+                            ? 'Finish'
+                            : 'Next'),
                   ),
                 ],
               ),
