@@ -6,6 +6,9 @@ import 'package:flutter_app/features/education/widgets/category_chips.dart';
 import 'package:flutter_app/features/education/widgets/recommended_articles_section.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({Key? key}) : super(key: key);
@@ -16,12 +19,48 @@ class EducationPage extends StatefulWidget {
 
 class _EducationPageState extends State<EducationPage> {
   final _searchController = TextEditingController();
+  bool _hasTriggeredShowcase = false;
+  TourStep? _lastStep;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ArticleController>(context, listen: false).initialize();
+
+      // Check if tour is on education step and trigger recommended articles showcase
+      final tourProvider =
+          Provider.of<ForcedTourProvider>(context, listen: false);
+      print(
+          '🎯 EducationPage: Tour active: ${tourProvider.isTourActive}, Current step: ${tourProvider.currentStep}, Is on education step: ${tourProvider.isOnStep(TourStep.education)}');
+
+      if (tourProvider.isOnStep(TourStep.education)) {
+        // Wait for articles to load, then decide which showcase to show
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) {
+            try {
+              final controller =
+                  Provider.of<ArticleController>(context, listen: false);
+              // If no recommended articles, show articles list showcase
+              if (controller.recommendedArticles.isEmpty &&
+                  controller.articles.isNotEmpty) {
+                ShowcaseView.get().startShowCase([TourKeys.articlesListKey]);
+                print(
+                    '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
+              } else if (controller.recommendedArticles.isNotEmpty) {
+                ShowcaseView.get()
+                    .startShowCase([TourKeys.recommendedArticlesKey]);
+                print(
+                    '🎯 EducationPage: Showing recommended articles showcase');
+              }
+            } catch (e) {}
+          }
+        });
+      } else if (tourProvider.isTourActive) {
+        // If tour is active but not on education step, log it
+        print(
+            '🎯 EducationPage: Tour is active but not on education step. Current: ${tourProvider.currentStep}');
+      }
     });
   }
 
@@ -34,6 +73,53 @@ class _EducationPageState extends State<EducationPage> {
   @override
   Widget build(BuildContext context) {
     final controller = Provider.of<ArticleController>(context);
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+
+    // Trigger showcase check when page becomes visible and tour is on education step
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Only trigger once per step change
+      final currentStep = tourProvider.currentStep;
+      final shouldTrigger = tourProvider.isOnStep(TourStep.education) &&
+          !_hasTriggeredShowcase &&
+          _lastStep != TourStep.education;
+
+      if (shouldTrigger) {
+        _hasTriggeredShowcase = true;
+        _lastStep = currentStep;
+
+        // Wait for articles to load, then decide which showcase to show
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (!mounted) return;
+          try {
+            final controller =
+                Provider.of<ArticleController>(context, listen: false);
+            print(
+                '🎯 EducationPage: recommendedArticles=${controller.recommendedArticles.length}, allArticles=${controller.articles.length}');
+
+            // If no recommended articles, show articles list showcase
+            if (controller.recommendedArticles.isEmpty &&
+                controller.articles.isNotEmpty) {
+              print('🎯 EducationPage: Triggering articles list showcase');
+              ShowcaseView.get().startShowCase([TourKeys.articlesListKey]);
+              print(
+                  '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
+            } else if (controller.recommendedArticles.isNotEmpty) {
+              print(
+                  '🎯 EducationPage: Triggering recommended articles showcase');
+              ShowcaseView.get()
+                  .startShowCase([TourKeys.recommendedArticlesKey]);
+              print('🎯 EducationPage: Showing recommended articles showcase');
+            } else {
+              print('🎯 EducationPage: No articles available');
+            }
+          } catch (e) {
+            print('🎯 EducationPage: Error: $e');
+          }
+        });
+      }
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       body: SafeArea(
@@ -74,9 +160,69 @@ class _EducationPageState extends State<EducationPage> {
               ),
             ),
 
-            // Content
+            // Content (stack allows us to overlay a full-area highlight box)
             Expanded(
-              child: _buildContent(controller),
+              child: Stack(
+                children: [
+                  Consumer<ArticleController>(
+                    builder: (context, articleController, child) {
+                      // Trigger showcase based on what's available
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final tourProvider = Provider.of<ForcedTourProvider>(
+                            context,
+                            listen: false);
+
+                        if (tourProvider.isOnStep(TourStep.education)) {
+                          print(
+                              '🎯 EducationPage Consumer: Tour on education step');
+                          print(
+                              '🎯 EducationPage Consumer: Recommended articles: ${articleController.recommendedArticles.length}');
+                          print(
+                              '🎯 EducationPage Consumer: All articles: ${articleController.articles.length}');
+
+                          // Add delay to ensure articles are loaded
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            if (!context.mounted) return;
+
+                            // If no recommended articles but we have articles, show articles list showcase
+                            if (articleController.recommendedArticles.isEmpty &&
+                                articleController.articles.isNotEmpty) {
+                              try {
+                                print(
+                                    '🎯 EducationPage: Triggering articles list showcase');
+                                ShowcaseView.get()
+                                    .startShowCase([TourKeys.articlesListKey]);
+                                print(
+                                    '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
+                              } catch (e) {
+                                print(
+                                    '🎯 EducationPage: Error showing articles list showcase: $e');
+                              }
+                            }
+                            // If we have recommended articles, show recommended articles showcase
+                            else if (articleController
+                                .recommendedArticles.isNotEmpty) {
+                              try {
+                                print(
+                                    '🎯 EducationPage: Triggering recommended articles showcase');
+                                ShowcaseView.get().startShowCase(
+                                    [TourKeys.recommendedArticlesKey]);
+                                print(
+                                    '🎯 EducationPage: Showing recommended articles showcase');
+                              } catch (e) {
+                                print(
+                                    '🎯 EducationPage: Error showing recommended articles showcase: $e');
+                              }
+                            }
+                          });
+                        }
+                      });
+
+                      return _buildContent(articleController);
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -97,14 +243,39 @@ class _EducationPageState extends State<EducationPage> {
 
     return CustomScrollView(
       slivers: [
-        if (controller.recommendedArticles.isNotEmpty)
+        if (controller.recommendedArticles.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: RecommendedArticlesSection(
-                  articles: controller.recommendedArticles),
+              child: Showcase(
+                key: TourKeys.recommendedArticlesKey,
+                title: 'Recommended Articles',
+                description:
+                    'These articles are specially selected for your health condition and goals.',
+                targetShapeBorder: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                tooltipBackgroundColor: Colors.white,
+                textColor: Colors.black,
+                overlayColor: Colors.black54,
+                overlayOpacity: 0.8,
+                onTargetClick: () {
+                  // Complete the tour
+                  Provider.of<ForcedTourProvider>(context, listen: false)
+                      .completeTour();
+                },
+                onToolTipClick: () {
+                  // Complete the tour
+                  Provider.of<ForcedTourProvider>(context, listen: false)
+                      .completeTour();
+                },
+                disposeOnTap: true,
+                child: RecommendedArticlesSection(
+                    articles: controller.recommendedArticles),
+              ),
             ),
           ),
+        ],
         SliverPersistentHeader(
           pinned: true,
           delegate: _SliverAppBarDelegate(

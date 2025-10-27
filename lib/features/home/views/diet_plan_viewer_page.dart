@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/features/home/widgets/diet_plan_viewer.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 
 class DietPlanViewerPage extends StatelessWidget {
   final String myPlanType;
@@ -18,9 +20,15 @@ class DietPlanViewerPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: Consumer<ForcedTourProvider>(
+          builder: (context, tourProvider, child) {
+            return IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: tourProvider.isTourActive
+                  ? null
+                  : () => Navigator.of(context).pop(),
+            );
+          },
         ),
         title: Text(
           '$displayName Details',

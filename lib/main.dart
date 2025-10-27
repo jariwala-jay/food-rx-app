@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
@@ -25,6 +26,8 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository_impl
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/features/home/providers/tip_provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/services/forced_tour_service.dart';
 import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
@@ -48,6 +51,14 @@ void main() async {
 
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
+
+    // Register ShowcaseView for guided tours
+    ShowcaseView.register(
+      onFinish: () {},
+      autoPlay: false,
+      enableAutoScroll: true,
+      disableBarrierInteraction: true,
+    );
 
     runApp(
       MultiProvider(
@@ -97,6 +108,15 @@ void main() async {
           ChangeNotifierProvider(
               create: (context) =>
                   TipProvider(TipService(context.read<MongoDBService>()))),
+
+          // Forced Tour Provider
+          ChangeNotifierProvider<ForcedTourProvider>(
+            create: (context) => ForcedTourProvider(
+              tourService: ForcedTourService(
+                authController: context.read<AuthController>(),
+              ),
+            ),
+          ),
 
           ChangeNotifierProxyProvider<AuthController, PantryController>(
             create: (context) => PantryController(

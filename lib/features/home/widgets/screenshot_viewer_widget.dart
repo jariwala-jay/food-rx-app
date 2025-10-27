@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
 
 class ScreenshotViewerWidget extends StatefulWidget {
   final String planType;
@@ -179,40 +183,71 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
         ),
 
         // Navigation buttons
-        Container(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              ElevatedButton(
-                onPressed: _currentPage > 0 ? _previousPage : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+        Consumer<ForcedTourProvider>(
+          builder: (context, tourProvider, child) {
+            final isLastPage = _currentPage >= _imagePaths.length - 1;
+            final isTourActive = tourProvider.isTourActive;
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton(
+                    onPressed: _currentPage > 0 ? _previousPage : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B35),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: const Text('Previous'),
                   ),
-                ),
-                child: const Text('Previous'),
-              ),
-              ElevatedButton(
-                onPressed:
-                    _currentPage < _imagePaths.length - 1 ? _nextPage : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (isLastPage && isTourActive) {
+                        // Complete the diet plan step and go back to home
+                        tourProvider.completeCurrentStep();
+                        Navigator.of(context).pop();
+
+                        // Trigger the next showcase step (Add Button) after navigation
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          try {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.addButtonKey]);
+                          } catch (e) {
+                            // Silently handle error
+                          }
+                        });
+                      } else if (isLastPage && !isTourActive) {
+                        // Just go back to home when tour is not active
+                        Navigator.of(context).pop();
+                      } else if (!isLastPage) {
+                        _nextPage();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B35),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: Text(isLastPage && isTourActive
+                        ? 'Finish'
+                        : isLastPage
+                            ? 'Finish'
+                            : 'Next'),
                   ),
-                ),
-                child: const Text('Next'),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ],
     );
