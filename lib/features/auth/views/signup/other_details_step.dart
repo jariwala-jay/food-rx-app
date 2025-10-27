@@ -286,7 +286,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       ),
                     ),
                     child: AppRadioGroup<String>(
-                      label: 'Cooking Skill',
+                      label: 'Rate YourCooking Skill',
                       value: _cookingSkill,
                       options: _cookingSkillOptions
                           .map((option) => {option: option})
