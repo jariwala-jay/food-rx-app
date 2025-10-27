@@ -652,14 +652,12 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
     // Add debug information about meal type mapping
     if (kDebugMode) {
-      print('🎯 Meal Type Mapping:');
       print('  User Selection: $_selectedMealTypeName');
       print('  Spoonacular Types: $spoonacularMealTypes');
       print('  Internal MealType: $_selectedMealType');
     }
 
     if (kDebugMode) {
-      print('🎯 CreateRecipeView: Starting recipe generation...');
     }
 
     // Get controller and generate recipes
@@ -680,9 +678,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (controller.recipes.isNotEmpty) {
         try {
           ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
-          print('🎯 CreateRecipeView: Triggered recipes showcase');
         } catch (e) {
-          print('🎯 CreateRecipeView: Error: $e');
         }
       }
     });
@@ -692,9 +688,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (controller.recipes.isNotEmpty) {
         try {
           ShowCaseWidget.of(context).startShowCase([TourKeys.recipesKey]);
-          print('🎯 CreateRecipeView: Triggered recipes showcase (retry)');
         } catch (e) {
-          print('🎯 CreateRecipeView: Error (retry): $e');
         }
       }
     });

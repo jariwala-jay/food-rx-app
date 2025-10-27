@@ -11,13 +11,8 @@ class ForcedTourService {
   /// Check if the current user should see the tour
   bool shouldShowTour() {
     final user = _authController.currentUser;
-    print('🎯 ForcedTourService: Checking if should show tour');
-    print('🎯 ForcedTourService: User = ${user?.email}');
-    print('🎯 ForcedTourService: hasCompletedTour = ${user?.hasCompletedTour}');
-    print('🎯 ForcedTourService: User is null = ${user == null}');
 
     final shouldShow = user != null && !user.hasCompletedTour;
-    print('🎯 ForcedTourService: Should show tour = $shouldShow');
     return shouldShow;
   }
 

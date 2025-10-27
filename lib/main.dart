@@ -176,6 +176,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
+      onFinish: () {
+      },
+      autoPlay: false,
+      enableAutoScroll: true,
+      disableBarrierInteraction: true,
       builder: (context) => MaterialApp(
         title: 'Food RX',
         theme: ThemeData(

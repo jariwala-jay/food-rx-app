@@ -38,9 +38,7 @@ class _EducationPageState extends State<EducationPage> {
           if (mounted) {
             try {
               ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
-              print('🎯 EducationPage: Auto-triggered education showcase');
             } catch (e) {
-              print('🎯 EducationPage: Error auto-triggering showcase: $e');
             }
           }
         });
@@ -60,7 +58,6 @@ class _EducationPageState extends State<EducationPage> {
 
   @override
   Widget build(BuildContext context) {
-    print('🎯 EducationPage: Building...');
     final controller = Provider.of<ArticleController>(context);
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
@@ -73,9 +70,7 @@ class _EducationPageState extends State<EducationPage> {
         Future.delayed(const Duration(milliseconds: 300), () {
           try {
             ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
-            print('🎯 EducationPage: Triggered education showcase from build');
           } catch (e) {
-            print('🎯 EducationPage: Error triggering showcase: $e');
           }
         });
       }
@@ -163,6 +158,13 @@ class _EducationPageState extends State<EducationPage> {
                 onTargetClick: () {
                   print(
                       '🎯 EducationPage: User clicked on recommended articles showcase');
+                  // Complete the tour
+                  Provider.of<ForcedTourProvider>(context, listen: false)
+                      .completeTour();
+                },
+                onToolTipClick: () {
+                  print(
+                      '🎯 EducationPage: User clicked on recommended articles tooltip');
                   // Complete the tour
                   Provider.of<ForcedTourProvider>(context, listen: false)
                       .completeTour();

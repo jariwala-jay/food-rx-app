@@ -89,7 +89,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 overlayColor: Colors.black54,
                 overlayOpacity: 0.8,
                 onTargetClick: () {
-                  print('🎯 PantryPage: User clicked on tab toggle showcase');
                   // Don't complete step here - just show the toggle info
                   // The pantry items showcase will complete the step
 
@@ -98,7 +97,17 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                     try {
                       ShowCaseWidget.of(context)
                           .startShowCase([TourKeys.pantryItemsKey]);
-                      print('🎯 PantryPage: Triggered pantry items showcase');
+                    } catch (e) {
+                      print(
+                          '🎯 PantryPage: Error triggering pantry items showcase: $e');
+                    }
+                  });
+                },
+                onToolTipClick: () {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      ShowCaseWidget.of(context)
+                          .startShowCase([TourKeys.pantryItemsKey]);
                     } catch (e) {
                       print(
                           '🎯 PantryPage: Error triggering pantry items showcase: $e');
@@ -316,7 +325,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
       overlayColor: Colors.black54,
       overlayOpacity: 0.8,
       onTargetClick: () {
-        print('🎯 PantryPage: User clicked on pantry items showcase');
         final tourProvider =
             Provider.of<ForcedTourProvider>(context, listen: false);
         print(
@@ -326,7 +334,6 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         // If we're already on recipes, skip completion
         if (tourProvider.isOnStep(TourStep.pantryItems)) {
           tourProvider.completeCurrentStep();
-          print('🎯 PantryPage: Completed pantryItems step');
         } else {
           print(
               '🎯 PantryPage: Already past pantryItems step, skipping completion');
@@ -341,14 +348,34 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             try {
               ShowCaseWidget.of(context)
                   .startShowCase([TourKeys.recipesTabKey]);
-              print('🎯 PantryPage: Triggered recipes tab showcase');
               final stepAfterTrigger =
                   Provider.of<ForcedTourProvider>(context, listen: false)
                       .currentStep;
               print(
                   '🎯 PantryPage: Step after triggering recipes tab: $stepAfterTrigger');
             } catch (e) {
-              print('🎯 PantryPage: Error triggering recipes tab showcase: $e');
+            }
+          });
+        });
+      },
+      onToolTipClick: () {
+        final tourProvider =
+            Provider.of<ForcedTourProvider>(context, listen: false);
+
+        if (tourProvider.isOnStep(TourStep.pantryItems)) {
+          tourProvider.completeCurrentStep();
+        } else {
+          print(
+              '🎯 PantryPage: Already past pantryItems step, skipping completion');
+        }
+
+        // Trigger recipes tab showcase
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            try {
+              ShowCaseWidget.of(context)
+                  .startShowCase([TourKeys.recipesTabKey]);
+            } catch (e) {
             }
           });
         });

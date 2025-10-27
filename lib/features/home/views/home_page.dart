@@ -27,6 +27,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // Add WidgetsBindingObserver mixin
   final _mongoDBService = MongoDBService();
   Uint8List? _profilePhotoData;
+
+  void _handleTrackersShowcase(BuildContext context) {
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+    tourProvider.completeCurrentStep();
+
+    // Trigger the next showcase step
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ShowCaseWidget.of(context).startShowCase([TourKeys.dailyTipsKey]);
+    });
+  }
+
+  void _handleDailyTipsShowcase(BuildContext context) {
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+    tourProvider.completeCurrentStep();
+
+    // Trigger the next showcase step (My Plan button)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        try {
+          ShowCaseWidget.of(context).startShowCase([TourKeys.myPlanButtonKey]);
+        } catch (e) {
+        }
+      });
+    });
+  }
+
   // Flag to prevent duplicate initial data loads on first build
   bool _isInitialLoadComplete = false;
 
@@ -449,19 +477,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       overlayColor: Colors.black54,
                       overlayOpacity: 0.8,
                       onTargetClick: () {
-                        print('🎯 HomePage: User clicked on trackers showcase');
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        tourProvider.completeCurrentStep();
-
-                        // Trigger the next showcase step
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          ShowCaseWidget.of(context)
-                              .startShowCase([TourKeys.dailyTipsKey]);
-                        });
+                        _handleTrackersShowcase(context);
                       },
-                      disposeOnTap: true,
+                      onToolTipClick: () {
+                        _handleTrackersShowcase(context);
+                      },
+                      disposeOnTap: false,
                       child: Consumer<TrackerProvider>(
                         builder: (context, trackerProvider, child) {
                           return TrackerGrid(
@@ -475,7 +496,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   // Daily Tips Section - horizontal scrollable view
                   Builder(
                     builder: (context) {
-                      print('🎯 HomePage: Building daily tips showcase');
                       return Showcase(
                         key: TourKeys.dailyTipsKey,
                         title: 'Daily Health Tips',
@@ -489,33 +509,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         overlayColor: Colors.black54,
                         overlayOpacity: 0.8,
                         onTargetClick: () {
-                          print(
-                              '🎯 HomePage: User clicked on daily tips showcase');
-                          final tourProvider = Provider.of<ForcedTourProvider>(
-                              context,
-                              listen: false);
-                          tourProvider.completeCurrentStep();
-
-                          // Trigger the next showcase step (My Plan button)
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            print(
-                                '🎯 HomePage: Triggering My Plan button showcase');
-                            // Add a small delay to ensure the UI has rendered
-                            Future.delayed(const Duration(milliseconds: 500),
-                                () {
-                              try {
-                                ShowCaseWidget.of(context)
-                                    .startShowCase([TourKeys.myPlanButtonKey]);
-                                print(
-                                    '🎯 HomePage: My Plan showcase triggered successfully');
-                              } catch (e) {
-                                print(
-                                    '🎯 HomePage: Error triggering My Plan showcase: $e');
-                              }
-                            });
-                          });
+                          _handleDailyTipsShowcase(context);
                         },
-                        disposeOnTap: true,
+                        onToolTipClick: () {
+                          _handleDailyTipsShowcase(context);
+                        },
+                        disposeOnTap: false,
                         child: Consumer<TipProvider>(
                           builder: (context, tipProvider, child) {
                             return Padding(

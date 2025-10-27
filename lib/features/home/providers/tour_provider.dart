@@ -18,12 +18,10 @@ class TourProvider extends ChangeNotifier {
 
   /// Start the tour for first-time users
   void startTour() {
-    print('🎯 TourProvider: Starting tour check...');
     print(
         '🎯 TourProvider: shouldShowTour() = ${_tourService.shouldShowTour()}');
 
     if (_tourService.shouldShowTour()) {
-      print('🎯 TourProvider: Starting tour for first-time user');
       _isTourActive = true;
       _currentStep = TourStep.trackers;
       _tourCompleted = false;
@@ -31,7 +29,6 @@ class TourProvider extends ChangeNotifier {
 
       // Force start the showcase after a short delay to ensure UI is ready
       Future.delayed(const Duration(milliseconds: 500), () {
-        print('🎯 TourProvider: Attempting to start showcase...');
         notifyListeners(); // Trigger rebuild to show showcase
       });
     } else {
@@ -44,22 +41,18 @@ class TourProvider extends ChangeNotifier {
   void completeCurrentStep() {
     if (!_isTourActive) return;
 
-    print('🎯 TourProvider: Completing step: $_currentStep');
     _tourService.completeTourStep(_currentStep);
 
     final nextStep = _tourService.getNextStep(_currentStep);
     if (nextStep != null) {
-      print('🎯 TourProvider: Moving to next step: $nextStep');
       _currentStep = nextStep;
       notifyListeners();
 
       // Trigger the next showcase after a short delay
       Future.delayed(const Duration(milliseconds: 500), () {
-        print('🎯 TourProvider: Ready to trigger next showcase');
         notifyListeners(); // This will cause MainScreen to rebuild and trigger showcase
       });
     } else {
-      print('🎯 TourProvider: Tour completed');
       // Tour is complete
       _isTourActive = false;
       _tourCompleted = true;
@@ -136,7 +129,6 @@ class TourProvider extends ChangeNotifier {
   void forceInteraction(TourStep step) {
     if (!_isTourActive || _currentStep != step) return;
 
-    print('🎯 TourProvider: Forcing interaction with step: $step');
     // This will be handled by the UI to show specific instructions
     notifyListeners();
   }

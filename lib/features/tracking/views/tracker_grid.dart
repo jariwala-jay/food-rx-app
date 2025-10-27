@@ -185,7 +185,6 @@ class _TrackerGridState extends State<TrackerGrid>
 
         if (dailyTrackers.isEmpty && weeklyTrackers.isEmpty) {
           // Show skeleton loading instead of manual initialization button
-          print('🎯 TrackerGrid: Showing skeleton loading (no trackers)');
           return _buildSkeletonLoading();
         }
 
@@ -210,7 +209,6 @@ class _TrackerGridState extends State<TrackerGrid>
                   ),
                   Builder(
                     builder: (context) {
-                      print('🎯 TrackerGrid: Building My Plan showcase widget');
                       return showcaseview.Showcase(
                         key: TourKeys.myPlanButtonKey,
                         title: 'View Your Diet Plan',
@@ -229,6 +227,12 @@ class _TrackerGridState extends State<TrackerGrid>
                           // Navigate to meal plan page - don't complete step yet
                           Navigator.pushNamed(context, '/meal-plan');
                           // Step will be completed when user clicks "Continue Tour" on diet plan page
+                        },
+                        onToolTipClick: () {
+                          print(
+                              '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
+                          // Navigate to meal plan page
+                          Navigator.pushNamed(context, '/meal-plan');
                         },
                         disposeOnTap: true,
                         child: ElevatedButton(
@@ -408,7 +412,12 @@ class _TrackerGridState extends State<TrackerGrid>
                       Navigator.pushNamed(context, '/meal-plan');
                       // Step will be completed when user clicks "Continue Tour" on diet plan page
                     },
-                    disposeOnTap: true,
+                    onToolTipClick: () {
+                      print(
+                          '🎯 TrackerGrid: User clicked on My Plan tooltip (skeleton) - navigating');
+                      Navigator.pushNamed(context, '/meal-plan');
+                    },
+                    disposeOnTap: false,
                     child: ElevatedButton(
                       onPressed: () {
                         print(

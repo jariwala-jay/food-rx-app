@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/services/forced_tour_service.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
-import 'package:showcaseview/showcaseview.dart';
 
 class ForcedTourProvider extends ChangeNotifier {
   final ForcedTourService _tourService;
@@ -23,19 +22,11 @@ class ForcedTourProvider extends ChangeNotifier {
 
   /// Start the tour for first-time users
   void startTour() {
-    print('🎯 ForcedTourProvider: Starting tour check...');
-    print(
-        '🎯 ForcedTourProvider: shouldShowTour() = ${_tourService.shouldShowTour()}');
-
     if (_tourService.shouldShowTour()) {
-      print('🎯 ForcedTourProvider: Starting forced tour for first-time user');
       _isTourActive = true;
       _currentStep = TourStep.trackers;
       _tourCompleted = false;
       notifyListeners();
-    } else {
-      print(
-          '🎯 ForcedTourProvider: Tour not needed - user has already completed it or not logged in');
     }
   }
 
@@ -43,15 +34,11 @@ class ForcedTourProvider extends ChangeNotifier {
   void completeCurrentStep() {
     if (!_isTourActive) return;
 
-    print('🎯 ForcedTourProvider: Completing step: $_currentStep');
-
     // Move to next step immediately
     final nextStep = _tourService.getNextStep(_currentStep);
     if (nextStep != null) {
-      print('🎯 ForcedTourProvider: Moving to next step: $nextStep');
       _currentStep = nextStep;
     } else {
-      print('🎯 ForcedTourProvider: Tour completed');
       completeTourSync();
     }
 
@@ -94,7 +81,9 @@ class ForcedTourProvider extends ChangeNotifier {
   Future<void> resetTour() async {
     final success = await _tourService.resetTour();
     if (success) {
+      _isTourActive = false;
       _tourCompleted = false;
+      _currentStep = TourStep.trackers;
       notifyListeners();
     }
   }
@@ -123,8 +112,6 @@ class ForcedTourProvider extends ChangeNotifier {
   void forceInteraction() {
     if (!_isTourActive) return;
 
-    print(
-        '🎯 ForcedTourProvider: Forcing interaction with step: $_currentStep');
     notifyListeners();
   }
 }

@@ -214,7 +214,6 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
                     // Default behavior for users who haven't generated recipes yet
                     if (kDebugMode) {
-                      print('🎯 Showing default discovery for new users');
                     }
                     return _buildDefaultDiscovery();
                   },
@@ -346,7 +345,6 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             overlayColor: Colors.black54,
             overlayOpacity: 0.8,
             onTargetClick: () {
-              print('🎯 RecipePage: User clicked on recipes showcase');
               final tourProvider =
                   Provider.of<ForcedTourProvider>(context, listen: false);
               print(
@@ -356,14 +354,12 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               // If we're already on education, the tour has progressed too far
               if (tourProvider.isOnStep(TourStep.recipes)) {
                 tourProvider.completeCurrentStep();
-                print('🎯 RecipePage: Completed recipes step');
 
                 // Trigger education tab showcase after completing step
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   try {
                     ShowCaseWidget.of(context)
                         .startShowCase([TourKeys.educationTabKey]);
-                    print('🎯 RecipePage: Triggered education tab showcase');
                   } catch (e) {
                     print(
                         '🎯 RecipePage: Error triggering education tab showcase: $e');
@@ -373,6 +369,24 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 print(
                     '🎯 RecipePage: Already past recipes step, skipping completion');
                 // If we're past recipes step, just complete the tour
+                tourProvider.completeTour();
+              }
+            },
+            onToolTipClick: () {
+              final tourProvider =
+                  Provider.of<ForcedTourProvider>(context, listen: false);
+              if (tourProvider.isOnStep(TourStep.recipes)) {
+                tourProvider.completeCurrentStep();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  try {
+                    ShowCaseWidget.of(context)
+                        .startShowCase([TourKeys.educationTabKey]);
+                  } catch (e) {
+                    print(
+                        '🎯 RecipePage: Error triggering education tab showcase: $e');
+                  }
+                });
+              } else {
                 tourProvider.completeTour();
               }
             },
@@ -458,9 +472,16 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             overlayColor: Colors.black54,
             overlayOpacity: 0.8,
             onTargetClick: () {
-              print('🎯 RecipePage: User clicked on Generate Recipes showcase');
               // Don't complete step here - let them explore the recipe creation
               // The tour will end after this step
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreateRecipeView(),
+                ),
+              );
+            },
+            onToolTipClick: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(

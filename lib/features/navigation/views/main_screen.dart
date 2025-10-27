@@ -38,7 +38,6 @@ class _MainScreenState extends State<MainScreen> {
       final tourProvider =
           Provider.of<ForcedTourProvider>(context, listen: false);
 
-      print('🎯 MainScreen: Starting tour check...');
 
       // Start tour if needed
       if (tourProvider.tourService.shouldShowTour() &&
@@ -48,7 +47,6 @@ class _MainScreenState extends State<MainScreen> {
         // Start the showcase sequence using the correct v5.0.1 API
         // Start with just the first step
         ShowCaseWidget.of(context).startShowCase([TourKeys.trackersKey]);
-        print('🎯 MainScreen: Tour showcase started');
       }
     });
   }
@@ -82,7 +80,6 @@ class _MainScreenState extends State<MainScreen> {
             print(
                 '🎯 MainScreen: Triggered Pantry tab showcase - step: $currentStep');
           } catch (e) {
-            print('🎯 MainScreen: Error triggering Pantry tab showcase: $e');
           }
         });
       });
@@ -112,7 +109,6 @@ class _MainScreenState extends State<MainScreen> {
                         builder: (context, tourProvider, child) {
                           return ElevatedButton(
                             onPressed: () {
-                              print('🎯 DEBUG: Starting forced tour manually');
                               tourProvider.startTour();
                             },
                             style: ElevatedButton.styleFrom(
@@ -130,9 +126,19 @@ class _MainScreenState extends State<MainScreen> {
                       Consumer<ForcedTourProvider>(
                         builder: (context, tourProvider, child) {
                           return ElevatedButton(
-                            onPressed: () {
-                              print('🎯 DEBUG: Resetting forced tour');
-                              tourProvider.resetTour();
+                            onPressed: () async {
+                              await tourProvider.resetTour();
+                              // Restart the tour after reset
+                              if (context.mounted) {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  print(
+                                      '🎯 DEBUG: Restarting tour after reset');
+                                  tourProvider.startTour();
+                                  ShowCaseWidget.of(context)
+                                      .startShowCase([TourKeys.trackersKey]);
+                                });
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,

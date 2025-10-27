@@ -103,6 +103,22 @@ class _AddActionSheetState extends State<AddActionSheet> {
                     }
                   });
                 },
+                onToolTipClick: () {
+                  print(
+                      '🎯 AddActionSheet: User clicked on Add FoodRx Items tooltip');
+                  setState(() => showPantryPicker = true);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    try {
+                      ShowCaseWidget.of(context)
+                          .startShowCase([TourKeys.pantryCategoryListKey]);
+                      print(
+                          '🎯 AddActionSheet: Triggered category list showcase');
+                    } catch (e) {
+                      print(
+                          '🎯 AddActionSheet: Error triggering category list showcase: $e');
+                    }
+                  });
+                },
                 disposeOnTap: true,
                 child: ModalActionButton(
                   iconAsset: 'assets/icons/pantry_add.svg',

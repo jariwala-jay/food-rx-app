@@ -87,7 +87,30 @@ class CustomNavBar extends StatelessWidget {
                           ShowCaseWidget.of(context)
                               .startShowCase([TourKeys.pantryTabToggleKey]);
                           print(
-                              '🎯 CustomNavBar settembre: Triggered Pantry tab toggle showcase');
+                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                        } catch (e) {
+                          print(
+                              '🎯 CustomNavBar: Error triggering toggle showcase: $e');
+                        }
+                      });
+                    });
+                  },
+                  onToolTipClick: () {
+                    print(
+                        '🎯 CustomNavBar: User clicked on Pantry tab tooltip');
+                    final tourProvider =
+                        Provider.of<ForcedTourProvider>(context, listen: false);
+                    tourProvider.completeCurrentStep();
+                    onPantryTap();
+
+                    // Trigger toggle showcase after navigation
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        try {
+                          ShowCaseWidget.of(context)
+                              .startShowCase([TourKeys.pantryTabToggleKey]);
+                          print(
+                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
                         } catch (e) {
                           print(
                               '🎯 CustomNavBar: Error triggering toggle showcase: $e');
@@ -128,6 +151,24 @@ class CustomNavBar extends StatelessWidget {
                     onRecipeTap();
 
                     // Trigger Generate Recipes button showcase after navigation
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        try {
+                          ShowCaseWidget.of(context).startShowCase(
+                              [TourKeys.generateRecipeButtonKey]);
+                          print(
+                              '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
+                        } catch (e) {
+                          print(
+                              '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                        }
+                      });
+                    });
+                  },
+                  onToolTipClick: () {
+                    print(
+                        '🎯 CustomNavBar: User clicked on Recipe tab tooltip');
+                    onRecipeTap();
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
                         try {
@@ -188,6 +229,24 @@ class CustomNavBar extends StatelessWidget {
                       });
                     });
                   },
+                  onToolTipClick: () {
+                    print(
+                        '🎯 CustomNavBar: User clicked on Education tab tooltip');
+                    onEducationTap();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        try {
+                          ShowCaseWidget.of(context)
+                              .startShowCase([TourKeys.recommendedArticlesKey]);
+                          print(
+                              '🎯 CustomNavBar: Triggered recommended articles showcase');
+                        } catch (e) {
+                          print(
+                              '🎯 CustomNavBar: Error triggering recommended articles showcase: $e');
+                        }
+                      });
+                    });
+                  },
                   disposeOnTap: true,
                   child: _buildNavItem(
                     svgPath: 'assets/icons/education.svg',
@@ -213,7 +272,20 @@ class CustomNavBar extends StatelessWidget {
               overlayColor: Colors.black54,
               overlayOpacity: 0.8,
               onTargetClick: () {
-                print('🎯 CustomNavBar: User clicked on add button showcase');
+                final tourProvider =
+                    Provider.of<ForcedTourProvider>(context, listen: false);
+                tourProvider.completeCurrentStep();
+
+                // Open the action sheet
+                onAddTap();
+
+                // Trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ShowCaseWidget.of(context)
+                      .startShowCase([TourKeys.addFoodRxItemsKey]);
+                });
+              },
+              onToolTipClick: () {
                 final tourProvider =
                     Provider.of<ForcedTourProvider>(context, listen: false);
                 tourProvider.completeCurrentStep();
