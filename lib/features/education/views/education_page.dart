@@ -38,8 +38,7 @@ class _EducationPageState extends State<EducationPage> {
           if (mounted) {
             try {
               ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
-            } catch (e) {
-            }
+            } catch (e) {}
           }
         });
       } else if (tourProvider.isTourActive) {
@@ -70,8 +69,7 @@ class _EducationPageState extends State<EducationPage> {
         Future.delayed(const Duration(milliseconds: 300), () {
           try {
             ShowCaseWidget.of(context).startShowCase([TourKeys.educationKey]);
-          } catch (e) {
-          }
+          } catch (e) {}
         });
       }
     });

@@ -49,8 +49,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       Future.delayed(const Duration(milliseconds: 500), () {
         try {
           ShowCaseWidget.of(context).startShowCase([TourKeys.myPlanButtonKey]);
-        } catch (e) {
-        }
+        } catch (e) {}
       });
     });
   }

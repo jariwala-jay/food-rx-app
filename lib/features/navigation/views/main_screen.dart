@@ -38,7 +38,6 @@ class _MainScreenState extends State<MainScreen> {
       final tourProvider =
           Provider.of<ForcedTourProvider>(context, listen: false);
 
-
       // Start tour if needed
       if (tourProvider.tourService.shouldShowTour() &&
           !tourProvider.isTourActive) {
@@ -79,8 +78,7 @@ class _MainScreenState extends State<MainScreen> {
             ShowCaseWidget.of(context).startShowCase([TourKeys.pantryTabKey]);
             print(
                 '🎯 MainScreen: Triggered Pantry tab showcase - step: $currentStep');
-          } catch (e) {
-          }
+          } catch (e) {}
         });
       });
     }

@@ -353,8 +353,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                       .currentStep;
               print(
                   '🎯 PantryPage: Step after triggering recipes tab: $stepAfterTrigger');
-            } catch (e) {
-            }
+            } catch (e) {}
           });
         });
       },
@@ -375,8 +374,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             try {
               ShowCaseWidget.of(context)
                   .startShowCase([TourKeys.recipesTabKey]);
-            } catch (e) {
-            }
+            } catch (e) {}
           });
         });
       },
