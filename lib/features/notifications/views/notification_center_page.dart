@@ -185,9 +185,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getCategoryColor(notification.category),
+          backgroundColor: _getTypeColor(notification.type),
           child: Icon(
-            _getCategoryIcon(notification.category),
+            _getTypeIcon(notification.type),
             color: Colors.white,
             size: 20,
           ),
@@ -235,9 +235,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           }
 
           // Handle notification action if needed
-          if (notification.actionData != null) {
-            _handleNotificationAction(notification);
-          }
+          _handleNotificationAction(notification);
         },
         onLongPress: () async {
           await _showNotificationOptions(notification, notificationManager);
@@ -261,72 +259,36 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     }
   }
 
-  Color _getCategoryColor(NotificationCategory category) {
-    switch (category) {
-      case NotificationCategory.dailyProgress:
-        return Colors.green;
-      case NotificationCategory.streak:
+  Color _getTypeColor(NotificationType type) {
+    switch (type) {
+      case NotificationType.expiring_ingredient:
         return Colors.orange;
-      case NotificationCategory.expiryAlert:
-        return Colors.red;
-      case NotificationCategory.tip:
+      case NotificationType.tracker_reminder:
+        return Colors.green;
+      case NotificationType.admin:
         return Colors.blue;
-      case NotificationCategory.mealReminder:
+      case NotificationType.education:
         return Colors.purple;
-      case NotificationCategory.onboarding:
-        return Colors.teal;
-      case NotificationCategory.reengagement:
-        return Colors.indigo;
-      case NotificationCategory.newContent:
-        return Colors.cyan;
-      case NotificationCategory.bookmarkReminder:
-        return Colors.amber;
-      case NotificationCategory.lowStock:
-        return Colors.deepOrange;
-      case NotificationCategory.recipeSuggestion:
-        return Colors.pink;
-      case NotificationCategory.motivation:
-        return Colors.lightGreen;
-      case NotificationCategory.goalAdjustment:
-        return Colors.deepPurple;
     }
   }
 
-  IconData _getCategoryIcon(NotificationCategory category) {
-    switch (category) {
-      case NotificationCategory.dailyProgress:
-        return Icons.trending_up;
-      case NotificationCategory.streak:
-        return Icons.local_fire_department;
-      case NotificationCategory.expiryAlert:
+  IconData _getTypeIcon(NotificationType type) {
+    switch (type) {
+      case NotificationType.expiring_ingredient:
         return Icons.warning;
-      case NotificationCategory.tip:
-        return Icons.lightbulb;
-      case NotificationCategory.mealReminder:
-        return Icons.restaurant;
-      case NotificationCategory.onboarding:
+      case NotificationType.tracker_reminder:
+        return Icons.restaurant_menu;
+      case NotificationType.admin:
+        return Icons.admin_panel_settings;
+      case NotificationType.education:
         return Icons.school;
-      case NotificationCategory.reengagement:
-        return Icons.refresh;
-      case NotificationCategory.newContent:
-        return Icons.new_releases;
-      case NotificationCategory.bookmarkReminder:
-        return Icons.bookmark;
-      case NotificationCategory.lowStock:
-        return Icons.inventory;
-      case NotificationCategory.recipeSuggestion:
-        return Icons.menu_book;
-      case NotificationCategory.motivation:
-        return Icons.favorite;
-      case NotificationCategory.goalAdjustment:
-        return Icons.tune;
     }
   }
 
   void _handleNotificationAction(AppNotification notification) {
     // Handle different notification actions with helpful messages
     switch (notification.type) {
-      case NotificationType.pantryExpiry:
+      case NotificationType.expiring_ingredient:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Check the Pantry tab for expiring items'),
@@ -359,7 +321,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           ),
         );
         break;
-      case NotificationType.healthGoal:
+      case NotificationType.admin:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Check the Home tab for your health goals'),
@@ -375,7 +337,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           ),
         );
         break;
-      case NotificationType.system:
+      case NotificationType.tracker_reminder:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Notification: ${notification.title}'),

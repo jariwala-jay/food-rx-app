@@ -1,0 +1,19 @@
+{
+  "name": "foodrx-admin-notification",
+  "version": "1.0.0",
+  "description": "Admin notification function for Food Rx",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "notifications",
+    "admin"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mongodb": "^6.0.0"
+  }
+}
+

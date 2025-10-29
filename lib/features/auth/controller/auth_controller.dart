@@ -7,8 +7,6 @@ import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
-import 'package:flutter_app/core/services/notification_trigger_service.dart';
-import 'package:flutter_app/core/services/health_goal_notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
@@ -20,8 +18,6 @@ class AuthController with ChangeNotifier {
   ReplanService? _replanService;
   ReplanTrigger? _pendingReplanTrigger;
   NotificationManager? _notificationManager;
-  NotificationTriggerService? _notificationTriggerService;
-  HealthGoalNotificationService? _healthGoalNotificationService;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
@@ -29,10 +25,6 @@ class AuthController with ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   ReplanTrigger? get pendingReplanTrigger => _pendingReplanTrigger;
   NotificationManager? get notificationManager => _notificationManager;
-  NotificationTriggerService? get notificationTriggerService =>
-      _notificationTriggerService;
-  HealthGoalNotificationService? get healthGoalNotificationService =>
-      _healthGoalNotificationService;
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -170,8 +162,6 @@ class AuthController with ChangeNotifier {
       // Clean up notification services
       _notificationManager?.dispose();
       _notificationManager = null;
-      _notificationTriggerService = null;
-      _healthGoalNotificationService = null;
 
       _currentUser = null;
     } catch (e) {
@@ -312,30 +302,9 @@ class AuthController with ChangeNotifier {
   /// Initialize notification services for the user
   Future<void> _initializeNotificationServices(String userId) async {
     try {
-      // Initialize notification manager
+      // Initialize notification manager (simplified)
       _notificationManager = NotificationManager();
       await _notificationManager!.initialize(userId);
-
-      // Initialize notification trigger service
-      _notificationTriggerService = NotificationTriggerService();
-      await _notificationTriggerService!.initialize(userId);
-
-      // Check for immediate notification triggers
-      await _notificationTriggerService!.checkOnboardingStatus(userId);
-      await _notificationTriggerService!.checkReengagement(userId);
-      await _notificationTriggerService!.checkPantryExpirationAlerts(userId);
-      await _notificationTriggerService!.checkLowStockAlerts(userId);
-
-      // Initialize health goal notification service
-      _healthGoalNotificationService = HealthGoalNotificationService();
-
-      // Check for health goal notifications
-      await _healthGoalNotificationService!
-          .checkDailyProgressMilestones(userId);
-      await _healthGoalNotificationService!.checkStreakAchievements(userId);
-      await _healthGoalNotificationService!.checkGoalCompletions(userId);
-      await _healthGoalNotificationService!
-          .checkMotivationNotifications(userId);
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
     }

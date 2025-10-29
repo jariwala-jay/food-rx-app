@@ -20,8 +20,6 @@ class MongoDBService {
   late DbCollection _educationalContentCollection;
   late DbCollection _pantryCollection;
   late DbCollection _notificationsCollection;
-  late DbCollection _notificationPreferencesCollection;
-  late DbCollection _notificationAnalyticsCollection;
   late GridFS _profilePhotosBucket;
   bool _isInitialized = false;
 
@@ -32,10 +30,6 @@ class MongoDBService {
       _educationalContentCollection;
   DbCollection get pantryCollection => _pantryCollection;
   DbCollection get notificationsCollection => _notificationsCollection;
-  DbCollection get notificationPreferencesCollection =>
-      _notificationPreferencesCollection;
-  DbCollection get notificationAnalyticsCollection =>
-      _notificationAnalyticsCollection;
   GridFS get profilePhotosBucket => _profilePhotosBucket;
 
   // Security constants
@@ -75,9 +69,6 @@ class MongoDBService {
     _educationalContentCollection = _db.collection('educational_content');
     _pantryCollection = _db.collection('pantry_items');
     _notificationsCollection = _db.collection('notifications');
-    _notificationPreferencesCollection =
-        _db.collection('notification_preferences');
-    _notificationAnalyticsCollection = _db.collection('notification_analytics');
     _profilePhotosBucket = GridFS(_db, 'profile_photos');
 
     await _usersCollection.createIndex(keys: {'email': 1}, unique: true);
@@ -111,18 +102,7 @@ class MongoDBService {
     await _notificationsCollection.createIndex(keys: {'userId': 1, 'type': 1});
     await _notificationsCollection
         .createIndex(keys: {'userId': 1, 'readAt': 1});
-    await _notificationsCollection.createIndex(keys: {'scheduledFor': 1});
     await _notificationsCollection.createIndex(keys: {'sentAt': 1});
-    await _notificationsCollection.createIndex(keys: {'priority': 1});
-
-    await _notificationPreferencesCollection
-        .createIndex(keys: {'userId': 1}, unique: true);
-
-    await _notificationAnalyticsCollection.createIndex(keys: {'userId': 1});
-    await _notificationAnalyticsCollection
-        .createIndex(keys: {'notificationId': 1});
-    await _notificationAnalyticsCollection.createIndex(keys: {'action': 1});
-    await _notificationAnalyticsCollection.createIndex(keys: {'timestamp': -1});
 
     // Only set _isInitialized to true if all steps complete successfully
     _isInitialized = true;

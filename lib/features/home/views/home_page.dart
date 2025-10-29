@@ -12,7 +12,6 @@ import 'package:flutter_app/core/services/image_cache_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/tracking/views/tracker_grid.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
-import 'package:flutter_app/features/notifications/views/notification_testing_page.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/notifications/views/notification_center_page.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -467,13 +466,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                         );
                                       },
                                       onLongPress: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                const NotificationTestingPage(),
-                                          ),
-                                        );
+                                        // NotificationTestingPage removed - simplified notification system
                                       },
                                     ),
                                     if (unreadCount > 0)

@@ -1,24 +1,19 @@
 // Google Cloud Function for Notification Delivery
-// This function sends notifications via Firebase Cloud Messaging
+// Simplified version - just sends FCM notifications
 
 const { MongoClient, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 
-// Configuration from Environment Variables
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.DB_NAME || "test";
 
 let client;
 let firebaseApp;
 
-/**
- * Initialize Firebase Admin SDK
- */
 async function initializeFirebase() {
   if (firebaseApp) return;
 
   try {
-    // Initialize Firebase Admin SDK
     firebaseApp = admin.initializeApp({
       credential: admin.credential.applicationDefault(),
     });
@@ -29,9 +24,6 @@ async function initializeFirebase() {
   }
 }
 
-/**
- * Establishes and reuses a MongoDB client connection.
- */
 async function connectToMongo() {
   if (!MONGODB_URI) {
     throw new Error("MONGODB_URI environment variable is not set");
@@ -62,13 +54,9 @@ async function connectToMongo() {
   }
 }
 
-/**
- * Main entry point for notification delivery
- * This function handles different types of notification delivery
- */
 exports.notificationDelivery = async (req, res) => {
   try {
-    const { type, userId } = req.body || {};
+    const { type } = req.body || {};
 
     console.log(`[Notification Delivery] Processing ${type} delivery`);
 
@@ -78,14 +66,6 @@ exports.notificationDelivery = async (req, res) => {
       case "scheduled":
         result = await sendScheduledNotifications();
         break;
-      case "urgent":
-        if (!userId) {
-          return res
-            .status(400)
-            .json({ error: "userId is required for urgent notifications" });
-        }
-        result = await sendUrgentNotification(userId);
-        break;
       case "test":
         result = {
           status: "success",
@@ -94,7 +74,7 @@ exports.notificationDelivery = async (req, res) => {
         break;
       default:
         return res.status(400).json({
-          error: "Invalid delivery type. Use: scheduled, urgent, or test",
+          error: "Invalid delivery type. Use: scheduled or test",
         });
     }
 
@@ -106,8 +86,7 @@ exports.notificationDelivery = async (req, res) => {
 };
 
 /**
- * Send scheduled notifications
- * Triggered by Cloud Scheduler every hour
+ * Send notifications that haven't been sent yet
  */
 async function sendScheduledNotifications() {
   let db;
@@ -117,20 +96,17 @@ async function sendScheduledNotifications() {
 
     const notificationsCollection = db.collection("notifications");
     const usersCollection = db.collection("users");
-    const notificationAnalyticsCollection = db.collection(
-      "notification_analytics"
-    );
 
     console.log(
       "[Notification Delivery] Starting scheduled notification delivery"
     );
 
-    // Get notifications that are scheduled to be sent now or in the past
+    // Get notifications that haven't been sent yet
     const now = new Date();
     const scheduledNotifications = await notificationsCollection
       .find({
-        scheduledFor: { $lte: now },
         sentAt: { $exists: false },
+        createdAt: { $lte: now },
       })
       .limit(100) // Process in batches
       .toArray();
@@ -166,15 +142,12 @@ async function sendScheduledNotifications() {
           data: {
             notificationId: notification._id.toHexString(),
             type: notification.type,
-            category: notification.category,
-            actionRequired: notification.actionRequired.toString(),
-            actionData: JSON.stringify(notification.actionData || {}),
           },
           android: {
             notification: {
               icon: "ic_notification",
               color: getNotificationColor(notification.type),
-              priority: getAndroidPriority(notification.priority),
+              priority: "high",
             },
           },
           apns: {
@@ -201,19 +174,9 @@ async function sendScheduledNotifications() {
           {
             $set: {
               sentAt: now,
-              updatedAt: now,
             },
           }
         );
-
-        // Track analytics
-        await notificationAnalyticsCollection.insertOne({
-          userId: notification.userId,
-          notificationId: notification._id.toHexString(),
-          action: "sent",
-          timestamp: now,
-          metadata: { fcmMessageId: response },
-        });
 
         deliveryResults.push({
           notificationId: notification._id.toHexString(),
@@ -227,15 +190,6 @@ async function sendScheduledNotifications() {
           error
         );
 
-        // Track failed delivery
-        await notificationAnalyticsCollection.insertOne({
-          userId: notification.userId,
-          notificationId: notification._id.toHexString(),
-          action: "failed",
-          timestamp: now,
-          metadata: { error: error.message },
-        });
-
         deliveryResults.push({
           notificationId: notification._id.toHexString(),
           userId: notification.userId,
@@ -246,7 +200,7 @@ async function sendScheduledNotifications() {
     }
 
     console.log(
-      `[Notification Delivery] Completed delivery attempt. Results:`,
+      `[Notification Delivery] Completed delivery. Results:`,
       deliveryResults
     );
 
@@ -265,174 +219,12 @@ async function sendScheduledNotifications() {
   }
 }
 
-/**
- * Send urgent notifications immediately
- * Triggered by pantry expiry alerts or other urgent events
- */
-async function sendUrgentNotification(userId) {
-  let db;
-  try {
-    await initializeFirebase();
-    db = await connectToMongo();
-
-    const notificationsCollection = db.collection("notifications");
-    const usersCollection = db.collection("users");
-    const notificationAnalyticsCollection = db.collection(
-      "notification_analytics"
-    );
-
-    console.log(
-      "[Urgent Notification] Processing urgent notification for user:",
-      userId
-    );
-
-    // Create a test urgent notification (since we're calling directly)
-    const notificationData = {
-      userId: userId,
-      title: "🚨 Urgent Alert",
-      message: "This is a test urgent notification!",
-      type: "system",
-      category: "tip",
-      actionData: null,
-      priority: "high",
-    };
-
-    const {
-      title,
-      message,
-      type,
-      category,
-      actionData,
-      priority = "high",
-    } = notificationData;
-
-    // Get user's FCM token
-    const user = await usersCollection.findOne(
-      { _id: new ObjectId(userId) },
-      { projection: { fcmToken: 1, name: 1 } }
-    );
-
-    if (!user || !user.fcmToken) {
-      throw new Error(`No FCM token found for user ${userId}`);
-    }
-
-    // Create notification record
-    const notification = {
-      userId: userId,
-      type: type,
-      category: category,
-      title: title,
-      message: message,
-      priority: priority,
-      scheduledFor: new Date(),
-      actionRequired: !!actionData,
-      actionData: actionData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const result = await notificationsCollection.insertOne(notification);
-    const notificationId = result.insertedId.toHexString();
-
-    // Prepare FCM message
-    const fcmMessage = {
-      token: user.fcmToken,
-      notification: {
-        title: title,
-        body: message,
-      },
-      data: {
-        notificationId: notificationId,
-        type: type,
-        category: category,
-        actionRequired: (!!actionData).toString(),
-        actionData: JSON.stringify(actionData || {}),
-      },
-      android: {
-        notification: {
-          icon: "ic_notification",
-          color: getNotificationColor(type),
-          priority: "high",
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            alert: {
-              title: title,
-              body: message,
-            },
-            sound: "default",
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    // Send notification
-    const response = await admin.messaging().send(fcmMessage);
-    console.log(
-      `[Urgent Notification] Sent urgent notification to user ${userId}`
-    );
-
-    // Update notification as sent
-    await notificationsCollection.updateOne(
-      { _id: result.insertedId },
-      {
-        $set: {
-          sentAt: new Date(),
-          updatedAt: new Date(),
-        },
-      }
-    );
-
-    // Track analytics
-    await notificationAnalyticsCollection.insertOne({
-      userId: userId,
-      notificationId: notificationId,
-      action: "sent",
-      timestamp: new Date(),
-      metadata: { fcmMessageId: response, urgent: true },
-    });
-
-    return {
-      status: "success",
-      notificationId: notificationId,
-      userId: userId,
-      fcmMessageId: response,
-    };
-  } catch (error) {
-    console.error("Error in urgent notification delivery:", error);
-    throw new Error(`Urgent notification delivery failed: ${error.message}`);
-  }
-}
-
-/**
- * Helper function to get notification color based on type
- */
 function getNotificationColor(type) {
   const colors = {
-    healthGoal: "#4CAF50", // Green
-    pantryExpiry: "#FF9800", // Orange
+    expiring_ingredient: "#FF9800", // Orange
+    tracker_reminder: "#4CAF50", // Green
+    admin: "#9E9E9E", // Grey
     education: "#2196F3", // Blue
-    system: "#9E9E9E", // Grey
   };
   return colors[type] || "#9E9E9E";
 }
-
-/**
- * Helper function to get Android priority based on notification priority
- */
-function getAndroidPriority(priority) {
-  const priorities = {
-    low: "normal",
-    medium: "high",
-    high: "high",
-    urgent: "max",
-  };
-  return priorities[priority] || "normal";
-}
-
-/**
- * Helper function to parse ObjectId safely
- */

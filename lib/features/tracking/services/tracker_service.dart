@@ -1,7 +1,6 @@
 import 'package:mongo_dart/mongo_dart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/core/services/health_goal_notification_service.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
@@ -13,8 +12,6 @@ import 'dart:async';
 class TrackerService {
   final MongoDBService _mongoDBService;
   final TrackerProgressService _progressService;
-  final HealthGoalNotificationService _healthGoalNotificationService =
-      HealthGoalNotificationService();
   static final TrackerService _instance = TrackerService._internal();
 
   // Local cache of trackers
@@ -986,25 +983,7 @@ class TrackerService {
   Future<void> _triggerHealthGoalNotifications(
       String trackerId, double newValue) async {
     try {
-      // Get the tracker to find the userId
-      final tracker = _cachedDailyTrackers.firstWhere(
-        (t) => t.id == trackerId,
-        orElse: () => _cachedWeeklyTrackers.firstWhere(
-          (t) => t.id == trackerId,
-          orElse: () => throw Exception('Tracker not found'),
-        ),
-      );
-
-      // Check for immediate progress milestones
-      await _healthGoalNotificationService
-          .checkDailyProgressMilestones(tracker.userId);
-
-      // Check for goal completions
-      await _healthGoalNotificationService.checkGoalCompletions(tracker.userId);
-
-      // Check for streak achievements
-      await _healthGoalNotificationService
-          .checkStreakAchievements(tracker.userId);
+      // Health goal notifications removed - simplified notification system
     } catch (e) {
       print('Error triggering health goal notifications: $e');
     }
