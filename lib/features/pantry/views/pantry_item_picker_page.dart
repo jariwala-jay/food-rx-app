@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/pantry_item_picker_provider.dart';
 import 'dart:developer' as developer;
+import 'dart:async';
 
 import '../widgets/pantry_item_add_modal.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
@@ -67,6 +68,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   bool _isTyping = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -77,6 +79,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -157,11 +160,27 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                     _isTyping = query.isNotEmpty;
                   });
 
-                  if (query.length >= 2) {
-                    provider.searchSpoonacular(query);
-                  } else {
+                  // Cancel previous debounce timer
+                  _debounceTimer?.cancel();
+
+                  // If query is empty, search locally immediately
+                  if (query.isEmpty) {
                     provider.searchItems(query);
+                    return;
                   }
+
+                  // For short queries, use local search only
+                  if (query.length < 3) {
+                    provider.searchItems(query);
+                    return;
+                  }
+
+                  // Debounce API calls: wait 500ms after user stops typing
+                  _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+                    if (mounted && _searchController.text == query) {
+                      provider.searchSpoonacular(query);
+                    }
+                  });
                 },
                 decoration: InputDecoration(
                   hintText: 'Search in ${widget.title}...',
@@ -297,140 +316,118 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    )
-                  else if (!_isTyping && provider.searchResults.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Popular ${widget.title}',
-                            style: TextStyle(
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                    ),
+                  if (provider.searchResults.isNotEmpty)
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 16),
+                        itemCount: provider.searchResults.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = provider.searchResults[index];
+                          final itemId = item.id.toString();
+                          final isSelected = provider.isItemSelected(itemId);
+                          final selectedItem = isSelected
+                              ? provider.getSelectedItem(itemId)
+                              : null;
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Tap + to add items to your pantry',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: CachedNetworkImage(
+                                  imageUrl: item.imageUrl,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  memCacheWidth: 100,
+                                  memCacheHeight: 100,
+                                  placeholder: (context, url) => Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: const Color(0xFFEEEEEE),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                                Color(0xFFFF6A00)),
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEEEEEE),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.food_bank,
+                                      color: Color(0xFFFF6A00),
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 16,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              subtitle: isSelected
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        selectedItem!.quantityDisplay,
+                                        style: const TextStyle(
+                                          color: Color(0xFFFF6A00),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                              trailing: isSelected
+                                  ? IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          color: Color(0xFFFF6A00)),
+                                      onPressed: () => provider
+                                          .removeItemFromSelection(itemId),
+                                    )
+                                  : GestureDetector(
+                                      onTap: () =>
+                                          _showAddItemModal(context, item),
+                                      child: Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFFF6A00),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.add,
+                                            color: Colors.white, size: 22),
+                                      ),
+                                    ),
                             ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
-                  Expanded(
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 8, horizontal: 16),
-                      itemCount: provider.searchResults.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = provider.searchResults[index];
-                        final itemId = item.id.toString();
-                        final isSelected = provider.isItemSelected(itemId);
-                        final selectedItem = isSelected
-                            ? provider.getSelectedItem(itemId)
-                            : null;
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
-                            ),
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: item.imageUrl,
-                                width: 50,
-                                height: 50,
-                                fit: BoxFit.cover,
-                                memCacheWidth: 100,
-                                memCacheHeight: 100,
-                                placeholder: (context, url) => Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: const Color(0xFFEEEEEE),
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Color(0xFFFF6A00)),
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEEEEEE),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.food_bank,
-                                    color: Color(0xFFFF6A00),
-                                    size: 24,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              item.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 16,
-                                color: Colors.black,
-                              ),
-                            ),
-                            subtitle: isSelected
-                                ? Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      selectedItem!.quantityDisplay,
-                                      style: const TextStyle(
-                                        color: Color(0xFFFF6A00),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                            trailing: isSelected
-                                ? IconButton(
-                                    icon: const Icon(
-                                        Icons.remove_circle_outline,
-                                        color: Color(0xFFFF6A00)),
-                                    onPressed: () => provider
-                                        .removeItemFromSelection(itemId),
-                                  )
-                                : GestureDetector(
-                                    onTap: () =>
-                                        _showAddItemModal(context, item),
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFFF6A00),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.add,
-                                          color: Colors.white, size: 22),
-                                    ),
-                                  ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
                 ],
               ),
             ),

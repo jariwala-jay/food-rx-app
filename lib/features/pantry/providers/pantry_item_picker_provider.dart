@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/constants/pantry_categories.dart';
 import '../repositories/ingredient_repository.dart';
+import '../repositories/spoonacular_ingredient_repository.dart';
 
 class PantryItemPickerProvider extends ChangeNotifier {
   final IngredientRepository _ingredientRepository;
@@ -134,7 +135,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
   }
 
   Future<void> searchSpoonacular(String query) async {
-    if (query.length < 2) return;
+    // Increased minimum to 3 characters to reduce API calls
+    if (query.length < 3) return;
 
     isLoading = true;
     error = null;
@@ -144,6 +146,16 @@ class PantryItemPickerProvider extends ChangeNotifier {
       developer.log(
           'Searching Spoonacular for "$query" in category $_currentCategoryKey');
 
+      // Check if repository is rate limited before making calls
+      final repository = _ingredientRepository;
+      if (repository is SpoonacularIngredientRepository &&
+          repository.isRateLimited) {
+        developer.log('Repository is rate limited, skipping API calls');
+        // Fall back to local search
+        searchItems(query);
+        return;
+      }
+
       // Search specifically within the current category/aisle
       final results = await _ingredientRepository.searchIngredients(
         query: query,
@@ -152,13 +164,22 @@ class PantryItemPickerProvider extends ChangeNotifier {
       );
 
       if (results.isEmpty) {
-        developer.log(
-            'No search results found for "$query" in aisle $_currentCategoryKey, trying autocomplete...');
-        // If no results in search, try autocomplete as a fallback
-        final autocompleteResults =
-            await _ingredientRepository.autocompleteIngredient(query: query);
+        // Only try autocomplete if we're not rate limited
+        if (repository is SpoonacularIngredientRepository &&
+            !repository.isRateLimited) {
+          developer.log(
+              'No search results found for "$query" in aisle $_currentCategoryKey, trying autocomplete...');
+          // If no results in search, try autocomplete as a fallback
+          final autocompleteResults =
+              await _ingredientRepository.autocompleteIngredient(query: query);
 
-        searchResults = autocompleteResults;
+          searchResults = autocompleteResults;
+        } else {
+          // Rate limited or autocomplete failed, fall back to local search
+          developer.log(
+              'No search results found and rate limited, falling back to local search');
+          searchItems(query);
+        }
       } else {
         // Merge search results with existing items to avoid losing common items
         final mergedResults = <Ingredient>[...results];
