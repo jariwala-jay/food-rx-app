@@ -34,7 +34,8 @@ class RecipeCard extends StatelessWidget {
               recipe: recipe,
               // When coming from saved recipes, show original servings
               // When coming from generated recipes, use user's preferred servings
-              targetServings: fromSaved ? null : controller.currentFilter.servings,
+              targetServings:
+                  fromSaved ? null : controller.currentFilter.servings,
             ),
           ),
         );
@@ -61,31 +62,8 @@ class RecipeCard extends StatelessWidget {
                   imageUrl: recipe.image,
                   height: 200,
                   width: double.infinity,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.people_outline,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${recipe.servings} Servings',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 Positioned(
                   bottom: 10,

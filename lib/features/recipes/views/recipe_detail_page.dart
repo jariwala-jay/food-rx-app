@@ -337,6 +337,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: _buildCookButton(),
+        ),
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,8 +356,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   _buildTitleSection(context),
                   const SizedBox(height: 16),
                   _buildIngredientTags(),
-                  const SizedBox(height: 16),
-                  _buildCookButton(),
                   const SizedBox(height: 24),
                   _buildSectionTitle(
                       'Ingredients for ${_adjustedRecipe.servings} servings'),
@@ -402,7 +406,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   ),
                   SizedBox(width: 12),
                   Text(
-                    'Cooking...',
+                    'Processing...',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -410,12 +414,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.restaurant, size: 20),
-                  SizedBox(width: 8),
                   Text(
-                    'Cook This Recipe',
+                    'I Cooked This',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
+                  SizedBox(width: 8),
+                  Icon(Icons.restaurant, size: 20),
                 ],
               ),
       ),
@@ -469,19 +473,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                 style:
                     const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-              if (widget.targetServings != null &&
-                  widget.targetServings != widget.recipe.servings)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Scaled from ${widget.recipe.servings} to ${widget.targetServings} servings',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
