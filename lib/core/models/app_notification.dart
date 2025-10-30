@@ -30,20 +30,30 @@ class AppNotification {
         createdAt = createdAt ?? DateTime.now();
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    DateTime _parseDate(dynamic v) {
+      if (v == null) return DateTime.now();
+      if (v is DateTime) return v;
+      return DateTime.parse(v.toString());
+    }
+
+    DateTime? _parseDateNullable(dynamic v) {
+      if (v == null) return null;
+      if (v is DateTime) return v;
+      return DateTime.tryParse(v.toString());
+    }
+
     return AppNotification(
       id: json['_id']?.toString() ?? json['id']?.toString(),
-      userId: json['userId'] ?? '',
+      userId: json['userId']?.toString() ?? '',
       type: NotificationType.values.firstWhere(
         (e) => e.toString().split('.').last == json['type'],
         orElse: () => NotificationType.admin,
       ),
       title: json['title'] ?? '',
       message: json['message'] ?? '',
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
-      sentAt: json['sentAt'] != null ? DateTime.parse(json['sentAt']) : null,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : DateTime.now(),
+      readAt: _parseDateNullable(json['readAt']),
+      sentAt: _parseDateNullable(json['sentAt']),
+      createdAt: _parseDate(json['createdAt']),
     );
   }
 
@@ -53,9 +63,10 @@ class AppNotification {
       'type': type.toString().split('.').last,
       'title': title,
       'message': message,
-      'readAt': readAt?.toIso8601String(),
-      'sentAt': sentAt?.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
+      // Store as BSON Date (Mongo will accept Dart DateTime directly)
+      'readAt': readAt,
+      'sentAt': sentAt,
+      'createdAt': createdAt,
     };
   }
 

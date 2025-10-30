@@ -14,9 +14,26 @@ async function initializeFirebase() {
   if (firebaseApp) return;
 
   try {
-    firebaseApp = admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
+    // Prefer explicit service account if provided (via env/secret),
+    // fallback to application default credentials.
+    const saBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
+    const projectIdOverride = process.env.FIREBASE_PROJECT_ID;
+    if (saBase64) {
+      const saJson = JSON.parse(
+        Buffer.from(saBase64, "base64").toString("utf8")
+      );
+      const options = { credential: admin.credential.cert(saJson) };
+      if (projectIdOverride) options.projectId = projectIdOverride;
+      firebaseApp = admin.initializeApp(options);
+      console.log("Firebase Admin initialized with explicit service account");
+    } else {
+      const options = { credential: admin.credential.applicationDefault() };
+      if (projectIdOverride) options.projectId = projectIdOverride;
+      firebaseApp = admin.initializeApp(options);
+      console.log(
+        "Firebase Admin initialized with application default credentials"
+      );
+    }
     console.log("Firebase Admin SDK initialized");
   } catch (error) {
     console.error("Error initializing Firebase Admin SDK:", error);
@@ -102,11 +119,11 @@ async function sendScheduledNotifications() {
     );
 
     // Get notifications that haven't been sent yet
-    const now = new Date();
+    // Note: createdAt may be stored as BSON Date or ISO string depending on
+    // client version. To avoid missing rows, we only filter on sentAt here.
     const scheduledNotifications = await notificationsCollection
       .find({
         sentAt: { $exists: false },
-        createdAt: { $lte: now },
       })
       .limit(100) // Process in batches
       .toArray();
@@ -173,7 +190,7 @@ async function sendScheduledNotifications() {
           { _id: notification._id },
           {
             $set: {
-              sentAt: now,
+              sentAt: new Date(),
             },
           }
         );

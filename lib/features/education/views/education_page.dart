@@ -9,6 +9,7 @@ import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:flutter_app/core/utils/app_logger.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({Key? key}) : super(key: key);
@@ -31,7 +32,7 @@ class _EducationPageState extends State<EducationPage> {
       // Check if tour is on education step and trigger recommended articles showcase
       final tourProvider =
           Provider.of<ForcedTourProvider>(context, listen: false);
-      print(
+      AppLogger.d(
           '🎯 EducationPage: Tour active: ${tourProvider.isTourActive}, Current step: ${tourProvider.currentStep}, Is on education step: ${tourProvider.isOnStep(TourStep.education)}');
 
       if (tourProvider.isOnStep(TourStep.education)) {
@@ -45,12 +46,12 @@ class _EducationPageState extends State<EducationPage> {
               if (controller.recommendedArticles.isEmpty &&
                   controller.articles.isNotEmpty) {
                 ShowcaseView.get().startShowCase([TourKeys.articlesListKey]);
-                print(
+                AppLogger.d(
                     '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
               } else if (controller.recommendedArticles.isNotEmpty) {
                 ShowcaseView.get()
                     .startShowCase([TourKeys.recommendedArticlesKey]);
-                print(
+                AppLogger.d(
                     '🎯 EducationPage: Showing recommended articles showcase');
               }
             } catch (e) {}
@@ -58,7 +59,7 @@ class _EducationPageState extends State<EducationPage> {
         });
       } else if (tourProvider.isTourActive) {
         // If tour is active but not on education step, log it
-        print(
+        AppLogger.d(
             '🎯 EducationPage: Tour is active but not on education step. Current: ${tourProvider.currentStep}');
       }
     });
@@ -94,27 +95,29 @@ class _EducationPageState extends State<EducationPage> {
           try {
             final controller =
                 Provider.of<ArticleController>(context, listen: false);
-            print(
+            AppLogger.d(
                 '🎯 EducationPage: recommendedArticles=${controller.recommendedArticles.length}, allArticles=${controller.articles.length}');
 
             // If no recommended articles, show articles list showcase
             if (controller.recommendedArticles.isEmpty &&
                 controller.articles.isNotEmpty) {
-              print('🎯 EducationPage: Triggering articles list showcase');
+              AppLogger.d(
+                  '🎯 EducationPage: Triggering articles list showcase');
               ShowcaseView.get().startShowCase([TourKeys.articlesListKey]);
-              print(
+              AppLogger.d(
                   '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
             } else if (controller.recommendedArticles.isNotEmpty) {
-              print(
+              AppLogger.d(
                   '🎯 EducationPage: Triggering recommended articles showcase');
               ShowcaseView.get()
                   .startShowCase([TourKeys.recommendedArticlesKey]);
-              print('🎯 EducationPage: Showing recommended articles showcase');
+              AppLogger.d(
+                  '🎯 EducationPage: Showing recommended articles showcase');
             } else {
-              print('🎯 EducationPage: No articles available');
+              AppLogger.d('🎯 EducationPage: No articles available');
             }
           } catch (e) {
-            print('🎯 EducationPage: Error: $e');
+            AppLogger.d('🎯 EducationPage: Error: $e');
           }
         });
       }
@@ -173,11 +176,11 @@ class _EducationPageState extends State<EducationPage> {
                             listen: false);
 
                         if (tourProvider.isOnStep(TourStep.education)) {
-                          print(
+                          AppLogger.d(
                               '🎯 EducationPage Consumer: Tour on education step');
-                          print(
+                          AppLogger.d(
                               '🎯 EducationPage Consumer: Recommended articles: ${articleController.recommendedArticles.length}');
-                          print(
+                          AppLogger.d(
                               '🎯 EducationPage Consumer: All articles: ${articleController.articles.length}');
 
                           // Add delay to ensure articles are loaded
@@ -188,14 +191,14 @@ class _EducationPageState extends State<EducationPage> {
                             if (articleController.recommendedArticles.isEmpty &&
                                 articleController.articles.isNotEmpty) {
                               try {
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Triggering articles list showcase');
                                 ShowcaseView.get()
                                     .startShowCase([TourKeys.articlesListKey]);
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Showing articles list showcase (no recommended articles)');
                               } catch (e) {
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Error showing articles list showcase: $e');
                               }
                             }
@@ -203,14 +206,14 @@ class _EducationPageState extends State<EducationPage> {
                             else if (articleController
                                 .recommendedArticles.isNotEmpty) {
                               try {
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Triggering recommended articles showcase');
                                 ShowcaseView.get().startShowCase(
                                     [TourKeys.recommendedArticlesKey]);
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Showing recommended articles showcase');
                               } catch (e) {
-                                print(
+                                AppLogger.d(
                                     '🎯 EducationPage: Error showing recommended articles showcase: $e');
                               }
                             }

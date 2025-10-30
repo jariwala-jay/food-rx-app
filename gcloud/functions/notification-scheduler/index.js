@@ -98,52 +98,73 @@ async function checkExpiringIngredients() {
     for (const user of users) {
       const userId = user._id.toHexString();
 
-      // Get expiring items for this user
+      // Get expiring items for this user (next 3 days)
+      // expiryDate may be stored as ISO string; convert to Date for comparison
       const expiringItems = await pantryCollection
-        .find({
-          userId: user._id,
-          expiryDate: {
-            $lte: threeDaysFromNow,
-            $gte: now,
+        .aggregate([
+          {
+            $match: {
+              userId: user._id,
+              expiryDate: { $exists: true, $ne: null },
+            },
           },
-        })
+          { $addFields: { expiryDateParsed: { $toDate: "$expiryDate" } } },
+          {
+            $match: { expiryDateParsed: { $lte: threeDaysFromNow, $gte: now } },
+          },
+        ])
         .toArray();
 
-      // Create notification for each expiring item
-      for (const item of expiringItems) {
-        const expiryDate = new Date(item.expiryDate);
-        const daysUntilExpiry = Math.ceil(
-          (expiryDate - now) / (24 * 60 * 60 * 1000)
+      if (expiringItems.length === 0) continue;
+
+      // Build a digest message with up to 3 item names
+      const names = expiringItems
+        .map((i) => (i.name || "").toString())
+        .filter((n) => n.length > 0);
+
+      const maxNames = 3;
+      const shown = names.slice(0, maxNames);
+      const remaining = names.length - shown.length;
+      const itemsSummary =
+        remaining > 0
+          ? `${shown.join(", ")} and ${remaining} more`
+          : shown.join(", ");
+
+      const title =
+        names.length === 1
+          ? `${names[0]} expires soon`
+          : `${names.length} items expiring soon`;
+      const message =
+        names.length === 1
+          ? "Use it in a recipe today so it doesn't go to waste."
+          : `Expiring soon: ${itemsSummary}`;
+
+      // If a digest exists today, update it; otherwise insert new
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const existing = await notificationsCollection.findOne({
+        userId: userId,
+        type: "expiring_ingredient",
+        createdAt: { $gte: today },
+      });
+
+      if (existing) {
+        await notificationsCollection.updateOne(
+          { _id: existing._id },
+          { $set: { title, message, updatedAt: new Date() } }
         );
-
-        // Check if notification already exists today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const existing = await notificationsCollection.findOne({
-          userId: userId,
-          type: "expiring_ingredient",
-          createdAt: { $gte: today },
-        });
-
-        if (existing) {
-          console.log(
-            `[Expiring Ingredients] Notification already sent today for user ${userId}`
-          );
-          continue;
-        }
-
-        // Create notification
+        console.log(
+          `[Expiring Ingredients] Updated digest for user ${userId} with ${names.length} items`
+        );
+      } else {
         await notificationsCollection.insertOne({
           userId: userId,
           type: "expiring_ingredient",
-          title: `${item.name} expires in ${daysUntilExpiry} day${
-            daysUntilExpiry === 1 ? "" : "s"
-          }!`,
-          message: `Your ${item.name} expires soon. Consider using it in a recipe today!`,
+          title,
+          message,
           createdAt: new Date(),
         });
-
         notificationsCreated++;
       }
     }

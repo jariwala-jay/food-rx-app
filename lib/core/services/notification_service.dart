@@ -1,10 +1,13 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/navigation_service.dart';
+import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class NotificationService {
@@ -17,6 +20,15 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final MongoDBService _mongoDBService = MongoDBService();
   String? _fcmToken;
+  bool _verbose = false; // Toggle to reduce console noise
+
+  void setVerboseLogging(bool enabled) {
+    _verbose = enabled;
+  }
+
+  void _v(String message) {
+    if (_verbose) debugPrint(message);
+  }
 
   // Initialize the notification service
   Future<void> initialize() async {
@@ -31,10 +43,9 @@ class NotificationService {
           _firebaseMessaging = FirebaseMessaging.instance;
           await _requestFCMToken();
           await _setupMessageHandlers();
-          debugPrint('NotificationService initialized with Firebase');
+          _v('NotificationService initialized with Firebase');
         } catch (e) {
-          debugPrint(
-              'Firebase not initialized, using local notifications only: $e');
+          _v('Firebase not initialized, using local notifications only: $e');
         }
       }
     } catch (e) {
@@ -82,6 +93,7 @@ class NotificationService {
   // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
+    _navigateFromPayload(response.payload);
   }
 
   // Request FCM token and save it
@@ -107,42 +119,39 @@ class NotificationService {
           debugPrint('❌ Notification permissions not granted on iOS');
           return;
         }
-        debugPrint('✅ Notification permissions granted on iOS');
+        _v('✅ Notification permissions granted on iOS');
 
         // Wait for APNs token
         await Future.delayed(const Duration(seconds: 1));
         final apnsToken = await _firebaseMessaging!.getAPNSToken();
         if (apnsToken != null) {
-          debugPrint('✅ APNs Token received: $apnsToken');
+          _v('✅ APNs Token received');
         } else {
-          debugPrint('⚠️ APNs token not available yet, retrying...');
+          _v('⚠️ APNs token not available yet, retrying...');
           await Future.delayed(const Duration(seconds: 2));
           final retryApnsToken = await _firebaseMessaging!.getAPNSToken();
           if (retryApnsToken != null) {
-            debugPrint('✅ APNs Token received on retry: $retryApnsToken');
+            _v('✅ APNs Token received on retry');
           } else {
-            debugPrint(
-                '❌ APNs token still not available - notifications may not work');
-            debugPrint(
-                '   Check Firebase console for APNs certificate configuration');
+            _v('❌ APNs token still not available');
           }
         }
       }
 
       _fcmToken = await _firebaseMessaging!.getToken();
-      debugPrint('🔑 FCM Token Generated: $_fcmToken');
+      _v('🔑 FCM Token generated');
 
       if (_fcmToken != null) {
         // Save token to SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('fcm_token', _fcmToken!);
-        debugPrint('💾 FCM Token saved to SharedPreferences');
+        _v('💾 FCM token saved locally');
 
         // Store in MongoDB for current user
         await _storeFCMTokenInDatabase(_fcmToken!);
       }
     } catch (e) {
-      debugPrint('❌ Error getting FCM token: $e');
+      _v('❌ Error getting FCM token: $e');
     }
   }
 
@@ -165,9 +174,9 @@ class NotificationService {
             }
           },
         );
-        debugPrint('✅ FCM Token stored in MongoDB for user: $userId');
+        _v('✅ FCM token stored for user');
       } else {
-        debugPrint('⚠️ No current user ID found, cannot store FCM token');
+        _v('⚠️ No current user ID found, cannot store FCM token');
       }
     } catch (e) {
       debugPrint('❌ Error storing FCM token in database: $e');
@@ -183,7 +192,7 @@ class NotificationService {
 
     // Listen for token changes (debugging)
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-      debugPrint('🔄 FCM Token refreshed: $newToken');
+      _v('🔄 FCM token refreshed');
       _fcmToken = newToken;
       _storeFCMTokenInDatabase(newToken);
     });
@@ -201,17 +210,12 @@ class NotificationService {
       _handleBackgroundMessage(initialMessage);
     }
 
-    debugPrint('✅ Message handlers registered');
-    debugPrint('   - Foreground handler active');
-    debugPrint('   - Background handler active');
-    debugPrint('   - Token refresh listener active');
+    _v('✅ Message handlers registered');
   }
 
   // Handle foreground messages
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    debugPrint('✅ Received foreground message: ${message.messageId}');
-    debugPrint('   Title: ${message.notification?.title}');
-    debugPrint('   Body: ${message.notification?.body}');
+    _v('✅ Foreground message: ${message.messageId}');
 
     // Show local notification when app is in foreground
     if (message.notification != null) {
@@ -242,20 +246,17 @@ class NotificationService {
         message.notification?.body,
         details,
       );
-
-      debugPrint('✅ Local notification shown');
+      _v('✅ Local notification shown');
     }
   }
 
   // Handle background messages
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    debugPrint('✅ Received background message: ${message.messageId}');
-    debugPrint('   Title: ${message.notification?.title}');
-    debugPrint('   Body: ${message.notification?.body}');
-    debugPrint('   Data: ${message.data}');
+    _v('✅ Background message: ${message.messageId}');
 
-    // Handle navigation or actions if needed
-    // This is called when app is opened from a notification
+    // Navigate based on data payload
+    final type = message.data['type'];
+    _navigateByType(type);
   }
 
   // Mark notification as read
@@ -268,7 +269,7 @@ class NotificationService {
         {'_id': ObjectIdHelper.parseObjectId(notificationId)},
         {
           '\$set': {
-            'readAt': DateTime.now().toIso8601String(),
+            'readAt': DateTime.now(),
           }
         },
       );
@@ -293,9 +294,28 @@ class NotificationService {
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('✅ Handling background message when app was killed');
-  debugPrint('   Message ID: ${message.messageId}');
-  debugPrint('   Title: ${message.notification?.title}');
-  debugPrint('   Body: ${message.notification?.body}');
-  debugPrint('   Data: ${message.data}');
+  // Keep logs minimal in background isolate
+}
+
+// Navigation helpers
+void _navigateFromPayload(String? payload) {
+  // If payload is a JSON string you could parse here. We currently rely on FCM data route.
+}
+
+void _navigateByType(dynamic type) {
+  final nav = NavigationService.navigatorKey.currentState;
+  if (nav == null) return;
+
+  // 0 = Home, 1 = Pantry
+  int targetIndex = 0;
+  if (type == 'expiring_ingredient') {
+    targetIndex = 1;
+  } else if (type == 'tracker_reminder') {
+    targetIndex = 0;
+  }
+
+  nav.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => MainScreen(initialIndex: targetIndex)),
+    (route) => false,
+  );
 }

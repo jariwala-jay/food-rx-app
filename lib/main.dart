@@ -42,6 +42,8 @@ import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
+import 'package:flutter_app/core/services/navigation_service.dart';
+import 'package:flutter_app/core/utils/app_logger.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -68,6 +70,9 @@ void main() async {
     // Initialize notification service
     final notificationService = NotificationService();
     await notificationService.initialize();
+
+    // Configure logging based on .env DEBUG
+    AppLogger.enabled = (dotenv.env['DEBUG']?.toLowerCase() == 'true');
 
     // Register background message handler (both platforms)
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -247,7 +252,7 @@ class MyApp extends StatelessWidget {
           return ArticleDetailPage(article: article);
         },
       },
-      navigatorKey: GlobalKey<NavigatorState>(),
+      navigatorKey: NavigationService.navigatorKey,
     );
   }
 }

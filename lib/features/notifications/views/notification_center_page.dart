@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
+import 'package:flutter_app/features/navigation/views/main_screen.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class NotificationCenterPage extends StatefulWidget {
   const NotificationCenterPage({super.key});
@@ -30,55 +32,69 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         title: const Text('Notifications'),
         backgroundColor: const Color(0xFFFF6A00),
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           Consumer<NotificationManager>(
             builder: (context, notificationManager, child) {
-              return PopupMenuButton<String>(
-                onSelected: (value) async {
-                  switch (value) {
-                    case 'mark_all_read':
-                      await notificationManager.markAllAsRead();
-                      break;
-                    case 'clear_all':
-                      await notificationManager.clearAllNotifications();
-                      break;
-                    case 'refresh':
-                      await notificationManager.loadNotifications();
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'refresh',
-                    child: Row(
-                      children: [
-                        Icon(Icons.refresh),
-                        SizedBox(width: 8),
-                        Text('Refresh'),
-                      ],
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  popupMenuTheme: PopupMenuThemeData(
+                    color: Colors.white,
+                    textStyle: const TextStyle(color: Colors.black87),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'mark_all_read',
-                    child: Row(
-                      children: [
-                        Icon(Icons.mark_email_read),
-                        SizedBox(width: 8),
-                        Text('Mark All Read'),
-                      ],
+                  iconTheme: const IconThemeData(color: Colors.white),
+                ),
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'mark_all_read':
+                        await notificationManager.markAllAsRead();
+                        break;
+                      case 'clear_all':
+                        await notificationManager.clearAllNotifications();
+                        break;
+                      case 'refresh':
+                        await notificationManager.loadNotifications();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Refresh'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'clear_all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.clear_all),
-                        SizedBox(width: 8),
-                        Text('Clear All'),
-                      ],
+                    PopupMenuItem(
+                      value: 'mark_all_read',
+                      child: Row(
+                        children: [
+                          Icon(Icons.mark_email_read, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Mark All Read'),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    PopupMenuItem(
+                      value: 'clear_all',
+                      child: Row(
+                        children: [
+                          Icon(Icons.clear_all, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Clear All'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -157,12 +173,38 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
           return RefreshIndicator(
             onRefresh: () => notificationManager.loadNotifications(),
-            child: ListView.builder(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(
+                  top: 12, bottom: 16, left: 16, right: 16),
+              separatorBuilder: (_, __) => const SizedBox(height: 0),
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notification = notifications[index];
-                return _buildNotificationCard(
-                    notification, notificationManager);
+                return Dismissible(
+                  key: ValueKey(notification.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF5275),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SvgPicture.asset(
+                      'assets/icons/trash.svg',
+                      width: 28,
+                      height: 28,
+                    ),
+                  ),
+                  confirmDismiss: (_) async {
+                    await notificationManager
+                        .dismissNotification(notification.id);
+                    return true;
+                  },
+                  child:
+                      _buildNotificationCard(notification, notificationManager),
+                );
               },
             ),
           );
@@ -176,70 +218,90 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final isRead = notification.isRead;
     final timeAgo = _getTimeAgo(notification.createdAt);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      elevation: isRead ? 1 : 2,
-      color: isRead ? Colors.white : Colors.orange[50],
-      shape: RoundedRectangleBorder(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getTypeColor(notification.type),
-          child: Icon(
-            _getTypeIcon(notification.type),
-            color: Colors.white,
-            size: 20,
-          ),
-        ),
-        title: Text(
-          notification.title,
-          style: TextStyle(
-            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-            color: isRead ? Colors.grey[700] : Colors.black,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              notification.message,
-              style: TextStyle(
-                color: isRead ? Colors.grey[600] : Colors.grey[700],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              timeAgo,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-        trailing: isRead
-            ? null
-            : Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: const Color(0xFFFF6A00),
-                  shape: BoxShape.circle,
-                ),
-              ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () async {
           if (!isRead) {
             await notificationManager.markAsRead(notification.id);
           }
-
-          // Handle notification action if needed
           _handleNotificationAction(notification);
         },
         onLongPress: () async {
           await _showNotificationOptions(notification, notificationManager);
         },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: _getTypeColor(notification.type).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(10),
+                child: Icon(
+                  _getTypeIcon(notification.type),
+                  color: _getTypeColor(notification.type),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            notification.title,
+                            style: TextStyle(
+                              fontWeight:
+                                  isRead ? FontWeight.w600 : FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (!isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF6A00),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      notification.message,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -286,64 +348,30 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   void _handleNotificationAction(AppNotification notification) {
-    // Handle different notification actions with helpful messages
+    // Navigate directly to the appropriate tab
     switch (notification.type) {
       case NotificationType.expiring_ingredient:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Check the Pantry tab for expiring items'),
-            backgroundColor: const Color(0xFFFF6A00),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Go to Pantry',
-              textColor: Colors.white,
-              onPressed: () {
-                Navigator.pop(context); // Close notification center
-                // The user will need to manually tap the pantry tab
-              },
-            ),
-          ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 1)),
+          (route) => false,
         );
         break;
       case NotificationType.education:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Check the Education tab for health tips'),
-            backgroundColor: const Color(0xFFFF6A00),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Go to Education',
-              textColor: Colors.white,
-              onPressed: () {
-                Navigator.pop(context); // Close notification center
-              },
-            ),
-          ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 3)),
+          (route) => false,
         );
         break;
       case NotificationType.admin:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Check the Home tab for your health goals'),
-            backgroundColor: const Color(0xFFFF6A00),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Go to Home',
-              textColor: Colors.white,
-              onPressed: () {
-                Navigator.pop(context); // Close notification center
-              },
-            ),
-          ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
+          (route) => false,
         );
         break;
       case NotificationType.tracker_reminder:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notification: ${notification.title}'),
-            backgroundColor: const Color(0xFFFF6A00),
-            duration: const Duration(seconds: 2),
-          ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
+          (route) => false,
         );
         break;
     }

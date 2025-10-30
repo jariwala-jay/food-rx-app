@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/utils/app_logger.dart';
 import 'package:provider/provider.dart';
 import '../controller/tracker_provider.dart';
 import '../models/tracker_goal.dart';
@@ -188,7 +189,7 @@ class _TrackerGridState extends State<TrackerGrid>
           return _buildSkeletonLoading();
         }
 
-        print(
+        AppLogger.d(
             '🎯 TrackerGrid: Showing main tracker display with ${dailyTrackers.length} daily trackers');
 
         return Padding(
@@ -222,14 +223,14 @@ class _TrackerGridState extends State<TrackerGrid>
                         overlayColor: Colors.black54,
                         overlayOpacity: 0.8,
                         onTargetClick: () {
-                          print(
+                          AppLogger.d(
                               '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
                           // Navigate to meal plan page - don't complete step yet
                           Navigator.pushNamed(context, '/meal-plan');
                           // Step will be completed when user clicks "Continue Tour" on diet plan page
                         },
                         onToolTipClick: () {
-                          print(
+                          AppLogger.d(
                               '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
                           // Navigate to meal plan page
                           Navigator.pushNamed(context, '/meal-plan');
@@ -237,7 +238,7 @@ class _TrackerGridState extends State<TrackerGrid>
                         disposeOnTap: true,
                         child: ElevatedButton(
                           onPressed: () {
-                            print(
+                            AppLogger.d(
                                 '🎯 TrackerGrid: User clicked on My Plan button');
                             // Navigate to meal plan page - don't complete step yet
                             Navigator.pushNamed(context, '/meal-plan');
@@ -391,7 +392,7 @@ class _TrackerGridState extends State<TrackerGrid>
               ),
               Builder(
                 builder: (context) {
-                  print(
+                  AppLogger.d(
                       '🎯 TrackerGrid: Building My Plan showcase widget (skeleton)');
                   return showcaseview.Showcase(
                     key: TourKeys.myPlanButtonKey,
@@ -406,21 +407,21 @@ class _TrackerGridState extends State<TrackerGrid>
                     overlayColor: Colors.black54,
                     overlayOpacity: 0.8,
                     onTargetClick: () {
-                      print(
+                      AppLogger.d(
                           '🎯 TrackerGrid: User tapped on My Plan showcase (skeleton) - navigating');
                       // Navigate to meal plan page - don't complete step yet
                       Navigator.pushNamed(context, '/meal-plan');
                       // Step will be completed when user clicks "Continue Tour" on diet plan page
                     },
                     onToolTipClick: () {
-                      print(
+                      AppLogger.d(
                           '🎯 TrackerGrid: User clicked on My Plan tooltip (skeleton) - navigating');
                       Navigator.pushNamed(context, '/meal-plan');
                     },
                     disposeOnTap: false,
                     child: ElevatedButton(
                       onPressed: () {
-                        print(
+                        AppLogger.d(
                             '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
                         // Navigate to meal plan page - don't complete step yet
                         Navigator.pushNamed(context, '/meal-plan');

@@ -38,9 +38,14 @@ class NotificationManager extends ChangeNotifier {
 
       final results = await collection.find({'userId': _userId!}).toList();
 
-      // Sort by createdAt descending
-      results.sort((a, b) => DateTime.parse(b['createdAt'])
-          .compareTo(DateTime.parse(a['createdAt'])));
+      // Sort by createdAt descending (supports BSON Date or ISO string)
+      DateTime _asDate(dynamic v) {
+        if (v is DateTime) return v;
+        return DateTime.parse(v.toString());
+      }
+
+      results.sort(
+          (a, b) => _asDate(b['createdAt']).compareTo(_asDate(a['createdAt'])));
 
       // Limit to last 50 notifications
       final limitedResults = results.take(50).toList();
@@ -112,7 +117,8 @@ class NotificationManager extends ChangeNotifier {
         {'userId': _userId!},
         {
           '\$set': {
-            'readAt': DateTime.now().toIso8601String(),
+            // Store as BSON Date
+            'readAt': DateTime.now(),
           }
         },
       );

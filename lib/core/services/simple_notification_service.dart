@@ -7,6 +7,7 @@ class SimpleNotificationService {
   final MongoDBService _mongoDBService = MongoDBService();
 
   /// Check expiring pantry items (3 days before expiry)
+  /// Best practice: send a single daily digest per user with a capped list of items.
   Future<void> checkExpiringIngredients(String userId) async {
     try {
       await _mongoDBService.ensureConnection();
@@ -22,20 +23,57 @@ class SimpleNotificationService {
         }
       }).toList();
 
-      for (final item in expiringItems) {
-        final expiryDate = DateTime.parse(item['expiryDate']);
-        final daysUntilExpiry = expiryDate.difference(now).inDays;
+      if (expiringItems.isEmpty) return;
 
-        // Create notification if not already sent
-        await _createNotification(
-          userId: userId,
-          type: NotificationType.expiring_ingredient,
-          title:
-              '${item['name']} expires in $daysUntilExpiry day${daysUntilExpiry == 1 ? '' : 's'}!',
-          message:
-              'Your ${item['name']} expires soon. Consider using it in a recipe today!',
-        );
+      // Summarize items: include up to 3 names, then "+N more"
+      final names = expiringItems
+          .map((i) => (i['name'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      const maxNames = 3;
+      final shown = names.take(maxNames).toList();
+      final remaining = names.length - shown.length;
+      final itemsSummary = remaining > 0
+          ? '${shown.join(', ')} and $remaining more'
+          : shown.join(', ');
+
+      final title = names.length == 1
+          ? '${names.first} expires soon'
+          : '${names.length} items expiring soon';
+      final message = names.length == 1
+          ? 'Use it in a recipe today so it doesn\'t go to waste.'
+          : 'Expiring soon: $itemsSummary';
+
+      // If a digest exists today, update it instead of creating a new one
+      final collection = _mongoDBService.notificationsCollection;
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final existing = await collection.findOne({
+        'userId': userId,
+        'type': 'expiring_ingredient',
+        'createdAt': {'\$gte': startOfDay}
+      });
+
+      if (existing != null) {
+        await collection.updateOne({
+          '_id': ObjectIdHelper.parseObjectId(
+              existing['_id']?.toString() ?? existing['id'])
+        }, {
+          '\$set': {
+            'title': title,
+            'message': message,
+            'updatedAt': DateTime.now(),
+          }
+        });
+        debugPrint('✅ Updated expiring items digest for today');
+        return;
       }
+
+      await _createNotification(
+        userId: userId,
+        type: NotificationType.expiring_ingredient,
+        title: title,
+        message: message,
+      );
     } catch (e) {
       debugPrint('Error checking expiring ingredients: $e');
     }
