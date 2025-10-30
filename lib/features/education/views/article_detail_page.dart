@@ -28,7 +28,6 @@ class ArticleDetailPage extends StatelessWidget {
           body: CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 240.0,
                 pinned: true,
                 backgroundColor: Colors.white,
                 elevation: 0,
@@ -52,8 +51,12 @@ class ArticleDetailPage extends StatelessWidget {
                     },
                   ),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Image(
+              ),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 240.0,
+                  width: double.infinity,
+                  child: Image(
                     image: ImageCacheService()
                         .getImageProvider(latestArticle.imageUrl),
                     width: double.infinity,
