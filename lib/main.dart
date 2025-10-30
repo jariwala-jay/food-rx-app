@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:showcaseview/showcaseview.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
@@ -37,7 +39,11 @@ import 'package:flutter_app/features/home/services/tip_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
+import 'package:flutter_app/core/services/notification_service.dart';
+import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
+import 'package:flutter_app/core/services/navigation_service.dart';
+import 'package:flutter_app/core/utils/app_logger.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -49,8 +55,27 @@ void main() async {
     await dotenv.load(fileName: ".env");
     DialogflowService.initialize();
 
+    // Initialize Firebase first (before any Firebase services)
+    try {
+      await Firebase.initializeApp();
+      debugPrint('✅ Firebase initialized successfully');
+    } catch (e) {
+      debugPrint('❌ Firebase initialization failed: $e');
+      // Continue without Firebase - the app will use local notifications only
+    }
+
     final mongoDBService = MongoDBService();
     await mongoDBService.initialize();
+
+    // Initialize notification service
+    final notificationService = NotificationService();
+    await notificationService.initialize();
+
+    // Configure logging based on .env DEBUG
+    AppLogger.enabled = (dotenv.env['DEBUG']?.toLowerCase() == 'true');
+
+    // Register background message handler (both platforms)
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Register ShowcaseView for guided tours
     ShowcaseView.register(
@@ -103,6 +128,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
           ChangeNotifierProvider(create: (_) => SignupProvider()),
           ChangeNotifierProvider(create: (_) => TrackerProvider()),
+          ChangeNotifierProvider(create: (_) => NotificationManager()),
 
           // Dependent Controllers (as ProxyProviders)
           ChangeNotifierProvider(
@@ -226,7 +252,7 @@ class MyApp extends StatelessWidget {
           return ArticleDetailPage(article: article);
         },
       },
-      navigatorKey: GlobalKey<NavigatorState>(),
+      navigatorKey: NavigationService.navigatorKey,
     );
   }
 }

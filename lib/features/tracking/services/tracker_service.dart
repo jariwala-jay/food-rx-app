@@ -337,6 +337,9 @@ class TrackerService {
         // 3. After successful MongoDB update, refresh the specific tracker from DB
         // to ensure cache consistency
         await _refreshTrackerFromMongoDB(trackerId);
+
+        // 4. Trigger health goal notifications
+        await _triggerHealthGoalNotifications(trackerId, newValue);
       }
     } catch (e) {
       print('MongoDB update failed, continuing with local cache: $e');
@@ -973,6 +976,16 @@ class TrackerService {
       print('MongoDB update failed for tracker $trackerId: $e');
       _useLocalFallback = true;
       rethrow;
+    }
+  }
+
+  // Trigger health goal notifications when tracker values are updated
+  Future<void> _triggerHealthGoalNotifications(
+      String trackerId, double newValue) async {
+    try {
+      // Health goal notifications removed - simplified notification system
+    } catch (e) {
+      print('Error triggering health goal notifications: $e');
     }
   }
 }

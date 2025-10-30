@@ -12,6 +12,8 @@ import 'package:flutter_app/core/services/image_cache_service.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/tracking/views/tracker_grid.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/core/services/notification_manager.dart';
+import 'package:flutter_app/features/notifications/views/notification_center_page.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -70,6 +72,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _isInitialLoadComplete = true; // Mark as started
         _loadDataForRefresh(); // Initial data load
         _loadProfilePhoto(); // Profile photo loads once
+        _initializeNotificationManager(); // Initialize notification manager
       }
     });
   }
@@ -179,6 +182,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _profilePhotoData = null; // Clear if no photo ID
         });
       }
+    }
+  }
+
+  // Initialize notification manager
+  Future<void> _initializeNotificationManager() async {
+    try {
+      final authProvider = Provider.of<AuthController>(context, listen: false);
+      final userId = authProvider.currentUser?.id;
+
+      if (userId != null) {
+        final notificationManager =
+            Provider.of<NotificationManager>(context, listen: false);
+        await notificationManager.initialize(userId);
+        await notificationManager.loadNotifications();
+      }
+    } catch (e) {
+      debugPrint('Error initializing notification manager: $e');
     }
   }
 
@@ -427,9 +447,59 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                         Row(
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.notifications_outlined),
-                              onPressed: () {},
+                            Consumer<NotificationManager>(
+                              builder: (context, notificationManager, child) {
+                                final unreadCount =
+                                    notificationManager.unreadCount;
+                                return Stack(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                          Icons.notifications_outlined),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const NotificationCenterPage(),
+                                          ),
+                                        );
+                                      },
+                                      onLongPress: () {
+                                        // NotificationTestingPage removed - simplified notification system
+                                      },
+                                    ),
+                                    if (unreadCount > 0)
+                                      Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange,
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 16,
+                                            minHeight: 16,
+                                          ),
+                                          child: Text(
+                                            unreadCount > 99
+                                                ? '99+'
+                                                : unreadCount.toString(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.logout),

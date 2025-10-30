@@ -4,6 +4,7 @@ import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/core/services/simple_notification_service.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../../recipes/models/recipe.dart';
 
@@ -11,6 +12,8 @@ class PantryController extends ChangeNotifier {
   final MongoDBService _mongoDBService;
   final UnitConversionService _unitConversionService;
   final IngredientSubstitutionService _ingredientSubstitutionService;
+  final SimpleNotificationService _notificationService =
+      SimpleNotificationService();
   List<PantryItem> _pantryItems = [];
   List<PantryItem> _otherItems = [];
   bool _isLoading = false;
@@ -116,6 +119,14 @@ class PantryController extends ChangeNotifier {
       // Apply filters after adding new item
       _applyFilters();
 
+      // Check if item expires within 3 days and notify
+      final now = DateTime.now();
+      final threeDaysFromNow = now.add(const Duration(days: 3));
+      if (newItem.expirationDate.isBefore(threeDaysFromNow) &&
+          newItem.expirationDate.isAfter(now)) {
+        await _notificationService.checkExpiringIngredients(_userId!);
+      }
+
       _setLoading(false);
       notifyListeners();
     } catch (e) {
@@ -185,6 +196,14 @@ class PantryController extends ChangeNotifier {
 
       // Apply filters after updating item
       _applyFilters();
+
+      // Check if item expires within 3 days and notify
+      final now = DateTime.now();
+      final threeDaysFromNow = now.add(const Duration(days: 3));
+      if (item.expirationDate.isBefore(threeDaysFromNow) &&
+          item.expirationDate.isAfter(now)) {
+        await _notificationService.checkExpiringIngredients(_userId!);
+      }
 
       _setLoading(false);
       notifyListeners();

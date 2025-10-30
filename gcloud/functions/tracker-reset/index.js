@@ -107,7 +107,7 @@ function getWeeklyProgressDateEST() {
  * Cloud Function to reset daily user trackers.
  * Triggered by Cloud Scheduler publishing to 'daily-tracker-reset-topic'.
  */
-exports.resetDailyTrackers = async (pubSubEvent, context) => {
+async function runDailyReset() {
   let db;
   try {
     db = await connectToMongo();
@@ -212,13 +212,27 @@ exports.resetDailyTrackers = async (pubSubEvent, context) => {
     // Throwing an error indicates to Cloud Functions to retry (if configured)
     throw new Error(`Daily tracker reset failed: ${error.message}`);
   }
+}
+
+exports.resetDailyTrackers = async (pubSubEvent, context) => {
+  return runDailyReset();
+};
+
+// HTTP wrapper so Cloud Scheduler can trigger directly
+exports.resetDailyTrackersHttp = async (req, res) => {
+  try {
+    const result = await runDailyReset();
+    res.status(200).json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 };
 
 /**
  * Cloud Function to reset weekly user trackers.
  * Triggered by Cloud Scheduler publishing to 'weekly-tracker-reset-topic'.
  */
-exports.resetWeeklyTrackers = async (pubSubEvent, context) => {
+async function runWeeklyReset() {
   let db;
   try {
     db = await connectToMongo();
@@ -315,5 +329,19 @@ exports.resetWeeklyTrackers = async (pubSubEvent, context) => {
   } catch (error) {
     console.error("Fatal error during weekly tracker reset:", error);
     throw new Error(`Weekly tracker reset failed: ${error.message}`);
+  }
+}
+
+exports.resetWeeklyTrackers = async (pubSubEvent, context) => {
+  return runWeeklyReset();
+};
+
+// HTTP wrapper for scheduler
+exports.resetWeeklyTrackersHttp = async (req, res) => {
+  try {
+    const result = await runWeeklyReset();
+    res.status(200).json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 };

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/utils/app_logger.dart';
 import 'package:flutter_app/features/recipes/widgets/recipe_card.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
@@ -147,7 +148,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                   ),
                   builder: (context, state, child) {
                     if (kDebugMode) {
-                      print(
+                      AppLogger.d(
                           '🏗️ RecipePage Selector rebuild: ${state.recipes.length} recipes, loading: ${state.isLoading}, generating: ${state.isGeneratingRecipes}, error: ${state.error}, hasAttempted: ${state.hasAttemptedGeneration}');
                     }
 

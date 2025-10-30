@@ -19,6 +19,7 @@ class MongoDBService {
   late DbCollection _dietPlansCollection;
   late DbCollection _educationalContentCollection;
   late DbCollection _pantryCollection;
+  late DbCollection _notificationsCollection;
   late GridFS _profilePhotosBucket;
   bool _isInitialized = false;
 
@@ -28,6 +29,7 @@ class MongoDBService {
   DbCollection get educationalContentCollection =>
       _educationalContentCollection;
   DbCollection get pantryCollection => _pantryCollection;
+  DbCollection get notificationsCollection => _notificationsCollection;
   GridFS get profilePhotosBucket => _profilePhotosBucket;
 
   // Security constants
@@ -66,6 +68,7 @@ class MongoDBService {
     _dietPlansCollection = _db.collection('diet_plans');
     _educationalContentCollection = _db.collection('educational_content');
     _pantryCollection = _db.collection('pantry_items');
+    _notificationsCollection = _db.collection('notifications');
     _profilePhotosBucket = GridFS(_db, 'profile_photos');
 
     await _usersCollection.createIndex(keys: {'email': 1}, unique: true);
@@ -93,6 +96,13 @@ class MongoDBService {
     await progressCollection
         .createIndex(keys: {'userId': 1, 'progressDate': -1});
     await progressCollection.createIndex(keys: {'progressDate': -1});
+
+    // Create indexes for notification collections
+    await _notificationsCollection.createIndex(keys: {'userId': 1});
+    await _notificationsCollection.createIndex(keys: {'userId': 1, 'type': 1});
+    await _notificationsCollection
+        .createIndex(keys: {'userId': 1, 'readAt': 1});
+    await _notificationsCollection.createIndex(keys: {'sentAt': 1});
 
     // Only set _isInitialized to true if all steps complete successfully
     _isInitialized = true;
@@ -238,8 +248,7 @@ class MongoDBService {
       if (id.length != 24) {
         return null;
       }
-      return await _usersCollection
-          .findOne({'_id': parseObjectId(id)});
+      return await _usersCollection.findOne({'_id': parseObjectId(id)});
     } catch (e) {
       throw Exception('Failed to find user by ID: $e');
     }
