@@ -50,6 +50,8 @@ class ForcedTourService {
   TourStep? getNextStep(TourStep currentStep) {
     switch (currentStep) {
       case TourStep.trackers:
+        return TourStep.trackerInfo;
+      case TourStep.trackerInfo:
         return TourStep.dailyTips;
       case TourStep.dailyTips:
         return TourStep.myPlan;
@@ -76,6 +78,8 @@ class ForcedTourService {
     switch (step) {
       case TourStep.trackers:
         return TourDescriptions.trackers;
+      case TourStep.trackerInfo:
+        return TourDescriptions.trackerInfo;
       case TourStep.dailyTips:
         return TourDescriptions.dailyTips;
       case TourStep.myPlan:
@@ -96,6 +100,8 @@ class ForcedTourService {
     switch (step) {
       case TourStep.trackers:
         return 'Track Your Nutrition';
+      case TourStep.trackerInfo:
+        return 'Serving Size Info';
       case TourStep.dailyTips:
         return 'Daily Health Tips';
       case TourStep.myPlan:

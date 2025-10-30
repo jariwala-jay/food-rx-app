@@ -4,15 +4,21 @@ import 'dart:math' as math;
 import '../models/tracker_goal.dart';
 import 'tracker_serving_info_modal.dart';
 import 'package:flutter_app/core/utils/app_colors.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
 
 class TrackerCard extends StatelessWidget {
   final TrackerGoal tracker;
   final VoidCallback? onTap;
+  final GlobalKey? infoShowcaseKey;
 
   const TrackerCard({
     Key? key,
     required this.tracker,
     this.onTap,
+    this.infoShowcaseKey,
   }) : super(key: key);
 
   // Get progress color based on percentage
@@ -149,29 +155,7 @@ class TrackerCard extends StatelessWidget {
             Positioned(
               top: 4,
               right: 4,
-              child: GestureDetector(
-                onTap: () => _showInfoModal(context),
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.info_outline,
-                    color: AppColors.textLight,
-                    size: 12,
-                  ),
-                ),
-              ),
+              child: _buildInfoIcon(context),
             ),
           ],
         ),
@@ -179,13 +163,71 @@ class TrackerCard extends StatelessWidget {
     );
   }
 
-  void _showInfoModal(BuildContext context) {
-    showDialog(
+  Future<void> _openInfoAndMaybeAdvanceTour(BuildContext context) async {
+    await showDialog(
       context: context,
       builder: (context) => TrackerServingInfoModal(
         category: tracker.category,
         dietType: tracker.dietType,
       ),
+    );
+
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+    if (tourProvider.currentStep == TourStep.trackerInfo &&
+        tourProvider.isTourActive) {
+      tourProvider.completeCurrentStep();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          ShowcaseView.get().startShowCase([TourKeys.dailyTipsKey]);
+        } catch (_) {}
+      });
+    }
+  }
+
+  Widget _buildInfoIcon(BuildContext context) {
+    final iconButton = GestureDetector(
+      onTap: () => _openInfoAndMaybeAdvanceTour(context),
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.info_outline,
+          color: AppColors.textLight,
+          size: 12,
+        ),
+      ),
+    );
+
+    if (infoShowcaseKey == null) {
+      return iconButton;
+    }
+
+    return Showcase(
+      key: infoShowcaseKey!,
+      title: 'Serving Size Info',
+      description: 'Tap to see what counts as 1 serving for ${tracker.name}.',
+      tooltipPosition: TooltipPosition.top,
+      targetShapeBorder: const CircleBorder(),
+      tooltipBackgroundColor: Colors.white,
+      textColor: Colors.black,
+      overlayColor: Colors.black54,
+      overlayOpacity: 0.8,
+      disposeOnTap: true,
+      onTargetClick: () => _openInfoAndMaybeAdvanceTour(context),
+      onToolTipClick: () => _openInfoAndMaybeAdvanceTour(context),
+      child: iconButton,
     );
   }
 }

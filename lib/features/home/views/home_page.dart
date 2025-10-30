@@ -35,9 +35,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         Provider.of<ForcedTourProvider>(context, listen: false);
     tourProvider.completeCurrentStep();
 
-    // Trigger the next showcase step
+    // Trigger the next showcase step (info icon on first tracker)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ShowcaseView.get().startShowCase([TourKeys.dailyTipsKey]);
+      ShowcaseView.get().startShowCase([TourKeys.trackerInfoKey]);
     });
   }
 
@@ -538,6 +538,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       title: 'Track Your Nutrition',
                       description:
                           'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
+                      tooltipPosition: TooltipPosition.bottom,
                       targetShapeBorder: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
