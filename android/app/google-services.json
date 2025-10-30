@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "609996001749",
+    "project_id": "myfoodrx-firebase",
+    "storage_bucket": "myfoodrx-firebase.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:609996001749:android:5deb06929dce45e321ed5c",
+        "android_client_info": {
+          "package_name": "com.shield.myfoodrx"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe8iNW8gsQaq49B-5_RGcs9zw74sQxGfs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
