@@ -281,7 +281,15 @@ class _TrackerGridState extends State<TrackerGrid>
                 itemCount: dailyTrackers.length,
                 itemBuilder: (context, index) {
                   final tracker = dailyTrackers[index];
-                  return _buildTrackerCard(context, tracker);
+                  final veggiesIndex = dailyTrackers
+                      .indexWhere((t) => t.category == TrackerCategory.veggies);
+                  final targetIndex = veggiesIndex >= 0 ? veggiesIndex : 0;
+                  final attachInfoKey = index == targetIndex;
+                  return _buildTrackerCard(
+                    context,
+                    tracker,
+                    infoKey: attachInfoKey ? TourKeys.trackerInfoKey : null,
+                  );
                 },
               ),
               if (weeklyTrackers.isNotEmpty) ...[
@@ -318,7 +326,8 @@ class _TrackerGridState extends State<TrackerGrid>
     );
   }
 
-  Widget _buildTrackerCard(BuildContext context, TrackerGoal tracker) {
+  Widget _buildTrackerCard(BuildContext context, TrackerGoal tracker,
+      {GlobalKey? infoKey}) {
     return Selector<TrackerProvider, TrackerGoal?>(
       selector: (context, provider) => provider.findTrackerById(tracker.id),
       builder: (context, currentTracker, child) {
@@ -327,6 +336,7 @@ class _TrackerGridState extends State<TrackerGrid>
           key: ValueKey(displayTracker.id),
           tracker: displayTracker,
           onTap: () => _showEditDialog(context, displayTracker),
+          infoShowcaseKey: infoKey,
         );
       },
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 // GlobalKeys for showcase widgets
 class TourKeys {
   static final GlobalKey trackersKey = GlobalKey(debugLabel: 'trackers');
+  static final GlobalKey trackerInfoKey = GlobalKey(debugLabel: 'tracker_info');
   static final GlobalKey trackerSectionKey =
       GlobalKey(debugLabel: 'tracker_section');
   static final GlobalKey dailyTipsKey = GlobalKey(debugLabel: 'daily_tips');
@@ -36,6 +37,7 @@ class TourKeys {
 // Tour step enum
 enum TourStep {
   trackers,
+  trackerInfo,
   dailyTips,
   myPlan,
   addButton,
@@ -48,6 +50,9 @@ enum TourStep {
 class TourDescriptions {
   static const String trackers =
       "This is where you track your daily nutrition goals. You'll see how well you're following your personalized meal plan. Click on this section to continue.";
+
+  static const String trackerInfo =
+      "Tap the i icon to learn what counts as 1 serving for this tracker.";
 
   static const String dailyTips =
       "Get helpful daily tips based on your health conditions to improve your well-being. Click on this section to continue.";
