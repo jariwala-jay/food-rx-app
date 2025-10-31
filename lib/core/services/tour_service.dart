@@ -57,6 +57,8 @@ class TourService {
   TourStep? getNextStep(TourStep currentStep) {
     switch (currentStep) {
       case TourStep.trackers:
+        return TourStep.trackerInfo;
+      case TourStep.trackerInfo:
         return TourStep.dailyTips;
       case TourStep.dailyTips:
         return TourStep.myPlan;

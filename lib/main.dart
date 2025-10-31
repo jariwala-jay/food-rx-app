@@ -214,6 +214,11 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.orange,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        dropdownMenuTheme: const DropdownMenuThemeData(
+          menuStyle: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll<Color>(Colors.white),
+          ),
+        ),
       ),
       navigatorObservers: [routeObserver],
       home: Consumer<AuthController>(
@@ -221,7 +226,9 @@ class MyApp extends StatelessWidget {
           if (authController.isLoading) {
             return const Scaffold(
               body: Center(
-                child: CircularProgressIndicator(),
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+                ),
               ),
             );
           }

@@ -259,7 +259,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         height: 250,
                         color: Colors.grey[300],
                         child: const Center(
-                          child: CircularProgressIndicator(),
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFF6A00)),
+                          ),
                         ),
                       );
                     },
@@ -339,7 +342,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     height: 120,
                     color: Colors.grey[300],
                     child: const Center(
-                      child: CircularProgressIndicator(),
+                      child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+                      ),
                     ),
                   );
                 },
@@ -604,7 +610,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     const SizedBox(
                                       height: 201,
                                       child: Center(
-                                        child: CircularProgressIndicator(),
+                                        child: CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Color(0xFFFF6A00)),
+                                        ),
                                       ),
                                     )
                                   else if (tipProvider.shownTips.isEmpty)

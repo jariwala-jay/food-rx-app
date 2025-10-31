@@ -114,7 +114,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Oranges',
       'id': 'orange',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/orange.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/orange.png'
     },
     {
       'name': 'Grapes',
@@ -141,17 +141,18 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Pears',
       'id': 'pear',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/pears.jpg'
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/pears-bosc.jpg'
     },
     {
       'name': 'Peaches',
       'id': 'peach',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peach.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peach.png'
     },
     {
       'name': 'Plums',
       'id': 'plum',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/plums.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/plum.jpg'
     },
     {
       'name': 'Watermelon',
@@ -170,14 +171,13 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Canned Peaches',
       'id': 'canned-peaches',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-peaches.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peach.png'
     },
     {
       'name': 'Canned Pears',
       'id': 'canned-pears',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-pears.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/pears-bosc.jpg'
     },
     {
       'name': 'Canned Pineapple',
@@ -194,8 +194,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Canned Mandarin Oranges',
       'id': 'canned-mandarin',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/mandarin-oranges.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/orange.png'
     },
     {
       'name': 'Fruit Cocktail',
@@ -225,7 +224,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Onions',
       'id': 'onions',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/yellow-onion.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/brown-onion.png'
     },
     {
       'name': 'Potatoes',
@@ -236,13 +235,13 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Tomatoes',
       'id': 'tomatoes',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/tomatoes.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/tomato.png'
     },
     {
       'name': 'Bell Peppers',
       'id': 'bell-peppers',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/bell-peppers.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/green-pepper.jpg'
     },
     {
       'name': 'Celery',
@@ -280,7 +279,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Green Beans',
       'id': 'green-beans',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/green-beans.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/green-beans-or-string-beans.jpg'
     },
     {
       'name': 'Cucumber',
@@ -309,7 +308,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Canned Green Beans',
       'id': 'canned-green-beans',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/green-beans.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/green-beans-or-string-beans.jpg'
     },
     {
       'name': 'Canned Peas',
@@ -324,14 +323,12 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Canned Tomatoes',
       'id': 'canned-tomatoes',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-tomatoes.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/tomato.png'
     },
     {
       'name': 'Tomato Sauce',
       'id': 'tomato-sauce',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/tomato-sauce.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/ketchup.png'
     },
     {
       'name': 'Tomato Paste',
@@ -361,13 +358,13 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'White Rice',
       'id': 'white-rice',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/white-rice.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/uncooked-white-rice.png'
     },
     {
       'name': 'Brown Rice',
       'id': 'brown-rice',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/brown-rice.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/uncooked-brown-rice.png'
     },
     {
       'name': 'Pasta',
@@ -401,13 +398,12 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Barley',
       'id': 'barley',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/pearl-barley.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/pearl-barley.png'
     },
     {
       'name': 'Cereal',
       'id': 'cereal',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/breakfast-cereal.jpg'
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cheerios.jpg'
     },
     {
       'name': 'Crackers',
@@ -430,7 +426,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Canned Tuna',
       'id': 'canned-tuna',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/canned-tuna.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/canned-tuna.png'
     },
     {
       'name': 'Canned Salmon',
@@ -464,7 +460,8 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
     {
       'name': 'Lentils',
       'id': 'lentils',
-      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/lentils.jpg'
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/lentils-brown.jpg'
     },
     {
       'name': 'Peanut Butter',
@@ -487,13 +484,13 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Nuts',
       'id': 'nuts',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/mixed-nuts.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/nuts-mixed.jpg'
     },
     {
       'name': 'Split Peas',
       'id': 'split-peas',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/split-peas.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/split-peas-green.jpg'
     },
   ],
   'dairy': [
@@ -542,7 +539,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Powdered Milk',
       'id': 'powdered-milk',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/milk-powder.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/milk-powdered.jpg'
     },
   ],
   'seasonings': [
@@ -610,7 +607,7 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'name': 'Italian Seasoning',
       'id': 'italian-seasoning',
       'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/italian-seasoning.jpg'
+          'https://spoonacular.com/cdn/ingredients_100x100/dried-herbs.png'
     },
   ],
 };

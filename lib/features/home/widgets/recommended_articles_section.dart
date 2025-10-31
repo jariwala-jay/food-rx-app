@@ -15,7 +15,11 @@ class RecommendedArticlesSection extends StatelessWidget {
     return Consumer<ArticleController>(
       builder: (context, articleController, child) {
         if (articleController.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+            ),
+          );
         } else if (articleController.error != null) {
           return Center(child: Text('Error: ${articleController.error}'));
         } else {
@@ -83,7 +87,8 @@ class RecommendedArticlesSection extends StatelessWidget {
               imageUrl: article.imageUrl,
               height: 120,
               width: double.infinity,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
             ),
             Padding(
               padding: const EdgeInsets.all(12),

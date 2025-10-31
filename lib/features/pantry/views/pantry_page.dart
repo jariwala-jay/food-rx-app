@@ -226,7 +226,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
 
   Widget _buildPantryItemsContent(PantryController controller) {
     if (controller.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+        ),
+      );
     }
 
     if (controller.error != null) {
@@ -346,8 +350,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
             try {
-              ShowcaseView.get()
-                  .startShowCase([TourKeys.recipesTabKey]);
+              ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
               final stepAfterTrigger =
                   Provider.of<ForcedTourProvider>(context, listen: false)
                       .currentStep;
@@ -372,8 +375,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
             try {
-              ShowcaseView.get()
-                  .startShowCase([TourKeys.recipesTabKey]);
+              ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
             } catch (e) {}
           });
         });
@@ -391,7 +393,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
 
   Widget _buildOtherItemsContent(PantryController controller) {
     if (controller.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+        ),
+      );
     }
 
     if (controller.error != null) {

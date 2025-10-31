@@ -47,7 +47,9 @@ class MealPlanPage extends StatelessWidget {
           });
 
           return const Center(
-            child: CircularProgressIndicator(),
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+            ),
           );
         },
       ),

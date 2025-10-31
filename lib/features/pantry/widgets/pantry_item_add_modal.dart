@@ -89,7 +89,8 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
 
     // For new items, we'll use a temporary ID that will be replaced by MongoDB
     // For existing items from Spoonacular, we'll use their ID but convert it to ObjectId format
-    final String itemId = widget.foodItem['id']?.toString() ?? 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final String itemId = widget.foodItem['id']?.toString() ??
+        'temp_${DateTime.now().millisecondsSinceEpoch}';
 
     final newItem = PantryItem(
       id: itemId, // This will be replaced by MongoDB with proper ObjectId
@@ -180,6 +181,8 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
                         value: _selectedUnit,
                         isExpanded: true,
                         icon: const Icon(Icons.keyboard_arrow_down),
+                        dropdownColor: Colors.white,
+                        style: const TextStyle(color: Colors.black87),
                         items: UnitType.values.map((UnitType unit) {
                           return DropdownMenuItem<UnitType>(
                             value: unit,
