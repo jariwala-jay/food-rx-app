@@ -92,7 +92,9 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(),
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+        ),
       );
     }
 

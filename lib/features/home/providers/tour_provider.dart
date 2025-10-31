@@ -65,6 +65,8 @@ class TourProvider extends ChangeNotifier {
     switch (_currentStep) {
       case TourStep.trackers:
         return TourKeys.trackerSectionKey;
+      case TourStep.trackerInfo:
+        return TourKeys.trackerInfoKey;
       case TourStep.dailyTips:
         return TourKeys.dailyTipsKey;
       case TourStep.myPlan:

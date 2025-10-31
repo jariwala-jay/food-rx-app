@@ -237,7 +237,11 @@ class _EducationPageState extends State<EducationPage> {
     if (controller.isLoading &&
         controller.articles.isEmpty &&
         controller.recommendedArticles.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+        ),
+      );
     }
 
     if (controller.error != null) {
@@ -295,7 +299,11 @@ class _EducationPageState extends State<EducationPage> {
         ),
         if (controller.isLoading && controller.articles.isEmpty)
           const SliverFillRemaining(
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+              ),
+            ),
           )
         else if (controller.articles.isEmpty)
           const SliverFillRemaining(

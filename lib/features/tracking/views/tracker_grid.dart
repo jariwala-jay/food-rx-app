@@ -92,7 +92,10 @@ class _TrackerGridState extends State<TrackerGrid>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const CircularProgressIndicator(
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'This is taking longer than expected...',

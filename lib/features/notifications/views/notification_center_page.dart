@@ -104,7 +104,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         builder: (context, notificationManager, child) {
           if (notificationManager.isLoading) {
             return const Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+              ),
             );
           }
 
@@ -173,6 +175,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
           return RefreshIndicator(
             onRefresh: () => notificationManager.loadNotifications(),
+            color: const Color(0xFFFF6A00),
             child: ListView.separated(
               padding: const EdgeInsets.only(
                   top: 12, bottom: 16, left: 16, right: 16),
@@ -330,7 +333,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       case NotificationType.admin:
         return Colors.blue;
       case NotificationType.education:
-        return Colors.purple;
+        return const Color(0xFFFF6A00); // Orange
     }
   }
 
