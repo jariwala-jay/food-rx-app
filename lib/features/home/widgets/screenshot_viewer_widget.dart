@@ -8,11 +8,13 @@ import 'package:flutter_app/core/constants/tour_constants.dart';
 class ScreenshotViewerWidget extends StatefulWidget {
   final String planType;
   final String title;
+  final bool showGlycemicIndex;
 
   const ScreenshotViewerWidget({
     Key? key,
     required this.planType,
     required this.title,
+    this.showGlycemicIndex = false,
   }) : super(key: key);
 
   @override
@@ -30,10 +32,8 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
     _loadImages();
   }
 
-  void _loadImages() async {
-    // Get the folder path based on plan type
-    String folderPath = _getFolderPath();
-
+  Future<List<String>> _loadImagesFromFolder(
+      String folderPath, String planName) async {
     List<String> imagePaths = [];
     int pageNumber = 1;
 
@@ -51,14 +51,31 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
       }
     }
 
+    return imagePaths;
+  }
+
+  void _loadImages() async {
+    // First, load images from the main plan type
+    String mainFolderPath = _getFolderPath(widget.planType);
+    List<String> mainImages =
+        await _loadImagesFromFolder(mainFolderPath, widget.planType);
+
+    // Then, if showGlycemicIndex is true, load glycemic index images
+    List<String> glycemicImages = [];
+    if (widget.showGlycemicIndex && widget.planType != 'GlycemicIndex') {
+      String glycemicFolderPath = _getFolderPath('GlycemicIndex');
+      glycemicImages =
+          await _loadImagesFromFolder(glycemicFolderPath, 'GlycemicIndex');
+    }
+
     setState(() {
-      _imagePaths = imagePaths;
+      _imagePaths = [...mainImages, ...glycemicImages];
       _isLoading = false;
     });
   }
 
-  String _getFolderPath() {
-    switch (widget.planType) {
+  String _getFolderPath(String planType) {
+    switch (planType) {
       case 'DASH':
         return 'assets/nutrition/screenshots/dash/';
       case 'MyPlate':
@@ -118,7 +135,7 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Please add screenshots to ${_getFolderPath()}',
+              'Please add screenshots to ${_getFolderPath(widget.planType)}',
               style: const TextStyle(
                 fontSize: 14,
                 color: Colors.grey,

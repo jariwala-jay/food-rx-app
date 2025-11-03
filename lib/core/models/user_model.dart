@@ -133,7 +133,13 @@ class UserModel {
       // Diet Preferences
       dietType: json['dietType'],
       myPlanType: json['myPlanType'],
-      showGlycemicIndex: json['showGlycemicIndex'],
+      showGlycemicIndex: json['showGlycemicIndex'] == null
+          ? null
+          : json['showGlycemicIndex'] is bool
+              ? json['showGlycemicIndex'] as bool
+              : json['showGlycemicIndex'] == true ||
+                  json['showGlycemicIndex'] == 'true' ||
+                  json['showGlycemicIndex'] == 1,
       excludedIngredients: List<String>.from(json['excludedIngredients'] ?? []),
       foodRestrictions: List<String>.from(json['foodRestrictions'] ?? []),
       favoriteCuisines: List<String>.from(json['favoriteCuisines'] ?? []),

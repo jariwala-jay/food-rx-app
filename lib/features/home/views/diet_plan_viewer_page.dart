@@ -6,11 +6,13 @@ import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 class DietPlanViewerPage extends StatelessWidget {
   final String myPlanType;
   final String displayName;
+  final bool showGlycemicIndex;
 
   const DietPlanViewerPage({
     Key? key,
     required this.myPlanType,
     required this.displayName,
+    this.showGlycemicIndex = false,
   }) : super(key: key);
 
   @override
@@ -40,7 +42,10 @@ class DietPlanViewerPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: DietPlanViewer(myPlanType: myPlanType),
+      body: DietPlanViewer(
+        myPlanType: myPlanType,
+        showGlycemicIndex: showGlycemicIndex,
+      ),
     );
   }
 }
