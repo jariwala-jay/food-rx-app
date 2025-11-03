@@ -191,7 +191,63 @@ class AuthController with ChangeNotifier {
           final trigger =
               await _replanService!.checkReplanTriggers(oldUser, _currentUser!);
           if (trigger != null) {
-            _pendingReplanTrigger = trigger;
+            // Automatically regenerate diet plan for all trigger types
+            // This includes: condition_change, weight_change, height_change, dob_change, activity_change
+            try {
+              // Ensure weight is in pounds for personalization service
+              final userForReplan = _currentUser!;
+              double? weightLb = userForReplan.weight;
+              if (weightLb != null && userForReplan.weightUnit == 'kg') {
+                weightLb = weightLb * 2.205; // Convert kg to lbs
+              }
+
+              // Create a temporary user with weight in lbs for personalization
+              final tempUser = UserModel(
+                id: userForReplan.id,
+                email: userForReplan.email,
+                name: userForReplan.name,
+                dateOfBirth: userForReplan.dateOfBirth,
+                gender: userForReplan.gender,
+                heightFeet: userForReplan.heightFeet,
+                heightInches: userForReplan.heightInches,
+                weight: weightLb,
+                activityLevel: userForReplan.activityLevel,
+                medicalConditions: userForReplan.medicalConditions,
+                healthGoals: userForReplan.healthGoals,
+              );
+
+              final result = await _replanService!.generateNewPlan(tempUser);
+
+              // Add small delay to allow connection to stabilize between operations
+              await Future.delayed(const Duration(milliseconds: 200));
+
+              await _mongoDBService.updateUserProfile(_currentUser!.id!, {
+                'dietType': result.dietType,
+                'myPlanType': result.myPlanType,
+                'showGlycemicIndex': result.showGlycemicIndex,
+                'targetCalories': result.targetCalories,
+                'selectedDietPlan': result.selectedDietPlan,
+                'diagnostics': result.diagnostics,
+                'updatedAt': DateTime.now().toIso8601String(),
+              });
+
+              // Add small delay before refresh
+              await Future.delayed(const Duration(milliseconds: 200));
+
+              // Refresh user data with new plan
+              final refreshedUser =
+                  await _mongoDBService.findUserById(_currentUser!.id!);
+              if (refreshedUser != null) {
+                _currentUser = _createUserModel(refreshedUser);
+              }
+
+              // Clear pending trigger since we've handled it
+              _pendingReplanTrigger = null;
+            } catch (e) {
+              debugPrint('Error auto-regenerating diet plan: $e');
+              // Fall back to setting pending trigger if regeneration fails
+              _pendingReplanTrigger = trigger;
+            }
             notifyListeners();
           }
         }

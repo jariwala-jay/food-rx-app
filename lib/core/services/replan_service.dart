@@ -3,7 +3,7 @@ import 'package:flutter_app/core/models/user_model.dart';
 
 class ReplanTrigger {
   final String
-      type; // 'weight_change', 'activity_change', 'condition_change', 'age_change'
+      type; // 'weight_change', 'activity_change', 'condition_change', 'age_change', 'height_change', 'dob_change'
   final String description;
   final DateTime triggeredAt;
   final Map<String, dynamic> oldValue;
@@ -26,11 +26,58 @@ class ReplanService {
   /// Check if a re-plan is needed based on user changes
   Future<ReplanTrigger?> checkReplanTriggers(
       UserModel oldUser, UserModel newUser) async {
-    // Check weight change (≥5%)
+    // Check DOB change (any change triggers recalculation since it affects age and BMR)
+    if (oldUser.dateOfBirth != null && newUser.dateOfBirth != null) {
+      if (oldUser.dateOfBirth != newUser.dateOfBirth) {
+        final oldAge =
+            DateTime.now().difference(oldUser.dateOfBirth!).inDays ~/ 365;
+        final newAge =
+            DateTime.now().difference(newUser.dateOfBirth!).inDays ~/ 365;
+        return ReplanTrigger(
+          type: 'dob_change',
+          description: 'Date of birth changed (age: $oldAge → $newAge)',
+          triggeredAt: DateTime.now(),
+          oldValue: {
+            'dateOfBirth': oldUser.dateOfBirth?.toIso8601String(),
+            'age': oldAge
+          },
+          newValue: {
+            'dateOfBirth': newUser.dateOfBirth?.toIso8601String(),
+            'age': newAge
+          },
+        );
+      }
+    }
+
+    // Check height change (any change triggers recalculation since it affects BMR)
+    if ((oldUser.heightFeet != newUser.heightFeet) ||
+        (oldUser.heightInches != newUser.heightInches)) {
+      final oldHeightInches =
+          (oldUser.heightFeet ?? 0) * 12 + (oldUser.heightInches ?? 0);
+      final newHeightInches =
+          (newUser.heightFeet ?? 0) * 12 + (newUser.heightInches ?? 0);
+      return ReplanTrigger(
+        type: 'height_change',
+        description:
+            'Height changed from ${oldHeightInches.toStringAsFixed(0)}" to ${newHeightInches.toStringAsFixed(0)}"',
+        triggeredAt: DateTime.now(),
+        oldValue: {
+          'heightFeet': oldUser.heightFeet,
+          'heightInches': oldUser.heightInches,
+        },
+        newValue: {
+          'heightFeet': newUser.heightFeet,
+          'heightInches': newUser.heightInches,
+        },
+      );
+    }
+
+    // Check weight change (any change triggers recalculation since it affects BMR)
     if (oldUser.weight != null && newUser.weight != null) {
-      final weightChangePercent =
-          ((newUser.weight! - oldUser.weight!) / oldUser.weight!) * 100;
-      if (weightChangePercent.abs() >= 5.0) {
+      if ((oldUser.weight! - newUser.weight!).abs() > 0.1) {
+        // Any weight change greater than 0.1 lbs triggers recalculation
+        final weightChangePercent =
+            ((newUser.weight! - oldUser.weight!) / oldUser.weight!) * 100;
         return ReplanTrigger(
           type: 'weight_change',
           description:
@@ -78,23 +125,6 @@ class ReplanService {
         oldValue: {'healthGoals': oldGoals},
         newValue: {'healthGoals': newGoals},
       );
-    }
-
-    // Check age change (yearly rollover)
-    if (oldUser.dateOfBirth != null && newUser.dateOfBirth != null) {
-      final oldAge =
-          DateTime.now().difference(oldUser.dateOfBirth!).inDays ~/ 365;
-      final newAge =
-          DateTime.now().difference(newUser.dateOfBirth!).inDays ~/ 365;
-      if (newAge > oldAge) {
-        return ReplanTrigger(
-          type: 'age_change',
-          description: 'Age changed from $oldAge to $newAge',
-          triggeredAt: DateTime.now(),
-          oldValue: {'age': oldAge},
-          newValue: {'age': newAge},
-        );
-      }
     }
 
     return null; // No re-plan needed
