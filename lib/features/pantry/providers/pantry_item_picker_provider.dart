@@ -33,6 +33,103 @@ class PantryItemPickerProvider extends ChangeNotifier {
       this._ingredientRepository, this._mongoDBService, this._authProvider,
       {this.isFoodPantryItem = true});
 
+  List<String> _mapUserAllergiesToIntolerances() {
+    final allergies = _authProvider.currentUser?.allergies ?? [];
+    return allergies
+        .map((a) {
+          switch (a.toLowerCase()) {
+            case 'dairy':
+              return 'dairy';
+            case 'egg':
+            case 'eggs':
+              return 'egg';
+            case 'gluten':
+              return 'gluten';
+            case 'wheat':
+              return 'wheat';
+            case 'peanut':
+            case 'peanuts':
+              return 'peanut';
+            case 'tree nuts':
+            case 'tree nut':
+              return 'treeNut';
+            case 'soy':
+              return 'soy';
+            case 'fish':
+            case 'shellfish':
+              return 'seafood';
+            case 'sesame':
+              return 'sesame';
+            case 'sulfite':
+            case 'sulfites':
+              return 'sulfite';
+            case 'grain':
+            case 'grains':
+              return 'grain';
+            default:
+              return '';
+          }
+        })
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  bool _isAllergyItemName(String itemName) {
+    final allergies = _authProvider.currentUser?.allergies ?? [];
+    if (allergies.isEmpty) return false;
+    final name = itemName.toLowerCase();
+    for (final allergy in allergies) {
+      final a = allergy.toLowerCase();
+      // Simple keyword checks for common allergens in prefilled items
+      if (a.contains('dairy')) {
+        if (name.contains('milk') ||
+            name.contains('cheese') ||
+            name.contains('yogurt') ||
+            name.contains('butter') ||
+            name.contains('cream')) return true;
+      }
+      if (a.contains('egg')) {
+        if (name.contains('egg')) return true;
+      }
+      if (a.contains('gluten') || a.contains('wheat')) {
+        if (name.contains('wheat') ||
+            name.contains('bread') ||
+            name.contains('pasta') ||
+            name.contains('flour')) return true;
+      }
+      if (a.contains('peanut')) {
+        if (name.contains('peanut')) return true;
+      }
+      if (a.contains('tree nut')) {
+        if (name.contains('almond') ||
+            name.contains('walnut') ||
+            name.contains('pecan') ||
+            name.contains('hazelnut') ||
+            name.contains('cashew') ||
+            name.contains('pistachio')) return true;
+      }
+      if (a.contains('soy')) {
+        if (name.contains('soy') ||
+            name.contains('tofu') ||
+            name.contains('edamame')) return true;
+      }
+      if (a.contains('fish') ||
+          a.contains('shellfish') ||
+          a.contains('seafood')) {
+        if (name.contains('fish') ||
+            name.contains('shrimp') ||
+            name.contains('crab') ||
+            name.contains('lobster') ||
+            name.contains('salmon') ||
+            name.contains('tuna')) return true;
+      }
+      if (a.contains('sesame')) {
+        if (name.contains('sesame')) return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> loadItems(String categoryKey) async {
     isLoading = true;
     error = null;
@@ -60,6 +157,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
                     itemData['imageUrl']?.split('/').last ?? 'default.jpg',
                 aisle: categoryKey,
               ))
+          .where((ing) => !_isAllergyItemName(ing.name))
           .toList();
 
       developer.log(
@@ -85,7 +183,9 @@ class PantryItemPickerProvider extends ChangeNotifier {
     try {
       // Fetch additional ingredients from API
       final apiResults = await _ingredientRepository.searchIngredients(
-          aisle: categoryKey, number: 30);
+          aisle: categoryKey,
+          number: 30,
+          intolerances: _mapUserAllergiesToIntolerances());
 
       developer.log(
           'Loaded ${apiResults.length} additional API items for category $categoryKey');
@@ -161,6 +261,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
         query: query,
         aisle: _currentCategoryKey,
         number: 20,
+        intolerances: _mapUserAllergiesToIntolerances(),
       );
 
       if (results.isEmpty) {
@@ -218,6 +319,12 @@ class PantryItemPickerProvider extends ChangeNotifier {
   void addItemToSelection(PantryItem item) {
     if (_authProvider.currentUser == null) {
       error = "User not logged in. Cannot add items.";
+      notifyListeners();
+      developer.log(error!);
+      return;
+    }
+    if (_isAllergyItemName(item.name)) {
+      error = "Cannot add item due to your allergy settings.";
       notifyListeners();
       developer.log(error!);
       return;
@@ -286,7 +393,15 @@ class PantryItemPickerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final itemsToSave = _selectedItems.values.toList();
+      var itemsToSave = _selectedItems.values.toList();
+      // Prevent saving allergy items
+      final beforeCount = itemsToSave.length;
+      itemsToSave =
+          itemsToSave.where((i) => !_isAllergyItemName(i.name)).toList();
+      if (itemsToSave.length != beforeCount) {
+        developer.log(
+            'Filtered out ${beforeCount - itemsToSave.length} allergy item(s) from save.');
+      }
       if (itemsToSave.isEmpty) {
         error = 'No items selected to save.';
         isLoading = false;
