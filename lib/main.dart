@@ -247,11 +247,12 @@ class MyApp extends StatelessWidget {
         '/chatbot': (context) => const ChatbotPage(),
         '/meal-plan': (context) => const MealPlanPage(),
         '/diet-plan-viewer': (context) {
-          final args =
-              ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>;
           return DietPlanViewerPage(
-            myPlanType: args['myPlanType']!,
-            displayName: args['displayName']!,
+            myPlanType: args['myPlanType'] as String,
+            displayName: args['displayName'] as String,
+            showGlycemicIndex: args['showGlycemicIndex'] as bool? ?? false,
           );
         },
         '/article-detail': (context) {

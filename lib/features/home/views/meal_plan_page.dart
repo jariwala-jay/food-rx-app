@@ -43,6 +43,7 @@ class MealPlanPage extends StatelessWidget {
                 arguments: {
                   'myPlanType': user.myPlanType ?? user.dietType ?? 'MyPlate',
                   'displayName': _getPlanDisplayName(user),
+                  'showGlycemicIndex': user.showGlycemicIndex ?? false,
                 });
           });
 
