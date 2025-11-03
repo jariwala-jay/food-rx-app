@@ -52,12 +52,13 @@ class PantryItemPickerProvider extends ChangeNotifier {
               return 'peanut';
             case 'tree nuts':
             case 'tree nut':
-              return 'treeNut';
+              return 'tree nut';
             case 'soy':
               return 'soy';
             case 'fish':
-            case 'shellfish':
               return 'seafood';
+            case 'shellfish':
+              return 'shellfish';
             case 'sesame':
               return 'sesame';
             case 'sulfite':

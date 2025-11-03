@@ -371,7 +371,7 @@ class RecipeFilter {
     }
 
     if (intolerances.isNotEmpty) {
-      params['intolerances'] = intolerances.map((e) => e.name).join(',');
+      params['intolerances'] = intolerances.map((e) => e.apiName).join(',');
     }
 
     if (maxReadyTime != null) {
@@ -558,6 +558,17 @@ extension MedicalConditionExtension on MedicalCondition {
         return 'Pre-diabetes';
       case MedicalCondition.obesity:
         return 'Obesity';
+    }
+  }
+}
+
+extension IntolerancesExtension on Intolerances {
+  String get apiName {
+    switch (this) {
+      case Intolerances.treeNut:
+        return 'tree nut';
+      default:
+        return name; // matches spoonacular for: dairy, egg, gluten, grain, peanut, seafood, sesame, shellfish, soy, sulfite, wheat
     }
   }
 }
