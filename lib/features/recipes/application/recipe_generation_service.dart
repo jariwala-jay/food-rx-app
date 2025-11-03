@@ -39,8 +39,52 @@ class RecipeGenerationService {
     final enhancedFilter = _enhanceFilterWithUserProfile(filter, userProfile);
 
     // 2. Fetch recipes from the repository with enhanced filter
-    final recipes = await _recipeRepository.getRecipes(
+    //    If no recipes are returned, progressively relax constraints:
+    //    a) remove meal type, b) remove cuisines, c) remove maxReadyTime
+    List<Recipe> recipes = await _recipeRepository.getRecipes(
         enhancedFilter, pantryIngredientNames);
+
+    if (recipes.isEmpty) {
+      if (kDebugMode) {
+        print('🔁 No recipes found. Retrying without meal type...');
+      }
+      final withoutMealType = enhancedFilter.copyWith(
+        mealType: null,
+        spoonacularMealType: null,
+        spoonacularMealTypes: null,
+      );
+      recipes = await _recipeRepository.getRecipes(
+          withoutMealType, pantryIngredientNames);
+    }
+
+    if (recipes.isEmpty) {
+      if (kDebugMode) {
+        print('🔁 Still none. Retrying without cuisines...');
+      }
+      final withoutCuisines = enhancedFilter.copyWith(
+        mealType: null, // keep meal type relaxed
+        spoonacularMealType: null,
+        spoonacularMealTypes: null,
+        cuisines: const [],
+      );
+      recipes = await _recipeRepository.getRecipes(
+          withoutCuisines, pantryIngredientNames);
+    }
+
+    if (recipes.isEmpty) {
+      if (kDebugMode) {
+        print('🔁 Still none. Retrying without time limit...');
+      }
+      final withoutTime = enhancedFilter.copyWith(
+        mealType: null,
+        spoonacularMealType: null,
+        spoonacularMealTypes: null,
+        cuisines: const [],
+        maxReadyTime: null,
+      );
+      recipes = await _recipeRepository.getRecipes(
+          withoutTime, pantryIngredientNames);
+    }
 
     if (kDebugMode) {
       print('\n🔍 RECIPE GENERATION DEBUG:');
