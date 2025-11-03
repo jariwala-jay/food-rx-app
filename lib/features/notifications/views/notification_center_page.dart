@@ -30,8 +30,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: const Color(0xFFFF6A00),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           Consumer<NotificationManager>(
@@ -48,7 +47,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   iconTheme: const IconThemeData(color: Colors.white),
                 ),
                 child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  icon: const Icon(Icons.more_vert, color: Colors.black87),
                   onSelected: (value) async {
                     switch (value) {
                       case 'mark_all_read':

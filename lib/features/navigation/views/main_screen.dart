@@ -22,6 +22,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _isAddActive = false;
+  bool _isDisposed = false;
   final List<Widget> _pages = [
     const HomePage(),
     const PantryPage(),
@@ -36,6 +37,7 @@ class _MainScreenState extends State<MainScreen> {
 
     // Start tour for first-time users using v5.0.1 API
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isDisposed) return;
       final tourProvider =
           Provider.of<ForcedTourProvider>(context, listen: false);
 
@@ -46,15 +48,24 @@ class _MainScreenState extends State<MainScreen> {
 
         // Start the showcase sequence using the correct v5.0.1 API
         // Start with just the first step
-        ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
+        if (mounted && !_isDisposed) {
+          ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
+        }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 
   void _handleAddTap() async {
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
 
+    if (!mounted || _isDisposed) return;
     setState(() => _isAddActive = true);
     await showModalBottomSheet(
       context: context,
@@ -62,9 +73,14 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => const AddActionSheet(),
     );
-    setState(() => _isAddActive = false);
+
+    // Only update state if still mounted
+    if (mounted && !_isDisposed) {
+      setState(() => _isAddActive = false);
+    }
 
     // Handle tour progression if on add button step
+    if (!mounted || _isDisposed) return;
     if (tourProvider.isOnStep(TourStep.addButton)) {
       tourProvider.completeCurrentStep();
     }
@@ -74,7 +90,9 @@ class _MainScreenState extends State<MainScreen> {
     if (currentStep == TourStep.recipes ||
         currentStep == TourStep.pantryItems) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
         Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted || _isDisposed) return;
           try {
             ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
             print(
@@ -122,11 +140,14 @@ class _MainScreenState extends State<MainScreen> {
                         ElevatedButton(
                           onPressed: () async {
                             await tourProvider.resetTour();
-                            if (context.mounted) {
+                            if (mounted && !_isDisposed && context.mounted) {
                               WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted || _isDisposed) return;
                                 tourProvider.startTour();
-                                ShowcaseView.get()
-                                    .startShowCase([TourKeys.trackersKey]);
+                                if (mounted && !_isDisposed) {
+                                  ShowcaseView.get()
+                                      .startShowCase([TourKeys.trackersKey]);
+                                }
                               });
                             }
                           },
@@ -151,10 +172,26 @@ class _MainScreenState extends State<MainScreen> {
                 removeBottom: true,
                 child: CustomNavBar(
                   currentIndex: _currentIndex,
-                  onHomeTap: () => setState(() => _currentIndex = 0),
-                  onPantryTap: () => setState(() => _currentIndex = 1),
-                  onRecipeTap: () => setState(() => _currentIndex = 2),
-                  onEducationTap: () => setState(() => _currentIndex = 3),
+                  onHomeTap: () {
+                    if (mounted && !_isDisposed) {
+                      setState(() => _currentIndex = 0);
+                    }
+                  },
+                  onPantryTap: () {
+                    if (mounted && !_isDisposed) {
+                      setState(() => _currentIndex = 1);
+                    }
+                  },
+                  onRecipeTap: () {
+                    if (mounted && !_isDisposed) {
+                      setState(() => _currentIndex = 2);
+                    }
+                  },
+                  onEducationTap: () {
+                    if (mounted && !_isDisposed) {
+                      setState(() => _currentIndex = 3);
+                    }
+                  },
                   onChatTap: () {
                     Navigator.pushNamed(context, '/chatbot');
                   },
