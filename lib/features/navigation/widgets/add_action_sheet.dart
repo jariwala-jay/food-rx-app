@@ -69,7 +69,8 @@ class _AddActionSheetState extends State<AddActionSheet> {
               ),
               ModalActionButton(
                 iconAsset: 'assets/icons/activity.svg',
-                label: 'Add Physically Activity',
+                label: 'Coming soon',
+                enabled: false,
                 onTap: () {},
               ),
               Showcase(
