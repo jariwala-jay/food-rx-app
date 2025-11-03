@@ -117,7 +117,6 @@ class MongoDBService {
 
       // Check connection status
       if (_db.state == State.CLOSED) {
-        print('🔄 MongoDB connection closed, reopening...');
         try {
           await _db.open().timeout(const Duration(seconds: 15), onTimeout: () {
             throw TimeoutException(
@@ -127,7 +126,6 @@ class MongoDBService {
           await Future.delayed(const Duration(milliseconds: 300));
         } catch (e) {
           // If reopen fails, reinitialize
-          print('⚠️ Failed to reopen connection, reinitializing: $e');
           _isInitialized = false;
           await initialize();
           return;
@@ -146,7 +144,6 @@ class MongoDBService {
         }
       } catch (e) {
         // If ping fails, try to reinitialize the connection
-        print('⚠️ Ping failed, reinitializing connection: $e');
         try {
           if (_db.state != State.CLOSED) {
             await _db.close();
@@ -160,7 +157,6 @@ class MongoDBService {
     } catch (e) {
       // If retry is requested and this is the first attempt, try once more
       if (!retry && e.toString().contains('connection')) {
-        print('🔄 Connection error detected, retrying...');
         _isInitialized = false;
         await Future.delayed(const Duration(milliseconds: 500));
         return ensureConnection(retry: true);

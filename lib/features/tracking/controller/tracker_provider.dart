@@ -90,14 +90,11 @@ class TrackerProvider extends ChangeNotifier {
       bool forceReload = false}) async {
     // Prevent concurrent loads for the same diet type (unless forced)
     if (!forceReload && _isLoading && _currentLoadingDietType == dietType) {
-      print(
-          '⏸️ Already loading trackers for dietType: $dietType, skipping duplicate call');
       return;
     }
 
     // If forced reload, clear state first
     if (forceReload) {
-      print('🔄 Force reload requested, clearing current trackers');
       _dailyTrackers = [];
       _weeklyTrackers = [];
       _lastLoadedDietType = null;
@@ -112,8 +109,6 @@ class TrackerProvider extends ChangeNotifier {
       final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
       if (allTrackers.isNotEmpty &&
           allTrackers.every((t) => t.dietType == dietType)) {
-        print(
-            '✅ Already loaded valid trackers for dietType: $dietType, skipping reload');
         return;
       }
     }
@@ -121,8 +116,6 @@ class TrackerProvider extends ChangeNotifier {
     _setError(null);
     _setLoading(true);
     _currentLoadingDietType = dietType;
-
-    print('🔄 Loading trackers for userId: $userId, dietType: $dietType');
 
     try {
       // First, clear any stale cache entries if diet type might have changed
@@ -144,9 +137,6 @@ class TrackerProvider extends ChangeNotifier {
 
           if (hasMatchingDietType &&
               (_dailyTrackers.isNotEmpty || _weeklyTrackers.isNotEmpty)) {
-            print(
-                '✅ Found valid cached trackers for dietType: $dietType (${_dailyTrackers.length} daily, ${_weeklyTrackers.length} weekly)');
-
             // If personalized diet plan is provided, validate tracker values match
             // Don't return early if we need to update trackers with new plan values
             bool shouldUpdateForPersonalizedPlan = false;
@@ -194,8 +184,6 @@ class TrackerProvider extends ChangeNotifier {
                 if (expectedValue != null &&
                     (tracker.goalValue - expectedValue).abs() > 0.1) {
                   shouldUpdateForPersonalizedPlan = true;
-                  print(
-                      '🔄 Cached tracker ${tracker.category.name} value mismatch: ${tracker.goalValue} vs $expectedValue');
                   break;
                 }
               }
@@ -214,24 +202,18 @@ class TrackerProvider extends ChangeNotifier {
               return;
             } else {
               // Clear cached trackers if they don't match personalized plan
-              print(
-                  '🧹 Clearing cached trackers that don\'t match personalized plan');
               _dailyTrackers = [];
               _weeklyTrackers = [];
               await _trackerService.clearUserTrackerCache(userId);
             }
           } else if (allTrackers.isNotEmpty && !hasMatchingDietType) {
             // Clear mismatched trackers - this indicates stale cache
-            print(
-                '⚠️ Cache mismatch detected. Expected: $dietType, found: ${allTrackers.isNotEmpty ? allTrackers.first.dietType : 'none'}');
             _dailyTrackers = [];
             _weeklyTrackers = [];
             // Clear all cache for this user to prevent future conflicts
             await _trackerService.clearUserTrackerCache(userId);
-            print('🧹 Cleared all cache for user to prevent stale data');
           }
         } catch (localError) {
-          print('Error loading from local cache: $localError');
           // Clear cache on error and continue to database
           await _trackerService.clearUserTrackerCache(userId);
         }
@@ -241,26 +223,21 @@ class TrackerProvider extends ChangeNotifier {
       try {
         await _trackerService.cleanupDuplicateTrackers(userId);
       } catch (e) {
-        print('Warning: Failed to cleanup duplicate trackers: $e');
+        // Silently fail - cleanup is non-critical
       }
 
       // Always attempt to fetch from MongoDB to get the latest state
       // This ensures we have the most up-to-date trackers for the current diet type
       try {
-        print('📡 Fetching trackers from database for dietType: $dietType');
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
-        print(
-            '📊 Loaded ${_dailyTrackers.length} daily and ${_weeklyTrackers.length} weekly trackers from database');
 
         // If personalized diet plan is provided and we're forcing a reload,
         // ALWAYS reinitialize trackers with new personalized values
         // This ensures we get fresh trackers with correct values, not updates to old ones
         if (forceReload && personalizedDietPlan != null) {
-          print(
-              '🔄 Force reload with personalized plan - reinitializing trackers with new values');
           // Clear cache again before reinitializing to ensure no stale data
           await _trackerService.clearUserTrackerCache(userId);
           // Delete existing trackers and create new ones with personalized values
@@ -272,8 +249,6 @@ class TrackerProvider extends ChangeNotifier {
               await _trackerService.getDailyTrackers(userId, dietType);
           _weeklyTrackers =
               await _trackerService.getWeeklyTrackers(userId, dietType);
-          print(
-              '✅ Trackers reinitialized and reloaded with new personalized values (${_dailyTrackers.length} daily, ${_weeklyTrackers.length} weekly)');
         }
       } catch (e) {
         print('❌ Error loading from database: $e');
@@ -287,8 +262,6 @@ class TrackerProvider extends ChangeNotifier {
 
       // If trackers are empty OR don't match diet type, initialize new ones
       if (_dailyTrackers.isEmpty && _weeklyTrackers.isEmpty) {
-        print(
-            '⚠️ No trackers found for dietType: $dietType, initializing new trackers');
         await _initializeDefaultTrackers(userId, dietType,
             personalizedDietPlan: personalizedDietPlan);
         // Reload after initialization to get the newly created trackers
@@ -296,12 +269,7 @@ class TrackerProvider extends ChangeNotifier {
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
-        print(
-            '📊 After initialization: ${_dailyTrackers.length} daily and ${_weeklyTrackers.length} weekly trackers');
       } else if (!hasMatchingDietType) {
-        print(
-            '⚠️ Trackers found but diet type mismatch. Expected: $dietType, found: ${allTrackers.isNotEmpty ? allTrackers.first.dietType : 'none'}');
-        print('🧹 Clearing mismatched trackers and re-initializing');
         // Clear mismatched trackers from provider
         _dailyTrackers = [];
         _weeklyTrackers = [];
@@ -315,8 +283,6 @@ class TrackerProvider extends ChangeNotifier {
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
-        print(
-            '📊 After re-initialization: ${_dailyTrackers.length} daily and ${_weeklyTrackers.length} weekly trackers');
       } else if (personalizedDietPlan != null) {
         // Trackers are valid and match diet type, check if they need personalized updates
         // Compare current tracker values with personalized diet plan values
@@ -365,14 +331,11 @@ class TrackerProvider extends ChangeNotifier {
           if (expectedValue != null &&
               (tracker.goalValue - expectedValue).abs() > 0.1) {
             needsUpdate = true;
-            print(
-                '🔄 Tracker ${tracker.category.name} value mismatch: ${tracker.goalValue} vs $expectedValue');
             break;
           }
         }
 
         if (needsUpdate) {
-          print('🔄 Updating trackers with new personalized diet plan values');
           // Clear cache first to ensure fresh load
           await _trackerService.clearUserTrackerCache(userId);
           // Update trackers with personalized values
@@ -383,7 +346,6 @@ class TrackerProvider extends ChangeNotifier {
               await _trackerService.getDailyTrackers(userId, dietType);
           _weeklyTrackers =
               await _trackerService.getWeeklyTrackers(userId, dietType);
-          print('✅ Trackers updated with new personalized values');
         }
       }
 
@@ -428,7 +390,6 @@ class TrackerProvider extends ChangeNotifier {
       await prefs.setBool(initKey, true);
 
       try {
-        print('🔄 Initializing trackers for dietType: $dietType');
         await _trackerService
             .initializeUserTrackers(userId, dietType,
                 personalizedDietPlan: personalizedDietPlan)
@@ -439,10 +400,7 @@ class TrackerProvider extends ChangeNotifier {
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
-        print(
-            '✅ Initialization complete: ${_dailyTrackers.length} daily and ${_weeklyTrackers.length} weekly trackers');
       } catch (e) {
-        print('❌ Error initializing trackers: $e');
         // On error, ensure we have empty trackers, not stale ones
         _dailyTrackers = [];
         _weeklyTrackers = [];
@@ -458,7 +416,6 @@ class TrackerProvider extends ChangeNotifier {
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
       } catch (e) {
-        print('Error loading trackers after waiting: $e');
       }
     }
   }
@@ -574,15 +531,10 @@ class TrackerProvider extends ChangeNotifier {
         _dailyTrackers = updatedDailyTrackers;
         _weeklyTrackers = updatedWeeklyTrackers;
 
-        if (kDebugMode) {
-          print(
-              'TrackerProvider: Synced with database - updated ${updatedDailyTrackers.length} daily and ${updatedWeeklyTrackers.length} weekly trackers');
-        }
-
         notifyListeners();
       }
     } catch (e) {
-      print('Error syncing with database (non-critical): $e');
+      // Silently fail - sync is non-critical background operation
     }
   }
 

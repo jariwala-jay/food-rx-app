@@ -161,7 +161,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // If the app comes back to the foreground from background, only refresh tips if needed.
     if (state == AppLifecycleState.resumed) {
-      print('App resumed. Only refreshing tips if needed.');
       _loadTipsIfNeeded();
     }
   }
@@ -242,7 +241,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final authProvider = Provider.of<AuthController>(context, listen: false);
 
     if (tipProvider.isLoading) {
-      print('Tips already loading, skipping refresh.');
       return;
     }
 
@@ -250,8 +248,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (user != null && user.id != null) {
       // Only load tips, not trackers
       await tipProvider.initializeTips(user.medicalConditions ?? [], user.id!);
-    } else {
-      print('User not logged in, cannot load tips.');
     }
   }
 
@@ -528,14 +524,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (dietTypeChanged || planChanged) {
           // Update tracked values immediately to prevent duplicate reloads
           if (dietTypeChanged) {
-            final oldDietType = _lastDietType;
             _lastDietType = dietType;
-            print('🔄 Diet type changed from $oldDietType to $dietType');
           }
 
           if (planChanged) {
-            print(
-                '🔄 Diet plan changed (targetCalories: $_lastTargetCalories → $currentTargetCalories)');
             _lastTargetCalories = currentTargetCalories;
             _lastSelectedDietPlan = currentSelectedDietPlan != null
                 ? Map<String, dynamic>.from(currentSelectedDietPlan)
