@@ -413,7 +413,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       _buildDivider(),
                       _buildInfoRow(
                         context: context,
-                        label: 'Gender',
+                        label: 'Sex',
                         value: _formatGender(user.gender),
                         onTap: () => _navigateToEditField(
                           context,

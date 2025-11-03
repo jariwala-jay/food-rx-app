@@ -6,6 +6,7 @@ class ModalActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool shouldClose;
+  final bool enabled;
 
   const ModalActionButton({
     Key? key,
@@ -13,6 +14,7 @@ class ModalActionButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.shouldClose = true,
+    this.enabled = true,
   }) : super(key: key);
 
   @override
@@ -20,15 +22,17 @@ class ModalActionButton extends StatelessWidget {
     return SizedBox(
       width: 150,
       child: GestureDetector(
-        onTap: () {
-          if (shouldClose) Navigator.of(context).pop();
-          onTap();
-        },
+        onTap: !enabled
+            ? null
+            : () {
+                if (shouldClose) Navigator.of(context).pop();
+                onTap();
+              },
         child: Container(
           height: 115,
           padding: const EdgeInsets.symmetric(vertical: 20),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F7F8),
+            color: enabled ? const Color(0xFFF7F7F8) : const Color(0xFFF0F0F0),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
@@ -39,7 +43,9 @@ class ModalActionButton extends StatelessWidget {
                 height: 45,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0x19FF6A00),
+                  color: enabled
+                      ? const Color(0x19FF6A00)
+                      : const Color(0x11000000),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: iconAsset.endsWith('.svg')
@@ -48,6 +54,10 @@ class ModalActionButton extends StatelessWidget {
                         width: 27,
                         height: 27,
                         fit: BoxFit.contain,
+                        colorFilter: enabled
+                            ? null
+                            : const ColorFilter.mode(
+                                Color(0xFFBDBDBD), BlendMode.srcIn),
                       )
                     : const Icon(Icons.circle, color: Color(0xFFFF6A00)),
               ),
@@ -55,8 +65,10 @@ class ModalActionButton extends StatelessWidget {
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF2C2C2C),
+                style: TextStyle(
+                  color: enabled
+                      ? const Color(0xFF2C2C2C)
+                      : const Color(0xFFBDBDBD),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFamily: 'Bricolage Grotesque',

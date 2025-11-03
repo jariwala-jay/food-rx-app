@@ -204,7 +204,7 @@ class _TrackerGridState extends State<TrackerGrid>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Meal Plan Goals',
+                    'Daily Meal Plan Goals',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -298,7 +298,7 @@ class _TrackerGridState extends State<TrackerGrid>
               if (weeklyTrackers.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
-                  'Weekly Goals',
+                  'Weekly Meal Plan Goals',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -396,7 +396,7 @@ class _TrackerGridState extends State<TrackerGrid>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Meal Plan Goals',
+                'Daily Meal Plan Goals',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -481,7 +481,7 @@ class _TrackerGridState extends State<TrackerGrid>
           ),
           const SizedBox(height: 16),
           const Text(
-            'Weekly Goals',
+            'Weekly Meal PlanGoals',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
