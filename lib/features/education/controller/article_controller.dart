@@ -141,11 +141,33 @@ class ArticleController extends ChangeNotifier {
     try {
       final allArticles = await _articleRepository.getArticles();
 
-      // Normalize medical conditions for comparison (handle case sensitivity and hyphens)
-      final normalizedConditions = user.medicalConditions!.map((condition) {
-        // Convert to lowercase and replace hyphens
-        return condition.toLowerCase().replaceAll('-', '').replaceAll(' ', '');
-      }).toList();
+      // Normalize medical conditions for comparison
+      // Handle case sensitivity, hyphens, slashes, and common variations
+      final normalizedConditions = user.medicalConditions!.expand((condition) {
+        final normalized = condition
+            .toLowerCase()
+            .replaceAll('-', '')
+            .replaceAll('/', '')
+            .replaceAll(' ', '');
+
+        // Create variations for common condition names
+        final variations = <String>[normalized];
+
+        // Handle "Overweight/Obesity" -> match both "Obesity" and "Overweight"
+        if (normalized.contains('overweight') ||
+            normalized.contains('obesity')) {
+          variations.add('obesity');
+          variations.add('overweight');
+        }
+
+        // Handle "Pre-Diabetes" or "PreDiabetes" -> match "Diabetes"
+        if (normalized.contains('prediabetes') ||
+            normalized.contains('prediabetes')) {
+          variations.add('diabetes');
+        }
+
+        return variations.toSet(); // Remove duplicates
+      }).toSet();
 
       _recommendedArticles = allArticles.where(
         (article) {
@@ -153,7 +175,9 @@ class ArticleController extends ChangeNotifier {
           final normalizedCategory = article.category
               .toLowerCase()
               .replaceAll('-', '')
+              .replaceAll('/', '')
               .replaceAll(' ', '');
+
           return normalizedConditions.contains(normalizedCategory);
         },
       ).toList();
