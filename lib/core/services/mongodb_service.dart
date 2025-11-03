@@ -108,25 +108,30 @@ class MongoDBService {
     _isInitialized = true;
   }
 
-  Future<void> ensureConnection() async {
-    if (!_isInitialized) {
-      try {
-        await initialize();
-      } catch (e) {
-        throw Exception('Failed to initialize MongoDB connection: $e');
-      }
-    }
-
+  Future<void> ensureConnection({bool retry = false}) async {
     try {
+      if (!_isInitialized) {
+        await initialize();
+        return;
+      }
+
       // Check connection status
       if (_db.state == State.CLOSED) {
-        await _db.open().timeout(const Duration(seconds: 15), onTimeout: () {
-          throw TimeoutException(
-              'MongoDB connection timed out during reopen (15 seconds)');
-        });
-
-        // Add a small delay to allow connection to stabilize
-        await Future.delayed(const Duration(milliseconds: 300));
+        print('🔄 MongoDB connection closed, reopening...');
+        try {
+          await _db.open().timeout(const Duration(seconds: 15), onTimeout: () {
+            throw TimeoutException(
+                'MongoDB connection timed out during reopen (15 seconds)');
+          });
+          // Add a small delay to allow connection to stabilize
+          await Future.delayed(const Duration(milliseconds: 300));
+        } catch (e) {
+          // If reopen fails, reinitialize
+          print('⚠️ Failed to reopen connection, reinitializing: $e');
+          _isInitialized = false;
+          await initialize();
+          return;
+        }
       }
 
       // Verify server status with a ping
@@ -137,20 +142,29 @@ class MongoDBService {
         });
 
         if (pingResult['ok'] != 1.0) {
-          // If ping doesn't work, try server status as fallback
-          final serverStatus =
-              await _db.serverStatus().timeout(const Duration(seconds: 5));
-
-          if (serverStatus['ok'] != 1.0) {
-            throw Exception("MongoDB is not responding correctly");
-          }
+          throw Exception("MongoDB ping failed");
         }
       } catch (e) {
-        // If ping fails, try to reopen the connection
-        await _db.close();
+        // If ping fails, try to reinitialize the connection
+        print('⚠️ Ping failed, reinitializing connection: $e');
+        try {
+          if (_db.state != State.CLOSED) {
+            await _db.close();
+          }
+        } catch (_) {
+          // Ignore close errors
+        }
+        _isInitialized = false;
         await initialize();
       }
     } catch (e) {
+      // If retry is requested and this is the first attempt, try once more
+      if (!retry && e.toString().contains('connection')) {
+        print('🔄 Connection error detected, retrying...');
+        _isInitialized = false;
+        await Future.delayed(const Duration(milliseconds: 500));
+        return ensureConnection(retry: true);
+      }
       _isInitialized = false;
       throw Exception('MongoDB connection failed: $e');
     }
