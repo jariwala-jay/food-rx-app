@@ -39,7 +39,7 @@ class SimpleNotificationService {
 
       final title = names.length == 1
           ? '${names.first} expires soon'
-          : '${names.length} items expiring soon';
+          : '${names.length} food expiring soon';
       final message = names.length == 1
           ? 'Use it in a recipe today so it doesn\'t go to waste.'
           : 'Expiring soon: $itemsSummary';
@@ -104,9 +104,9 @@ class SimpleNotificationService {
         await _createNotification(
           userId: userId,
           type: NotificationType.tracker_reminder,
-          title: 'Time to log your meals!',
+          title: 'Time to log your food!',
           message:
-              "You haven't logged anything in your tracker today. Don't forget to track your meals!",
+              "You haven't logged anything in your tracker today. Don't forget to track your food!",
         );
       }
     } catch (e) {

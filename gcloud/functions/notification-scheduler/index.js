@@ -133,7 +133,7 @@ async function checkExpiringIngredients() {
       const title =
         names.length === 1
           ? `${names[0]} expires soon`
-          : `${names.length} items expiring soon`;
+          : `${names.length} food expiring soon`;
       const message =
         names.length === 1
           ? "Use it in a recipe today so it doesn't go to waste."
@@ -249,9 +249,9 @@ async function checkTrackerReminders() {
       await notificationsCollection.insertOne({
         userId: userId,
         type: "tracker_reminder",
-        title: "Time to log your meals!",
+        title: "Time to log your food!",
         message:
-          "You haven't logged anything in your tracker today. Don't forget to track your meals!",
+          "You haven't logged anything in your tracker today. Don't forget to track your food!",
         createdAt: new Date(),
       });
 
