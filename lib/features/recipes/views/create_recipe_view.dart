@@ -27,6 +27,11 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
   int? _cookingTimeHours;
   int? _cookingTimeMinutes;
 
+  // Preset cooking time chips (minutes)
+  static const List<int> _presetCookingTimes = [15, 30, 60];
+  int? _selectedPresetMinutes;
+  bool _useCustomCookingTime = false;
+
   // Popular cuisines that are commonly selected
   static const List<CuisineType> _popularCuisines = [
     CuisineType.american,
@@ -146,6 +151,16 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     _cookingTimeHoursController.text = _cookingTimeHours?.toString() ?? '';
     _cookingTimeMinutesController.text =
         _cookingTimeMinutes?.toString().padLeft(2, '0') ?? '';
+
+    // Try to match a preset, otherwise default to Custom
+    final total = ((_cookingTimeHours ?? 0) * 60) + (_cookingTimeMinutes ?? 0);
+    if (_presetCookingTimes.contains(total)) {
+      _selectedPresetMinutes = total;
+      _useCustomCookingTime = false;
+    } else {
+      _selectedPresetMinutes = null;
+      _useCustomCookingTime = true;
+    }
   }
 
   @override
@@ -314,64 +329,177 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
   }
 
   Widget _buildCookingTimeInput() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E5E5)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: _cookingTimeHoursController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'HH',
-                border: InputBorder.none,
-                hintStyle: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E5E5)),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            runAlignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ..._presetCookingTimes.map((minutes) {
+                final isSelected =
+                    _selectedPresetMinutes == minutes && !_useCustomCookingTime;
+                return _buildTimeChip(
+                  label: _formatMinutesLabel(minutes),
+                  isSelected: isSelected,
+                  onTap: () {
+                    setState(() {
+                      _selectedPresetMinutes = minutes;
+                      _useCustomCookingTime = false;
+                      _cookingTimeHours = minutes ~/ 60;
+                      _cookingTimeMinutes = minutes % 60;
+                      _cookingTimeHoursController.text =
+                          _cookingTimeHours.toString();
+                      _cookingTimeMinutesController.text =
+                          (_cookingTimeMinutes ?? 0).toString().padLeft(2, '0');
+                    });
+                  },
+                );
+              }).toList(),
+              _buildTimeChip(
+                label: 'Custom',
+                isSelected: _useCustomCookingTime,
+                onTap: () {
+                  setState(() {
+                    _useCustomCookingTime = true;
+                    _selectedPresetMinutes = null;
+                  });
+                },
               ),
-              onChanged: (value) {
-                _cookingTimeHours = int.tryParse(value);
-              },
-            ),
+            ],
           ),
-          const Text(
-            ':',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+        ),
+        if (_useCustomCookingTime) const SizedBox(height: 12),
+        if (_useCustomCookingTime)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E5E5)),
             ),
-          ),
-          Expanded(
-            child: TextFormField(
-              controller: _cookingTimeMinutesController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'MM',
-                border: InputBorder.none,
-                hintStyle: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _cookingTimeHoursController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'HH',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPresetMinutes = null;
+                        _useCustomCookingTime = true;
+                        _cookingTimeHours = int.tryParse(value);
+                      });
+                    },
+                  ),
                 ),
-              ),
-              onChanged: (value) {
-                _cookingTimeMinutes = int.tryParse(value);
-              },
+                const Text(
+                  ':',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                Expanded(
+                  child: TextFormField(
+                    controller: _cookingTimeMinutesController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'MM',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPresetMinutes = null;
+                        _useCustomCookingTime = true;
+                        final parsed = int.tryParse(value) ?? 0;
+                        // Clamp minutes to 0-59 for sanity
+                        _cookingTimeMinutes = parsed.clamp(0, 59);
+                        _cookingTimeMinutesController.text =
+                            _cookingTimeMinutes!.toString().padLeft(2, '0');
+                        _cookingTimeMinutesController.selection =
+                            TextSelection.fromPosition(
+                          TextPosition(
+                              offset:
+                                  _cookingTimeMinutesController.text.length),
+                        );
+                      });
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.access_time, color: Colors.grey),
+                  onPressed: () {},
+                ),
+              ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.access_time, color: Colors.grey),
-            onPressed: () {
-              // Could show time picker here
-            },
+      ],
+    );
+  }
+
+  String _formatMinutesLabel(int minutes) {
+    if (minutes == 60) return '1hr';
+    if (minutes == 30) return '30mn';
+    if (minutes == 15) return '15m';
+    // Fallbacks (should not be hit with current presets)
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (hours == 0) return '${mins}m';
+    if (mins == 0) return hours == 1 ? '1hr' : '${hours}hr';
+    return '${hours}hr ${mins}m';
+  }
+
+  Widget _buildTimeChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    const color = Color(0xFFFF6A00);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(100),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: 1,
           ),
-        ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey.shade600,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -657,8 +785,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       print('  Internal MealType: $_selectedMealType');
     }
 
-    if (kDebugMode) {
-    }
+    if (kDebugMode) {}
 
     // Get controller and generate recipes
     final controller = Provider.of<RecipeController>(context, listen: false);
@@ -678,8 +805,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (controller.recipes.isNotEmpty) {
         try {
           ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
-        } catch (e) {
-        }
+        } catch (e) {}
       }
     });
 
@@ -688,8 +814,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       if (controller.recipes.isNotEmpty) {
         try {
           ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
-        } catch (e) {
-        }
+        } catch (e) {}
       }
     });
 
