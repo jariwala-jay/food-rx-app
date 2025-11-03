@@ -310,6 +310,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  // Returns a time-based greeting using the device's local time
+  String _timeBasedGreeting() {
+    final int hour = DateTime.now().hour;
+    // Night: 21:00–04:59, Morning: 05:00–11:59, Afternoon: 12:00–16:59, Evening: 17:00–20:59
+    if (hour >= 5 && hour < 12) return 'Hi, Good Morning';
+    if (hour >= 12 && hour < 17) return 'Hi, Good Afternoon';
+    if (hour >= 17 && hour < 21) return 'Hi, Good Evening';
+    return 'Hi, Good Night';
+  }
+
   // >>> THIS METHOD IS NOW CORRECTLY PLACED INSIDE _HomePageState <<<
   Widget _buildTipCard(
     BuildContext context,
@@ -615,7 +625,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Hi, Good Morning',
+                                      _timeBasedGreeting(),
                                       style: TextStyle(
                                         color: Colors.grey[600],
                                         fontSize: 14,
