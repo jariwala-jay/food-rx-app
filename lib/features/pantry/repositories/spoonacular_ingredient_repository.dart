@@ -15,7 +15,10 @@ class SpoonacularIngredientRepository implements IngredientRepository {
 
   @override
   Future<List<Ingredient>> searchIngredients(
-      {String? query, String? aisle, int number = 100}) async {
+      {String? query,
+      String? aisle,
+      int number = 100,
+      List<String>? intolerances}) async {
     if (_apiKey == null) {
       developer.log('Spoonacular API key not found.');
       return [];
@@ -41,6 +44,9 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     }
     if (aisle != null && aisle.isNotEmpty) {
       queryParams['aisle'] = aisle;
+    }
+    if (intolerances != null && intolerances.isNotEmpty) {
+      queryParams['intolerances'] = intolerances.join(',');
     }
 
     final uri = Uri.parse('$_baseUrl/food/ingredients/search')
