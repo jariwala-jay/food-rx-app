@@ -699,31 +699,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     );
                                   },
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.logout),
-                                  onPressed: () async {
-                                    try {
-                                      await authProvider.logout();
-                                      if (mounted) {
-                                        Navigator.of(context)
-                                            .pushNamedAndRemoveUntil(
-                                          '/login',
-                                          (route) => false,
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text('Logout failed: $e'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                ),
                               ],
                             ),
                           ],
