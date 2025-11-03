@@ -65,15 +65,61 @@ class TrackerService {
   final bool _isProcessingQueue = false;
   final Completer<void>? _processingCompleter = null;
 
+  // Clear all tracker cache for a user (useful when diet type changes)
+  Future<void> clearUserTrackerCache(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get all keys and find ones that match this user
+      final allKeys = prefs.getKeys();
+      final userTrackerKeys = allKeys
+          .where((key) =>
+              key.startsWith('daily_trackers_${userId}_') ||
+              key.startsWith('weekly_trackers_${userId}_'))
+          .toList();
+
+      // Remove all user tracker cache entries
+      for (final key in userTrackerKeys) {
+        await prefs.remove(key);
+      }
+
+      // Clear memory cache
+      _cachedDailyTrackers = [];
+      _cachedWeeklyTrackers = [];
+
+      print('Cleared all tracker cache for user: $userId');
+    } catch (e) {
+      print('Failed to clear tracker cache: $e');
+    }
+  }
+
   // Cache trackers locally
   Future<void> _cacheTrackersLocally(List<TrackerGoal> daily,
       List<TrackerGoal> weekly, String userId, String dietType) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Cache identifiers
+      // Only clear cache if diet type has changed (don't clear on every cache operation)
+      // This prevents race conditions when multiple operations happen concurrently
       final dailyCacheKey = 'daily_trackers_${userId}_$dietType';
       final weeklyCacheKey = 'weekly_trackers_${userId}_$dietType';
+
+      // Check if we're caching a different diet type than what's currently cached
+      bool shouldClearCache = false;
+      if (_cachedDailyTrackers.isNotEmpty || _cachedWeeklyTrackers.isNotEmpty) {
+        final currentDietType = _cachedDailyTrackers.isNotEmpty
+            ? _cachedDailyTrackers.first.dietType
+            : _cachedWeeklyTrackers.first.dietType;
+        if (currentDietType != dietType) {
+          shouldClearCache = true;
+        }
+      }
+
+      // Only clear cache if diet type is different
+      if (shouldClearCache) {
+        print('🧹 Clearing cache before caching new diet type: $dietType');
+        await clearUserTrackerCache(userId);
+      }
 
       // Save to shared preferences
       await prefs.setString(
@@ -84,6 +130,9 @@ class TrackerService {
       // Update memory cache
       _cachedDailyTrackers = List.from(daily);
       _cachedWeeklyTrackers = List.from(weekly);
+
+      print(
+          '💾 Cached ${daily.length} daily and ${weekly.length} weekly trackers for dietType: $dietType');
     } catch (e) {
       print('Failed to cache trackers locally: $e');
     }
@@ -98,11 +147,21 @@ class TrackerService {
           ? 'weekly_trackers_${userId}_$dietType'
           : 'daily_trackers_${userId}_$dietType';
 
-      // Try to get from memory cache first
+      // Try to get from memory cache first, but verify diet type matches
       if (isWeekly && _cachedWeeklyTrackers.isNotEmpty) {
-        return List.from(_cachedWeeklyTrackers);
+        final cached = _cachedWeeklyTrackers;
+        if (cached.first.dietType == dietType) {
+          return List.from(cached);
+        }
+        // Clear cache if diet type doesn't match
+        _cachedWeeklyTrackers = [];
       } else if (!isWeekly && _cachedDailyTrackers.isNotEmpty) {
-        return List.from(_cachedDailyTrackers);
+        final cached = _cachedDailyTrackers;
+        if (cached.first.dietType == dietType) {
+          return List.from(cached);
+        }
+        // Clear cache if diet type doesn't match
+        _cachedDailyTrackers = [];
       }
 
       // Otherwise load from shared preferences
@@ -112,14 +171,19 @@ class TrackerService {
         final trackers =
             decoded.map((json) => TrackerGoal.fromJson(json)).toList();
 
-        // Update memory cache
-        if (isWeekly) {
-          _cachedWeeklyTrackers = List.from(trackers);
+        // Verify all trackers match the requested diet type
+        if (trackers.isNotEmpty && trackers.first.dietType == dietType) {
+          // Update memory cache
+          if (isWeekly) {
+            _cachedWeeklyTrackers = List.from(trackers);
+          } else {
+            _cachedDailyTrackers = List.from(trackers);
+          }
+          return trackers;
         } else {
-          _cachedDailyTrackers = List.from(trackers);
+          // If diet type doesn't match, clear this cache entry
+          await prefs.remove(cacheKey);
         }
-
-        return trackers;
       }
 
       // If not in cache, return empty list
@@ -201,11 +265,11 @@ class TrackerService {
         return;
       }
 
-      // Check if trackers already exist
-      final existingTrackers =
-          await collection.find({'userId': userId}).toList();
+      // Check if trackers already exist for this specific diet type
+      final existingTrackers = await collection
+          .find({'userId': userId, 'dietType': dietType}).toList();
       if (existingTrackers.isNotEmpty) {
-        // If trackers already exist, just cache them
+        // If trackers already exist for this diet type, just cache them
         final trackers =
             existingTrackers.map((doc) => TrackerGoal.fromJson(doc)).toList();
         final dailyTrackers = trackers.where((t) => !t.isWeeklyGoal).toList();
@@ -213,6 +277,16 @@ class TrackerService {
         await _cacheTrackersLocally(
             dailyTrackers, weeklyTrackers, userId, dietType);
         return;
+      }
+
+      // If trackers exist for a different diet type, delete them first
+      final oldTrackers = await collection.find({'userId': userId}).toList();
+      if (oldTrackers.isNotEmpty) {
+        // Delete old trackers for different diet types
+        await collection.deleteMany({
+          'userId': userId,
+          'dietType': {'\$ne': dietType}
+        });
       }
 
       // Insert new trackers
@@ -715,13 +789,32 @@ class TrackerService {
   }
 
   // Helper method to get default trackers based on diet type
+  // Helper function to safely convert values to double
+  // Handles both numeric and string types
+  double _safeToDouble(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      return parsed ?? defaultValue;
+    }
+    try {
+      return (value as num).toDouble();
+    } catch (e) {
+      return defaultValue;
+    }
+  }
+
   List<TrackerGoal> _getDefaultTrackers(String userId, String dietType,
       {Map<String, dynamic>? personalizedDietPlan}) {
     if (dietType == 'DASH') {
       return _getDefaultDashTrackers(userId,
           personalizedDietPlan: personalizedDietPlan);
     } else {
-      return _getDefaultMyPlateTrackers(userId,
+      // MyPlate trackers (dietType should already be 'MyPlate' at this point)
+      // Note: DiabetesPlate users get DASH trackers (mapped before calling this)
+      return _getDefaultMyPlateTrackers(userId, dietType,
           personalizedDietPlan: personalizedDietPlan);
     }
   }
@@ -730,22 +823,25 @@ class TrackerService {
   List<TrackerGoal> _getDefaultDashTrackers(String userId,
       {Map<String, dynamic>? personalizedDietPlan}) {
     // Use personalized values if available, otherwise fall back to defaults
-    final grains = personalizedDietPlan?['grainsMax']?.toDouble() ?? 6.0;
+    final grains = _safeToDouble(personalizedDietPlan?['grainsMax'], 6.0);
     final vegetables =
-        personalizedDietPlan?['vegetablesMax']?.toDouble() ?? 4.0;
-    final fruits = personalizedDietPlan?['fruitsMax']?.toDouble() ?? 4.0;
-    final dairy = personalizedDietPlan?['dairyMax']?.toDouble() ?? 2.0;
-    final leanMeats = personalizedDietPlan?['leanMeatsMax']?.toDouble() ?? 6.0;
-    final oils = personalizedDietPlan?['oilsMax']?.toDouble() ?? 2.0;
+        _safeToDouble(personalizedDietPlan?['vegetablesMax'], 4.0);
+    final fruits = _safeToDouble(personalizedDietPlan?['fruitsMax'], 4.0);
+    final dairy = _safeToDouble(personalizedDietPlan?['dairyMax'], 2.0);
+    final leanMeats = _safeToDouble(personalizedDietPlan?['leanMeatsMax'], 6.0);
+    final oils = _safeToDouble(personalizedDietPlan?['oilsMax'], 2.0);
     final nutsLegumes =
-        personalizedDietPlan?['nutsLegumesPerWeek']?.toDouble() ?? 4.0;
-    final sweets = personalizedDietPlan?['sweetsMaxPerWeek']?.toDouble() ?? 5.0;
+        _safeToDouble(personalizedDietPlan?['nutsLegumesPerWeek'], 4.0);
+    final sweets =
+        _safeToDouble(personalizedDietPlan?['sweetsMaxPerWeek'], 5.0);
 
     // Check if there are daily limits for sweets (2600+ kcal plans)
-    final sweetsMaxPerDay =
-        personalizedDietPlan?['sweetsMaxPerDay']?.toDouble();
+    final sweetsMaxPerDayValue = personalizedDietPlan?['sweetsMaxPerDay'];
+    final sweetsMaxPerDay = sweetsMaxPerDayValue != null
+        ? _safeToDouble(sweetsMaxPerDayValue, 0.0)
+        : null;
     final hasDailySweets = sweetsMaxPerDay != null && sweetsMaxPerDay > 0;
-    final sodium = personalizedDietPlan?['sodium']?.toDouble() ?? 1500.0;
+    final sodium = _safeToDouble(personalizedDietPlan?['sodium'], 1500.0);
 
     return [
       TrackerGoal(
@@ -854,20 +950,21 @@ class TrackerService {
     ];
   }
 
-  // Default trackers for MyPlate diet
-  List<TrackerGoal> _getDefaultMyPlateTrackers(String userId,
+  // Default trackers for MyPlate diet (also used for DiabetesPlate)
+  List<TrackerGoal> _getDefaultMyPlateTrackers(String userId, String dietType,
       {Map<String, dynamic>? personalizedDietPlan}) {
     // Use personalized values if available, otherwise fall back to defaults
-    final fruits = personalizedDietPlan?['fruits']?.toDouble() ?? 2.0;
-    final vegetables = personalizedDietPlan?['vegetables']?.toDouble() ?? 2.5;
-    final grains = personalizedDietPlan?['grains']?.toDouble() ?? 6.0;
-    final protein = personalizedDietPlan?['protein']?.toDouble() ?? 5.5;
-    final dairy = personalizedDietPlan?['dairy']?.toDouble() ?? 3.0;
-    final addedSugars =
-        personalizedDietPlan?['addedSugarsMax']?.toDouble() ?? 50.0;
-    final saturatedFat =
-        personalizedDietPlan?['saturatedFatMax']?.toDouble() ?? 22.0;
-    final sodium = personalizedDietPlan?['sodiumMax']?.toDouble() ?? 2300.0;
+    // Handle both numeric and string values safely
+    final fruits = _safeToDouble(personalizedDietPlan?['fruits'], 2.0);
+    final vegetables = _safeToDouble(personalizedDietPlan?['vegetables'], 2.5);
+    final grains = _safeToDouble(personalizedDietPlan?['grains'], 6.0);
+    final protein = _safeToDouble(personalizedDietPlan?['protein'], 5.5);
+    final dairy = _safeToDouble(personalizedDietPlan?['dairy'], 3.0);
+    final sodium = _safeToDouble(personalizedDietPlan?['sodiumMax'], 2300.0);
+
+    // Trackers always use "MyPlate" as dietType
+    // Note: DiabetesPlate users should already be mapped to DASH before reaching here
+    final trackerDietType = 'MyPlate';
 
     return [
       TrackerGoal(
@@ -878,7 +975,7 @@ class TrackerService {
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -888,7 +985,7 @@ class TrackerService {
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFFFF6E6E),
         colorEnd: const Color(0xFFFF9797),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -898,7 +995,7 @@ class TrackerService {
         unit: TrackerUnit.oz,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -908,7 +1005,7 @@ class TrackerService {
         unit: TrackerUnit.oz,
         colorStart: const Color(0xFFFFA726),
         colorEnd: const Color(0xFFFFCC80),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -918,7 +1015,7 @@ class TrackerService {
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -928,7 +1025,7 @@ class TrackerService {
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFF2196F3),
         colorEnd: const Color(0xFF90CAF9),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
       TrackerGoal(
         userId: userId,
@@ -938,7 +1035,7 @@ class TrackerService {
         unit: TrackerUnit.mg,
         colorStart: const Color(0xFFB0BEC5),
         colorEnd: const Color(0xFF78909C),
-        dietType: 'MyPlate',
+        dietType: trackerDietType,
       ),
     ];
   }

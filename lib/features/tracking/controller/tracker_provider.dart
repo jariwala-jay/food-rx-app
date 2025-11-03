@@ -19,11 +19,25 @@ class TrackerProvider extends ChangeNotifier {
   String? _error;
   int _retryCount = 0;
   static const int _maxRetries = 3;
+  String?
+      _currentLoadingDietType; // Track what diet type is currently being loaded
+  String? _lastLoadedDietType; // Track last successfully loaded diet type
 
   List<TrackerGoal> get dailyTrackers => _dailyTrackers;
   List<TrackerGoal> get weeklyTrackers => _weeklyTrackers;
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  // Clear tracker state (useful when diet type changes)
+  void clearTrackers() {
+    _dailyTrackers = [];
+    _weeklyTrackers = [];
+    _error = null;
+    _retryCount = 0;
+    _lastLoadedDietType = null; // Reset last loaded diet type
+    _currentLoadingDietType = null; // Reset current loading
+    notifyListeners();
+  }
 
   // Add this clearError method
   void clearError() {
@@ -72,67 +86,258 @@ class TrackerProvider extends ChangeNotifier {
   }
 
   Future<void> loadUserTrackers(String userId, String dietType,
-      {Map<String, dynamic>? personalizedDietPlan}) async {
+      {Map<String, dynamic>? personalizedDietPlan,
+      bool forceReload = false}) async {
+    // Prevent concurrent loads for the same diet type (unless forced)
+    if (!forceReload && _isLoading && _currentLoadingDietType == dietType) {
+      return;
+    }
+
+    // If forced reload, clear state first
+    if (forceReload) {
+      _dailyTrackers = [];
+      _weeklyTrackers = [];
+      _lastLoadedDietType = null;
+      _currentLoadingDietType = null;
+      await _trackerService.clearUserTrackerCache(userId);
+    }
+
+    // If we're already loaded with this diet type, skip reload (unless forced)
+    if (!forceReload &&
+        _lastLoadedDietType == dietType &&
+        (_dailyTrackers.isNotEmpty || _weeklyTrackers.isEmpty)) {
+      final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
+      if (allTrackers.isNotEmpty &&
+          allTrackers.every((t) => t.dietType == dietType)) {
+        return;
+      }
+    }
+
     _setError(null);
     _setLoading(true);
-    try {
-      // First try loading from local cache
-      try {
-        _dailyTrackers =
-            await _trackerService.getDailyTrackers(userId, dietType);
-        _weeklyTrackers =
-            await _trackerService.getWeeklyTrackers(userId, dietType);
+    _currentLoadingDietType = dietType;
 
-        // If we got trackers from the cache, use them
-        if (_dailyTrackers.isNotEmpty || _weeklyTrackers.isNotEmpty) {
-          _retryCount = 0;
-          notifyListeners();
-          // Try to sync with the database in the background
-          _syncWithDatabase(
-              userId, dietType); // Keep this for eventual consistency
-          return;
+    try {
+      // First, clear any stale cache entries if diet type might have changed
+      // This ensures we don't load old trackers from a previous diet type
+
+      // Try loading from local cache first (with strict diet type validation)
+      // Skip cache if force reload is requested
+      if (!forceReload) {
+        try {
+          _dailyTrackers =
+              await _trackerService.getDailyTrackers(userId, dietType);
+          _weeklyTrackers =
+              await _trackerService.getWeeklyTrackers(userId, dietType);
+
+          // Strictly verify trackers match the requested diet type
+          final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
+          final hasMatchingDietType = allTrackers.isNotEmpty &&
+              allTrackers.every((t) => t.dietType == dietType);
+
+          if (hasMatchingDietType &&
+              (_dailyTrackers.isNotEmpty || _weeklyTrackers.isNotEmpty)) {
+            // If personalized diet plan is provided, validate tracker values match
+            // Don't return early if we need to update trackers with new plan values
+            bool shouldUpdateForPersonalizedPlan = false;
+            if (personalizedDietPlan != null) {
+              for (final tracker in _dailyTrackers) {
+                final categoryName = tracker.category.name.toLowerCase();
+                double? expectedValue;
+
+                if (dietType == 'DASH') {
+                  if (categoryName == 'vegetables' ||
+                      categoryName == 'veggies') {
+                    expectedValue =
+                        (personalizedDietPlan['vegetablesMax'] as num?)
+                            ?.toDouble();
+                  } else if (categoryName == 'fruits') {
+                    expectedValue =
+                        (personalizedDietPlan['fruitsMax'] as num?)?.toDouble();
+                  } else if (categoryName == 'grains') {
+                    expectedValue =
+                        (personalizedDietPlan['grainsMax'] as num?)?.toDouble();
+                  } else if (categoryName == 'dairy') {
+                    expectedValue =
+                        (personalizedDietPlan['dairyMax'] as num?)?.toDouble();
+                  }
+                } else if (dietType == 'MyPlate') {
+                  if (categoryName == 'vegetables' ||
+                      categoryName == 'veggies') {
+                    expectedValue = (personalizedDietPlan['vegetables'] as num?)
+                        ?.toDouble();
+                  } else if (categoryName == 'fruits') {
+                    expectedValue =
+                        (personalizedDietPlan['fruits'] as num?)?.toDouble();
+                  } else if (categoryName == 'grains') {
+                    expectedValue =
+                        (personalizedDietPlan['grains'] as num?)?.toDouble();
+                  } else if (categoryName == 'protein') {
+                    expectedValue =
+                        (personalizedDietPlan['protein'] as num?)?.toDouble();
+                  } else if (categoryName == 'dairy') {
+                    expectedValue =
+                        (personalizedDietPlan['dairy'] as num?)?.toDouble();
+                  }
+                }
+
+                if (expectedValue != null &&
+                    (tracker.goalValue - expectedValue).abs() > 0.1) {
+                  shouldUpdateForPersonalizedPlan = true;
+                  break;
+                }
+              }
+            }
+
+            // Only return early if trackers are valid AND match personalized plan (if provided)
+            if (!shouldUpdateForPersonalizedPlan) {
+              _retryCount = 0;
+              _lastLoadedDietType = dietType;
+              _currentLoadingDietType = null;
+              _setLoading(false);
+              notifyListeners();
+              // Try to sync with the database in the background
+              _syncWithDatabase(
+                  userId, dietType); // Keep this for eventual consistency
+              return;
+            } else {
+              // Clear cached trackers if they don't match personalized plan
+              _dailyTrackers = [];
+              _weeklyTrackers = [];
+              await _trackerService.clearUserTrackerCache(userId);
+            }
+          } else if (allTrackers.isNotEmpty && !hasMatchingDietType) {
+            // Clear mismatched trackers - this indicates stale cache
+            _dailyTrackers = [];
+            _weeklyTrackers = [];
+            // Clear all cache for this user to prevent future conflicts
+            await _trackerService.clearUserTrackerCache(userId);
+          }
+        } catch (localError) {
+          // Clear cache on error and continue to database
+          await _trackerService.clearUserTrackerCache(userId);
         }
-      } catch (localError) {
-        print('Error loading from local cache: $localError');
-        // Continue to try loading from the database
-      }
+      } // End of forceReload check for cache
 
       // Clean up duplicates if possible (non-critical, can run in background)
       try {
         await _trackerService.cleanupDuplicateTrackers(userId);
       } catch (e) {
-        print('Warning: Failed to cleanup duplicate trackers: $e');
+        // Silently fail - cleanup is non-critical
       }
 
-      // Always attempt to fetch from MongoDB to get the latest state after backend resets
+      // Always attempt to fetch from MongoDB to get the latest state
+      // This ensures we have the most up-to-date trackers for the current diet type
       try {
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
+
+        // If personalized diet plan is provided and we're forcing a reload,
+        // ALWAYS reinitialize trackers with new personalized values
+        // This ensures we get fresh trackers with correct values, not updates to old ones
+        if (forceReload && personalizedDietPlan != null) {
+          // Clear cache again before reinitializing to ensure no stale data
+          await _trackerService.clearUserTrackerCache(userId);
+          // Delete existing trackers and create new ones with personalized values
+          // This is more reliable than trying to update existing trackers
+          await _initializeDefaultTrackers(userId, dietType,
+              personalizedDietPlan: personalizedDietPlan);
+          // Reload trackers after reinitialization to get fresh values
+          _dailyTrackers =
+              await _trackerService.getDailyTrackers(userId, dietType);
+          _weeklyTrackers =
+              await _trackerService.getWeeklyTrackers(userId, dietType);
+        }
       } catch (e) {
+        print('❌ Error loading from database: $e');
         throw Exception('Failed to load trackers from database: $e');
       }
 
-      // If after all attempts, trackers are empty, re-initialize defaults
-      // (This serves as a client-side fallback if backend provisioning fails for new users)
+      // Verify trackers match the requested diet type (critical validation)
+      final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
+      final hasMatchingDietType = allTrackers.isNotEmpty &&
+          allTrackers.every((t) => t.dietType == dietType);
+
+      // If trackers are empty OR don't match diet type, initialize new ones
       if (_dailyTrackers.isEmpty && _weeklyTrackers.isEmpty) {
         await _initializeDefaultTrackers(userId, dietType,
             personalizedDietPlan: personalizedDietPlan);
+        // Reload after initialization to get the newly created trackers
+        _dailyTrackers =
+            await _trackerService.getDailyTrackers(userId, dietType);
+        _weeklyTrackers =
+            await _trackerService.getWeeklyTrackers(userId, dietType);
+      } else if (!hasMatchingDietType) {
+        // Clear mismatched trackers from provider
+        _dailyTrackers = [];
+        _weeklyTrackers = [];
+        // Clear cache to prevent future conflicts
+        await _trackerService.clearUserTrackerCache(userId);
+        // Initialize with correct diet type
+        await _initializeDefaultTrackers(userId, dietType,
+            personalizedDietPlan: personalizedDietPlan);
+        // Reload after initialization to get the newly created trackers
+        _dailyTrackers =
+            await _trackerService.getDailyTrackers(userId, dietType);
+        _weeklyTrackers =
+            await _trackerService.getWeeklyTrackers(userId, dietType);
       } else if (personalizedDietPlan != null) {
-        // Check if trackers need to be updated with personalized values
-        // If trackers exist but seem to have default values, update them
-        final hasDefaultValues = _dailyTrackers.any((tracker) {
-          if (tracker.category.name == 'veggies' && tracker.goalValue == 4.0)
-            return true;
-          if (tracker.category.name == 'fruits' && tracker.goalValue == 4.0)
-            return true;
-          if (tracker.category.name == 'grains' && tracker.goalValue == 6.0)
-            return true;
-          return false;
-        });
+        // Trackers are valid and match diet type, check if they need personalized updates
+        // Compare current tracker values with personalized diet plan values
+        bool needsUpdate = false;
 
-        if (hasDefaultValues) {
+        // Check if tracker values don't match personalized plan values
+        for (final tracker in _dailyTrackers) {
+          final categoryName = tracker.category.name.toLowerCase();
+          double? expectedValue;
+
+          // Map category names to personalized diet plan keys
+          if (dietType == 'DASH') {
+            if (categoryName == 'vegetables' || categoryName == 'veggies') {
+              expectedValue =
+                  (personalizedDietPlan['vegetablesMax'] as num?)?.toDouble();
+            } else if (categoryName == 'fruits') {
+              expectedValue =
+                  (personalizedDietPlan['fruitsMax'] as num?)?.toDouble();
+            } else if (categoryName == 'grains') {
+              expectedValue =
+                  (personalizedDietPlan['grainsMax'] as num?)?.toDouble();
+            } else if (categoryName == 'dairy') {
+              expectedValue =
+                  (personalizedDietPlan['dairyMax'] as num?)?.toDouble();
+            }
+          } else if (dietType == 'MyPlate') {
+            if (categoryName == 'vegetables' || categoryName == 'veggies') {
+              expectedValue =
+                  (personalizedDietPlan['vegetables'] as num?)?.toDouble();
+            } else if (categoryName == 'fruits') {
+              expectedValue =
+                  (personalizedDietPlan['fruits'] as num?)?.toDouble();
+            } else if (categoryName == 'grains') {
+              expectedValue =
+                  (personalizedDietPlan['grains'] as num?)?.toDouble();
+            } else if (categoryName == 'protein') {
+              expectedValue =
+                  (personalizedDietPlan['protein'] as num?)?.toDouble();
+            } else if (categoryName == 'dairy') {
+              expectedValue =
+                  (personalizedDietPlan['dairy'] as num?)?.toDouble();
+            }
+          }
+
+          // If expected value exists and doesn't match tracker value (within 0.1 tolerance), need update
+          if (expectedValue != null &&
+              (tracker.goalValue - expectedValue).abs() > 0.1) {
+            needsUpdate = true;
+            break;
+          }
+        }
+
+        if (needsUpdate) {
+          // Clear cache first to ensure fresh load
+          await _trackerService.clearUserTrackerCache(userId);
           // Update trackers with personalized values
           await _trackerService.updateTrackersWithPersonalizedPlan(
               userId, dietType, personalizedDietPlan);
@@ -145,6 +350,8 @@ class TrackerProvider extends ChangeNotifier {
       }
 
       _retryCount = 0;
+      _lastLoadedDietType = dietType;
+      _currentLoadingDietType = null;
       notifyListeners();
     } catch (e) {
       String errorMsg;
@@ -188,12 +395,15 @@ class TrackerProvider extends ChangeNotifier {
                 personalizedDietPlan: personalizedDietPlan)
             .timeout(const Duration(seconds: 30));
 
+        // Reload trackers after initialization
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
       } catch (e) {
-        print('Error initializing trackers: $e');
+        // On error, ensure we have empty trackers, not stale ones
+        _dailyTrackers = [];
+        _weeklyTrackers = [];
       } finally {
         await prefs.remove(initKey);
       }
@@ -206,7 +416,6 @@ class TrackerProvider extends ChangeNotifier {
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
       } catch (e) {
-        print('Error loading trackers after waiting: $e');
       }
     }
   }
@@ -322,15 +531,10 @@ class TrackerProvider extends ChangeNotifier {
         _dailyTrackers = updatedDailyTrackers;
         _weeklyTrackers = updatedWeeklyTrackers;
 
-        if (kDebugMode) {
-          print(
-              'TrackerProvider: Synced with database - updated ${updatedDailyTrackers.length} daily and ${updatedWeeklyTrackers.length} weekly trackers');
-        }
-
         notifyListeners();
       }
     } catch (e) {
-      print('Error syncing with database (non-critical): $e');
+      // Silently fail - sync is non-critical background operation
     }
   }
 

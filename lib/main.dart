@@ -16,6 +16,7 @@ import 'package:flutter_app/features/education/repositories/mongo_article_reposi
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/features/home/views/meal_plan_page.dart';
 import 'package:flutter_app/features/home/views/diet_plan_viewer_page.dart';
+import 'package:flutter_app/features/profile/views/profile_page.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 import 'package:flutter_app/features/pantry/repositories/spoonacular_ingredient_repository.dart';
@@ -259,6 +260,7 @@ class MyApp extends StatelessWidget {
           final article = ModalRoute.of(context)!.settings.arguments as Article;
           return ArticleDetailPage(article: article);
         },
+        '/profile': (context) => const ProfilePage(),
       },
       navigatorKey: NavigationService.navigatorKey,
     );
