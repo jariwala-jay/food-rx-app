@@ -265,7 +265,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       case 'email':
         return 'Edit Email';
       case 'gender':
-        return 'Edit Gender';
+        return 'Edit Sex';
       case 'activityLevel':
         return 'Edit Activity Level';
       case 'dateOfBirth':
@@ -418,7 +418,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: AppRadioGroup<String>(
-        label: 'Gender',
+        label: 'Sex',
         value: currentValue,
         options: const [
           {'male': 'Male'},
