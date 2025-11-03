@@ -147,6 +147,15 @@ class TrackerServingInfoModal extends StatelessWidget {
                       ),
                     ))
                 .toList(),
+            const SizedBox(height: 16),
+            if (servingDefinition['notes'] != null)
+              Text(
+                servingDefinition['notes'] as String,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             const SizedBox(height: 24),
             // Got it button
             Align(
