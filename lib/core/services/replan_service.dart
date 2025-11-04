@@ -133,7 +133,7 @@ class ReplanService {
   /// Generate a new personalized diet plan
   Future<PersonalizationResult> generateNewPlan(UserModel user) async {
     if (user.dateOfBirth == null ||
-        user.gender == null ||
+        user.sex == null ||
         user.heightFeet == null ||
         user.heightInches == null ||
         user.weight == null ||
@@ -143,7 +143,7 @@ class ReplanService {
 
     return _personalizationService.personalize(
       dob: user.dateOfBirth!,
-      sex: user.gender!,
+      sex: user.sex!,
       heightFeet: user.heightFeet!,
       heightInches: user.heightInches!,
       weightLb: user.weight!,

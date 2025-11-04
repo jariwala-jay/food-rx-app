@@ -444,7 +444,7 @@ void main() {
       });
     });
 
-    group('Gender-Specific Tests', () {
+    group('Sex-Specific Tests', () {
       test('Female DASH step-down respects female floor (1200)', () {
         final result = personalizationService.personalize(
           dob: DateTime(1980, 1, 1),

@@ -8,7 +8,7 @@ class UserModel {
   // Basic Health Information
   final int? age;
   final DateTime? dateOfBirth;
-  final String? gender;
+  final String? sex;
   final double? height;
   final String? heightUnit; // cm or inches
   final double? heightFeet;
@@ -65,7 +65,7 @@ class UserModel {
     // Health Info
     this.age,
     this.dateOfBirth,
-    this.gender,
+    this.sex,
     this.height,
     this.heightUnit,
     this.heightFeet,
@@ -120,7 +120,7 @@ class UserModel {
       dateOfBirth: json['dateOfBirth'] is String
           ? DateTime.parse(json['dateOfBirth'])
           : json['dateOfBirth'],
-      gender: json['gender'],
+      sex: json['sex'],
       height: json['height']?.toDouble(),
       heightUnit: json['heightUnit'],
       heightFeet: json['heightFeet']?.toDouble(),
@@ -187,7 +187,7 @@ class UserModel {
       // Health Info
       'age': age,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
-      'gender': gender,
+      'sex': sex,
       'height': height,
       'heightUnit': heightUnit,
       'heightFeet': heightFeet,
@@ -233,7 +233,7 @@ class UserModel {
     // Health Info
     int? age,
     DateTime? dateOfBirth,
-    String? gender,
+    String? sex,
     double? height,
     String? heightUnit,
     double? heightFeet,
@@ -277,7 +277,7 @@ class UserModel {
       // Health Info
       age: age ?? this.age,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
-      gender: gender ?? this.gender,
+      sex: sex ?? this.sex,
       height: height ?? this.height,
       heightUnit: heightUnit ?? this.heightUnit,
       heightFeet: heightFeet ?? this.heightFeet,
