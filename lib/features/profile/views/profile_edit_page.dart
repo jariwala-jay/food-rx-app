@@ -45,7 +45,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       case 'email':
         _textController.text = widget.currentValue ?? '';
         break;
-      case 'gender':
+      case 'sex':
         // Handle both lowercase and original case
         _selectedValue = widget.currentValue?.toString().toLowerCase();
         break;
@@ -145,10 +145,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         case 'email':
           updates['email'] = _textController.text.trim();
           break;
-        case 'gender':
+        case 'sex':
           if (_selectedValue != null) {
-            updates['gender'] = _selectedValue;
-            // Gender affects diet plan, trigger re-plan check
+            updates['sex'] = _selectedValue;
+            // Sex affects diet plan, trigger re-plan check
             _triggerReplanCheck();
           }
           break;
@@ -217,7 +217,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         if (mounted) {
           // Check if re-planning is needed (diet-affecting fields)
           final needsReplan = [
-            'gender',
+            'sex',
             'dateOfBirth',
             'height',
             'weight',
@@ -264,7 +264,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         return 'Edit Name';
       case 'email':
         return 'Edit Email';
-      case 'gender':
+      case 'sex':
         return 'Edit Sex';
       case 'activityLevel':
         return 'Edit Activity Level';
@@ -346,8 +346,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       case 'name':
       case 'email':
         return _buildTextEdit();
-      case 'gender':
-        return _buildGenderEdit();
+      case 'sex':
+        return _buildSexEdit();
       case 'activityLevel':
         return _buildActivityLevelEdit();
       case 'dateOfBirth':
@@ -397,7 +397,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     );
   }
 
-  Widget _buildGenderEdit() {
+  Widget _buildSexEdit() {
     // Map to handle case-insensitive matching
     String? currentValue = _selectedValue;
     if (currentValue != null) {

@@ -100,7 +100,7 @@ class RecipeController extends ChangeNotifier {
         'excludedIngredients': user.excludedIngredients ?? [],
         'activityLevel': user.activityLevel,
         'age': user.age,
-        'gender': user.gender,
+        'sex': user.sex,
         'targetCalories': user.targetCalories,
         'diet_rule': user.diagnostics?[
             'diet_rule'], // Include diet rule from personalization

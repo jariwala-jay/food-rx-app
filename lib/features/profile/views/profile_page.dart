@@ -189,9 +189,9 @@ class _ProfilePageState extends State<ProfilePage> {
     return DateFormat('MM/dd/yyyy').format(dob);
   }
 
-  String _formatGender(String? gender) {
-    if (gender == null) return 'Not set';
-    switch (gender.toLowerCase()) {
+  String _formatSex(String? sex) {
+    if (sex == null) return 'Not set';
+    switch (sex.toLowerCase()) {
       case 'male':
         return 'Male';
       case 'female':
@@ -199,7 +199,7 @@ class _ProfilePageState extends State<ProfilePage> {
       case 'decline':
         return 'Decline to answer';
       default:
-        return gender;
+        return sex;
     }
   }
 
@@ -461,11 +461,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       _buildInfoRow(
                         context: context,
                         label: 'Sex',
-                        value: _formatGender(user.gender),
+                        value: _formatSex(user.sex),
                         onTap: () => _navigateToEditField(
                           context,
-                          'gender',
-                          user.gender,
+                          'sex',
+                          user.sex,
                         ),
                       ),
                     ],

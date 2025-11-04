@@ -207,7 +207,7 @@ class AuthController with ChangeNotifier {
                 email: userForReplan.email,
                 name: userForReplan.name,
                 dateOfBirth: userForReplan.dateOfBirth,
-                gender: userForReplan.gender,
+                sex: userForReplan.sex,
                 heightFeet: userForReplan.heightFeet,
                 heightInches: userForReplan.heightInches,
                 weight: weightLb,
