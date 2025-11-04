@@ -38,40 +38,45 @@ class RecipeGenerationService {
     // 1. Enhance filter with user-specific dietary constraints
     final enhancedFilter = _enhanceFilterWithUserProfile(filter, userProfile);
 
-    // 2. Fetch recipes from the repository with enhanced filter
-    //    If no recipes are returned, progressively relax constraints:
-    //    a) remove meal type, b) remove cuisines, c) remove maxReadyTime
-    List<Recipe> recipes = await _recipeRepository.getRecipes(
-        enhancedFilter, pantryIngredientNames);
+    // 2. Try fetching and validating recipes with progressive fallback:
+    //    a) original filter, b) without meal type, c) without cuisines, d) without time
+    List<Recipe> validatedRecipes = await _tryFetchAndValidateRecipes(
+        enhancedFilter, pantryIngredientNames, pantryItems, userProfile);
 
-    if (recipes.isEmpty) {
+    // If still empty after all fallbacks, try without meal type
+    if (validatedRecipes.isEmpty &&
+        (enhancedFilter.mealType != null ||
+            enhancedFilter.spoonacularMealType != null ||
+            enhancedFilter.spoonacularMealTypes != null)) {
       if (kDebugMode) {
-        print('🔁 No recipes found. Retrying without meal type...');
+        print('🔁 No validated recipes found. Retrying without meal type...');
       }
       final withoutMealType = enhancedFilter.copyWith(
         mealType: null,
         spoonacularMealType: null,
         spoonacularMealTypes: null,
       );
-      recipes = await _recipeRepository.getRecipes(
-          withoutMealType, pantryIngredientNames);
+      validatedRecipes = await _tryFetchAndValidateRecipes(
+          withoutMealType, pantryIngredientNames, pantryItems, userProfile);
     }
 
-    if (recipes.isEmpty) {
+    // If still empty, try without cuisines
+    if (validatedRecipes.isEmpty && enhancedFilter.cuisines.isNotEmpty) {
       if (kDebugMode) {
         print('🔁 Still none. Retrying without cuisines...');
       }
       final withoutCuisines = enhancedFilter.copyWith(
-        mealType: null, // keep meal type relaxed
+        mealType: null,
         spoonacularMealType: null,
         spoonacularMealTypes: null,
         cuisines: const [],
       );
-      recipes = await _recipeRepository.getRecipes(
-          withoutCuisines, pantryIngredientNames);
+      validatedRecipes = await _tryFetchAndValidateRecipes(
+          withoutCuisines, pantryIngredientNames, pantryItems, userProfile);
     }
 
-    if (recipes.isEmpty) {
+    // If still empty, try without time limit
+    if (validatedRecipes.isEmpty && enhancedFilter.maxReadyTime != null) {
       if (kDebugMode) {
         print('🔁 Still none. Retrying without time limit...');
       }
@@ -82,9 +87,42 @@ class RecipeGenerationService {
         cuisines: const [],
         maxReadyTime: null,
       );
-      recipes = await _recipeRepository.getRecipes(
-          withoutTime, pantryIngredientNames);
+      validatedRecipes = await _tryFetchAndValidateRecipes(
+          withoutTime, pantryIngredientNames, pantryItems, userProfile);
     }
+
+    // 3. Sort recipes by health score and ingredient availability
+    validatedRecipes.sort((a, b) {
+      // Primary sort: by used ingredient count (more available ingredients first)
+      final usedIngredientComparison =
+          (b.usedIngredientCount ?? 0).compareTo(a.usedIngredientCount ?? 0);
+      if (usedIngredientComparison != 0) return usedIngredientComparison;
+
+      // Secondary sort: by health score (healthier recipes first)
+      return b.healthScore.compareTo(a.healthScore);
+    });
+
+    if (kDebugMode) {
+      print('\n📊 FINAL RESULTS:');
+      print('Validated recipes: ${validatedRecipes.length}');
+      if (validatedRecipes.isEmpty) {
+        print('⚠️  No recipes found after all fallback attempts');
+      }
+    }
+
+    return validatedRecipes;
+  }
+
+  /// Fetch recipes from repository and validate them
+  Future<List<Recipe>> _tryFetchAndValidateRecipes(
+    RecipeFilter filter,
+    List<String> pantryIngredientNames,
+    List<PantryItem> pantryItems,
+    Map<String, dynamic> userProfile,
+  ) async {
+    // Fetch recipes from the repository
+    final recipes =
+        await _recipeRepository.getRecipes(filter, pantryIngredientNames);
 
     if (kDebugMode) {
       print('\n🔍 RECIPE GENERATION DEBUG:');
@@ -92,7 +130,7 @@ class RecipeGenerationService {
       print('User Profile: $userProfile');
     }
 
-    // 3. Perform local validation and enhancement
+    // Perform local validation and enhancement
     final validatedRecipes = <Recipe>[];
 
     for (var recipe in recipes) {
@@ -136,28 +174,9 @@ class RecipeGenerationService {
     }
 
     if (kDebugMode) {
-      print('\n📊 FINAL RESULTS:');
-      print('API recipes: ${recipes.length}');
       print('Validated recipes: ${validatedRecipes.length}');
       print('Filtered out: ${recipes.length - validatedRecipes.length}');
-
-      if (recipes.length > 0 && validatedRecipes.isEmpty) {
-        print('⚠️  All recipes were filtered out during validation!');
-        print(
-            '   This is expected behavior if recipes don\'t meet dietary constraints.');
-      }
     }
-
-    // 4. Sort recipes by health score and ingredient availability
-    validatedRecipes.sort((a, b) {
-      // Primary sort: by used ingredient count (more available ingredients first)
-      final usedIngredientComparison =
-          (b.usedIngredientCount ?? 0).compareTo(a.usedIngredientCount ?? 0);
-      if (usedIngredientComparison != 0) return usedIngredientComparison;
-
-      // Secondary sort: by health score (healthier recipes first)
-      return b.healthScore.compareTo(a.healthScore);
-    });
 
     return validatedRecipes;
   }
