@@ -73,6 +73,11 @@ class RecipeController extends ChangeNotifier {
   }
 
   Future<void> generateRecipes({RecipeFilter? filter}) async {
+    if (kDebugMode) {
+      print('🚀 Starting recipe generation...');
+      print('   Filter provided: ${filter != null}');
+    }
+
     _isLoading = true;
     _error = null;
     _hasAttemptedGeneration = true; // Mark that generation has been attempted
@@ -87,8 +92,16 @@ class RecipeController extends ChangeNotifier {
         throw Exception("User not logged in");
       }
 
+      if (kDebugMode) {
+        print('👤 User: ${user.id}, Diet: ${user.dietType}');
+      }
+
       await pantryController.loadItems();
       final pantryItems = pantryController.pantryItems;
+
+      if (kDebugMode) {
+        print('🥘 Pantry items: ${pantryItems.length}');
+      }
 
       // Create comprehensive user profile for recipe filtering
       final userProfile = {
@@ -106,11 +119,20 @@ class RecipeController extends ChangeNotifier {
             'diet_rule'], // Include diet rule from personalization
       };
 
+      if (kDebugMode) {
+        print('🔍 Calling recipeGenerationService.generateRecipes...');
+      }
+
       final generatedRecipes = await recipeGenerationService.generateRecipes(
         filter: _currentFilter,
         pantryItems: pantryItems,
         userProfile: userProfile,
       );
+
+      if (kDebugMode) {
+        print(
+            '✅ Recipe generation completed: ${generatedRecipes.length} recipes');
+      }
 
       // Check if all recipes were filtered out during validation
       if (generatedRecipes.isEmpty) {
@@ -118,19 +140,26 @@ class RecipeController extends ChangeNotifier {
         // Don't set error - let the empty state handle this case
         if (kDebugMode) {
           print(
-              'All recipes were filtered out during dietary/pantry validation');
+              '⚠️ All recipes were filtered out during dietary/pantry validation');
         }
       } else {
         _recipes = generatedRecipes;
+        if (kDebugMode) {
+          print('✨ Successfully loaded ${_recipes.length} recipes');
+        }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       _error = "Failed to generate recipes: $e";
       if (kDebugMode) {
-        print(_error);
+        print('❌ Recipe generation error: $e');
+        print('Stack trace: $stackTrace');
       }
     } finally {
       _isLoading = false;
       notifyListeners();
+      if (kDebugMode) {
+        print('🏁 Recipe generation finished (loading: $_isLoading)');
+      }
     }
   }
 

@@ -106,6 +106,8 @@ class RecipeFilter {
   final bool dairyFree;
   final bool veryHealthy;
   final String? query; // Search query
+  final int? offset; // Pagination offset for variety
+  final bool randomize; // Use random sorting for variety
 
   const RecipeFilter({
     this.cuisines = const [],
@@ -132,6 +134,8 @@ class RecipeFilter {
     this.dairyFree = false,
     this.veryHealthy = false,
     this.query,
+    this.offset,
+    this.randomize = false,
   });
 
   RecipeFilter copyWith({
@@ -159,6 +163,8 @@ class RecipeFilter {
     bool? dairyFree,
     bool? veryHealthy,
     String? query,
+    int? offset,
+    bool? randomize,
   }) {
     return RecipeFilter(
       cuisines: cuisines ?? this.cuisines,
@@ -185,6 +191,8 @@ class RecipeFilter {
       dairyFree: dairyFree ?? this.dairyFree,
       veryHealthy: veryHealthy ?? this.veryHealthy,
       query: query ?? this.query,
+      offset: offset ?? this.offset,
+      randomize: randomize ?? this.randomize,
     );
   }
 
@@ -214,6 +222,8 @@ class RecipeFilter {
       'dairyFree': dairyFree,
       'veryHealthy': veryHealthy,
       'query': query,
+      'offset': offset,
+      'randomize': randomize,
     };
   }
 
@@ -274,6 +284,8 @@ class RecipeFilter {
       dairyFree: json['dairyFree'] ?? false,
       veryHealthy: json['veryHealthy'] ?? false,
       query: json['query'],
+      offset: json['offset'],
+      randomize: json['randomize'] ?? false,
     );
   }
 
@@ -447,6 +459,13 @@ class RecipeFilter {
     if (minProtein != null) params['minProtein'] = minProtein.toString();
     if (maxSodium != null) params['maxSodium'] = maxSodium.toString();
     if (maxSugar != null) params['maxSugar'] = maxSugar.toString();
+
+    // Add pagination parameters (offset for variety)
+    // Note: We don't use random sort here to maintain min-missing-ingredients
+    // which ensures recipes use ingredients users already have
+    if (offset != null && offset! > 0) {
+      params['offset'] = offset.toString();
+    }
 
     return params;
   }

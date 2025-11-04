@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
 import 'package:flutter_app/features/recipes/models/nutrition.dart';
@@ -15,6 +16,7 @@ class RecipeGenerationService {
   final FoodCategoryService _foodCategoryService;
   final IngredientSubstitutionService _ingredientSubstitutionService;
   final DietConstraintsService _dietConstraintsService;
+  static int _requestCount = 0; // Static counter for variety across requests
 
   RecipeGenerationService({
     required RecipeRepository recipeRepository,
@@ -44,6 +46,7 @@ class RecipeGenerationService {
         enhancedFilter, pantryIngredientNames, pantryItems, userProfile);
 
     // If still empty after all fallbacks, try without meal type
+    // Use a small offset for variety even during fallback
     if (validatedRecipes.isEmpty &&
         (enhancedFilter.mealType != null ||
             enhancedFilter.spoonacularMealType != null ||
@@ -51,10 +54,32 @@ class RecipeGenerationService {
       if (kDebugMode) {
         print('🔁 No validated recipes found. Retrying without meal type...');
       }
-      final withoutMealType = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
+      // Calculate a small offset for variety (based on request count)
+      final fallbackOffset = (_requestCount % 3) * 20; // 0, 20, or 40
+      // Create a new filter without meal type, keeping small offset for variety
+      final withoutMealType = RecipeFilter(
+        cuisines: enhancedFilter.cuisines,
+        diets: enhancedFilter.diets,
+        intolerances: enhancedFilter.intolerances,
+        medicalConditions: enhancedFilter.medicalConditions,
+        maxReadyTime: enhancedFilter.maxReadyTime,
+        servings: enhancedFilter.servings,
+        includeIngredients: enhancedFilter.includeIngredients,
+        excludeIngredients: enhancedFilter.excludeIngredients,
+        prioritizeExpiring: enhancedFilter.prioritizeExpiring,
+        dashCompliant: enhancedFilter.dashCompliant,
+        myPlateCompliant: enhancedFilter.myPlateCompliant,
+        maxCalories: enhancedFilter.maxCalories,
+        minProtein: enhancedFilter.minProtein,
+        maxSodium: enhancedFilter.maxSodium,
+        maxSugar: enhancedFilter.maxSugar,
+        vegetarian: enhancedFilter.vegetarian,
+        vegan: enhancedFilter.vegan,
+        glutenFree: enhancedFilter.glutenFree,
+        dairyFree: enhancedFilter.dairyFree,
+        veryHealthy: enhancedFilter.veryHealthy,
+        query: enhancedFilter.query,
+        offset: fallbackOffset, // Use small offset for variety
       );
       validatedRecipes = await _tryFetchAndValidateRecipes(
           withoutMealType, pantryIngredientNames, pantryItems, userProfile);
@@ -65,11 +90,30 @@ class RecipeGenerationService {
       if (kDebugMode) {
         print('🔁 Still none. Retrying without cuisines...');
       }
-      final withoutCuisines = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
-        cuisines: const [],
+      // Calculate a small offset for variety (based on request count)
+      final fallbackOffset = (_requestCount % 3) * 20; // 0, 20, or 40
+      final withoutCuisines = RecipeFilter(
+        diets: enhancedFilter.diets,
+        intolerances: enhancedFilter.intolerances,
+        medicalConditions: enhancedFilter.medicalConditions,
+        maxReadyTime: enhancedFilter.maxReadyTime,
+        servings: enhancedFilter.servings,
+        includeIngredients: enhancedFilter.includeIngredients,
+        excludeIngredients: enhancedFilter.excludeIngredients,
+        prioritizeExpiring: enhancedFilter.prioritizeExpiring,
+        dashCompliant: enhancedFilter.dashCompliant,
+        myPlateCompliant: enhancedFilter.myPlateCompliant,
+        maxCalories: enhancedFilter.maxCalories,
+        minProtein: enhancedFilter.minProtein,
+        maxSodium: enhancedFilter.maxSodium,
+        maxSugar: enhancedFilter.maxSugar,
+        vegetarian: enhancedFilter.vegetarian,
+        vegan: enhancedFilter.vegan,
+        glutenFree: enhancedFilter.glutenFree,
+        dairyFree: enhancedFilter.dairyFree,
+        veryHealthy: enhancedFilter.veryHealthy,
+        query: enhancedFilter.query,
+        offset: fallbackOffset, // Use small offset for variety
       );
       validatedRecipes = await _tryFetchAndValidateRecipes(
           withoutCuisines, pantryIngredientNames, pantryItems, userProfile);
@@ -80,12 +124,29 @@ class RecipeGenerationService {
       if (kDebugMode) {
         print('🔁 Still none. Retrying without time limit...');
       }
-      final withoutTime = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
-        cuisines: const [],
-        maxReadyTime: null,
+      // Calculate a small offset for variety (based on request count)
+      final fallbackOffset = (_requestCount % 3) * 20; // 0, 20, or 40
+      final withoutTime = RecipeFilter(
+        diets: enhancedFilter.diets,
+        intolerances: enhancedFilter.intolerances,
+        medicalConditions: enhancedFilter.medicalConditions,
+        servings: enhancedFilter.servings,
+        includeIngredients: enhancedFilter.includeIngredients,
+        excludeIngredients: enhancedFilter.excludeIngredients,
+        prioritizeExpiring: enhancedFilter.prioritizeExpiring,
+        dashCompliant: enhancedFilter.dashCompliant,
+        myPlateCompliant: enhancedFilter.myPlateCompliant,
+        maxCalories: enhancedFilter.maxCalories,
+        minProtein: enhancedFilter.minProtein,
+        maxSodium: enhancedFilter.maxSodium,
+        maxSugar: enhancedFilter.maxSugar,
+        vegetarian: enhancedFilter.vegetarian,
+        vegan: enhancedFilter.vegan,
+        glutenFree: enhancedFilter.glutenFree,
+        dairyFree: enhancedFilter.dairyFree,
+        veryHealthy: enhancedFilter.veryHealthy,
+        query: enhancedFilter.query,
+        offset: fallbackOffset, // Use small offset for variety
       );
       validatedRecipes = await _tryFetchAndValidateRecipes(
           withoutTime, pantryIngredientNames, pantryItems, userProfile);
@@ -101,6 +162,24 @@ class RecipeGenerationService {
       // Secondary sort: by health score (healthier recipes first)
       return b.healthScore.compareTo(a.healthScore);
     });
+
+    // 4. Apply final randomization shuffle for variety (industry best practice)
+    // This ensures variety even when API returns same results
+    if (validatedRecipes.length > 1) {
+      // Use a seed based on time AND request count for better variety
+      // Changes every minute AND with each request to ensure different order
+      final timeSeed = DateTime.now().millisecondsSinceEpoch ~/
+          60000; // Changes every minute
+      final seed =
+          timeSeed + _requestCount; // Add request count for additional variety
+      final seededRandom = Random(seed);
+      validatedRecipes.shuffle(seededRandom);
+
+      if (kDebugMode) {
+        print(
+            '🎲 Applied local shuffling for variety (seed: $seed, timeSeed: $timeSeed, requestCount: $_requestCount)');
+      }
+    }
 
     if (kDebugMode) {
       print('\n📊 FINAL RESULTS:');
@@ -184,6 +263,17 @@ class RecipeGenerationService {
   /// Enhance filter with user-specific dietary constraints based on diet assignment matrix
   RecipeFilter _enhanceFilterWithUserProfile(
       RecipeFilter filter, Map<String, dynamic> userProfile) {
+    // Calculate offset for variety (industry best practice: time-based pagination)
+    final offset = _calculateVarietyOffset(filter);
+
+    // Note: We don't use random sort API parameter to maintain min-missing-ingredients
+    // Variety is achieved through offset-based pagination and local shuffling
+
+    if (kDebugMode && offset > 0) {
+      print(
+          '🎲 Variety settings: offset=$offset (using min-missing-ingredients sort)');
+    }
+
     final medicalConditions =
         List<String>.from(userProfile['medicalConditions'] ?? []);
     final healthGoals = List<String>.from(userProfile['healthGoals'] ?? []);
@@ -270,6 +360,9 @@ class RecipeGenerationService {
       }
     }
 
+    // Increment request count for variety
+    _requestCount++;
+
     return filter.copyWith(
       medicalConditions: medicalConditionEnums,
       intolerances: [...filter.intolerances, ...intoleranceEnums],
@@ -277,7 +370,43 @@ class RecipeGenerationService {
       myPlateCompliant: myPlateCompliant,
       maxSodium: maxSodium,
       veryHealthy: true, // Always prefer healthier options
+      offset: offset > 0
+          ? offset
+          : filter
+              .offset, // Use calculated offset if > 0, otherwise keep existing
+      // Note: randomize flag is kept for potential future use, but we don't use it for API sort
+      // to maintain min-missing-ingredients prioritization
     );
+  }
+
+  /// Calculate offset for recipe variety using industry best practices
+  /// Uses time-based pagination: hour of day + day of week for natural variety
+  int _calculateVarietyOffset(RecipeFilter filter) {
+    // If offset is explicitly set, use it (but cap it to prevent empty results)
+    if (filter.offset != null && filter.offset! > 0) {
+      // Cap offset at 60 to avoid empty result sets with strict filters
+      return filter.offset! > 60 ? 60 : filter.offset!;
+    }
+
+    // Calculate offset based on time-of-day and day-of-week
+    // This ensures variety across different sessions while maintaining consistency
+    final now = DateTime.now();
+    final hourOfDay = now.hour;
+    final dayOfWeek = now.weekday; // 1-7 (Monday-Sunday)
+
+    // Create a deterministic but varied offset
+    // Formula: (hour * 2 + dayOfWeek) % 5, multiplied by 20 (our page size)
+    // This gives us 0-80 offset range, cycling through different pages
+    // Reduced range to avoid empty results when combined with strict filters
+    final baseOffset = ((hourOfDay * 2 + dayOfWeek) % 5) * 20;
+
+    // Add some additional randomness based on request count
+    final additionalOffset = (_requestCount % 3) * 20;
+
+    // Cap at 60 to ensure we don't go too far and get empty results
+    final calculatedOffset = (baseOffset + additionalOffset) % 60;
+
+    return calculatedOffset;
   }
 
   bool _hasEnoughIngredients(Recipe recipe, List<PantryItem> pantryItems) {

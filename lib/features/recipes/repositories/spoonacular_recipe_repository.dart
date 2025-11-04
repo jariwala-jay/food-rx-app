@@ -24,10 +24,14 @@ class SpoonacularRecipeRepository {
       'addRecipeInformation': 'true',
       'instructionsRequired': 'true',
       'fillIngredients': 'true',
-      'sort':
-          'min-missing-ingredients', // Prioritize recipes with less missing ingredients
-      'sortDirection': 'asc',
     };
+
+    // Always use min-missing-ingredients sort to prioritize recipes with ingredients users have
+    // This ensures users get recipes they can actually make with their pantry items
+    if (!queryParams.containsKey('sort')) {
+      queryParams['sort'] = 'min-missing-ingredients';
+      queryParams['sortDirection'] = 'asc';
+    }
 
     final uri = Uri.parse('$_baseUrl/recipes/complexSearch')
         .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
