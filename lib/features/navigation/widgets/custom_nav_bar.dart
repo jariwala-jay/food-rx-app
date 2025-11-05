@@ -76,19 +76,34 @@ class CustomNavBar extends StatelessWidget {
                   onTargetClick: () {
                     print(
                         '🎯 CustomNavBar: User clicked on Pantry tab showcase');
-                    final tourProvider =
-                        Provider.of<ForcedTourProvider>(context, listen: false);
-                    tourProvider.completeCurrentStep();
+                    // Don't complete step here - let the pantry items showcase complete it
+                    // We need to stay on pantryItems step so the toggle showcase can trigger the pantry items showcase
                     onPantryTap();
 
                     // Trigger toggle showcase after navigation
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
+                        if (!context.mounted) return;
                         try {
-                          ShowcaseView.get()
-                              .startShowCase([TourKeys.pantryTabToggleKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Only trigger if we're still on pantryItems step
+                          if (tp.isOnStep(TourStep.pantryItems)) {
+                            ShowcaseView.get().dismiss();
+                            Future.delayed(const Duration(milliseconds: 300),
+                                () {
+                              if (!context.mounted) return;
+                              final tp2 = Provider.of<ForcedTourProvider>(
+                                  context,
+                                  listen: false);
+                              if (tp2.isOnStep(TourStep.pantryItems)) {
+                                ShowcaseView.get().startShowCase(
+                                    [TourKeys.pantryTabToggleKey]);
+                                print(
+                                    '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                              }
+                            });
+                          }
                         } catch (e) {
                           print(
                               '🎯 CustomNavBar: Error triggering toggle showcase: $e');
@@ -99,19 +114,34 @@ class CustomNavBar extends StatelessWidget {
                   onToolTipClick: () {
                     print(
                         '🎯 CustomNavBar: User clicked on Pantry tab tooltip');
-                    final tourProvider =
-                        Provider.of<ForcedTourProvider>(context, listen: false);
-                    tourProvider.completeCurrentStep();
+                    // Don't complete step here - let the pantry items showcase complete it
+                    // We need to stay on pantryItems step so the toggle showcase can trigger the pantry items showcase
                     onPantryTap();
 
                     // Trigger toggle showcase after navigation
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       Future.delayed(const Duration(milliseconds: 300), () {
+                        if (!context.mounted) return;
                         try {
-                          ShowcaseView.get()
-                              .startShowCase([TourKeys.pantryTabToggleKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Only trigger if we're still on pantryItems step
+                          if (tp.isOnStep(TourStep.pantryItems)) {
+                            ShowcaseView.get().dismiss();
+                            Future.delayed(const Duration(milliseconds: 300),
+                                () {
+                              if (!context.mounted) return;
+                              final tp2 = Provider.of<ForcedTourProvider>(
+                                  context,
+                                  listen: false);
+                              if (tp2.isOnStep(TourStep.pantryItems)) {
+                                ShowcaseView.get().startShowCase(
+                                    [TourKeys.pantryTabToggleKey]);
+                                print(
+                                    '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                              }
+                            });
+                          }
                         } catch (e) {
                           print(
                               '🎯 CustomNavBar: Error triggering toggle showcase: $e');
@@ -148,41 +178,61 @@ class CustomNavBar extends StatelessWidget {
                         '🎯 CustomNavBar: User clicked on Recipe tab showcase');
                     print(
                         '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
-                    // Don't complete step here - just navigate to Recipe page
+                    // Don't complete step here - let RecipePage handle it
                     onRecipeTap();
 
                     // Trigger Generate Recipes button showcase after navigation
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        try {
-                          ShowcaseView.get().startShowCase(
-                              [TourKeys.generateRecipeButtonKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
-                        } catch (e) {
-                          print(
-                              '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
-                        }
+                    // Only if we're on the recipes step
+                    if (tourProvider.isOnStep(TourStep.recipes)) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!context.mounted) return;
+                          try {
+                            final tp = Provider.of<ForcedTourProvider>(context,
+                                listen: false);
+                            // Double-check step hasn't changed
+                            if (tp.isOnStep(TourStep.recipes)) {
+                              ShowcaseView.get().startShowCase(
+                                  [TourKeys.generateRecipeButtonKey]);
+                              print(
+                                  '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
+                            }
+                          } catch (e) {
+                            print(
+                                '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                          }
+                        });
                       });
-                    });
+                    }
                   },
                   onToolTipClick: () {
                     print(
                         '🎯 CustomNavBar: User clicked on Recipe tab tooltip');
+                    final tourProvider =
+                        Provider.of<ForcedTourProvider>(context, listen: false);
                     onRecipeTap();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        try {
-                          ShowcaseView.get().startShowCase(
-                              [TourKeys.generateRecipeButtonKey]);
-                          print(
-                              '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
-                        } catch (e) {
-                          print(
-                              '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
-                        }
+                    // Only trigger if we're on the recipes step
+                    if (tourProvider.isOnStep(TourStep.recipes)) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!context.mounted) return;
+                          try {
+                            final tp = Provider.of<ForcedTourProvider>(context,
+                                listen: false);
+                            // Double-check step hasn't changed
+                            if (tp.isOnStep(TourStep.recipes)) {
+                              ShowcaseView.get().startShowCase(
+                                  [TourKeys.generateRecipeButtonKey]);
+                              print(
+                                  '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
+                            }
+                          } catch (e) {
+                            print(
+                                '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                          }
+                        });
                       });
-                    });
+                    }
                   },
                   disposeOnTap: true,
                   child: _buildNavItem(
@@ -287,31 +337,62 @@ class CustomNavBar extends StatelessWidget {
               overlayColor: Colors.black54,
               overlayOpacity: 0.8,
               onTargetClick: () {
-                final tourProvider =
-                    Provider.of<ForcedTourProvider>(context, listen: false);
-                tourProvider.completeCurrentStep();
+                // Don't complete the step here - let MainScreen._handleAddTap complete it
+                // after the action sheet closes. This prevents premature step completion
+                // and ensures the pantry showcase triggers at the right time.
 
                 // Open the action sheet
                 onAddTap();
 
-                // Trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ShowcaseView.get()
-                      .startShowCase([TourKeys.addFoodRxItemsKey]);
+                  if (!context.mounted) return;
+                  try {
+                    ShowcaseView.get().dismiss();
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!context.mounted) return;
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      // Only trigger if we're still on the addButton step
+                      // (step will be completed after action sheet closes)
+                      if (tp.isOnStep(TourStep.addButton)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.addFoodRxItemsKey]);
+                      }
+                    });
+                  } catch (e) {
+                    debugPrint(
+                        '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                  }
                 });
               },
               onToolTipClick: () {
-                final tourProvider =
-                    Provider.of<ForcedTourProvider>(context, listen: false);
-                tourProvider.completeCurrentStep();
+                // Don't complete the step here - let MainScreen._handleAddTap complete it
+                // after the action sheet closes.
 
                 // Open the action sheet
                 onAddTap();
 
-                // Trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ShowcaseView.get()
-                      .startShowCase([TourKeys.addFoodRxItemsKey]);
+                  if (!context.mounted) return;
+                  try {
+                    ShowcaseView.get().dismiss();
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!context.mounted) return;
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      // Only trigger if we're still on the addButton step
+                      // (step will be completed after action sheet closes)
+                      if (tp.isOnStep(TourStep.addButton)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.addFoodRxItemsKey]);
+                      }
+                    });
+                  } catch (e) {
+                    debugPrint(
+                        '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                  }
                 });
               },
               disposeOnTap: false,

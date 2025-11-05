@@ -43,13 +43,58 @@ class _MainScreenState extends State<MainScreen> {
 
       // Start tour if needed
       if (tourProvider.tourService.shouldShowTour() &&
-          !tourProvider.isTourActive) {
+          !tourProvider.isTourActive &&
+          !tourProvider.hasTriggeredInitialShowcase) {
         tourProvider.startTour();
 
+        // Only start showcase if we're on the trackers step and haven't triggered yet
         // Start the showcase sequence using the correct v5.0.1 API
-        // Start with just the first step
-        if (mounted && !_isDisposed) {
-          ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
+        if (mounted &&
+            !_isDisposed &&
+            tourProvider.isOnStep(TourStep.trackers) &&
+            !tourProvider.hasTriggeredInitialShowcase) {
+          // Mark as triggered immediately to prevent duplicate calls
+          tourProvider.markInitialShowcaseTriggered();
+
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted || _isDisposed) return;
+            try {
+              final tp =
+                  Provider.of<ForcedTourProvider>(context, listen: false);
+              // Double-check we're still on trackers step and have triggered flag set
+              if (tp.isOnStep(TourStep.trackers) &&
+                  tp.hasTriggeredInitialShowcase) {
+                // Dismiss any existing showcase first to prevent duplicates
+                ShowcaseView.get().dismiss();
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (!mounted || _isDisposed) return;
+                  final tp2 =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  // Final check before starting - ensure we're still on trackers step
+                  if (tp2.isOnStep(TourStep.trackers)) {
+                    try {
+                      ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
+                      print(
+                          '🎯 MainScreen: Started trackers showcase (single trigger)');
+                    } catch (e) {
+                      print('🎯 MainScreen: Error starting showcase: $e');
+                      // Reset flag on error so it can be retried
+                      tp2.startTour(); // This will reset the flag
+                    }
+                  }
+                });
+              } else {
+                // If step changed or flag wasn't set, reset so it can be retried
+                if (!tp.isOnStep(TourStep.trackers)) {
+                  tp.startTour(); // Reset the flag
+                }
+              }
+            } catch (e) {
+              print('🎯 MainScreen: Error starting initial showcase: $e');
+              // Reset flag on error
+              tourProvider.startTour(); // This will reset the flag
+            }
+          });
         }
       }
     });
@@ -83,21 +128,34 @@ class _MainScreenState extends State<MainScreen> {
     if (!mounted || _isDisposed) return;
     if (tourProvider.isOnStep(TourStep.addButton)) {
       tourProvider.completeCurrentStep();
-    }
 
-    // Check if we should show Pantry tab (either on recipes step or just completed addButton)
-    final currentStep = tourProvider.currentStep;
-    if (currentStep == TourStep.recipes ||
-        currentStep == TourStep.pantryItems) {
+      // After completing addButton step, we move to pantryItems step
+      // Trigger the pantry tab showcase to guide user to pantry
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!mounted || _isDisposed) return;
           try {
-            ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
-            print(
-                '🎯 MainScreen: Triggered Pantry tab showcase - step: $currentStep');
-          } catch (e) {}
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Check if we're now on pantryItems step (after completing addButton)
+            if (tp.isOnStep(TourStep.pantryItems)) {
+              // Dismiss any active showcase first
+              ShowcaseView.get().dismiss();
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (!mounted || _isDisposed) return;
+                final tp2 =
+                    Provider.of<ForcedTourProvider>(context, listen: false);
+                // Double-check we're still on pantryItems step
+                if (tp2.isOnStep(TourStep.pantryItems)) {
+                  ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
+                  print(
+                      '🎯 MainScreen: Triggered Pantry tab showcase after adding items');
+                }
+              });
+            }
+          } catch (e) {
+            print('🎯 MainScreen: Error triggering pantry tab showcase: $e');
+          }
         });
       });
     }

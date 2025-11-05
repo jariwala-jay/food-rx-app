@@ -77,17 +77,30 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // Request permissions for iOS
+    // Request permissions for iOS only if not already granted
+    // Note: We skip this here because Firebase Messaging will handle it
+    // This prevents duplicate permission requests
+    // If you need local notifications without Firebase, uncomment below:
+    /*
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      await _localNotifications
+      final iosImplementation = _localNotifications
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
+              IOSFlutterLocalNotificationsPlugin>();
+      if (iosImplementation != null) {
+        // Check current permission status first
+        final permissionStatus = await iosImplementation.checkPermissions();
+        if (permissionStatus == null || 
+            !permissionStatus.isEnabled ||
+            !permissionStatus.isAlertEnabled) {
+          await iosImplementation.requestPermissions(
             alert: true,
             badge: true,
             sound: true,
           );
+        }
+      }
     }
+    */
   }
 
   // Handle notification tap
@@ -104,22 +117,39 @@ class NotificationService {
         return;
       }
 
-      // Request permissions on iOS
+      // Request permissions on iOS only if not already granted
       if (Platform.isIOS) {
-        final NotificationSettings settings =
-            await _firebaseMessaging!.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-          provisional: false,
-        );
+        // Check current permission status first
+        final currentSettings =
+            await _firebaseMessaging!.getNotificationSettings();
 
-        if (settings.authorizationStatus != AuthorizationStatus.authorized &&
-            settings.authorizationStatus != AuthorizationStatus.provisional) {
-          debugPrint('❌ Notification permissions not granted on iOS');
+        // Only request if permission is not determined (first time) or denied
+        // If already authorized or provisional, skip the request
+        if (currentSettings.authorizationStatus ==
+            AuthorizationStatus.notDetermined) {
+          final NotificationSettings settings =
+              await _firebaseMessaging!.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+            provisional: false,
+          );
+
+          if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+              settings.authorizationStatus != AuthorizationStatus.provisional) {
+            debugPrint('❌ Notification permissions not granted on iOS');
+            return;
+          }
+          _v('✅ Notification permissions granted on iOS');
+        } else if (currentSettings.authorizationStatus ==
+                AuthorizationStatus.authorized ||
+            currentSettings.authorizationStatus ==
+                AuthorizationStatus.provisional) {
+          _v('✅ Notification permissions already granted on iOS');
+        } else {
+          debugPrint('❌ Notification permissions denied on iOS');
           return;
         }
-        _v('✅ Notification permissions granted on iOS');
 
         // Wait for APNs token
         await Future.delayed(const Duration(seconds: 1));

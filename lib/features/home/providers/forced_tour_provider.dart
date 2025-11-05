@@ -14,11 +14,14 @@ class ForcedTourProvider extends ChangeNotifier {
   bool _isTourActive = false;
   TourStep _currentStep = TourStep.trackers;
   bool _tourCompleted = false;
+  bool _hasTriggeredInitialShowcase =
+      false; // Prevent duplicate showcase triggers
 
   // Getters
   bool get isTourActive => _isTourActive;
   TourStep get currentStep => _currentStep;
   bool get tourCompleted => _tourCompleted;
+  bool get hasTriggeredInitialShowcase => _hasTriggeredInitialShowcase;
 
   /// Start the tour for first-time users
   void startTour() {
@@ -26,8 +29,14 @@ class ForcedTourProvider extends ChangeNotifier {
       _isTourActive = true;
       _currentStep = TourStep.trackers;
       _tourCompleted = false;
+      _hasTriggeredInitialShowcase = false; // Reset when starting tour
       notifyListeners();
     }
+  }
+
+  /// Mark that the initial showcase has been triggered
+  void markInitialShowcaseTriggered() {
+    _hasTriggeredInitialShowcase = true;
   }
 
   /// Mark the current step as completed
@@ -84,6 +93,7 @@ class ForcedTourProvider extends ChangeNotifier {
       _isTourActive = false;
       _tourCompleted = false;
       _currentStep = TourStep.trackers;
+      _hasTriggeredInitialShowcase = false; // Reset showcase trigger flag
       notifyListeners();
     }
   }

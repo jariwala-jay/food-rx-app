@@ -11,20 +11,13 @@ import UserNotifications
   ) -> Bool {
     FirebaseApp.configure()
     
-    // Request notification permissions
+    // Set notification delegate (but don't request permissions here - let Flutter handle it)
+    // This prevents duplicate permission requests
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
-      let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
-      UNUserNotificationCenter.current().requestAuthorization(
-        options: authOptions,
-        completionHandler: { _, _ in }
-      )
-    } else {
-      let settings: UIUserNotificationSettings =
-        UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
-      application.registerUserNotificationSettings(settings)
     }
     
+    // Register for remote notifications (this doesn't request permissions, just registers the device)
     application.registerForRemoteNotifications()
     
     GeneratedPluginRegistrant.register(with: self)

@@ -45,20 +45,28 @@ class _EducationPageState extends State<EducationPage> {
         Provider.of<ForcedTourProvider>(context, listen: false);
 
     // Single, debounced entry point to start a showcase on this page.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final currentStep = tourProvider.currentStep;
-      final shouldTrigger = tourProvider.isOnStep(TourStep.education) &&
-          !_hasTriggeredShowcase &&
-          _lastStep != TourStep.education;
+    // Only trigger once when we transition to education step
+    final currentStep = tourProvider.currentStep;
+    final shouldTrigger = tourProvider.isOnStep(TourStep.education) &&
+        !_hasTriggeredShowcase &&
+        _lastStep != TourStep.education;
 
-      if (shouldTrigger) {
-        _hasTriggeredShowcase = true;
-        _lastStep = currentStep;
+    if (shouldTrigger) {
+      _hasTriggeredShowcase = true;
+      _lastStep = currentStep;
 
-        // Wait for article lists to render, then decide which target to highlight.
+      // Wait for article lists to render, then decide which target to highlight.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 800), () {
           if (!mounted) return;
           try {
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Double-check we're still on education step
+            if (!tp.isOnStep(TourStep.education)) {
+              _hasTriggeredShowcase = false;
+              return;
+            }
+
             final c = Provider.of<ArticleController>(context, listen: false);
             AppLogger.d(
               '🎯 EducationPage: recommended=${c.recommendedArticles.length}, all=${c.articles.length}',
@@ -77,10 +85,11 @@ class _EducationPageState extends State<EducationPage> {
             }
           } catch (e) {
             AppLogger.d('🎯 EducationPage: Error starting showcase: $e');
+            _hasTriggeredShowcase = false; // Reset on error
           }
         });
-      }
-    });
+      });
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
