@@ -174,13 +174,26 @@ class TrackerCard extends StatelessWidget {
 
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
-    if (tourProvider.currentStep == TourStep.trackerInfo &&
+    // Only complete if we're on the trackerInfo step
+    if (tourProvider.isOnStep(TourStep.trackerInfo) &&
         tourProvider.isTourActive) {
       tourProvider.completeCurrentStep();
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
         try {
-          ShowcaseView.get().startShowCase([TourKeys.dailyTipsKey]);
-        } catch (_) {}
+          // Dismiss any active showcase first
+          ShowcaseView.get().dismiss();
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!context.mounted) return;
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Double-check we're on the dailyTips step
+            if (tp.isOnStep(TourStep.dailyTips)) {
+              ShowcaseView.get().startShowCase([TourKeys.dailyTipsKey]);
+            }
+          });
+        } catch (e) {
+          debugPrint('🎯 TrackerCard: Error triggering dailyTips showcase: $e');
+        }
       });
     }
   }

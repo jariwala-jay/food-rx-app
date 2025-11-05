@@ -92,27 +92,59 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                   // Don't complete step here - just show the toggle info
                   // The pantry items showcase will complete the step
 
-                  // Trigger pantry items showcase after this
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    try {
-                      ShowcaseView.get()
-                          .startShowCase([TourKeys.pantryItemsKey]);
-                    } catch (e) {
-                      print(
-                          '🎯 PantryPage: Error triggering pantry items showcase: $e');
-                    }
-                  });
+                  // Dismiss current showcase and trigger pantry items showcase if we're on the right step
+                  final tourProvider =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  if (tourProvider.isOnStep(TourStep.pantryItems)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      try {
+                        ShowcaseView.get().dismiss();
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!mounted) return;
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Double-check step hasn't changed
+                          if (tp.isOnStep(TourStep.pantryItems)) {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.pantryItemsKey]);
+                            print(
+                                '🎯 PantryPage: Triggered pantry items showcase from toggle');
+                          }
+                        });
+                      } catch (e) {
+                        print(
+                            '🎯 PantryPage: Error triggering pantry items showcase: $e');
+                      }
+                    });
+                  }
                 },
                 onToolTipClick: () {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    try {
-                      ShowcaseView.get()
-                          .startShowCase([TourKeys.pantryItemsKey]);
-                    } catch (e) {
-                      print(
-                          '🎯 PantryPage: Error triggering pantry items showcase: $e');
-                    }
-                  });
+                  final tourProvider =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  if (tourProvider.isOnStep(TourStep.pantryItems)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      try {
+                        ShowcaseView.get().dismiss();
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!mounted) return;
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Double-check step hasn't changed
+                          if (tp.isOnStep(TourStep.pantryItems)) {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.pantryItemsKey]);
+                            print(
+                                '🎯 PantryPage: Triggered pantry items showcase from toggle tooltip');
+                          }
+                        });
+                      } catch (e) {
+                        print(
+                            '🎯 PantryPage: Error triggering pantry items showcase: $e');
+                      }
+                    });
+                  }
                 },
                 disposeOnTap: true,
                 child: Container(
@@ -346,16 +378,27 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         print(
             '🎯 PantryPage: Current step after completion: ${tourProvider.currentStep}');
 
-        // Trigger recipes tab showcase
+        // Dismiss current showcase and trigger recipes tab showcase only if we're on recipes step
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted) return;
             try {
-              ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
-              final stepAfterTrigger =
-                  Provider.of<ForcedTourProvider>(context, listen: false)
-                      .currentStep;
-              print(
-                  '🎯 PantryPage: Step after triggering recipes tab: $stepAfterTrigger');
+              final tp =
+                  Provider.of<ForcedTourProvider>(context, listen: false);
+              // Only trigger if we're on the recipes step
+              if (tp.isOnStep(TourStep.recipes)) {
+                ShowcaseView.get().dismiss();
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (!mounted) return;
+                  final tp2 =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  if (tp2.isOnStep(TourStep.recipes)) {
+                    ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
+                    print(
+                        '🎯 PantryPage: Step after triggering recipes tab: ${tp2.currentStep}');
+                  }
+                });
+              }
             } catch (e) {}
           });
         });
@@ -371,11 +414,25 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               '🎯 PantryPage: Already past pantryItems step, skipping completion');
         }
 
-        // Trigger recipes tab showcase
+        // Dismiss current showcase and trigger recipes tab showcase only if we're on recipes step
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted) return;
             try {
-              ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
+              final tp =
+                  Provider.of<ForcedTourProvider>(context, listen: false);
+              // Only trigger if we're on the recipes step
+              if (tp.isOnStep(TourStep.recipes)) {
+                ShowcaseView.get().dismiss();
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (!mounted) return;
+                  final tp2 =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  if (tp2.isOnStep(TourStep.recipes)) {
+                    ShowcaseView.get().startShowCase([TourKeys.recipesTabKey]);
+                  }
+                });
+              }
             } catch (e) {}
           });
         });

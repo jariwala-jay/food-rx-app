@@ -62,6 +62,7 @@ class RecipePage extends StatefulWidget {
 
 class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
   bool _hasInitialized = false;
+  bool _hasTriggeredRecipesShowcase = false;
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
 
@@ -100,6 +101,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Reset showcase flag if we're no longer on recipes step
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+    if (!tourProvider.isOnStep(TourStep.recipes)) {
+      _hasTriggeredRecipesShowcase = false;
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       body: SafeArea(
@@ -168,25 +176,33 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                       }
 
                       // Trigger recipes showcase when recipes first appear if tour is active
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        print(
-                            '🎯 RecipePage: Recipes loaded, tour active: ${tourProvider.isTourActive}, current step: ${tourProvider.currentStep}');
-                        // Only trigger if we're on the recipes step
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          try {
-                            ShowcaseView.get()
-                                .startShowCase([TourKeys.recipesKey]);
-                            print(
-                                '🎯 RecipePage: Triggered recipes showcase (on recipes step)');
-                          } catch (e) {
-                            print(
-                                '🎯 RecipePage: Error triggering showcase: $e');
+                      // Use a flag to prevent multiple triggers
+                      if (!_hasTriggeredRecipesShowcase) {
+                        _hasTriggeredRecipesShowcase = true;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          final tourProvider = Provider.of<ForcedTourProvider>(
+                              context,
+                              listen: false);
+                          print(
+                              '🎯 RecipePage: Recipes loaded, tour active: ${tourProvider.isTourActive}, current step: ${tourProvider.currentStep}');
+                          // Only trigger if we're on the recipes step
+                          if (tourProvider.isOnStep(TourStep.recipes)) {
+                            try {
+                              ShowcaseView.get()
+                                  .startShowCase([TourKeys.recipesKey]);
+                              print(
+                                  '🎯 RecipePage: Triggered recipes showcase (on recipes step)');
+                            } catch (e) {
+                              print(
+                                  '🎯 RecipePage: Error triggering showcase: $e');
+                            }
+                          } else {
+                            // Reset flag if step changed
+                            _hasTriggeredRecipesShowcase = false;
                           }
-                        }
-                      });
+                        });
+                      }
 
                       _fadeAnimationController.forward();
                       return FadeTransition(
@@ -212,19 +228,27 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                       }
 
                       // Trigger recipes showcase when showing empty state if tour is active
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          try {
-                            ShowcaseView.get()
-                                .startShowCase([TourKeys.recipesKey]);
-                          } catch (e) {
-                            // Silently handle error
+                      // Use a flag to prevent multiple triggers
+                      if (!_hasTriggeredRecipesShowcase) {
+                        _hasTriggeredRecipesShowcase = true;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          final tourProvider = Provider.of<ForcedTourProvider>(
+                              context,
+                              listen: false);
+                          if (tourProvider.isOnStep(TourStep.recipes)) {
+                            try {
+                              ShowcaseView.get()
+                                  .startShowCase([TourKeys.recipesKey]);
+                            } catch (e) {
+                              // Silently handle error
+                            }
+                          } else {
+                            // Reset flag if step changed
+                            _hasTriggeredRecipesShowcase = false;
                           }
-                        }
-                      });
+                        });
+                      }
 
                       return _buildEmptyState(context);
                     }
@@ -371,11 +395,20 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               if (tourProvider.isOnStep(TourStep.recipes)) {
                 tourProvider.completeCurrentStep();
 
-                // Trigger education tab showcase after completing step
+                // Dismiss current showcase and trigger education tab showcase after completing step
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
                   try {
-                    ShowcaseView.get()
-                        .startShowCase([TourKeys.educationTabKey]);
+                    ShowcaseView.get().dismiss();
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!mounted) return;
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      if (tp.isOnStep(TourStep.education)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.educationTabKey]);
+                      }
+                    });
                   } catch (e) {
                     print(
                         '🎯 RecipePage: Error triggering education tab showcase: $e');
@@ -394,9 +427,18 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               if (tourProvider.isOnStep(TourStep.recipes)) {
                 tourProvider.completeCurrentStep();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
                   try {
-                    ShowcaseView.get()
-                        .startShowCase([TourKeys.educationTabKey]);
+                    ShowcaseView.get().dismiss();
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!mounted) return;
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      if (tp.isOnStep(TourStep.education)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.educationTabKey]);
+                      }
+                    });
                   } catch (e) {
                     print(
                         '🎯 RecipePage: Error triggering education tab showcase: $e');

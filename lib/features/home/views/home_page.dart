@@ -36,27 +36,81 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _handleTrackersShowcase(BuildContext context) {
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
-    tourProvider.completeCurrentStep();
 
-    // Trigger the next showcase step (info icon on first tracker)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ShowcaseView.get().startShowCase([TourKeys.trackerInfoKey]);
-    });
+    // Only complete if we're on the trackers step
+    if (tourProvider.isOnStep(TourStep.trackers)) {
+      // Dismiss current showcase first
+      try {
+        ShowcaseView.get().dismiss();
+      } catch (e) {
+        debugPrint('🎯 HomePage: Error dismissing showcase: $e');
+      }
+
+      // Complete the step after dismissing
+      tourProvider.completeCurrentStep();
+
+      // Dismiss current showcase and trigger the next showcase step (info icon on first tracker)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          // Wait a bit before showing next to ensure previous is fully dismissed
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted) return;
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Double-check we're on the trackerInfo step
+            if (tp.isOnStep(TourStep.trackerInfo)) {
+              try {
+                // Dismiss again just to be safe
+                ShowcaseView.get().dismiss();
+                Future.delayed(const Duration(milliseconds: 200), () {
+                  if (!mounted) return;
+                  final tp2 =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  if (tp2.isOnStep(TourStep.trackerInfo)) {
+                    ShowcaseView.get().startShowCase([TourKeys.trackerInfoKey]);
+                    print('🎯 HomePage: Started trackerInfo showcase');
+                  }
+                });
+              } catch (e) {
+                debugPrint(
+                    '🎯 HomePage: Error starting trackerInfo showcase: $e');
+              }
+            }
+          });
+        } catch (e) {
+          debugPrint('🎯 HomePage: Error in trackers showcase handler: $e');
+        }
+      });
+    }
   }
 
   void _handleDailyTipsShowcase(BuildContext context) {
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
-    tourProvider.completeCurrentStep();
 
-    // Trigger the next showcase step (My Plan button)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 500), () {
+    // Only complete if we're on the dailyTips step
+    if (tourProvider.isOnStep(TourStep.dailyTips)) {
+      tourProvider.completeCurrentStep();
+
+      // Dismiss current showcase and trigger the next showcase step (My Plan button)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         try {
-          ShowcaseView.get().startShowCase([TourKeys.myPlanButtonKey]);
-        } catch (e) {}
+          // Dismiss any active showcase first
+          ShowcaseView.get().dismiss();
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted) return;
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Double-check we're on the myPlan step
+            if (tp.isOnStep(TourStep.myPlan)) {
+              ShowcaseView.get().startShowCase([TourKeys.myPlanButtonKey]);
+            }
+          });
+        } catch (e) {
+          debugPrint('🎯 HomePage: Error in dailyTips showcase handler: $e');
+        }
       });
-    });
+    }
   }
 
   // Flag to prevent duplicate initial data loads on first build
