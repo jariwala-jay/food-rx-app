@@ -76,338 +76,359 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
     }
   }
 
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: _dismissKeyboard,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: AppFormField(
+                        label: 'Date of birth',
+                        hintText: 'MM/DD/YYYY',
+                        controller: _dobController,
+                        readOnly: true,
+                        onTap: () => _selectDate(context),
+                        suffixIcon: const Icon(
+                          Icons.calendar_today_outlined,
+                          color: Color(0xFF90909A),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your date of birth';
+                          }
+                          return null;
+                        },
                       ),
                     ),
-                    child: AppFormField(
-                      label: 'Date of birth',
-                      hintText: 'MM/DD/YYYY',
-                      controller: _dobController,
-                      readOnly: true,
-                      onTap: () => _selectDate(context),
-                      suffixIcon: const Icon(
-                        Icons.calendar_today_outlined,
-                        color: Color(0xFF90909A),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your date of birth';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      child: AppRadioGroup<String>(
+                        label: 'Sex',
+                        value: _selectedSex,
+                        options: const [
+                          {'male': 'Male'},
+                          {'female': 'Female'},
+                          {'decline': 'Decline to answer'},
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedSex = value;
+                          });
+                        },
                       ),
                     ),
-                    child: AppRadioGroup<String>(
-                      label: 'Sex',
-                      value: _selectedSex,
-                      options: const [
-                        {'male': 'Male'},
-                        {'female': 'Female'},
-                        {'decline': 'Decline to answer'},
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedSex = value;
-                        });
-                      },
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Height', style: AppTypography.bg_16_m),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: HeightDropdownField(
-                                label: '',
-                                value: _heightFeet?.toString(),
-                                options:
-                                    List.generate(8, (i) => (i + 4).toString()),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _heightFeet = double.tryParse(value ?? '');
-                                  });
-                                },
-                                hintText: 'FT',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Height', style: AppTypography.bg_16_m),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: HeightDropdownField(
+                                  label: '',
+                                  value: _heightFeet?.toString(),
+                                  options: List.generate(
+                                      8, (i) => (i + 4).toString()),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _heightFeet =
+                                          double.tryParse(value ?? '');
+                                    });
+                                  },
+                                  hintText: 'FT',
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: HeightDropdownField(
-                                label: '',
-                                value: _heightInches?.toString(),
-                                options: List.generate(12, (i) => i.toString()),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _heightInches =
-                                        double.tryParse(value ?? '');
-                                  });
-                                },
-                                hintText: 'INCH',
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: HeightDropdownField(
+                                  label: '',
+                                  value: _heightInches?.toString(),
+                                  options:
+                                      List.generate(12, (i) => i.toString()),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _heightInches =
+                                          double.tryParse(value ?? '');
+                                    });
+                                  },
+                                  hintText: 'INCH',
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    child: AppFormField(
-                      label: 'Weight',
-                      hintText: 'Enter Weight',
-                      controller: _weightController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                      ],
-                      suffixIcon: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'LB',
-                          style: AppTypography.bg_14_r
-                              .copyWith(color: const Color(0xFF90909A)),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: AppFormField(
+                        label: 'Weight',
+                        hintText: 'Enter Weight',
+                        controller: _weightController,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _dismissKeyboard(),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your weight';
+                          }
+                          final weight = double.tryParse(value);
+                          if (weight == null) {
+                            return 'Please enter a valid number';
+                          }
+                          if (weight <= 0) {
+                            return 'Weight must be greater than 0';
+                          }
+                          if (weight < 50 || weight > 1000) {
+                            return 'Please enter a weight between 50 and 1000 lbs';
+                          }
+                          return null;
+                        },
+                        suffixIcon: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'LB',
+                            style: AppTypography.bg_14_r
+                                .copyWith(color: const Color(0xFF90909A)),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppDropdownField(
-                          label: 'Medical Conditions',
-                          value: null,
-                          options: const [
-                            'Hypertension',
-                            'Pre-Diabetes',
-                            'Diabetes',
-                            'Overweight/Obesity',
-                            'None',
-                          ],
-                          multiSelect: true,
-                          selectedValues: _selectedMedicalConditions,
-                          onChangedMulti: (values) {
-                            setState(() {
-                              // Allow explicit 'None' as a value but not with others
-                              if (values.contains('None')) {
-                                _selectedMedicalConditions = ['None'];
-                              } else {
-                                _selectedMedicalConditions = values;
-                              }
-                            });
-                          },
-                          onChanged: (_) {},
-                          hintText: 'Select Disease',
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_selectedMedicalConditions.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          AppChipGroup(
-                            values: _selectedMedicalConditions,
-                            onChanged: (values) {
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppDropdownField(
+                            label: 'Medical Conditions',
+                            value: null,
+                            options: const [
+                              'Hypertension',
+                              'Pre-Diabetes',
+                              'Diabetes',
+                              'Overweight/Obesity',
+                              'None',
+                            ],
+                            multiSelect: true,
+                            selectedValues: _selectedMedicalConditions,
+                            onChangedMulti: (values) {
                               setState(() {
-                                // Respect 'None' exclusivity
-                                if (values.contains('None') &&
-                                    values.length > 1) {
+                                // Allow explicit 'None' as a value but not with others
+                                if (values.contains('None')) {
                                   _selectedMedicalConditions = ['None'];
                                 } else {
                                   _selectedMedicalConditions = values;
                                 }
                               });
                             },
+                            onChanged: (_) {},
+                            hintText: 'Select Disease',
                           ),
+                          if (_selectedMedicalConditions.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            AppChipGroup(
+                              values: _selectedMedicalConditions,
+                              onChanged: (values) {
+                                setState(() {
+                                  // Respect 'None' exclusivity
+                                  if (values.contains('None') &&
+                                      values.length > 1) {
+                                    _selectedMedicalConditions = ['None'];
+                                  } else {
+                                    _selectedMedicalConditions = values;
+                                  }
+                                });
+                              },
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFFF6A00)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFFF6A00)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
-                        ),
-                        onPressed: widget.onPrevious,
-                        child: Text(
-                          'Previous',
-                          style: AppTypography.bg_16_sb
-                              .copyWith(color: const Color(0xFFFF6A00)),
+                          onPressed: widget.onPrevious,
+                          child: Text(
+                            'Previous',
+                            style: AppTypography.bg_16_sb
+                                .copyWith(color: const Color(0xFFFF6A00)),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6A00),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF6A00),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            elevation: 0,
                           ),
-                          elevation: 0,
-                        ),
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            // Required field validations
-                            if (_selectedSex == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please select your sex'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
-                            if (_heightFeet == null || _heightInches == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please select your height'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
-                            if (_weightController.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please enter your weight'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
-                            if (_selectedMedicalConditions.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Please select your medical conditions (or None)'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
+                          onPressed: () {
+                            if (_formKey.currentState!.validate()) {
+                              // Required field validations
+                              if (_selectedSex == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please select your sex'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
+                              if (_heightFeet == null ||
+                                  _heightInches == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please select your height'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
+                              if (_selectedMedicalConditions.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Please select your medical conditions (or None)'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                return;
+                              }
 
-                            try {
-                              final dateOfBirth = _dobController.text.isNotEmpty
-                                  ? DateFormat('MM/dd/yyyy')
-                                      .parse(_dobController.text)
-                                  : null;
+                              try {
+                                final dateOfBirth =
+                                    _dobController.text.isNotEmpty
+                                        ? DateFormat('MM/dd/yyyy')
+                                            .parse(_dobController.text)
+                                        : null;
 
-                              context.read<SignupProvider>().updateHealthInfo(
-                                    dateOfBirth: dateOfBirth,
-                                    sex: _selectedSex,
-                                    heightFeet: _heightFeet,
-                                    heightInches: _heightInches,
-                                    weight:
-                                        double.tryParse(_weightController.text),
-                                    medicalConditions:
-                                        _selectedMedicalConditions,
-                                  );
-                              widget.onNext();
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please enter a valid date'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                                context.read<SignupProvider>().updateHealthInfo(
+                                      dateOfBirth: dateOfBirth,
+                                      sex: _selectedSex,
+                                      heightFeet: _heightFeet,
+                                      heightInches: _heightInches,
+                                      weight: double.tryParse(
+                                          _weightController.text),
+                                      medicalConditions:
+                                          _selectedMedicalConditions,
+                                    );
+                                widget.onNext();
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter a valid date'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
-                          }
-                        },
-                        child: const Text(
-                          'Next',
-                          style: AppTypography.bg_16_sb,
+                          },
+                          child: const Text(
+                            'Next',
+                            style: AppTypography.bg_16_sb,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
