@@ -169,9 +169,10 @@ class NotificationService {
       }
 
       _fcmToken = await _firebaseMessaging!.getToken();
-      _v('🔑 FCM Token generated');
 
       if (_fcmToken != null) {
+        _v('🔑 FCM Token generated: ${_fcmToken!.substring(0, 20)}...');
+
         // Save token to SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('fcm_token', _fcmToken!);
@@ -179,9 +180,19 @@ class NotificationService {
 
         // Store in MongoDB for current user
         await _storeFCMTokenInDatabase(_fcmToken!);
+      } else {
+        _v('❌ FCM token is null - this indicates a configuration issue');
+        debugPrint('❌ FCM Token Generation Failed - Check:');
+        debugPrint('   1. Firebase project configuration');
+        debugPrint('   2. GoogleService-Info.plist matches bundle ID');
+        debugPrint(
+            '   3. APNs authentication key uploaded to Firebase Console');
+        debugPrint('   4. Push notification capability enabled in Xcode');
       }
     } catch (e) {
       _v('❌ Error getting FCM token: $e');
+      debugPrint('❌ FCM Token Error Details: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -206,10 +217,61 @@ class NotificationService {
         );
         _v('✅ FCM token stored for user');
       } else {
-        _v('⚠️ No current user ID found, cannot store FCM token');
+        _v('⚠️ No current user ID found, cannot store FCM token (will sync after login)');
       }
     } catch (e) {
       debugPrint('❌ Error storing FCM token in database: $e');
+    }
+  }
+
+  // Sync stored FCM token to database (call this after user login/registration)
+  Future<void> syncFCMTokenToDatabase() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      final storedToken = prefs.getString('fcm_token');
+
+      if (userId == null) {
+        _v('⚠️ No user ID found, cannot sync FCM token');
+        return;
+      }
+
+      // Use stored token if available, otherwise try to get current token
+      String? tokenToSync = storedToken ?? _fcmToken;
+
+      if (tokenToSync == null) {
+        // Try to get a fresh token
+        if (_firebaseMessaging != null) {
+          tokenToSync = await _firebaseMessaging!.getToken();
+          if (tokenToSync != null) {
+            await prefs.setString('fcm_token', tokenToSync);
+            _fcmToken = tokenToSync;
+          }
+        }
+      }
+
+      if (tokenToSync == null) {
+        _v('⚠️ No FCM token available to sync');
+        return;
+      }
+
+      await _mongoDBService.ensureConnection();
+      final usersCollection = _mongoDBService.usersCollection;
+
+      await usersCollection.updateOne(
+        {'_id': ObjectIdHelper.parseObjectId(userId)},
+        {
+          '\$set': {
+            'fcmToken': tokenToSync,
+            'updatedAt': DateTime.now().toIso8601String()
+          }
+        },
+      );
+
+      _v('✅ FCM token synced to database for user');
+      _fcmToken = tokenToSync; // Update internal token reference
+    } catch (e) {
+      debugPrint('❌ Error syncing FCM token to database: $e');
     }
   }
 
@@ -221,10 +283,16 @@ class NotificationService {
     }
 
     // Listen for token changes (debugging)
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       _v('🔄 FCM token refreshed');
       _fcmToken = newToken;
-      _storeFCMTokenInDatabase(newToken);
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fcm_token', newToken);
+
+      // Try to store in database (will work if user is logged in)
+      await _storeFCMTokenInDatabase(newToken);
     });
 
     // Handle foreground messages
@@ -313,6 +381,91 @@ class NotificationService {
 
   // Get FCM token
   String? get fcmToken => _fcmToken;
+
+  // Diagnostic method to check FCM/APNs status
+  Future<Map<String, dynamic>> getDiagnostics() async {
+    final diagnostics = <String, dynamic>{
+      'fcmToken': _fcmToken,
+      'firebaseInitialized': _firebaseMessaging != null,
+    };
+
+    if (Platform.isIOS && _firebaseMessaging != null) {
+      try {
+        final apnsToken = await _firebaseMessaging!.getAPNSToken();
+        final settings = await _firebaseMessaging!.getNotificationSettings();
+
+        diagnostics['apnsToken'] = apnsToken;
+        diagnostics['apnsTokenAvailable'] = apnsToken != null;
+        diagnostics['authorizationStatus'] =
+            settings.authorizationStatus.toString();
+        diagnostics['alertSetting'] = settings.alert.toString();
+        diagnostics['badgeSetting'] = settings.badge.toString();
+        diagnostics['soundSetting'] = settings.sound.toString();
+
+        _v('📊 Diagnostics - APNs Token: ${apnsToken != null ? "✅ Available" : "❌ Not Available"}');
+        _v('📊 Diagnostics - Authorization: ${settings.authorizationStatus}');
+      } catch (e) {
+        diagnostics['apnsError'] = e.toString();
+        _v('❌ Error getting APNs diagnostics: $e');
+      }
+    }
+
+    if (Platform.isAndroid && _firebaseMessaging != null) {
+      try {
+        final settings = await _firebaseMessaging!.getNotificationSettings();
+        diagnostics['authorizationStatus'] =
+            settings.authorizationStatus.toString();
+        diagnostics['alertSetting'] = settings.alert.toString();
+        diagnostics['badgeSetting'] = settings.badge.toString();
+        diagnostics['soundSetting'] = settings.sound.toString();
+      } catch (e) {
+        diagnostics['androidError'] = e.toString();
+      }
+    }
+
+    return diagnostics;
+  }
+
+  // Force refresh FCM token (useful after bundle ID change)
+  Future<String?> refreshToken() async {
+    try {
+      if (_firebaseMessaging == null) {
+        debugPrint('❌ FirebaseMessaging not initialized');
+        return null;
+      }
+
+      _v('🔄 Refreshing FCM token...');
+
+      // Delete old token to force refresh
+      await _firebaseMessaging!.deleteToken();
+      _v('🗑️ Old token deleted');
+
+      // Wait a bit
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Get new token
+      _fcmToken = await _firebaseMessaging!.getToken();
+
+      if (_fcmToken != null) {
+        _v('✅ New FCM token generated: ${_fcmToken!.substring(0, 20)}...');
+
+        // Save token to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', _fcmToken!);
+        _v('💾 FCM token saved locally');
+
+        // Store in MongoDB for current user
+        await _storeFCMTokenInDatabase(_fcmToken!);
+      } else {
+        _v('❌ Failed to generate new FCM token');
+      }
+
+      return _fcmToken;
+    } catch (e) {
+      debugPrint('❌ Error refreshing FCM token: $e');
+      return null;
+    }
+  }
 
   // Dispose resources
   void dispose() {

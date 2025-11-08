@@ -7,6 +7,7 @@ import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
+import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
@@ -361,6 +362,10 @@ class AuthController with ChangeNotifier {
       // Initialize notification manager (simplified)
       _notificationManager = NotificationManager();
       await _notificationManager!.initialize(userId);
+
+      // Sync FCM token to database after user is logged in
+      final notificationService = NotificationService();
+      await notificationService.syncFCMTokenToDatabase();
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
     }
