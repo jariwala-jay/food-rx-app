@@ -13,11 +13,15 @@ import 'package:showcaseview/showcaseview.dart' as showcaseview;
 class TrackerGrid extends StatefulWidget {
   final String userId;
   final String dietType;
+  final bool showDailyTrackers;
+  final bool showWeeklyTrackers;
 
   const TrackerGrid({
     Key? key,
     required this.userId,
     required this.dietType,
+    this.showDailyTrackers = true,
+    this.showWeeklyTrackers = true,
   }) : super(key: key);
 
   @override
@@ -200,102 +204,104 @@ class _TrackerGridState extends State<TrackerGrid>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Daily Meal Plan Goals',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF333333),
+              if (widget.showDailyTrackers) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Daily Meal Plan Goals',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF333333),
+                      ),
                     ),
-                  ),
-                  Builder(
-                    builder: (context) {
-                      return showcaseview.Showcase(
-                        key: TourKeys.myPlanButtonKey,
-                        title: 'View Your Diet Plan',
-                        description:
-                            'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
-                        targetShapeBorder: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(20)),
-                        ),
-                        tooltipBackgroundColor: Colors.white,
-                        textColor: Colors.black,
-                        overlayColor: Colors.black54,
-                        overlayOpacity: 0.8,
-                        onTargetClick: () {
-                          AppLogger.d(
-                              '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
-                          // Navigate to meal plan page - don't complete step yet
-                          Navigator.pushNamed(context, '/meal-plan');
-                          // Step will be completed when user clicks "Continue Tour" on diet plan page
-                        },
-                        onToolTipClick: () {
-                          AppLogger.d(
-                              '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
-                          // Navigate to meal plan page
-                          Navigator.pushNamed(context, '/meal-plan');
-                        },
-                        disposeOnTap: true,
-                        child: ElevatedButton(
-                          onPressed: () {
+                    Builder(
+                      builder: (context) {
+                        return showcaseview.Showcase(
+                          key: TourKeys.myPlanButtonKey,
+                          title: 'View Your Diet Plan',
+                          description:
+                              'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
+                          targetShapeBorder: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                          ),
+                          tooltipBackgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          overlayColor: Colors.black54,
+                          overlayOpacity: 0.8,
+                          onTargetClick: () {
                             AppLogger.d(
-                                '🎯 TrackerGrid: User clicked on My Plan button');
+                                '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
                             // Navigate to meal plan page - don't complete step yet
                             Navigator.pushNamed(context, '/meal-plan');
                             // Step will be completed when user clicks "Continue Tour" on diet plan page
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFFFF6B35), // Orange color
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
+                          onToolTipClick: () {
+                            AppLogger.d(
+                                '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
+                            // Navigate to meal plan page
+                            Navigator.pushNamed(context, '/meal-plan');
+                          },
+                          disposeOnTap: true,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              AppLogger.d(
+                                  '🎯 TrackerGrid: User clicked on My Plan button');
+                              // Navigate to meal plan page - don't complete step yet
+                              Navigator.pushNamed(context, '/meal-plan');
+                              // Step will be completed when user clicks "Continue Tour" on diet plan page
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  const Color(0xFFFF6B35), // Orange color
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 0,
                             ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'My Plan',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                            child: const Text(
+                              'My Plan',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 152 / 68,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-                itemCount: dailyTrackers.length,
-                itemBuilder: (context, index) {
-                  final tracker = dailyTrackers[index];
-                  final veggiesIndex = dailyTrackers
-                      .indexWhere((t) => t.category == TrackerCategory.veggies);
-                  final targetIndex = veggiesIndex >= 0 ? veggiesIndex : 0;
-                  final attachInfoKey = index == targetIndex;
-                  return _buildTrackerCard(
-                    context,
-                    tracker,
-                    infoKey: attachInfoKey ? TourKeys.trackerInfoKey : null,
-                  );
-                },
-              ),
-              if (weeklyTrackers.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 152 / 68,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: dailyTrackers.length,
+                  itemBuilder: (context, index) {
+                    final tracker = dailyTrackers[index];
+                    final veggiesIndex = dailyTrackers.indexWhere(
+                        (t) => t.category == TrackerCategory.veggies);
+                    final targetIndex = veggiesIndex >= 0 ? veggiesIndex : 0;
+                    final attachInfoKey = index == targetIndex;
+                    return _buildTrackerCard(
+                      context,
+                      tracker,
+                      infoKey: attachInfoKey ? TourKeys.trackerInfoKey : null,
+                    );
+                  },
+                ),
+              ],
+              if (widget.showWeeklyTrackers && weeklyTrackers.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
                   'Weekly Meal Plan Goals',
