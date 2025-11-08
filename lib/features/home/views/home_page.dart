@@ -761,32 +761,53 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                       // Trackers section
                       if (user != null && user.id != null)
-                        Showcase(
-                          key: TourKeys.trackersKey,
-                          title: 'Track Your Nutrition',
-                          description:
-                              'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
-                          tooltipPosition: TooltipPosition.bottom,
-                          targetShapeBorder: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                          ),
-                          tooltipBackgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          overlayColor: Colors.black54,
-                          overlayOpacity: 0.8,
-                          onTargetClick: () {
-                            _handleTrackersShowcase(context);
+                        Consumer<TrackerProvider>(
+                          builder: (context, trackerProvider, child) {
+                            final weeklyTrackers =
+                                trackerProvider.weeklyTrackers;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Daily trackers section wrapped in Showcase
+                                Showcase(
+                                  key: TourKeys.trackersKey,
+                                  title: 'Track Your Nutrition',
+                                  description:
+                                      'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
+                                  tooltipPosition: TooltipPosition.bottom,
+                                  targetShapeBorder:
+                                      const RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(12)),
+                                  ),
+                                  tooltipBackgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  overlayColor: Colors.black54,
+                                  overlayOpacity: 0.8,
+                                  onTargetClick: () {
+                                    _handleTrackersShowcase(context);
+                                  },
+                                  onToolTipClick: () {
+                                    _handleTrackersShowcase(context);
+                                  },
+                                  disposeOnTap: false,
+                                  child: TrackerGrid(
+                                    userId: user.id!,
+                                    dietType: dietType,
+                                    showWeeklyTrackers: false,
+                                  ),
+                                ),
+                                // Weekly trackers section (outside showcase)
+                                if (weeklyTrackers.isNotEmpty)
+                                  TrackerGrid(
+                                    userId: user.id!,
+                                    dietType: dietType,
+                                    showDailyTrackers: false,
+                                  ),
+                              ],
+                            );
                           },
-                          onToolTipClick: () {
-                            _handleTrackersShowcase(context);
-                          },
-                          disposeOnTap: false,
-                          child: Consumer<TrackerProvider>(
-                            builder: (context, trackerProvider, child) {
-                              return TrackerGrid(
-                                  userId: user.id!, dietType: dietType);
-                            },
-                          ),
                         ),
 
                       // Activity section could go here

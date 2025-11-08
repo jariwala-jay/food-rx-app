@@ -50,8 +50,10 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       if (success) {
+        // Pop back to home - MaterialApp's home Consumer will automatically
+        // show MainScreen when authController.isAuthenticated becomes true
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       } else {
         if (mounted) {

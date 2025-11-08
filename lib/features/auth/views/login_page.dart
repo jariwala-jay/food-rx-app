@@ -77,9 +77,10 @@ class _LoginPageState extends State<LoginPage> {
         // Clear the form
         _emailController.clear();
         _passwordController.clear();
-        // Navigate to main screen
+        // Pop back to home - MaterialApp's home Consumer will automatically
+        // show MainScreen when authController.isAuthenticated becomes true
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
