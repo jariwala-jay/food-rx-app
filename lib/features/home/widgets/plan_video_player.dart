@@ -7,6 +7,14 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+/// Helper class to hold video source information
+class _VideoSource {
+  final String path;
+  final bool isNetwork;
+
+  _VideoSource({required this.path, required this.isNetwork});
+}
+
 class PlanVideoPlayer extends StatefulWidget {
   final String planType;
   final String title;
@@ -43,9 +51,17 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
   Future<void> _initializeVideo() async {
     try {
-      final videoPath = _getVideoPath(widget.planType);
+      final videoSource = _getVideoSource(widget.planType);
 
-      _controller = VideoPlayerController.asset(videoPath);
+      // Create controller based on source type (network URL or local asset)
+      if (videoSource.isNetwork) {
+        _controller = VideoPlayerController.networkUrl(
+          Uri.parse(videoSource.path),
+        );
+      } else {
+        _controller = VideoPlayerController.asset(videoSource.path);
+      }
+
       await _controller!.initialize();
 
       // Listen for video completion and position updates
@@ -68,8 +84,17 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage =
-            'Video not found: ${_getVideoPath(widget.planType)}\nError: $e';
+        // Provide helpful error message
+        if (e.toString().contains('not configured')) {
+          _errorMessage = e.toString();
+        } else {
+          _errorMessage = 'Failed to load video from cloud storage.\n\n'
+              'Please check:\n'
+              '1. Video URL is correctly set in .env file\n'
+              '2. Firebase Storage rules allow public read access\n'
+              '3. Internet connection is available\n\n'
+              'Error: $e';
+        }
       });
     }
   }
@@ -106,17 +131,53 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     }
   }
 
-  String _getVideoPath(String planType) {
+  /// Video source information - requires cloud URLs from environment variables
+  _VideoSource _getVideoSource(String planType) {
+    // Get cloud URL from environment variables
+    String? cloudUrl;
+    String videoName;
     switch (planType) {
       case 'DASH':
-        return 'assets/nutrition/videos/dash.mp4';
+        cloudUrl = dotenv.env['DASH_VIDEO_URL'];
+        videoName = 'DASH';
+        break;
       case 'MyPlate':
-        return 'assets/nutrition/videos/myplate.mp4';
+        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        videoName = 'MyPlate';
+        break;
       case 'DiabetesPlate':
-        return 'assets/nutrition/videos/diabetes_plate.mp4';
+        cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL'];
+        videoName = 'Diabetes Plate';
+        break;
       default:
-        return 'assets/nutrition/videos/myplate.mp4';
+        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        videoName = 'MyPlate';
     }
+
+    // Cloud URL is required - no local fallback
+    if (cloudUrl != null &&
+        cloudUrl.isNotEmpty &&
+        cloudUrl.startsWith('http')) {
+      return _VideoSource(path: cloudUrl, isNetwork: true);
+    }
+
+    // If no cloud URL configured, throw an error with helpful message
+    String envVarName;
+    switch (planType) {
+      case 'DASH':
+        envVarName = 'DASH_VIDEO_URL';
+        break;
+      case 'MyPlate':
+        envVarName = 'MYPLATE_VIDEO_URL';
+        break;
+      case 'DiabetesPlate':
+        envVarName = 'DIABETES_PLATE_VIDEO_URL';
+        break;
+      default:
+        envVarName = 'MYPLATE_VIDEO_URL';
+    }
+    throw Exception(
+        '$videoName video URL not configured. Please add $envVarName to your .env file with the Firebase Storage URL.');
   }
 
   void _handleContinue() {

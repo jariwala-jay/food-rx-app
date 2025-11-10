@@ -10,13 +10,13 @@
 
 ## ✨ Features
 
--   **🍎 Personalized Diet Plans**: Get a tailored diet plan (DASH or MyPlate) based on a detailed onboarding process that captures your health goals, medical conditions, and dietary preferences.
--   **🧑‍🍳 Smart Recipe Generation**: Discover recipes that you can make right now. The app analyzes your pantry, prioritizes expiring ingredients, and filters recipes based on your specific health needs (e.g., low-sodium, low-sugar).
--   **📝 Pantry Management**: Easily track your food inventory. Add items to your virtual pantry, categorize them, and get reminders for expiring goods.
--   **🎯 Daily & Weekly Health Tracking**: Stay on top of your goals with a dashboard that tracks your daily intake of water, vegetables, protein, and other essential nutrients.
--   **📚 Educational Content**: Browse and bookmark articles on nutrition, healthy eating, and managing health conditions.
--   **🤖 AI-Powered Chatbot**: Have a question about a food item or nutrition? Our Dialogflow-powered chatbot is here to help 24/7.
--   **🔐 Secure Authentication**: Your data is protected with secure user authentication and password hashing.
+- **🍎 Personalized Diet Plans**: Get a tailored diet plan (DASH or MyPlate) based on a detailed onboarding process that captures your health goals, medical conditions, and dietary preferences.
+- **🧑‍🍳 Smart Recipe Generation**: Discover recipes that you can make right now. The app analyzes your pantry, prioritizes expiring ingredients, and filters recipes based on your specific health needs (e.g., low-sodium, low-sugar).
+- **📝 Pantry Management**: Easily track your food inventory. Add items to your virtual pantry, categorize them, and get reminders for expiring goods.
+- **🎯 Daily & Weekly Health Tracking**: Stay on top of your goals with a dashboard that tracks your daily intake of water, vegetables, protein, and other essential nutrients.
+- **📚 Educational Content**: Browse and bookmark articles on nutrition, healthy eating, and managing health conditions.
+- **🤖 AI-Powered Chatbot**: Have a question about a food item or nutrition? Our Dialogflow-powered chatbot is here to help 24/7.
+- **🔐 Secure Authentication**: Your data is protected with secure user authentication and password hashing.
 
 ---
 
@@ -24,12 +24,12 @@
 
 Food Rx is built with a modern stack, designed for scalability and a smooth user experience.
 
--   **Frontend**: Flutter
--   **State Management**: Provider
--   **Database**: MongoDB
--   **Food Data & Recipes**: Spoonacular API
--   **Chatbot**: Google Cloud Dialogflow
--   **Backend Automation**: Google Cloud Functions (for scheduled tasks like resetting trackers)
+- **Frontend**: Flutter
+- **State Management**: Provider
+- **Database**: MongoDB
+- **Food Data & Recipes**: Spoonacular API
+- **Chatbot**: Google Cloud Dialogflow
+- **Backend Automation**: Google Cloud Functions (for scheduled tasks like resetting trackers)
 
 The project follows a **feature-first architecture**, where code is organized by feature (e.g., `auth`, `recipes`, `pantry`). This makes the codebase modular, easier to navigate, and simpler to maintain.
 
@@ -41,12 +41,12 @@ Follow these steps to get the Food Rx project up and running on your local machi
 
 ### 1. Prerequisites
 
--   Flutter SDK (version >=3.0.0 <4.0.0)
--   An IDE (like VS Code or Android Studio) with the Flutter plugin.
--   Access to:
-    -   A MongoDB database.
-    -   A Spoonacular API key.
-    -   A Google Cloud Platform project with Dialogflow CX enabled.
+- Flutter SDK (version >=3.0.0 <4.0.0)
+- An IDE (like VS Code or Android Studio) with the Flutter plugin.
+- Access to:
+  - A MongoDB database.
+  - A Spoonacular API key.
+  - A Google Cloud Platform project with Dialogflow CX enabled.
 
 ### 2. Clone the Repository
 
@@ -85,6 +85,12 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
     # FLAGS
     SHOW_SCALING_CONVERSION=false
     MANDATORY_PLAN_VIDEO=false
+
+    # VIDEO URLs (Required - videos are hosted in cloud storage)
+    # Get these URLs from Firebase Storage
+    DASH_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fdash.mp4?alt=media&token=..."
+    MYPLATE_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fmyplate.mp4?alt=media&token=..."
+    DIABETES_PLATE_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fdiabetes_plate.mp4?alt=media&token=..."
     ```
 
 3.  **Dialogflow Service Account**: Place your Google Cloud service account JSON key file in `assets/dialogflow_auth.json`. This is required for the chatbot to authenticate with Google's services.
