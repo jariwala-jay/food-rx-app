@@ -90,7 +90,6 @@ flutter:
     - assets/nutrition/screenshots/myplate/
     - assets/nutrition/screenshots/diabetes_plate/
     - assets/nutrition/screenshots/glycemic_index/
-    - assets/nutrition/videos/
     - assets/images/profile_pic.png
     - assets/images/healthy_diet.png
     - .env
