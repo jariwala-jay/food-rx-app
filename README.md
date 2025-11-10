@@ -84,6 +84,7 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
 
     # FLAGS
     SHOW_SCALING_CONVERSION=false
+    MANDATORY_PLAN_VIDEO=false
     ```
 
 3.  **Dialogflow Service Account**: Place your Google Cloud service account JSON key file in `assets/dialogflow_auth.json`. This is required for the chatbot to authenticate with Google's services.
