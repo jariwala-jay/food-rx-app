@@ -43,6 +43,36 @@ class MyPlateIntro extends StatelessWidget {
                 style: AppTypography.bg_14_r
                     .copyWith(color: const Color(0xFF90909A)),
               ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEFE7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFF6A00).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.play_circle_outline,
+                      color: Color(0xFFFF6A00),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "We'll walk you through this plan in detail with a video tutorial once you're set up!",
+                        style: AppTypography.bg_14_r.copyWith(
+                          color: const Color(0xFF2C2C2C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const Spacer(),
               Padding(
                 padding: const EdgeInsets.only(bottom: 24.0),
