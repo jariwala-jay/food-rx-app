@@ -121,12 +121,22 @@ class _PreferencesStepState extends State<PreferencesStep> {
           });
           return;
         }
+        // Validate food allergies - must be selected
+        if (_selectedFoodAllergies.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select your food allergies (or "No allergies" if you have none)'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
         // Ensure multi-selects have a value (with explicit neutral choices)
         if (_favoriteCuisines.isEmpty) {
           _favoriteCuisines = ["No preference"];
-        }
-        if (_selectedFoodAllergies.isEmpty) {
-          _selectedFoodAllergies = ["None"];
         }
 
         // Update preferences in SignupProvider
@@ -234,7 +244,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Food Allergies',
+                          label: 'Food Allergies *',
                           value: null,
                           options: const [
                             'Tree Nuts',
@@ -245,6 +255,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             'Wheat',
                             'Fish',
                             'Shellfish',
+                            'No allergies',
                           ],
                           onChanged: (_) {},
                           hintText: 'Food Allergies',
@@ -253,7 +264,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           selectedValues: _selectedFoodAllergies,
                           onChangedMulti: (values) {
                             setState(() {
-                              _selectedFoodAllergies = values;
+                              // Allow explicit 'No allergies' as a value but not with others
+                              if (values.contains('No allergies')) {
+                                _selectedFoodAllergies = ['No allergies'];
+                              } else {
+                                _selectedFoodAllergies = values;
+                              }
                             });
                           },
                         ),
@@ -263,7 +279,13 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             values: _selectedFoodAllergies,
                             onChanged: (values) {
                               setState(() {
-                                _selectedFoodAllergies = values;
+                                // Respect 'No allergies' exclusivity
+                                if (values.contains('No allergies') &&
+                                    values.length > 1) {
+                                  _selectedFoodAllergies = ['No allergies'];
+                                } else {
+                                  _selectedFoodAllergies = values;
+                                }
                               });
                             },
                           ),
