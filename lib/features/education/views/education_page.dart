@@ -7,7 +7,9 @@ import 'package:flutter_app/features/education/widgets/recommended_articles_sect
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/features/home/widgets/tour_completion_dialog.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/core/utils/app_logger.dart';
 
@@ -136,9 +138,10 @@ class _EducationPageState extends State<EducationPage> {
               child: Stack(
                 children: [
                   Consumer<ArticleController>(
-                    builder: (context, articleController, child) {
+                    builder: (consumerContext, articleController, child) {
                       // No showcase starts here anymore — just render content.
-                      return _buildContent(articleController);
+                      // Pass the widget's context (from build method) to _buildContent
+                      return _buildContent(context, articleController);
                     },
                   ),
                 ],
@@ -150,7 +153,8 @@ class _EducationPageState extends State<EducationPage> {
     );
   }
 
-  Widget _buildContent(ArticleController controller) {
+  Widget _buildContent(
+      BuildContext widgetContext, ArticleController controller) {
     if (controller.isLoading &&
         controller.articles.isEmpty &&
         controller.recommendedArticles.isEmpty) {
@@ -183,13 +187,71 @@ class _EducationPageState extends State<EducationPage> {
                 textColor: Colors.black,
                 overlayColor: Colors.black54,
                 overlayOpacity: 0.8,
-                onTargetClick: () {
-                  Provider.of<ForcedTourProvider>(context, listen: false)
-                      .completeTour();
+                onTargetClick: () async {
+                  debugPrint(
+                      '🎯 EducationPage: onTargetClick - completing tour');
+                  final tourProvider = Provider.of<ForcedTourProvider>(
+                      widgetContext,
+                      listen: false);
+                  // Complete tour
+                  await tourProvider.completeTour();
+                  debugPrint('🎯 EducationPage: Tour completed');
+                  // Show completion dialog after delay using global navigator key
+                  Future.delayed(const Duration(milliseconds: 1000), () {
+                    final navigator =
+                        NavigationService.navigatorKey.currentState;
+                    if (navigator != null && navigator.overlay != null) {
+                      try {
+                        showDialog(
+                          context: navigator.overlay!.context,
+                          barrierDismissible: false,
+                          builder: (dialogContext) =>
+                              const TourCompletionDialog(),
+                        );
+                        debugPrint(
+                            '🎯 EducationPage: Dialog shown successfully using navigator overlay');
+                      } catch (e) {
+                        debugPrint(
+                            '🎯 EducationPage: Error showing completion dialog: $e');
+                      }
+                    } else {
+                      debugPrint(
+                          '🎯 EducationPage: Navigator or overlay is null, cannot show dialog');
+                    }
+                  });
                 },
-                onToolTipClick: () {
-                  Provider.of<ForcedTourProvider>(context, listen: false)
-                      .completeTour();
+                onToolTipClick: () async {
+                  debugPrint(
+                      '🎯 EducationPage: onToolTipClick - completing tour');
+                  final tourProvider = Provider.of<ForcedTourProvider>(
+                      widgetContext,
+                      listen: false);
+                  // Complete tour
+                  await tourProvider.completeTour();
+                  debugPrint('🎯 EducationPage: Tour completed');
+                  // Show completion dialog after delay using global navigator key
+                  Future.delayed(const Duration(milliseconds: 1000), () {
+                    final navigator =
+                        NavigationService.navigatorKey.currentState;
+                    if (navigator != null && navigator.overlay != null) {
+                      try {
+                        showDialog(
+                          context: navigator.overlay!.context,
+                          barrierDismissible: false,
+                          builder: (dialogContext) =>
+                              const TourCompletionDialog(),
+                        );
+                        debugPrint(
+                            '🎯 EducationPage: Dialog shown successfully using navigator overlay');
+                      } catch (e) {
+                        debugPrint(
+                            '🎯 EducationPage: Error showing completion dialog: $e');
+                      }
+                    } else {
+                      debugPrint(
+                          '🎯 EducationPage: Navigator or overlay is null, cannot show dialog');
+                    }
+                  });
                 },
                 disposeOnTap: true,
                 child: RecommendedArticlesSection(
