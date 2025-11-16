@@ -39,6 +39,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   // Health goals are collected in Other Details step
 
   final List<String> _cuisineOptions = [
+    "No preference",
     'American',
     'Mexican',
     'Italian',
@@ -53,7 +54,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
     'Greek',
     'French',
     'Spanish',
-    "No preference",
   ];
 
   final List<String> _dailyIntakeOptions = [
@@ -125,7 +125,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
         if (_selectedFoodAllergies.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please select your food allergies (or "No allergies" if you have none)'),
+              content: Text(
+                  'Please select your food allergies (or "No allergies" if you have none)'),
               backgroundColor: Colors.red,
             ),
           );
@@ -247,6 +248,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           label: 'Food Allergies *',
                           value: null,
                           options: const [
+                            'No allergies',
                             'Tree Nuts',
                             'Peanuts',
                             'Dairy',
@@ -255,7 +257,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             'Wheat',
                             'Fish',
                             'Shellfish',
-                            'No allergies',
                           ],
                           onChanged: (_) {},
                           hintText: 'Food Allergies',
@@ -359,8 +360,14 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       value: _dailyWaterIntake,
                       options: const [
                         {'0 glass': '0 glass'},
-                        {'less than 8 glasses': 'less than 8 glasses'},
-                        {'8 or more glasses': '8 or more glasses'},
+                        {
+                          'less than 8 glasses (0.5 gallon)':
+                              'less than 8 glasses (0.5 gallon)'
+                        },
+                        {
+                          '8 or more glasses (0.5 gallon)':
+                              '8 or more glasses (0.5 gallon)'
+                        },
                       ],
                       onChanged: (value) {
                         setState(() {

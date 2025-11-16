@@ -404,6 +404,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
             ),
           ),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }

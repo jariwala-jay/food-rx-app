@@ -700,6 +700,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
   Widget _buildAllergiesEdit() {
     final options = const [
+      'No allergies',
       'Tree Nuts',
       'Peanuts',
       'Dairy',
@@ -708,7 +709,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       'Wheat',
       'Fish',
       'Shellfish',
-      'No allergies',
     ];
 
     return Container(
