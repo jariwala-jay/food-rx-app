@@ -89,8 +89,7 @@ class _MainScreenState extends State<MainScreen> {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!mounted || _isDisposed) return;
           try {
-            final tp =
-                Provider.of<ForcedTourProvider>(context, listen: false);
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
             // Double-check we're still on trackers step and have triggered flag set
             if (tp.isOnStep(TourStep.trackers) &&
                 tp.hasTriggeredInitialShowcase) {
@@ -153,28 +152,26 @@ class _MainScreenState extends State<MainScreen> {
       setState(() => _isAddActive = false);
     }
 
-    // Handle tour progression if on add button step
+    // Handle tour progression - only if we're past the item adding steps
+    // The addButton step is now completed when user clicks "Add FoodRx Items"
+    // and we move through selectCategory -> selectItem -> setQuantityUnit -> pantryItems
     if (!mounted || _isDisposed) return;
-    if (tourProvider.isOnStep(TourStep.addButton)) {
-      tourProvider.completeCurrentStep();
 
-      // After completing addButton step, we move to pantryItems step
-      // Trigger the pantry tab showcase to guide user to pantry
+    // Only handle pantryItems step here (after items are added)
+    final currentStep = tourProvider.currentStep;
+    if (currentStep == TourStep.pantryItems) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!mounted || _isDisposed) return;
           try {
             final tp = Provider.of<ForcedTourProvider>(context, listen: false);
-            // Check if we're now on pantryItems step (after completing addButton)
             if (tp.isOnStep(TourStep.pantryItems)) {
-              // Dismiss any active showcase first
               ShowcaseView.get().dismiss();
               Future.delayed(const Duration(milliseconds: 300), () {
                 if (!mounted || _isDisposed) return;
                 final tp2 =
                     Provider.of<ForcedTourProvider>(context, listen: false);
-                // Double-check we're still on pantryItems step
                 if (tp2.isOnStep(TourStep.pantryItems)) {
                   ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
                   print(
@@ -195,9 +192,9 @@ class _MainScreenState extends State<MainScreen> {
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
         // Listen for tour completion to show completion dialog (backup method)
-        if (_wasTourActive && 
-            !tourProvider.isTourActive && 
-            tourProvider.tourCompleted && 
+        if (_wasTourActive &&
+            !tourProvider.isTourActive &&
+            tourProvider.tourCompleted &&
             !_hasShownCompletionDialog) {
           // Tour just completed, show completion dialog
           _hasShownCompletionDialog = true;
@@ -212,7 +209,8 @@ class _MainScreenState extends State<MainScreen> {
                       builder: (dialogContext) => const TourCompletionDialog(),
                     );
                   } catch (e) {
-                    debugPrint('MainScreen: Error showing completion dialog: $e');
+                    debugPrint(
+                        'MainScreen: Error showing completion dialog: $e');
                   }
                 }
               });

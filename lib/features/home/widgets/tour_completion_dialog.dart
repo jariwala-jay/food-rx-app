@@ -44,28 +44,7 @@ class TourCompletionDialog extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
 
-            const SizedBox(height: 16),
-
-            // Description
-            const Text(
-              'You\'ve completed your FoodRx tour! You now know how to:',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF666666),
-              ),
-              textAlign: TextAlign.center,
-            ),
-
             const SizedBox(height: 20),
-
-            // Features learned
-            _buildFeatureItem('📊 Track your daily nutrition goals'),
-            _buildFeatureItem('📋 View your personalized diet plan'),
-            _buildFeatureItem('🏠 Add items from your pantry'),
-            _buildFeatureItem('👨‍🍳 Generate healthy recipes'),
-            _buildFeatureItem('📚 Learn about managing your health'),
-
-            const SizedBox(height: 24),
 
             // Completion message
             Container(
@@ -97,7 +76,7 @@ class TourCompletionDialog extends StatelessWidget {
                       color: const Color(0xFF666666),
                       height: 1.4,
                     ),
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.justify,
                   ),
                 ],
               ),

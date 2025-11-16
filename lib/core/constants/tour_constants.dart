@@ -32,6 +32,10 @@ class TourKeys {
       GlobalKey(debugLabel: 'recommended_articles');
   static final GlobalKey articlesListKey =
       GlobalKey(debugLabel: 'articles_list');
+  static final GlobalKey selectItemKey =
+      GlobalKey(debugLabel: 'select_item');
+  static final GlobalKey quantityUnitKey =
+      GlobalKey(debugLabel: 'quantity_unit');
 }
 
 // Tour step enum
@@ -41,6 +45,9 @@ enum TourStep {
   dailyTips,
   myPlan,
   addButton,
+  selectCategory,
+  selectItem,
+  setQuantityUnit,
   pantryItems,
   recipes,
   education,
@@ -63,8 +70,17 @@ class TourDescriptions {
   static const String addButton =
       "Tap the + button to add food items from your pantry or create healthy recipes. You MUST click this button to continue.";
 
+  static const String selectCategory =
+      "Choose a category to browse items. Tap any category to continue.";
+
+  static const String selectItem =
+      "Tap the + button next to an item to add it to your pantry.";
+
+  static const String setQuantityUnit =
+      "Set the quantity and unit for this item, then tap Add to save it.";
+
   static const String pantryItems =
-      "Let's add items you got from food pharmacy. This helps us suggest recipes you can actually make! Click on this section to continue.";
+      "Here are your pantry items! The more items you add, the better recipe recommendations you'll get. Make sure to add all the items you received from the food pantry today. Click on this section to continue.";
 
   static const String pantryList =
       "Here are your pantry items! We'll use these to suggest recipes you can make. Click on this section to continue.";

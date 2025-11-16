@@ -58,6 +58,10 @@ class ForcedTourService {
       case TourStep.myPlan:
         return TourStep.addButton;
       case TourStep.addButton:
+        return TourStep.selectCategory;
+      case TourStep.selectCategory:
+        return TourStep.setQuantityUnit;
+      case TourStep.setQuantityUnit:
         return TourStep.pantryItems;
       case TourStep.pantryItems:
         return TourStep.recipes;
@@ -65,6 +69,9 @@ class ForcedTourService {
         return TourStep.education;
       case TourStep.education:
         return null; // Tour is complete
+      case TourStep.selectItem:
+        // This step is no longer used, but kept for enum completeness
+        return TourStep.setQuantityUnit;
     }
   }
 
@@ -86,12 +93,19 @@ class ForcedTourService {
         return TourDescriptions.myPlan;
       case TourStep.addButton:
         return TourDescriptions.addButton;
+      case TourStep.selectCategory:
+        return TourDescriptions.selectCategory;
+      case TourStep.setQuantityUnit:
+        return TourDescriptions.setQuantityUnit;
       case TourStep.pantryItems:
         return TourDescriptions.pantryItems;
       case TourStep.recipes:
         return TourDescriptions.recipes;
       case TourStep.education:
         return TourDescriptions.education;
+      case TourStep.selectItem:
+        // This step is no longer used
+        return TourDescriptions.selectItem;
     }
   }
 
@@ -108,12 +122,19 @@ class ForcedTourService {
         return 'Your Diet Plan';
       case TourStep.addButton:
         return 'Add Items';
+      case TourStep.selectCategory:
+        return 'Select Category';
+      case TourStep.setQuantityUnit:
+        return 'Set Quantity & Unit';
       case TourStep.pantryItems:
         return 'Your Pantry';
       case TourStep.recipes:
         return 'Personalized Recipes';
       case TourStep.education:
         return 'Health Education';
+      case TourStep.selectItem:
+        // This step is no longer used
+        return 'Select Item';
     }
   }
 }

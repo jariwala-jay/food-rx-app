@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/utils/image_url_helper.dart';
 import 'dart:developer' as developer;
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class PantryItemAddModal extends StatefulWidget {
   final Map<String, dynamic> foodItem; // Spoonacular item or similar map
@@ -138,91 +142,153 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
             const SizedBox(height: 24),
 
             // Quantity input and unit selection row
-            Row(
-              children: [
-                // Quantity field - takes 60% of the space
-                Expanded(
-                  flex: 60,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: TextField(
-                      controller: _quantityController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (_) => _validateQuantity(),
-                      decoration: InputDecoration(
-                        hintText: 'Enter Quantity',
-                        border: InputBorder.none,
-                        errorText:
-                            _isQuantityValid ? null : 'Enter valid quantity',
-                        errorStyle: const TextStyle(height: 0, fontSize: 0),
-                      ),
-                    ),
+            Consumer<ForcedTourProvider>(
+              builder: (context, tourProvider, child) {
+                final bool showTour =
+                    tourProvider.isOnStep(TourStep.setQuantityUnit);
+                return Showcase(
+                  key: showTour ? TourKeys.quantityUnitKey : GlobalKey(),
+                  title: 'Set Quantity & Unit',
+                  description:
+                      'Enter the quantity and select the unit for this item, then tap Add.',
+                  targetShapeBorder: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Unit dropdown - takes 40% of the space
-                Expanded(
-                  flex: 40,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<UnitType>(
-                        value: _selectedUnit,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down),
-                        dropdownColor: Colors.white,
-                        style: const TextStyle(color: Colors.black87),
-                        items: UnitType.values.map((UnitType unit) {
-                          return DropdownMenuItem<UnitType>(
-                            value: unit,
-                            child: Text(_getUnitDisplayName(unit)),
-                          );
-                        }).toList(),
-                        onChanged: (UnitType? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              _selectedUnit = newValue;
-                            });
-                          }
-                        },
+                  tooltipBackgroundColor: Colors.white,
+                  tooltipPosition: TooltipPosition.bottom,
+                  textColor: Colors.black,
+                  overlayColor: Colors.black54,
+                  overlayOpacity: 0.8,
+                  showArrow: true,
+                  onTargetClick: () {
+                    // Dismiss showcase to allow interaction with fields
+                    ShowcaseView.get().dismiss();
+                  },
+                  onToolTipClick: () {
+                    // Dismiss showcase to allow interaction with fields
+                    ShowcaseView.get().dismiss();
+                  },
+                  disposeOnTap: true,
+                  child: Row(
+                    children: [
+                      // Quantity field - takes 60% of the space
+                      Expanded(
+                        flex: 60,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: TextField(
+                            controller: _quantityController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) {
+                              _validateQuantity();
+                              // Complete step when quantity is entered (if valid)
+                              final tourProvider =
+                                  Provider.of<ForcedTourProvider>(context,
+                                      listen: false);
+                              if (tourProvider
+                                      .isOnStep(TourStep.setQuantityUnit) &&
+                                  _quantityController.text.isNotEmpty &&
+                                  _isQuantityValid) {
+                                // Don't complete here, wait for Add button or unit change
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Enter Quantity',
+                              border: InputBorder.none,
+                              errorText: _isQuantityValid
+                                  ? null
+                                  : 'Enter valid quantity',
+                              errorStyle:
+                                  const TextStyle(height: 0, fontSize: 0),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+
+                      const SizedBox(width: 12),
+
+                      // Unit dropdown - takes 40% of the space
+                      Expanded(
+                        flex: 40,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<UnitType>(
+                              value: _selectedUnit,
+                              isExpanded: true,
+                              icon: const Icon(Icons.keyboard_arrow_down),
+                              dropdownColor: Colors.white,
+                              style: const TextStyle(color: Colors.black87),
+                              items: UnitType.values.map((UnitType unit) {
+                                return DropdownMenuItem<UnitType>(
+                                  value: unit,
+                                  child: Text(_getUnitDisplayName(unit)),
+                                );
+                              }).toList(),
+                              onChanged: (UnitType? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedUnit = newValue;
+                                  });
+                                  // Complete step when unit is changed
+                                  final tourProvider =
+                                      Provider.of<ForcedTourProvider>(context,
+                                          listen: false);
+                                  if (tourProvider
+                                      .isOnStep(TourStep.setQuantityUnit)) {
+                                    tourProvider.completeCurrentStep();
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
 
             const SizedBox(height: 24),
 
             // Add button
-            ElevatedButton(
-              onPressed: _addItem,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-              ),
-              child: const Text(
-                'Add',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            Consumer<ForcedTourProvider>(
+              builder: (context, tourProvider, child) {
+                return ElevatedButton(
+                  onPressed: () {
+                    // Complete step if we're on it
+                    if (tourProvider.isOnStep(TourStep.setQuantityUnit)) {
+                      tourProvider.completeCurrentStep();
+                    }
+                    _addItem();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: const Text(
+                    'Add',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -255,8 +321,6 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
         return 'Tablespoon';
       case UnitType.teaspoon:
         return 'Teaspoon';
-      default:
-        return unit.toString().split('.').last;
     }
   }
 }
