@@ -118,116 +118,170 @@ async function sendScheduledNotifications() {
       "[Notification Delivery] Starting scheduled notification delivery"
     );
 
-    // Get notifications that haven't been sent yet
-    // Note: createdAt may be stored as BSON Date or ISO string depending on
-    // client version. To avoid missing rows, we only filter on sentAt here.
-    const scheduledNotifications = await notificationsCollection
-      .find({
-        sentAt: { $exists: false },
-      })
-      .limit(100) // Process in batches
-      .toArray();
-
+    // Get total count of unsent notifications
+    const totalUnsentCount = await notificationsCollection.countDocuments({
+      sentAt: { $exists: false },
+    });
     console.log(
-      `[Notification Delivery] Found ${scheduledNotifications.length} notifications to send`
+      `[Notification Delivery] Total unsent notifications: ${totalUnsentCount}`
     );
 
+    if (totalUnsentCount === 0) {
+      console.log("[Notification Delivery] No notifications to process");
+      return {
+        status: "success",
+        notificationsProcessed: 0,
+        successfulDeliveries: 0,
+        failedDeliveries: 0,
+        usersWithToken: 0,
+        usersWithoutToken: 0,
+        results: [],
+      };
+    }
+
+    // Process all notifications in batches to avoid memory issues
+    // Process in batches of 1000, but continue until all are processed
+    const BATCH_SIZE = 1000;
     const deliveryResults = [];
+    let usersWithToken = 0;
+    let usersWithoutToken = 0;
+    let totalProcessed = 0;
+    let hasMore = true;
 
-    for (const notification of scheduledNotifications) {
-      try {
-        // Get user's FCM token
-        const user = await usersCollection.findOne(
-          { _id: new ObjectId(notification.userId) },
-          { projection: { fcmToken: 1, name: 1 } }
-        );
+    while (hasMore) {
+      // Get next batch of notifications
+      const scheduledNotifications = await notificationsCollection
+        .find({
+          sentAt: { $exists: false },
+        })
+        .limit(BATCH_SIZE)
+        .toArray();
 
-        if (!user || !user.fcmToken) {
-          console.log(
-            `[Notification Delivery] No FCM token for user ${notification.userId}`
+      if (scheduledNotifications.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      console.log(
+        `[Notification Delivery] Processing batch: ${
+          scheduledNotifications.length
+        } notifications (${
+          totalProcessed + scheduledNotifications.length
+        }/${totalUnsentCount} total)`
+      );
+
+      for (const notification of scheduledNotifications) {
+        try {
+          // Get user's FCM token
+          const user = await usersCollection.findOne(
+            { _id: new ObjectId(notification.userId) },
+            { projection: { fcmToken: 1, name: 1 } }
           );
-          continue;
-        }
 
-        // Prepare notification payload
-        const message = {
-          token: user.fcmToken,
-          notification: {
-            title: notification.title,
-            body: notification.message,
-          },
-          data: {
-            notificationId: notification._id.toHexString(),
-            type: notification.type,
-          },
-          android: {
+          if (!user || !user.fcmToken) {
+            usersWithoutToken++;
+            console.log(
+              `[Notification Delivery] No FCM token for user ${notification.userId}`
+            );
+            continue;
+          }
+
+          usersWithToken++;
+
+          // Prepare notification payload
+          const message = {
+            token: user.fcmToken,
             notification: {
-              icon: "ic_notification",
-              color: getNotificationColor(notification.type),
-              priority: "high",
+              title: notification.title,
+              body: notification.message,
             },
-          },
-          apns: {
-            payload: {
-              aps: {
-                badge: 1,
-                sound: "default",
+            data: {
+              notificationId: notification._id.toHexString(),
+              type: notification.type,
+            },
+            android: {
+              notification: {
+                icon: "ic_notification",
+                color: getNotificationColor(notification.type),
+                priority: "high",
               },
             },
-          },
-        };
-
-        // Send notification
-        const response = await admin.messaging().send(message);
-        console.log(
-          `[Notification Delivery] Sent notification ${notification._id.toHexString()} to user ${
-            notification.userId
-          }`
-        );
-
-        // Update notification as sent
-        await notificationsCollection.updateOne(
-          { _id: notification._id },
-          {
-            $set: {
-              sentAt: new Date(),
+            apns: {
+              payload: {
+                aps: {
+                  badge: 1,
+                  sound: "default",
+                },
+              },
             },
-          }
-        );
+          };
 
-        deliveryResults.push({
-          notificationId: notification._id.toHexString(),
-          userId: notification.userId,
-          status: "sent",
-          fcmMessageId: response,
-        });
-      } catch (error) {
-        console.error(
-          `[Notification Delivery] Error sending notification ${notification._id.toHexString()}:`,
-          error
-        );
+          // Send notification
+          const response = await admin.messaging().send(message);
+          console.log(
+            `[Notification Delivery] Sent notification ${notification._id.toHexString()} to user ${
+              notification.userId
+            }`
+          );
 
-        deliveryResults.push({
-          notificationId: notification._id.toHexString(),
-          userId: notification.userId,
-          status: "failed",
-          error: error.message,
-        });
+          // Update notification as sent
+          await notificationsCollection.updateOne(
+            { _id: notification._id },
+            {
+              $set: {
+                sentAt: new Date(),
+              },
+            }
+          );
+
+          deliveryResults.push({
+            notificationId: notification._id.toHexString(),
+            userId: notification.userId,
+            status: "sent",
+            fcmMessageId: response,
+          });
+        } catch (error) {
+          console.error(
+            `[Notification Delivery] Error sending notification ${notification._id.toHexString()}:`,
+            error
+          );
+
+          deliveryResults.push({
+            notificationId: notification._id.toHexString(),
+            userId: notification.userId,
+            status: "failed",
+            error: error.message,
+          });
+        }
       }
+
+      totalProcessed += scheduledNotifications.length;
+
+      // If we got fewer notifications than the batch size, we've processed all
+      if (scheduledNotifications.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+
+      // Log progress
+      console.log(
+        `[Notification Delivery] Batch complete. Progress: ${totalProcessed}/${totalUnsentCount} notifications processed`
+      );
     }
 
     console.log(
-      `[Notification Delivery] Completed delivery. Results:`,
-      deliveryResults
+      `[Notification Delivery] Completed delivery of all ${totalProcessed} notifications. Users with token: ${usersWithToken}, Users without token: ${usersWithoutToken}`
     );
+    console.log(`[Notification Delivery] Results:`, deliveryResults);
 
     return {
       status: "success",
-      notificationsProcessed: scheduledNotifications.length,
+      notificationsProcessed: totalProcessed,
       successfulDeliveries: deliveryResults.filter((r) => r.status === "sent")
         .length,
       failedDeliveries: deliveryResults.filter((r) => r.status === "failed")
         .length,
+      usersWithToken: usersWithToken,
+      usersWithoutToken: usersWithoutToken,
       results: deliveryResults,
     };
   } catch (error) {

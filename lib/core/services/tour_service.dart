@@ -65,6 +65,12 @@ class TourService {
       case TourStep.myPlan:
         return TourStep.addButton;
       case TourStep.addButton:
+        return TourStep.selectCategory;
+      case TourStep.selectCategory:
+        return TourStep.setQuantityUnit;
+      case TourStep.selectItem:
+        return TourStep.setQuantityUnit;
+      case TourStep.setQuantityUnit:
         return TourStep.pantryItems;
       case TourStep.pantryItems:
         return TourStep.recipes;

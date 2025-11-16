@@ -88,58 +88,64 @@ class _AddActionSheetState extends State<AddActionSheet> {
                 onTargetClick: () {
                   print(
                       '🎯 AddActionSheet: User clicked on Add FoodRx Items showcase');
-                  // Don't complete step yet - wait for user to add items
+                  final tourProvider =
+                      Provider.of<ForcedTourProvider>(context, listen: false);
+                  
+                  // Complete addButton step and move to selectCategory
+                  if (tourProvider.isOnStep(TourStep.addButton)) {
+                    tourProvider.completeCurrentStep();
+                  }
+                  
                   setState(() => showPantryPicker = true);
 
                   // Trigger category list showcase after opening
-                  // Only if we're on the addButton step
-                  final tourProvider =
-                      Provider.of<ForcedTourProvider>(context, listen: false);
-                  if (tourProvider.isOnStep(TourStep.addButton)) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
-                      try {
-                        final tp = Provider.of<ForcedTourProvider>(context,
-                            listen: false);
-                        // Double-check step hasn't changed
-                        if (tp.isOnStep(TourStep.addButton)) {
-                          ShowcaseView.get()
-                              .startShowCase([TourKeys.pantryCategoryListKey]);
-                          print(
-                              '🎯 AddActionSheet: Triggered category list showcase');
-                        }
-                      } catch (e) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    try {
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      // Check if we're now on selectCategory step
+                      if (tp.isOnStep(TourStep.selectCategory)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.pantryCategoryListKey]);
                         print(
-                            '🎯 AddActionSheet: Error triggering category list showcase: $e');
+                            '🎯 AddActionSheet: Triggered category list showcase');
                       }
-                    });
-                  }
+                    } catch (e) {
+                      print(
+                          '🎯 AddActionSheet: Error triggering category list showcase: $e');
+                    }
+                  });
                 },
                 onToolTipClick: () {
                   print(
                       '🎯 AddActionSheet: User clicked on Add FoodRx Items tooltip');
                   final tourProvider =
                       Provider.of<ForcedTourProvider>(context, listen: false);
-                  setState(() => showPantryPicker = true);
+                  
+                  // Complete addButton step and move to selectCategory
                   if (tourProvider.isOnStep(TourStep.addButton)) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
-                      try {
-                        final tp = Provider.of<ForcedTourProvider>(context,
-                            listen: false);
-                        // Double-check step hasn't changed
-                        if (tp.isOnStep(TourStep.addButton)) {
-                          ShowcaseView.get()
-                              .startShowCase([TourKeys.pantryCategoryListKey]);
-                          print(
-                              '🎯 AddActionSheet: Triggered category list showcase');
-                        }
-                      } catch (e) {
-                        print(
-                            '🎯 AddActionSheet: Error triggering category list showcase: $e');
-                      }
-                    });
+                    tourProvider.completeCurrentStep();
                   }
+                  
+                  setState(() => showPantryPicker = true);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    try {
+                      final tp = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      // Check if we're now on selectCategory step
+                      if (tp.isOnStep(TourStep.selectCategory)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.pantryCategoryListKey]);
+                        print(
+                            '🎯 AddActionSheet: Triggered category list showcase');
+                      }
+                    } catch (e) {
+                      print(
+                          '🎯 AddActionSheet: Error triggering category list showcase: $e');
+                    }
+                  });
                 },
                 disposeOnTap: true,
                 child: ModalActionButton(

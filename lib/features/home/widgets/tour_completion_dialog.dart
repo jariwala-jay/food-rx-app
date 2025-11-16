@@ -35,7 +35,7 @@ class TourCompletionDialog extends StatelessWidget {
 
             // Title
             const Text(
-              'Congratulations! 🎉',
+              'Congratulations!',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -44,38 +44,42 @@ class TourCompletionDialog extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
 
-            const SizedBox(height: 16),
-
-            // Description
-            const Text(
-              'You\'ve completed your FoodRx tour! You now know how to:',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF666666),
-              ),
-              textAlign: TextAlign.center,
-            ),
-
             const SizedBox(height: 20),
 
-            // Features learned
-            _buildFeatureItem('📊 Track your daily nutrition goals'),
-            _buildFeatureItem('📋 View your personalized diet plan'),
-            _buildFeatureItem('🏠 Add items from your pantry'),
-            _buildFeatureItem('👨‍🍳 Generate healthy recipes'),
-            _buildFeatureItem('📚 Learn about managing your health'),
-
-            const SizedBox(height: 24),
-
             // Completion message
-            const Text(
-              'You\'re all set! Feel free to explore on your own now.',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF333333),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEFE7),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFF6A00).withOpacity(0.3),
+                  width: 1,
+                ),
               ),
-              textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  const Text(
+                    'You\'re all set!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Now you know how to use the app! You can move forward and track your nutrition, manage your pantry, generate recipes, and use all the features on your own.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: const Color(0xFF666666),
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.justify,
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 24),

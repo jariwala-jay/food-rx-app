@@ -5,6 +5,8 @@ import 'package:flutter_app/features/navigation/widgets/custom_nav_bar.dart';
 import 'package:flutter_app/features/pantry/views/pantry_page.dart';
 import 'package:flutter_app/features/recipes/views/recipe_page.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
+import 'package:flutter_app/features/home/widgets/tour_welcome_dialog.dart';
+import 'package:flutter_app/features/home/widgets/tour_completion_dialog.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -23,6 +25,8 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _isAddActive = false;
   bool _isDisposed = false;
+  bool _wasTourActive = false;
+  bool _hasShownCompletionDialog = false;
   final List<Widget> _pages = [
     const HomePage(),
     const PantryPage(),
@@ -35,69 +39,93 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _currentIndex = widget.initialIndex;
 
-    // Start tour for first-time users using v5.0.1 API
+    // Show welcome dialog and start tour for first-time users
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isDisposed) return;
       final tourProvider =
           Provider.of<ForcedTourProvider>(context, listen: false);
 
-      // Start tour if needed
+      // Show welcome dialog if tour should be shown
       if (tourProvider.tourService.shouldShowTour() &&
           !tourProvider.isTourActive &&
           !tourProvider.hasTriggeredInitialShowcase) {
-        tourProvider.startTour();
-
-        // Only start showcase if we're on the trackers step and haven't triggered yet
-        // Start the showcase sequence using the correct v5.0.1 API
-        if (mounted &&
-            !_isDisposed &&
-            tourProvider.isOnStep(TourStep.trackers) &&
-            !tourProvider.hasTriggeredInitialShowcase) {
-          // Mark as triggered immediately to prevent duplicate calls
-          tourProvider.markInitialShowcaseTriggered();
-
-          Future.delayed(const Duration(milliseconds: 500), () {
+        // Show welcome dialog first
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted || _isDisposed) return;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const TourWelcomeDialog(),
+          ).then((_) {
+            // After dialog is dismissed, start the tour
             if (!mounted || _isDisposed) return;
-            try {
-              final tp =
-                  Provider.of<ForcedTourProvider>(context, listen: false);
-              // Double-check we're still on trackers step and have triggered flag set
-              if (tp.isOnStep(TourStep.trackers) &&
-                  tp.hasTriggeredInitialShowcase) {
-                // Dismiss any existing showcase first to prevent duplicates
-                ShowcaseView.get().dismiss();
-                Future.delayed(const Duration(milliseconds: 300), () {
-                  if (!mounted || _isDisposed) return;
-                  final tp2 =
-                      Provider.of<ForcedTourProvider>(context, listen: false);
-                  // Final check before starting - ensure we're still on trackers step
-                  if (tp2.isOnStep(TourStep.trackers)) {
-                    try {
-                      ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
-                      print(
-                          '🎯 MainScreen: Started trackers showcase (single trigger)');
-                    } catch (e) {
-                      print('🎯 MainScreen: Error starting showcase: $e');
-                      // Reset flag on error so it can be retried
-                      tp2.startTour(); // This will reset the flag
-                    }
-                  }
-                });
-              } else {
-                // If step changed or flag wasn't set, reset so it can be retried
-                if (!tp.isOnStep(TourStep.trackers)) {
-                  tp.startTour(); // Reset the flag
-                }
-              }
-            } catch (e) {
-              print('🎯 MainScreen: Error starting initial showcase: $e');
-              // Reset flag on error
-              tourProvider.startTour(); // This will reset the flag
-            }
+            _startTour();
           });
-        }
+        });
       }
     });
+  }
+
+  void _startTour() {
+    if (!mounted || _isDisposed) return;
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+
+    // Start tour if needed
+    if (tourProvider.tourService.shouldShowTour() &&
+        !tourProvider.isTourActive &&
+        !tourProvider.hasTriggeredInitialShowcase) {
+      tourProvider.startTour();
+
+      // Only start showcase if we're on the trackers step and haven't triggered yet
+      // Start the showcase sequence using the correct v5.0.1 API
+      if (mounted &&
+          !_isDisposed &&
+          tourProvider.isOnStep(TourStep.trackers) &&
+          !tourProvider.hasTriggeredInitialShowcase) {
+        // Mark as triggered immediately to prevent duplicate calls
+        tourProvider.markInitialShowcaseTriggered();
+
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted || _isDisposed) return;
+          try {
+            final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+            // Double-check we're still on trackers step and have triggered flag set
+            if (tp.isOnStep(TourStep.trackers) &&
+                tp.hasTriggeredInitialShowcase) {
+              // Dismiss any existing showcase first to prevent duplicates
+              ShowcaseView.get().dismiss();
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (!mounted || _isDisposed) return;
+                final tp2 =
+                    Provider.of<ForcedTourProvider>(context, listen: false);
+                // Final check before starting - ensure we're still on trackers step
+                if (tp2.isOnStep(TourStep.trackers)) {
+                  try {
+                    ShowcaseView.get().startShowCase([TourKeys.trackersKey]);
+                    print(
+                        '🎯 MainScreen: Started trackers showcase (single trigger)');
+                  } catch (e) {
+                    print('🎯 MainScreen: Error starting showcase: $e');
+                    // Reset flag on error so it can be retried
+                    tp2.startTour(); // This will reset the flag
+                  }
+                }
+              });
+            } else {
+              // If step changed or flag wasn't set, reset so it can be retried
+              if (!tp.isOnStep(TourStep.trackers)) {
+                tp.startTour(); // Reset the flag
+              }
+            }
+          } catch (e) {
+            print('🎯 MainScreen: Error starting initial showcase: $e');
+            // Reset flag on error
+            tourProvider.startTour(); // This will reset the flag
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -124,28 +152,26 @@ class _MainScreenState extends State<MainScreen> {
       setState(() => _isAddActive = false);
     }
 
-    // Handle tour progression if on add button step
+    // Handle tour progression - only if we're past the item adding steps
+    // The addButton step is now completed when user clicks "Add FoodRx Items"
+    // and we move through selectCategory -> selectItem -> setQuantityUnit -> pantryItems
     if (!mounted || _isDisposed) return;
-    if (tourProvider.isOnStep(TourStep.addButton)) {
-      tourProvider.completeCurrentStep();
 
-      // After completing addButton step, we move to pantryItems step
-      // Trigger the pantry tab showcase to guide user to pantry
+    // Only handle pantryItems step here (after items are added)
+    final currentStep = tourProvider.currentStep;
+    if (currentStep == TourStep.pantryItems) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
         Future.delayed(const Duration(milliseconds: 500), () {
           if (!mounted || _isDisposed) return;
           try {
             final tp = Provider.of<ForcedTourProvider>(context, listen: false);
-            // Check if we're now on pantryItems step (after completing addButton)
             if (tp.isOnStep(TourStep.pantryItems)) {
-              // Dismiss any active showcase first
               ShowcaseView.get().dismiss();
               Future.delayed(const Duration(milliseconds: 300), () {
                 if (!mounted || _isDisposed) return;
                 final tp2 =
                     Provider.of<ForcedTourProvider>(context, listen: false);
-                // Double-check we're still on pantryItems step
                 if (tp2.isOnStep(TourStep.pantryItems)) {
                   ShowcaseView.get().startShowCase([TourKeys.pantryTabKey]);
                   print(
@@ -165,6 +191,33 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
+        // Listen for tour completion to show completion dialog (backup method)
+        if (_wasTourActive &&
+            !tourProvider.isTourActive &&
+            tourProvider.tourCompleted &&
+            !_hasShownCompletionDialog) {
+          // Tour just completed, show completion dialog
+          _hasShownCompletionDialog = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_isDisposed) {
+              Future.delayed(const Duration(milliseconds: 1200), () {
+                if (mounted && !_isDisposed && context.mounted) {
+                  try {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (dialogContext) => const TourCompletionDialog(),
+                    );
+                  } catch (e) {
+                    debugPrint(
+                        'MainScreen: Error showing completion dialog: $e');
+                  }
+                }
+              });
+            }
+          });
+        }
+        _wasTourActive = tourProvider.isTourActive;
         Widget scaffold = WillPopScope(
           onWillPop: () async => false,
           child: Scaffold(

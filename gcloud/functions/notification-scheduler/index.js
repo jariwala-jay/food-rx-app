@@ -89,88 +89,121 @@ async function checkExpiringIngredients() {
     const now = new Date();
     const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-    // Get all users
-    const users = await usersCollection.find({}).toArray();
-    console.log(`[Expiring Ingredients] Checking ${users.length} users`);
+    // Get total user count
+    const totalUsers = await usersCollection.countDocuments({});
+    console.log(`[Expiring Ingredients] Total users to check: ${totalUsers}`);
 
+    // Process users in batches to avoid memory issues
+    const BATCH_SIZE = 1000;
     let notificationsCreated = 0;
+    let processedUsers = 0;
+    let hasMore = true;
 
-    for (const user of users) {
-      const userId = user._id.toHexString();
-
-      // Get expiring items for this user (next 3 days)
-      // expiryDate may be stored as ISO string; convert to Date for comparison
-      const expiringItems = await pantryCollection
-        .aggregate([
-          {
-            $match: {
-              userId: user._id,
-              expiryDate: { $exists: true, $ne: null },
-            },
-          },
-          { $addFields: { expiryDateParsed: { $toDate: "$expiryDate" } } },
-          {
-            $match: { expiryDateParsed: { $lte: threeDaysFromNow, $gte: now } },
-          },
-        ])
+    while (hasMore) {
+      // Get next batch of users
+      const users = await usersCollection
+        .find({})
+        .skip(processedUsers)
+        .limit(BATCH_SIZE)
         .toArray();
 
-      if (expiringItems.length === 0) continue;
+      if (users.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-      // Build a digest message with up to 3 item names
-      const names = expiringItems
-        .map((i) => (i.name || "").toString())
-        .filter((n) => n.length > 0);
+      console.log(
+        `[Expiring Ingredients] Processing batch: ${users.length} users (${processedUsers + users.length}/${totalUsers} total)`
+      );
 
-      const maxNames = 3;
-      const shown = names.slice(0, maxNames);
-      const remaining = names.length - shown.length;
-      const itemsSummary =
-        remaining > 0
-          ? `${shown.join(", ")} and ${remaining} more`
-          : shown.join(", ");
+      for (const user of users) {
+        const userId = user._id.toHexString();
 
-      const title =
-        names.length === 1
-          ? `${names[0]} expires soon`
-          : `${names.length} food expiring soon`;
-      const message =
-        names.length === 1
-          ? "Use it in a recipe today so it doesn't go to waste."
-          : `Expiring soon: ${itemsSummary}`;
+        // Get expiring items for this user (next 3 days)
+        // expiryDate may be stored as ISO string; convert to Date for comparison
+        const expiringItems = await pantryCollection
+          .aggregate([
+            {
+              $match: {
+                userId: user._id,
+                expiryDate: { $exists: true, $ne: null },
+              },
+            },
+            { $addFields: { expiryDateParsed: { $toDate: "$expiryDate" } } },
+            {
+              $match: { expiryDateParsed: { $lte: threeDaysFromNow, $gte: now } },
+            },
+          ])
+          .toArray();
 
-      // If a digest exists today, update it; otherwise insert new
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+        if (expiringItems.length === 0) continue;
 
-      const existing = await notificationsCollection.findOne({
-        userId: userId,
-        type: "expiring_ingredient",
-        createdAt: { $gte: today },
-      });
+        // Build a digest message with up to 3 item names
+        const names = expiringItems
+          .map((i) => (i.name || "").toString())
+          .filter((n) => n.length > 0);
 
-      if (existing) {
-        await notificationsCollection.updateOne(
-          { _id: existing._id },
-          { $set: { title, message, updatedAt: new Date() } }
-        );
-        console.log(
-          `[Expiring Ingredients] Updated digest for user ${userId} with ${names.length} items`
-        );
-      } else {
-        await notificationsCollection.insertOne({
+        const maxNames = 3;
+        const shown = names.slice(0, maxNames);
+        const remaining = names.length - shown.length;
+        const itemsSummary =
+          remaining > 0
+            ? `${shown.join(", ")} and ${remaining} more`
+            : shown.join(", ");
+
+        const title =
+          names.length === 1
+            ? `${names[0]} expires soon`
+            : `${names.length} food expiring soon`;
+        const message =
+          names.length === 1
+            ? "Use it in a recipe today so it doesn't go to waste."
+            : `Expiring soon: ${itemsSummary}`;
+
+        // If a digest exists today, update it; otherwise insert new
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const existing = await notificationsCollection.findOne({
           userId: userId,
           type: "expiring_ingredient",
-          title,
-          message,
-          createdAt: new Date(),
+          createdAt: { $gte: today },
         });
-        notificationsCreated++;
+
+        if (existing) {
+          await notificationsCollection.updateOne(
+            { _id: existing._id },
+            { $set: { title, message, updatedAt: new Date() } }
+          );
+          console.log(
+            `[Expiring Ingredients] Updated digest for user ${userId} with ${names.length} items`
+          );
+        } else {
+          await notificationsCollection.insertOne({
+            userId: userId,
+            type: "expiring_ingredient",
+            title,
+            message,
+            createdAt: new Date(),
+          });
+          notificationsCreated++;
+        }
       }
+
+      processedUsers += users.length;
+
+      // If we got fewer users than the batch size, we've processed all
+      if (users.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+
+      console.log(
+        `[Expiring Ingredients] Batch complete. Progress: ${processedUsers}/${totalUsers} users processed, ${notificationsCreated} notifications created so far`
+      );
     }
 
     console.log(
-      `[Expiring Ingredients] Created ${notificationsCreated} notifications`
+      `[Expiring Ingredients] Completed. Processed ${processedUsers} users, created ${notificationsCreated} notifications`
     );
 
     return {
@@ -201,64 +234,99 @@ async function checkTrackerReminders() {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get all users
-    const users = await usersCollection.find({}).toArray();
-    console.log(`[Tracker Reminder] Checking ${users.length} users`);
+    // Get total user count
+    const totalUsers = await usersCollection.countDocuments({});
+    console.log(`[Tracker Reminder] Total users to check: ${totalUsers}`);
 
+    // Process users in batches to avoid memory issues
+    const BATCH_SIZE = 1000;
     let notificationsCreated = 0;
+    let processedUsers = 0;
+    let hasMore = true;
 
-    for (const user of users) {
-      const userId = user._id.toHexString();
-
-      // Check if user has any progress today
-      const todayProgress = await progressCollection
-        .find({
-          userId: userId,
-          progressDate: {
-            $gte: today,
-            $lt: tomorrow,
-          },
-        })
+    while (hasMore) {
+      // Get next batch of users
+      const users = await usersCollection
+        .find({})
+        .skip(processedUsers)
+        .limit(BATCH_SIZE)
         .toArray();
 
-      if (todayProgress.length > 0) {
-        console.log(
-          `[Tracker Reminder] User ${userId} has logged today, skipping`
-        );
-        continue;
+      if (users.length === 0) {
+        hasMore = false;
+        break;
       }
 
-      // Check if reminder already sent today
-      const today2 = new Date();
-      today2.setHours(0, 0, 0, 0);
+      console.log(
+        `[Tracker Reminder] Processing batch: ${users.length} users (${processedUsers + users.length}/${totalUsers} total)`
+      );
 
-      const existing = await notificationsCollection.findOne({
-        userId: userId,
-        type: "tracker_reminder",
-        createdAt: { $gte: today2 },
-      });
+      for (const user of users) {
+        const userId = user._id.toHexString();
 
-      if (existing) {
-        console.log(
-          `[Tracker Reminder] Reminder already sent today for user ${userId}`
-        );
-        continue;
+        // Check if user has any progress today
+        const todayProgress = await progressCollection
+          .find({
+            userId: userId,
+            progressDate: {
+              $gte: today,
+              $lt: tomorrow,
+            },
+          })
+          .toArray();
+
+        if (todayProgress.length > 0) {
+          console.log(
+            `[Tracker Reminder] User ${userId} has logged today, skipping`
+          );
+          continue;
+        }
+
+        // Check if reminder already sent today
+        const today2 = new Date();
+        today2.setHours(0, 0, 0, 0);
+
+        const existing = await notificationsCollection.findOne({
+          userId: userId,
+          type: "tracker_reminder",
+          createdAt: { $gte: today2 },
+        });
+
+        if (existing) {
+          console.log(
+            `[Tracker Reminder] Reminder already sent today for user ${userId}`
+          );
+          continue;
+        }
+
+        // Create reminder
+        await notificationsCollection.insertOne({
+          userId: userId,
+          type: "tracker_reminder",
+          title: "Time to log your food!",
+          message:
+            "You haven't logged anything in your tracker today. Don't forget to track your food!",
+          createdAt: new Date(),
+        });
+
+        notificationsCreated++;
       }
 
-      // Create reminder
-      await notificationsCollection.insertOne({
-        userId: userId,
-        type: "tracker_reminder",
-        title: "Time to log your food!",
-        message:
-          "You haven't logged anything in your tracker today. Don't forget to track your food!",
-        createdAt: new Date(),
-      });
+      processedUsers += users.length;
 
-      notificationsCreated++;
+      // If we got fewer users than the batch size, we've processed all
+      if (users.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+
+      console.log(
+        `[Tracker Reminder] Batch complete. Progress: ${processedUsers}/${totalUsers} users processed, ${notificationsCreated} reminders created so far`
+      );
     }
 
-    console.log(`[Tracker Reminder] Created ${notificationsCreated} reminders`);
+    console.log(
+      `[Tracker Reminder] Completed. Processed ${processedUsers} users, created ${notificationsCreated} reminders`
+    );
 
     return {
       status: "success",

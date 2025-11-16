@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/features/pantry/views/pantry_item_picker_page.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'dart:async';
 
 class PantryCategoryPicker extends StatelessWidget {
   final String title;
@@ -18,72 +23,119 @@ class PantryCategoryPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
+    return Consumer<ForcedTourProvider>(
+      builder: (context, tourProvider, child) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-              onPressed: onBack,
-              splashRadius: 20,
-            ),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                  color: Colors.black,
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                  onPressed: onBack,
+                  splashRadius: 20,
                 ),
-                textAlign: TextAlign.center,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                      color: Colors.black,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 40), // To balance the back button
+              ],
+            ),
+            const SizedBox(height: 8),
+            Showcase(
+              key: TourKeys.pantryCategoryListKey,
+              title: 'Add All Your Pantry Items',
+              description:
+                  'Add all items from your food pantry visit today. More items = better recipe recommendations! Tap any category to continue.',
+              targetShapeBorder: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              tooltipBackgroundColor: Colors.white,
+              tooltipPosition: TooltipPosition.bottom,
+              textColor: Colors.black,
+              overlayColor: Colors.black54,
+              overlayOpacity: 0.8,
+              showArrow: true,
+              onTargetClick: () {
+                // Dismiss showcase to allow category selection
+                ShowcaseView.get().dismiss();
+              },
+              onToolTipClick: () {
+                // Dismiss showcase to allow category selection
+                ShowcaseView.get().dismiss();
+              },
+              disposeOnTap: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: categories
+                    .map((cat) => ListTile(
+                          leading: SvgPicture.asset(cat['icon']!,
+                              width: 40, height: 40),
+                          title: Text(
+                            cat['title']!,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 15,
+                              color: Colors.black,
+                            ),
+                          ),
+                          subtitle: cat['subtitle'] != null &&
+                                  cat['subtitle']!.isNotEmpty
+                              ? Text(
+                                  cat['subtitle']!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                )
+                              : null,
+                          trailing: const Icon(Icons.chevron_right_rounded,
+                              color: Colors.grey),
+                          onTap: () {
+                            // Dismiss showcase if it's showing
+                            try {
+                              ShowcaseView.get().dismiss();
+                            } catch (e) {
+                              // Showcase might not be active
+                            }
+
+                            // Complete selectCategory step if we're on it
+                            final tp = Provider.of<ForcedTourProvider>(context,
+                                listen: false);
+                            if (tp.isOnStep(TourStep.selectCategory)) {
+                              tp.completeCurrentStep();
+                            }
+
+                            // Small delay to ensure showcase is dismissed
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              if (!context.mounted) return;
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => PantryItemPickerPage(
+                                    categoryTitle: cat['title']!,
+                                    categoryKey: cat['key']!,
+                                    isFoodPantryItem: isFoodPantryItem,
+                                  ),
+                                ),
+                              );
+                            });
+                          },
+                        ))
+                    .toList(),
               ),
             ),
-            const SizedBox(width: 40), // To balance the back button
           ],
-        ),
-        const SizedBox(height: 8),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: categories
-              .map((cat) => ListTile(
-                    leading:
-                        SvgPicture.asset(cat['icon']!, width: 40, height: 40),
-                    title: Text(
-                      cat['title']!,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 15,
-                        color: Colors.black,
-                      ),
-                    ),
-                    subtitle:
-                        cat['subtitle'] != null && cat['subtitle']!.isNotEmpty
-                            ? Text(
-                                cat['subtitle']!,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              )
-                            : null,
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        color: Colors.grey),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => PantryItemPickerPage(
-                            categoryTitle: cat['title']!,
-                            categoryKey: cat['key']!,
-                            isFoodPantryItem: isFoodPantryItem,
-                          ),
-                        ),
-                      );
-                    },
-                  ))
-              .toList(),
-        ),
-      ],
+        );
+      },
     );
   }
 }

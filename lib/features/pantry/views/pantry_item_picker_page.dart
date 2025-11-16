@@ -11,6 +11,9 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
 import '../controller/pantry_controller.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
   final String categoryTitle;
@@ -86,6 +89,14 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
 
   // Show modal dialog to add quantity and unit
   void _showAddItemModal(BuildContext context, Ingredient item) {
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+
+    // Complete selectCategory step if we're on it (user has chosen an item)
+    if (tourProvider.isOnStep(TourStep.selectCategory)) {
+      tourProvider.completeCurrentStep();
+    }
+
     showDialog(
       context: context,
       builder: (dialogContext) => PantryItemAddModal(
@@ -99,6 +110,22 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         },
       ),
     );
+
+    // Trigger quantity/unit showcase after modal opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        try {
+          final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+          if (tp.isOnStep(TourStep.setQuantityUnit)) {
+            ShowcaseView.get().startShowCase([TourKeys.quantityUnitKey]);
+          }
+        } catch (e) {
+          print('Error triggering quantityUnit showcase: $e');
+        }
+      });
+    });
   }
 
   @override

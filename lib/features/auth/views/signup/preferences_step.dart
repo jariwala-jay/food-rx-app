@@ -39,6 +39,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   // Health goals are collected in Other Details step
 
   final List<String> _cuisineOptions = [
+    "No preference",
     'American',
     'Mexican',
     'Italian',
@@ -53,7 +54,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
     'Greek',
     'French',
     'Spanish',
-    "No preference",
   ];
 
   final List<String> _dailyIntakeOptions = [
@@ -121,12 +121,23 @@ class _PreferencesStepState extends State<PreferencesStep> {
           });
           return;
         }
+        // Validate food allergies - must be selected
+        if (_selectedFoodAllergies.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Please select your food allergies (or "No allergies" if you have none)'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
         // Ensure multi-selects have a value (with explicit neutral choices)
         if (_favoriteCuisines.isEmpty) {
           _favoriteCuisines = ["No preference"];
-        }
-        if (_selectedFoodAllergies.isEmpty) {
-          _selectedFoodAllergies = ["None"];
         }
 
         // Update preferences in SignupProvider
@@ -234,9 +245,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Food Allergies',
+                          label: 'Food Allergies *',
                           value: null,
                           options: const [
+                            'No allergies',
                             'Tree Nuts',
                             'Peanuts',
                             'Dairy',
@@ -253,7 +265,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           selectedValues: _selectedFoodAllergies,
                           onChangedMulti: (values) {
                             setState(() {
-                              _selectedFoodAllergies = values;
+                              // Allow explicit 'No allergies' as a value but not with others
+                              if (values.contains('No allergies')) {
+                                _selectedFoodAllergies = ['No allergies'];
+                              } else {
+                                _selectedFoodAllergies = values;
+                              }
                             });
                           },
                         ),
@@ -263,7 +280,13 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             values: _selectedFoodAllergies,
                             onChanged: (values) {
                               setState(() {
-                                _selectedFoodAllergies = values;
+                                // Respect 'No allergies' exclusivity
+                                if (values.contains('No allergies') &&
+                                    values.length > 1) {
+                                  _selectedFoodAllergies = ['No allergies'];
+                                } else {
+                                  _selectedFoodAllergies = values;
+                                }
                               });
                             },
                           ),
@@ -337,8 +360,14 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       value: _dailyWaterIntake,
                       options: const [
                         {'0 glass': '0 glass'},
-                        {'less than 8 glasses': 'less than 8 glasses'},
-                        {'8 or more glasses': '8 or more glasses'},
+                        {
+                          'less than 8 glasses (0.5 gallon)':
+                              'less than 8 glasses (0.5 gallon)'
+                        },
+                        {
+                          '8 or more glasses (0.5 gallon)':
+                              '8 or more glasses (0.5 gallon)'
+                        },
                       ],
                       onChanged: (value) {
                         setState(() {

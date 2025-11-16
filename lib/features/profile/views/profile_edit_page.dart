@@ -78,10 +78,25 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         }
         break;
       case 'medicalConditions':
-      case 'allergies':
       case 'healthGoals':
         if (widget.currentValue is List) {
           _selectedMultiValues = List<String>.from(widget.currentValue);
+        }
+        break;
+      case 'allergies':
+        if (widget.currentValue is List) {
+          _selectedMultiValues = List<String>.from(widget.currentValue);
+          // Convert legacy "None" to "No allergies" for consistency
+          if (_selectedMultiValues.contains('None')) {
+            _selectedMultiValues = _selectedMultiValues
+                .map((item) => item == 'None' ? 'No allergies' : item)
+                .toList();
+            // If "None" was selected, ensure exclusivity
+            if (_selectedMultiValues.contains('No allergies') &&
+                _selectedMultiValues.length > 1) {
+              _selectedMultiValues = ['No allergies'];
+            }
+          }
         }
         break;
     }
@@ -685,6 +700,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
   Widget _buildAllergiesEdit() {
     final options = const [
+      'No allergies',
       'Tree Nuts',
       'Peanuts',
       'Dairy',
@@ -693,7 +709,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       'Wheat',
       'Fish',
       'Shellfish',
-      'None',
     ];
 
     return Container(
@@ -716,8 +731,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             selectedValues: _selectedMultiValues,
             onChangedMulti: (values) {
               setState(() {
-                if (values.contains('None')) {
-                  _selectedMultiValues = ['None'];
+                // Allow explicit 'No allergies' as a value but not with others
+                if (values.contains('No allergies')) {
+                  _selectedMultiValues = ['No allergies'];
                 } else {
                   _selectedMultiValues = values;
                 }
@@ -730,8 +746,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               values: _selectedMultiValues,
               onChanged: (values) {
                 setState(() {
-                  if (values.contains('None') && values.length > 1) {
-                    _selectedMultiValues = ['None'];
+                  // Respect 'No allergies' exclusivity
+                  if (values.contains('No allergies') && values.length > 1) {
+                    _selectedMultiValues = ['No allergies'];
                   } else {
                     _selectedMultiValues = values;
                   }
