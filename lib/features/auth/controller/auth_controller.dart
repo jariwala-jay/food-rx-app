@@ -124,6 +124,16 @@ class AuthController with ChangeNotifier {
     }
   }
 
+  Future<bool> checkEmailExists(String email) async {
+    try {
+      final user = await _mongoDBService.findUserByEmail(email);
+      return user != null;
+    } catch (e) {
+      // If there's an error checking, assume email doesn't exist to allow signup
+      return false;
+    }
+  }
+
   Future<bool> login(String email, String password) async {
     _isLoading = true;
     _error = null;
