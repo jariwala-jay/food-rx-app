@@ -528,7 +528,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 },
               ),
             ),
-            Flexible(
+            Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
@@ -552,7 +552,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                     ),
                     const SizedBox(height: 2),
-                    Flexible(
+                    Expanded(
                       child: Builder(
                         builder: (context) {
                           final textScaleFactor =
@@ -564,7 +564,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               fontSize: 12 * clampedScale,
                               color: Colors.grey[600],
                             ),
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           );
                         },
