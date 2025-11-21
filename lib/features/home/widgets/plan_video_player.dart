@@ -335,46 +335,63 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
+                  Flexible(
+                    child: Text(
+                      '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
+                      style: TextStyle(
+                        fontSize: 12 * MediaQuery.textScaleFactorOf(context).clamp(0.8, 1.0),
+                        color: Colors.grey,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          _controller!.value.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _controller!.value.isPlaying
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              if (_controller!.value.isPlaying) {
+                                _controller!.pause();
+                              } else {
+                                _controller!.play();
+                              }
+                            });
+                          },
                         ),
-                        onPressed: () {
-                          setState(() {
-                            if (_controller!.value.isPlaying) {
-                              _controller!.pause();
-                            } else {
-                              _controller!.play();
-                            }
-                          });
-                        },
-                      ),
-                      if (_isMandatoryVideo &&
-                          widget.isTourActive &&
-                          !_isVideoCompleted)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 8.0),
-                          child: Text(
-                            'Watch full video to continue',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.orange,
-                              fontStyle: FontStyle.italic,
+                        if (_isMandatoryVideo &&
+                            widget.isTourActive &&
+                            !_isVideoCompleted)
+                          Flexible(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: Builder(
+                                builder: (context) {
+                                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                  return Text(
+                                    'Watch full video',
+                                    style: TextStyle(
+                                      fontSize: 12 * clampedScale,
+                                      color: Colors.orange,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                },
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),

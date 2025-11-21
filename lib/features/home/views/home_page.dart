@@ -475,6 +475,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (onTap != null) onTap();
       },
       child: Container(
+        constraints: const BoxConstraints(
+          maxHeight: 201,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: Colors.white,
@@ -489,6 +492,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             ClipRRect(
               borderRadius:
@@ -524,30 +528,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 },
               ),
             ),
-            Expanded(
+            Flexible(
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Builder(
+                      builder: (context) {
+                        final textScaleFactor =
+                            MediaQuery.textScaleFactorOf(context);
+                        final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                        return Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 14 * clampedScale,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                    Flexible(
+                      child: Builder(
+                        builder: (context) {
+                          final textScaleFactor =
+                              MediaQuery.textScaleFactorOf(context);
+                          final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                          return Text(
+                            description,
+                            style: TextStyle(
+                              fontSize: 12 * clampedScale,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -682,15 +703,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       _timeBasedGreeting(),
                                       style: TextStyle(
                                         color: Colors.grey[600],
-                                        fontSize: 14,
+                                        fontSize: 12 *
+                                            MediaQuery.textScaleFactorOf(
+                                                    context)
+                                                .clamp(1.0, 1.0),
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     Text(
                                       user?.name ?? 'Guest',
-                                      style: const TextStyle(
-                                        fontSize: 16,
+                                      style: TextStyle(
+                                        fontSize: 14 *
+                                            MediaQuery.textScaleFactorOf(
+                                                    context)
+                                                .clamp(1.0, 1.0),
                                         fontWeight: FontWeight.bold,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -843,11 +874,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
+                                      Text(
                                         'Daily tips',
                                         style: TextStyle(
-                                          fontSize: 20,
+                                          fontSize: 20 *
+                                              MediaQuery.textScaleFactorOf(
+                                                      context)
+                                                  .clamp(0.8, 1.0),
                                           fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF333333),
                                         ),
                                       ),
                                       const SizedBox(height: 16),

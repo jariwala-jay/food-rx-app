@@ -19,6 +19,14 @@ class ModalActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+    
+    // Calculate responsive height based on text scaling
+    final baseHeight = 115.0;
+    final cardHeight = baseHeight * clampedScale.clamp(1.0, 1.1);
+    
     return SizedBox(
       width: 150,
       child: GestureDetector(
@@ -29,14 +37,17 @@ class ModalActionButton extends StatelessWidget {
                 onTap();
               },
         child: Container(
-          height: 115,
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          height: cardHeight,
+          padding: EdgeInsets.symmetric(
+            vertical: 20 * clampedScale.clamp(1.0, 1.1),
+          ),
           decoration: BoxDecoration(
             color: enabled ? const Color(0xFFF7F7F8) : const Color(0xFFF0F0F0),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 45,
@@ -61,20 +72,22 @@ class ModalActionButton extends StatelessWidget {
                       )
                     : const Icon(Icons.circle, color: Color(0xFFFF6A00)),
               ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: enabled
-                      ? const Color(0xFF2C2C2C)
-                      : const Color(0xFFBDBDBD),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'Bricolage Grotesque',
+              SizedBox(height: 8 * clampedScale),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: enabled
+                        ? const Color(0xFF2C2C2C)
+                        : const Color(0xFFBDBDBD),
+                    fontSize: 12 * clampedScale,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Bricolage Grotesque',
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

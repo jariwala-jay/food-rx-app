@@ -23,6 +23,10 @@ class PantryCategoryPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+    
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
         return Column(
@@ -38,99 +42,112 @@ class PantryCategoryPicker extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 18,
+                      fontSize: 18 * clampedScale,
                       color: Colors.black,
                     ),
                     textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 40), // To balance the back button
               ],
             ),
             const SizedBox(height: 8),
-            Showcase(
-              key: TourKeys.pantryCategoryListKey,
-              title: 'Add All Your Pantry Items',
-              description:
-                  'Add all items from your food pantry visit today. More items = better recipe recommendations! Tap any category to continue.',
-              targetShapeBorder: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              tooltipBackgroundColor: Colors.white,
-              tooltipPosition: TooltipPosition.bottom,
-              textColor: Colors.black,
-              overlayColor: Colors.black54,
-              overlayOpacity: 0.8,
-              showArrow: true,
-              onTargetClick: () {
-                // Dismiss showcase to allow category selection
-                ShowcaseView.get().dismiss();
-              },
-              onToolTipClick: () {
-                // Dismiss showcase to allow category selection
-                ShowcaseView.get().dismiss();
-              },
-              disposeOnTap: true,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: categories
-                    .map((cat) => ListTile(
-                          leading: SvgPicture.asset(cat['icon']!,
-                              width: 40, height: 40),
-                          title: Text(
-                            cat['title']!,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 15,
-                              color: Colors.black,
-                            ),
-                          ),
-                          subtitle: cat['subtitle'] != null &&
-                                  cat['subtitle']!.isNotEmpty
-                              ? Text(
-                                  cat['subtitle']!,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                )
-                              : null,
-                          trailing: const Icon(Icons.chevron_right_rounded,
-                              color: Colors.grey),
-                          onTap: () {
-                            // Dismiss showcase if it's showing
-                            try {
-                              ShowcaseView.get().dismiss();
-                            } catch (e) {
-                              // Showcase might not be active
-                            }
-
-                            // Complete selectCategory step if we're on it
-                            final tp = Provider.of<ForcedTourProvider>(context,
-                                listen: false);
-                            if (tp.isOnStep(TourStep.selectCategory)) {
-                              tp.completeCurrentStep();
-                            }
-
-                            // Small delay to ensure showcase is dismissed
-                            Future.delayed(const Duration(milliseconds: 100),
-                                () {
-                              if (!context.mounted) return;
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PantryItemPickerPage(
-                                    categoryTitle: cat['title']!,
-                                    categoryKey: cat['key']!,
-                                    isFoodPantryItem: isFoodPantryItem,
-                                  ),
+            Flexible(
+              child: Showcase(
+                key: TourKeys.pantryCategoryListKey,
+                title: 'Add All Your Pantry Items',
+                description:
+                    'Add all items from your food pantry visit today. More items = better recipe recommendations! Tap any category to continue.',
+                targetShapeBorder: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                tooltipBackgroundColor: Colors.white,
+                tooltipPosition: TooltipPosition.bottom,
+                textColor: Colors.black,
+                overlayColor: Colors.black54,
+                overlayOpacity: 0.8,
+                showArrow: true,
+                onTargetClick: () {
+                  // Dismiss showcase to allow category selection
+                  ShowcaseView.get().dismiss();
+                },
+                onToolTipClick: () {
+                  // Dismiss showcase to allow category selection
+                  ShowcaseView.get().dismiss();
+                },
+                disposeOnTap: true,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.6,
+                  ),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: categories
+                        .map((cat) => ListTile(
+                              leading: SvgPicture.asset(cat['icon']!,
+                                  width: 40, height: 40),
+                              title: Text(
+                                cat['title']!,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15 * clampedScale,
+                                  color: Colors.black,
                                 ),
-                              );
-                            });
-                          },
-                        ))
-                    .toList(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: cat['subtitle'] != null &&
+                                      cat['subtitle']!.isNotEmpty
+                                  ? Text(
+                                      cat['subtitle']!,
+                                      style: TextStyle(
+                                        fontSize: 12 * clampedScale,
+                                        color: Colors.grey,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : null,
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.grey),
+                              onTap: () {
+                                // Dismiss showcase if it's showing
+                                try {
+                                  ShowcaseView.get().dismiss();
+                                } catch (e) {
+                                  // Showcase might not be active
+                                }
+
+                                // Complete selectCategory step if we're on it
+                                final tp = Provider.of<ForcedTourProvider>(context,
+                                    listen: false);
+                                if (tp.isOnStep(TourStep.selectCategory)) {
+                                  tp.completeCurrentStep();
+                                }
+
+                                // Small delay to ensure showcase is dismissed
+                                Future.delayed(const Duration(milliseconds: 100),
+                                    () {
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PantryItemPickerPage(
+                                        categoryTitle: cat['title']!,
+                                        categoryKey: cat['key']!,
+                                        isFoodPantryItem: isFoodPantryItem,
+                                      ),
+                                    ),
+                                  );
+                                });
+                              },
+                            ))
+                        .toList(),
+                  ),
+                ),
               ),
             ),
           ],
