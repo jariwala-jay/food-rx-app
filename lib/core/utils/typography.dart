@@ -266,4 +266,47 @@ class AppTypography {
     fontSize: 42,
     fontWeight: FontWeight.w700,
   );
+
+  // Text scaling-aware helper methods
+  // These methods apply text scaling from MediaQuery while optionally clamping
+  // for UI elements that must fit in constrained spaces
+
+  /// Applies text scaling to a TextStyle with optional clamping
+  /// 
+  /// [context] - BuildContext to get MediaQuery.textScaleFactor
+  /// [style] - Base TextStyle to scale
+  /// [maxScale] - Maximum scale factor (default 1.5). Set to null for unlimited scaling
+  /// 
+  /// Example:
+  /// ```dart
+  /// Text('Hello', style: AppTypography.scaleStyle(context, AppTypography.bg_16_r))
+  /// Text('Label', style: AppTypography.scaleStyle(context, AppTypography.bg_14_r, maxScale: 1.3))
+  /// ```
+  static TextStyle scaleStyle(
+    BuildContext context,
+    TextStyle style, {
+    double? maxScale,
+  }) {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final scale = maxScale != null
+        ? textScaleFactor.clamp(1.0, maxScale)
+        : textScaleFactor;
+
+    return style.copyWith(fontSize: (style.fontSize ?? 14) * scale);
+  }
+
+  /// Gets the clamped text scale factor for constrained UI elements
+  /// 
+  /// [context] - BuildContext to get MediaQuery.textScaleFactor
+  /// [maxScale] - Maximum scale factor (default 1.3)
+  /// 
+  /// Example:
+  /// ```dart
+  /// final scale = AppTypography.getClampedScale(context);
+  /// Text('Label', style: TextStyle(fontSize: 14 * scale))
+  /// ```
+  static double getClampedScale(BuildContext context, {double maxScale = 1.3}) {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    return textScaleFactor.clamp(1.0, maxScale);
+  }
 }

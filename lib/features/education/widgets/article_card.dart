@@ -24,6 +24,10 @@ class ArticleCard extends StatelessWidget {
   }
 
   Widget _buildRecommendedCard(BuildContext context) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -33,6 +37,7 @@ class ArticleCard extends StatelessWidget {
         ),
         elevation: 2,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
@@ -47,16 +52,18 @@ class ArticleCard extends StatelessWidget {
                     const Icon(Icons.image, size: 50),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                article.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  article.title,
+                  style: TextStyle(
+                    fontSize: 16 * clampedScale,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -66,6 +73,10 @@ class ArticleCard extends StatelessWidget {
   }
 
   Widget _buildListCard(BuildContext context) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -94,21 +105,26 @@ class ArticleCard extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       article.title,
-                      style: const TextStyle(
-                        fontSize: 16,
+                      style: TextStyle(
+                        fontSize: 16 * clampedScale,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       article.category,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 12 * clampedScale,
                         color: Colors.grey[600],
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

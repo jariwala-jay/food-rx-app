@@ -56,31 +56,41 @@ class DiabetesPlatePlan extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF6B35)
-                                        .withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.bloodtype,
-                                    color: Color(0xFFFF6B35),
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  "Key Principles",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF333333),
-                                  ),
-                                ),
-                              ],
+                            Builder(
+                              builder: (context) {
+                                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                return Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF6B35)
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.bloodtype,
+                                        color: Color(0xFFFF6B35),
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Flexible(
+                                      child: Text(
+                                        "Key Principles",
+                                        style: TextStyle(
+                                          fontSize: 18 * clampedScale,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF333333),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
                             const Text(
@@ -113,31 +123,41 @@ class DiabetesPlatePlan extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4CAF50)
-                                        .withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.trending_down,
-                                    color: Color(0xFF4CAF50),
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  "Blood Sugar Management",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF333333),
-                                  ),
-                                ),
-                              ],
+                            Builder(
+                              builder: (context) {
+                                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                return Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4CAF50)
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.trending_down,
+                                        color: Color(0xFF4CAF50),
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Flexible(
+                                      child: Text(
+                                        "Blood Sugar Management",
+                                        style: TextStyle(
+                                          fontSize: 18 * clampedScale,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF333333),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
                             const Text(
@@ -168,10 +188,19 @@ class DiabetesPlatePlan extends StatelessWidget {
                       ),
                     ),
                     onPressed: onFinish,
-                    child: Text(
-                      "Let's get Started!",
-                      style:
-                          AppTypography.bg_16_sb.copyWith(color: Colors.white),
+                    child: Builder(
+                      builder: (context) {
+                        final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                        final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                        return Text(
+                          "Let's get Started!",
+                          style: AppTypography.bg_16_sb.copyWith(
+                            color: Colors.white,
+                            fontSize: 16 * clampedScale,
+                          ),
+                          textAlign: TextAlign.center,
+                        );
+                      },
                     ),
                   ),
                 ),

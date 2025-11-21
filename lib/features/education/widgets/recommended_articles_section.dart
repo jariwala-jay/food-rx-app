@@ -13,19 +13,28 @@ class RecommendedArticlesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
+
+    // Calculate dynamic height based on text scaling
+    // Base: 120 (image) + 24 (padding) + ~40 (text) = ~184, add buffer for scaling
+    final baseHeight = 220.0;
+    final sectionHeight = baseHeight * clampedScale.clamp(1.0, 1.15);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Recommended',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 22 * clampedScale.clamp(0.8, 1.0),
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 220, // Adjust height to fit cards
+          height: sectionHeight,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: articles.length,

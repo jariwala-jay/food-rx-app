@@ -74,6 +74,11 @@ class AppFormField extends StatelessWidget {
               vertical: 14,
             ),
             suffixIcon: suffixIcon,
+            errorMaxLines: 3,
+            errorStyle: const TextStyle(
+              fontSize: 12,
+              height: 1.3,
+            ),
           ),
         ),
       ],

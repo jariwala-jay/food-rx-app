@@ -53,11 +53,19 @@ class TrackerCard extends StatelessWidget {
     final iconPath = getTrackerIconAsset(tracker.category);
     final isSvg = iconPath.endsWith('.svg');
 
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
+
+    // Calculate responsive card height based on text scaling
+    final baseHeight = 68.0;
+    final cardHeight = baseHeight * clampedScale;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 152,
-        height: 68,
+        height: cardHeight,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -78,7 +86,7 @@ class TrackerCard extends StatelessWidget {
                 // Left - Progress circle with icon
                 SizedBox(
                   width: 68,
-                  height: 68,
+                  height: cardHeight - 16, // Account for padding
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -126,23 +134,31 @@ class TrackerCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        tracker.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF5F5F5F),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          tracker.name,
+                          style: TextStyle(
+                            fontSize: 14 * clampedScale,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF5F5F5F),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        tracker.formattedProgress,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: progressColor,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          tracker.formattedProgress,
+                          style: TextStyle(
+                            fontSize: 12 * clampedScale,
+                            fontWeight: FontWeight.bold,
+                            color: progressColor,
+                          ),
                         ),
                       ),
                     ],

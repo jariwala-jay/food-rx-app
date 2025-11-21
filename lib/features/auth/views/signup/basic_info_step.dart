@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class BasicInfoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -31,6 +32,8 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   String? _error;
   File? _profilePhoto;
   String? _profilePhotoPath;
+  final FocusNode _emailFocusNode = FocusNode();
+  String? _emailExistsError;
 
   @override
   void initState() {
@@ -40,6 +43,15 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _emailController.text = signupData.email ?? '';
     _passwordController.text = signupData.password ?? '';
     _confirmPasswordController.text = signupData.password ?? '';
+
+    // Clear email error when user types
+    _emailController.addListener(() {
+      if (_emailExistsError != null) {
+        setState(() {
+          _emailExistsError = null;
+        });
+      }
+    });
   }
 
   @override
@@ -48,6 +60,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _emailFocusNode.dispose();
     super.dispose();
   }
 
@@ -74,6 +87,11 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   }
 
   Future<void> _handleNext() async {
+    // Clear email error before validation
+    setState(() {
+      _emailExistsError = null;
+    });
+
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
@@ -106,6 +124,29 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           });
           return;
         }
+
+        // Check if email already exists in database
+        // Clear any previous email error first
+        setState(() {
+          _emailExistsError = null;
+        });
+
+        final authController = context.read<AuthController>();
+        final emailExists =
+            await authController.checkEmailExists(_emailController.text.trim());
+        if (emailExists) {
+          setState(() {
+            _isLoading = false;
+            _emailExistsError =
+                'This email is already registered. Please use a different email or try logging in.';
+          });
+          // Focus on email field and show error
+          _emailFocusNode.requestFocus();
+          // Trigger form validation to show error
+          _formKey.currentState?.validate();
+          return;
+        }
+
         if (_passwordController.text.trim().isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -277,12 +318,16 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           hintText: 'Enter your email',
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
+                          focusNode: _emailFocusNode,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            if (!value.contains('@')) {
+                            if (!value.contains('@') || !value.contains('.')) {
                               return 'Please enter a valid email';
+                            }
+                            if (_emailExistsError != null) {
+                              return _emailExistsError;
                             }
                             return null;
                           },
@@ -328,6 +373,13 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                               });
                             },
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _passwordController,
+                          builder: (context, value, child) {
+                            return _buildPasswordRequirements();
+                          },
                         ),
                         const SizedBox(height: 16),
                         AppFormField(
@@ -403,6 +455,91 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           ),
         ),
       ],
+    );
+  }
+
+  bool _hasMinLength(String password) => password.length >= 8;
+  bool _hasUppercase(String password) => password.contains(RegExp(r'[A-Z]'));
+  bool _hasLowercase(String password) => password.contains(RegExp(r'[a-z]'));
+  bool _hasNumber(String password) => password.contains(RegExp(r'[0-9]'));
+  bool _hasSpecialChar(String password) =>
+      password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+
+  Widget _buildPasswordRequirements() {
+    final password = _passwordController.text;
+    final requirements = [
+      {
+        'text': 'At least 8 characters',
+        'met': _hasMinLength(password),
+      },
+      {
+        'text': 'One uppercase letter',
+        'met': _hasUppercase(password),
+      },
+      {
+        'text': 'One lowercase letter',
+        'met': _hasLowercase(password),
+      },
+      {
+        'text': 'One number',
+        'met': _hasNumber(password),
+      },
+      {
+        'text': 'One special character',
+        'met': _hasSpecialChar(password),
+      },
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Password must contain:',
+            style: TextStyle(
+              fontSize: 12,
+              fontFamily: 'BricolageGrotesque',
+              color: const Color(0xFF8E8E93),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...requirements.map((req) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      req['met'] as bool
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      size: 16,
+                      color: req['met'] as bool
+                          ? const Color(0xFF34C759)
+                          : const Color(0xFFC7C7CC),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        req['text'] as String,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'BricolageGrotesque',
+                          color: req['met'] as bool
+                              ? const Color(0xFF34C759)
+                              : const Color(0xFF8E8E93),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
     );
   }
 }
