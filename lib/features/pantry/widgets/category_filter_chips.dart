@@ -20,23 +20,33 @@ class CategoryFilterChips extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+    
+    // Calculate responsive height based on text scaling
+    final baseHeight = 40.0;
+    final chipHeight = baseHeight * clampedScale.clamp(1.0, 1.1);
+
     return Container(
-      height: 40,
+      height: chipHeight,
       margin: const EdgeInsets.only(bottom: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
           // All categories chip
           _buildFilterChip(
+            context: context,
             label: 'All',
             isSelected: selectedCategory == null,
             onTap: () => onCategorySelected(null),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8 * clampedScale),
           // Category chips
           ...categories.map((category) => Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: EdgeInsets.only(right: 8 * clampedScale),
                 child: _buildFilterChip(
+                  context: context,
                   label: _formatCategoryName(category),
                   isSelected: selectedCategory == category,
                   onTap: () => onCategorySelected(category),
@@ -48,14 +58,26 @@ class CategoryFilterChips extends StatelessWidget {
   }
 
   Widget _buildFilterChip({
+    required BuildContext context,
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        constraints: BoxConstraints(
+          minHeight: 32 * clampedScale,
+          maxHeight: 40 * clampedScale,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: 16 * clampedScale,
+          vertical: 8 * clampedScale,
+        ),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFF6A00) : Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -64,12 +86,17 @@ class CategoryFilterChips extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.grey[700],
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[700],
+              fontSize: 14 * clampedScale,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),

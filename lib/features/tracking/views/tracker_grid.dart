@@ -199,6 +199,17 @@ class _TrackerGridState extends State<TrackerGrid>
         AppLogger.d(
             '🎯 TrackerGrid: Showing main tracker display with ${dailyTrackers.length} daily trackers');
 
+        // Get text scale factor and clamp it for UI elements that must fit
+        final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+        final clampedScale = textScaleFactor.clamp(1.0, 1.3);
+
+        // Calculate responsive aspect ratio based on text scaling
+        // Base: 152 width / 68 height = 2.235
+        // When height scales, aspect ratio decreases
+        final baseHeight = 68.0;
+        final scaledHeight = baseHeight * clampedScale;
+        final childAspectRatio = 152 / scaledHeight;
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
@@ -207,15 +218,21 @@ class _TrackerGridState extends State<TrackerGrid>
               if (widget.showDailyTrackers) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Daily Meal Plan Goals',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF333333),
+                    Flexible(
+                      child: Text(
+                        'Daily Meal Plan Goals',
+                        style: TextStyle(
+                          fontSize: 20 * clampedScale.clamp(0.8, 1.0),
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF333333),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Builder(
                       builder: (context) {
                         return showcaseview.Showcase(
@@ -244,30 +261,37 @@ class _TrackerGridState extends State<TrackerGrid>
                             Navigator.pushNamed(context, '/meal-plan');
                           },
                           disposeOnTap: true,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              AppLogger.d(
-                                  '🎯 TrackerGrid: User clicked on My Plan button');
-                              // Navigate to meal plan page - don't complete step yet
-                              Navigator.pushNamed(context, '/meal-plan');
-                              // Step will be completed when user clicks "Continue Tour" on diet plan page
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFFFF6B35), // Orange color
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                AppLogger.d(
+                                    '🎯 TrackerGrid: User clicked on My Plan button');
+                                // Navigate to meal plan page - don't complete step yet
+                                Navigator.pushNamed(context, '/meal-plan');
+                                // Step will be completed when user clicks "Continue Tour" on diet plan page
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    const Color(0xFFFF6B35), // Orange color
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal:
+                                        16 * clampedScale.clamp(1.0, 1.2),
+                                    vertical: 8 * clampedScale.clamp(1.0, 1.2)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                elevation: 0,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'My Plan',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                              child: Text(
+                                'My Plan',
+                                style: TextStyle(
+                                  fontSize: 14 * clampedScale.clamp(0.8, 1.0),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
@@ -280,9 +304,9 @@ class _TrackerGridState extends State<TrackerGrid>
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 152 / 68,
+                    childAspectRatio: childAspectRatio,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                   ),
@@ -303,21 +327,21 @@ class _TrackerGridState extends State<TrackerGrid>
               ],
               if (widget.showWeeklyTrackers && weeklyTrackers.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Weekly Meal Plan Goals',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 20 * clampedScale.clamp(0.8, 1.0),
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF333333),
+                    color: const Color(0xFF333333),
                   ),
                 ),
                 const SizedBox(height: 16),
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 152 / 68,
+                    childAspectRatio: childAspectRatio,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                   ),
@@ -393,6 +417,15 @@ class _TrackerGridState extends State<TrackerGrid>
   }
 
   Widget _buildSkeletonLoading() {
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
+
+    // Calculate responsive aspect ratio based on text scaling
+    final baseHeight = 68.0;
+    final scaledHeight = baseHeight * clampedScale;
+    final childAspectRatio = 152 / scaledHeight;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -400,15 +433,21 @@ class _TrackerGridState extends State<TrackerGrid>
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'Daily Meal Plan Goals',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF333333),
+              Flexible(
+                child: Text(
+                  'Daily Meal Plan Goals',
+                  style: TextStyle(
+                    fontSize: 20 * clampedScale,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF333333),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Builder(
                 builder: (context) {
                   AppLogger.d(
@@ -438,30 +477,36 @@ class _TrackerGridState extends State<TrackerGrid>
                       Navigator.pushNamed(context, '/meal-plan');
                     },
                     disposeOnTap: false,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        AppLogger.d(
-                            '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
-                        // Navigate to meal plan page - don't complete step yet
-                        Navigator.pushNamed(context, '/meal-plan');
-                        // Step will be completed when user clicks "Continue Tour" on diet plan page
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFFFF6B35), // Orange color
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          AppLogger.d(
+                              '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
+                          // Navigate to meal plan page - don't complete step yet
+                          Navigator.pushNamed(context, '/meal-plan');
+                          // Step will be completed when user clicks "Continue Tour" on diet plan page
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFFFF6B35), // Orange color
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16 * clampedScale.clamp(1.0, 1.2),
+                              vertical: 8 * clampedScale.clamp(1.0, 1.2)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'My Plan',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                        child: Text(
+                          'My Plan',
+                          style: TextStyle(
+                            fontSize: 14 * clampedScale.clamp(1.0, 1.2),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
@@ -474,9 +519,9 @@ class _TrackerGridState extends State<TrackerGrid>
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 152 / 68,
+              childAspectRatio: childAspectRatio,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
@@ -486,21 +531,21 @@ class _TrackerGridState extends State<TrackerGrid>
             },
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Weekly Meal PlanGoals',
+          Text(
+            'Weekly Meal Plan Goals',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 20 * clampedScale,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF333333),
+              color: const Color(0xFF333333),
             ),
           ),
           const SizedBox(height: 16),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 152 / 68,
+              childAspectRatio: childAspectRatio,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),

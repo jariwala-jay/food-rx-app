@@ -147,13 +147,17 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                   }
                 },
                 disposeOnTap: true,
-                child: Container(
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
+                child: Builder(
+                  builder: (context) {
+                    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                    return Container(
+                      height: 46 * clampedScale.clamp(1.0, 1.1),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
                     children: [
                       Expanded(
                         child: GestureDetector(
@@ -171,15 +175,23 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
-                              child: Text(
-                                'FoodRx Items',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: _selectedTabIndex == 0
-                                      ? Colors.white
-                                      : Colors.grey,
-                                ),
+                              child: Builder(
+                                builder: (context) {
+                                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                  return Text(
+                                    'FoodRx Items',
+                                    style: TextStyle(
+                                      fontSize: 16 * clampedScale,
+                                      fontWeight: FontWeight.w500,
+                                      color: _selectedTabIndex == 0
+                                          ? Colors.white
+                                          : Colors.grey,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -201,22 +213,32 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
-                              child: Text(
-                                'Home Items',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: _selectedTabIndex == 1
-                                      ? Colors.white
-                                      : Colors.grey,
-                                ),
+                              child: Builder(
+                                builder: (context) {
+                                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                  return Text(
+                                    'Home Items',
+                                    style: TextStyle(
+                                      fontSize: 16 * clampedScale,
+                                      fontWeight: FontWeight.w500,
+                                      color: _selectedTabIndex == 1
+                                          ? Colors.white
+                                          : Colors.grey,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                },
                               ),
                             ),
                           ),
                         ),
                       ),
                     ],
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
 
@@ -290,13 +312,21 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Your FoodRx Items list is Empty. Add items to get started!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
+            Builder(
+              builder: (context) {
+                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                return Text(
+                  'Your FoodRx Items list is Empty. Add items to get started!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16 * clampedScale,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add FoodRx Items', () {
@@ -320,16 +350,24 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               color: Colors.grey[400],
             ),
             const SizedBox(height: 16),
-            Text(
-              controller.searchQuery.isNotEmpty ||
-                      controller.selectedCategory != null
-                  ? 'No items found matching your search'
-                  : 'No pantry items available',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 16,
-              ),
+            Builder(
+              builder: (context) {
+                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                return Text(
+                  controller.searchQuery.isNotEmpty ||
+                          controller.selectedCategory != null
+                      ? 'No items found matching your search'
+                      : 'No pantry items available',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16 * clampedScale,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
             ),
             if (controller.searchQuery.isNotEmpty ||
                 controller.selectedCategory != null) ...[
@@ -482,13 +520,21 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Your Home Items list is empty. Add what you have at home or bought from grocery store.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
+            Builder(
+              builder: (context) {
+                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                return Text(
+                  'Your Home Items list is empty. Add what you have at home or bought from grocery store.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16 * clampedScale,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add Home Items', () {
@@ -512,16 +558,24 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               color: Colors.grey[400],
             ),
             const SizedBox(height: 16),
-            Text(
-              controller.searchQuery.isNotEmpty ||
-                      controller.selectedCategory != null
-                  ? 'No items found matching your search'
-                  : 'No other items available',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 16,
-              ),
+            Builder(
+              builder: (context) {
+                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                return Text(
+                  controller.searchQuery.isNotEmpty ||
+                          controller.selectedCategory != null
+                      ? 'No items found matching your search'
+                      : 'No other items available',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16 * clampedScale,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
             ),
             if (controller.searchQuery.isNotEmpty ||
                 controller.selectedCategory != null) ...[
@@ -596,45 +650,66 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getExpiryText(item.expiryDate),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
+                  child: Builder(
+                    builder: (context) {
+                      final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                      final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            item.name,
+                            style: TextStyle(
+                              fontSize: 16 * clampedScale,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _getExpiryText(item.expiryDate),
+                            style: TextStyle(
+                              fontSize: 14 * clampedScale,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
               // Qty tag
-              Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3EB),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  item.quantityDisplay,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFFFF6A00),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                  return Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 10 * clampedScale,
+                      vertical: 6 * clampedScale,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3EB),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      item.quantityDisplay,
+                      style: TextStyle(
+                        fontSize: 13 * clampedScale,
+                        color: const Color(0xFFFF6A00),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -657,33 +732,47 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
   }
 
   Widget _buildAddButton(String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEEFE4),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.add,
-              color: Color(0xFFFF6A00),
-              size: 20,
+    return Builder(
+      builder: (context) {
+        final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+        final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 24 * clampedScale,
+              vertical: 12 * clampedScale,
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFFFF6A00),
-                fontWeight: FontWeight.w500,
-              ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEEFE4),
+              borderRadius: BorderRadius.circular(24),
             ),
-          ],
-        ),
-      ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add,
+                  color: const Color(0xFFFF6A00),
+                  size: 20 * clampedScale,
+                ),
+                SizedBox(width: 8 * clampedScale),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: const Color(0xFFFF6A00),
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14 * clampedScale,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -717,9 +806,21 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit ${item.name}',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
+              Builder(
+                builder: (context) {
+                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                  return Text(
+                    'Edit ${item.name}',
+                    style: TextStyle(
+                      fontSize: 20 * clampedScale,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: qtyController,
@@ -730,69 +831,89 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 ),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Expiration Date:',
-                      style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 12),
-                  TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate.isBefore(DateTime.now())
-                            ? DateTime.now()
-                            : selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 365 * 5)),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.light(
-                                primary: Color(0xFFFF6A00),
-                                onPrimary: Colors.white,
-                                surface: Colors.white,
-                                onSurface: Color(0xFF2C2C2C),
-                                onSurfaceVariant: Colors.white,
-                              ),
-                              datePickerTheme: DatePickerThemeData(
-                                backgroundColor: Colors.white,
-                                headerBackgroundColor: Colors.white,
-                                headerForegroundColor: Color(0xFF2C2C2C),
-                                weekdayStyle: TextStyle(
-                                  color: Color(0xFF8E8E93),
-                                ),
-                                dayStyle: TextStyle(
-                                  color: Color(0xFF2C2C2C),
-                                ),
-                                cancelButtonStyle: TextButton.styleFrom(
-                                  foregroundColor: Color(0xFFFF6A00),
-                                ),
-                                confirmButtonStyle: TextButton.styleFrom(
-                                  foregroundColor: Color(0xFFFF6A00),
-                                ),
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-                      if (picked != null && mounted) {
-                        // Check mounted before setState
-                        setState(() {
-                          selectedDate = picked;
-                        });
-                      }
-                    },
-                    child: Text(
-                      '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6A00),
+              Builder(
+                builder: (context) {
+                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                  return Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Expiration Date:',
+                          style: TextStyle(fontSize: 16 * clampedScale),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                      SizedBox(width: 12 * clampedScale),
+                      Flexible(
+                        child: TextButton(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDate.isBefore(DateTime.now())
+                                  ? DateTime.now()
+                                  : selectedDate,
+                              firstDate: DateTime.now(),
+                              lastDate:
+                                  DateTime.now().add(const Duration(days: 365 * 5)),
+                              builder: (context, child) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    colorScheme: const ColorScheme.light(
+                                      primary: Color(0xFFFF6A00),
+                                      onPrimary: Colors.white,
+                                      surface: Colors.white,
+                                      onSurface: Color(0xFF2C2C2C),
+                                      onSurfaceVariant: Colors.white,
+                                    ),
+                                    datePickerTheme: DatePickerThemeData(
+                                      backgroundColor: Colors.white,
+                                      headerBackgroundColor: Colors.white,
+                                      headerForegroundColor: Color(0xFF2C2C2C),
+                                      weekdayStyle: TextStyle(
+                                        color: Color(0xFF8E8E93),
+                                      ),
+                                      dayStyle: TextStyle(
+                                        color: Color(0xFF2C2C2C),
+                                      ),
+                                      cancelButtonStyle: TextButton.styleFrom(
+                                        foregroundColor: Color(0xFFFF6A00),
+                                      ),
+                                      confirmButtonStyle: TextButton.styleFrom(
+                                        foregroundColor: Color(0xFFFF6A00),
+                                      ),
+                                    ),
+                                  ),
+                                  child: child!,
+                                );
+                              },
+                            );
+                            if (picked != null && mounted) {
+                              // Check mounted before setState
+                              setState(() {
+                                selectedDate = picked;
+                              });
+                            }
+                          },
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFFFF6A00),
+                                fontSize: 14 * clampedScale,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 24),
               Row(

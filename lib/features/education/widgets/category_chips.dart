@@ -62,15 +62,24 @@ class CategoryChips extends StatelessWidget {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final theme = Theme.of(context);
+    // Get text scale factor and clamp it for UI elements that must fit
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
     const color = Color(0xFFFF6A00); // App's theme color
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(100),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
+        constraints: BoxConstraints(
+          minHeight: 32 * clampedScale,
+          maxHeight: 40 * clampedScale,
+          minWidth: 0,
+          maxWidth: double.infinity,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: 16 * clampedScale,
+          vertical: 8 * clampedScale,
         ),
         decoration: BoxDecoration(
           color: isSelected ? color : Colors.white,
@@ -84,14 +93,19 @@ class CategoryChips extends StatelessWidget {
             ? Icon(
                 icon,
                 color: isSelected ? Colors.white : Colors.grey.shade600,
-                size: 20,
+                size: 20 * clampedScale,
               )
-            : Text(
-                label!,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey.shade600,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label!,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                    fontSize: 14 * clampedScale,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
       ),

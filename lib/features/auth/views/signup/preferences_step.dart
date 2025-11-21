@@ -245,7 +245,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Food Allergies *',
+                          label: 'Food Allergies',
                           value: null,
                           options: const [
                             'No allergies',
@@ -361,12 +361,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       options: const [
                         {'0 glass': '0 glass'},
                         {
-                          'less than 8 glasses (0.5 gallon)':
-                              'less than 8 glasses (0.5 gallon)'
+                          'less than 8 glasses (64 oz)':
+                              'less than 8 glasses (64 oz)'
                         },
                         {
-                          '8 or more glasses (0.5 gallon)':
-                              '8 or more glasses (0.5 gallon)'
+                          '8 or more glasses (64 oz)':
+                              '8 or more glasses (64 oz)'
                         },
                       ],
                       onChanged: (value) {
