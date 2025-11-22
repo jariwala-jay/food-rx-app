@@ -92,111 +92,102 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       _emailExistsError = null;
     });
 
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
+    // Validate form fields first
+    final isFormValid = _formKey.currentState!.validate();
 
-      try {
-        // Additional required field validations
-        if (_nameController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter your name'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_emailController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter your email'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
+    // Collect all missing required fields
+    final List<String> missingFields = [];
 
-        // Check if email already exists in database
-        // Clear any previous email error first
-        setState(() {
-          _emailExistsError = null;
-        });
+    if (_nameController.text.trim().isEmpty) {
+      missingFields.add('Name');
+    }
+    if (_emailController.text.trim().isEmpty) {
+      missingFields.add('Email');
+    }
+    if (_passwordController.text.trim().isEmpty) {
+      missingFields.add('Password');
+    }
+    if (_confirmPasswordController.text.trim().isEmpty) {
+      missingFields.add('Confirm password');
+    }
 
-        final authController = context.read<AuthController>();
-        final emailExists =
-            await authController.checkEmailExists(_emailController.text.trim());
-        if (emailExists) {
-          setState(() {
-            _isLoading = false;
-            _emailExistsError =
-                'This email is already registered. Please use a different email or try logging in.';
-          });
-          // Focus on email field and show error
-          _emailFocusNode.requestFocus();
-          // Trigger form validation to show error
-          _formKey.currentState?.validate();
-          return;
-        }
+    // If form validation failed or there are missing fields, show all errors
+    if (!isFormValid || missingFields.isNotEmpty) {
+      // Build comprehensive error message
+      final List<String> allErrors = [];
 
-        if (_passwordController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter your password'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_confirmPasswordController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please confirm your password'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
+      // Add missing required fields
+      allErrors.addAll(missingFields);
 
-        // Store the data in SignupProvider instead of registering
-        context.read<SignupProvider>().updateBasicInfo(
-              name: _nameController.text,
-              email: _emailController.text,
-              password: _passwordController.text,
-              profilePhoto: _profilePhoto,
-            );
+      // Show all missing fields in one message (form validators will show their own errors)
+      if (allErrors.isNotEmpty) {
+        final errorMessage = allErrors.length == 1
+            ? 'Please fill in: ${allErrors.first}'
+            : 'Please fill in the following required fields:\n• ${allErrors.join('\n• ')}';
 
-        widget.onNext();
-      } catch (e) {
-        setState(() {
-          _error = 'An error occurred: $e';
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An error occurred: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
-      } finally {
-        if (!mounted) return;
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Check if email already exists in database
+      // Clear any previous email error first
+      setState(() {
+        _emailExistsError = null;
+      });
+
+      final authController = context.read<AuthController>();
+      final emailExists =
+          await authController.checkEmailExists(_emailController.text.trim());
+      if (emailExists) {
         setState(() {
           _isLoading = false;
+          _emailExistsError =
+              'This email is already registered. Please use a different email or try logging in.';
         });
+        // Focus on email field and show error
+        _emailFocusNode.requestFocus();
+        // Trigger form validation to show error
+        _formKey.currentState?.validate();
+        return;
       }
+
+      // Store the data in SignupProvider instead of registering
+      context.read<SignupProvider>().updateBasicInfo(
+            name: _nameController.text,
+            email: _emailController.text,
+            password: _passwordController.text,
+            profilePhoto: _profilePhoto,
+          );
+
+      widget.onNext();
+    } catch (e) {
+      setState(() {
+        _error = 'An error occurred: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
