@@ -28,6 +28,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   String? _dailyVegetableIntake;
   String? _dailyWaterIntake;
   bool _isLoading = false;
+  bool _showErrors = false;
 
   final List<String> _activityLevels = [
     'Not Active',
@@ -78,93 +79,97 @@ class _PreferencesStepState extends State<PreferencesStep> {
   }
 
   Future<void> _handleSubmit() async {
-    if (_formKey.currentState!.validate()) {
+    // Collect all validation errors first in the correct order (as they appear on screen)
+    final List<String> missingFields = [];
+
+    // Validate form fields
+    final isFormValid = _formKey.currentState!.validate();
+
+    // Check all required fields in the order they appear on screen
+    // 1. Favorite Cuisines
+    if (_favoriteCuisines.isEmpty) {
+      missingFields.add('Favorite cuisines (or "No preference")');
+    }
+    // 2. Food Allergies
+    if (_selectedFoodAllergies.isEmpty) {
+      missingFields.add('Food allergies (or "No allergies" if you have none)');
+    }
+    // 3. Daily Fruit Intake
+    if (_dailyFruitIntake == null) {
+      missingFields.add('Daily fruit intake');
+    }
+    // 4. Daily Vegetable Intake
+    if (_dailyVegetableIntake == null) {
+      missingFields.add('Daily vegetable intake');
+    }
+    // 5. Daily Water Intake
+    if (_dailyWaterIntake == null) {
+      missingFields.add('Daily water intake');
+    }
+    // 6. Activity Level
+    if (_activityLevel == null) {
+      missingFields.add('Activity level');
+    }
+
+    // If there are any missing fields or form validation failed, show all errors
+    if (!isFormValid || missingFields.isNotEmpty) {
+      // Show errors on fields
       setState(() {
-        _isLoading = true;
+        _showErrors = true;
       });
 
-      try {
-        // Required field checks and defaults
-        if (_activityLevel == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select your activity level'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_dailyFruitIntake == null || _dailyVegetableIntake == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select daily fruit and vegetable intake'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_dailyWaterIntake == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select daily water intake'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        // Validate food allergies - must be selected
-        if (_selectedFoodAllergies.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Please select your food allergies (or "No allergies" if you have none)'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        // Ensure multi-selects have a value (with explicit neutral choices)
-        if (_favoriteCuisines.isEmpty) {
-          _favoriteCuisines = ["No preference"];
-        }
+      // Trigger form validation to show field errors
+      _formKey.currentState?.validate();
 
-        // Update preferences in SignupProvider
-        context.read<SignupProvider>().updatePreferences(
-              foodAllergies: _selectedFoodAllergies,
-              activityLevel: _activityLevel,
-              favoriteCuisines: _favoriteCuisines,
-              dailyFruitIntake: _dailyFruitIntake,
-              dailyVegetableIntake: _dailyVegetableIntake,
-              dailyWaterIntake: _dailyWaterIntake,
-            );
+      // Show all missing fields in one message
+      if (missingFields.isNotEmpty) {
+        final errorMessage = missingFields.length == 1
+            ? 'Please fill in: ${missingFields.first}'
+            : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
 
-        // Advance to next step
-        widget.onSubmit();
-      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An error occurred: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
-      } finally {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
       }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _showErrors = false;
+    });
+
+    try {
+      // Note: Favorite cuisines is now required, so we don't set a default here
+
+      // Update preferences in SignupProvider
+      context.read<SignupProvider>().updatePreferences(
+            foodAllergies: _selectedFoodAllergies,
+            activityLevel: _activityLevel,
+            favoriteCuisines: _favoriteCuisines,
+            dailyFruitIntake: _dailyFruitIntake,
+            dailyVegetableIntake: _dailyVegetableIntake,
+            dailyWaterIntake: _dailyWaterIntake,
+          );
+
+      // Advance to next step
+      widget.onSubmit();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -213,6 +218,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           onChangedMulti: (values) {
                             setState(() {
                               _favoriteCuisines = values;
+                              _showErrors = false;
                             });
                           },
                         ),
@@ -223,8 +229,20 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             onChanged: (values) {
                               setState(() {
                                 _favoriteCuisines = values;
+                                _showErrors = false;
                               });
                             },
+                          ),
+                        ],
+                        if (_showErrors && _favoriteCuisines.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select your favorite cuisines (or "No preference")',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
                           ),
                         ],
                       ],
@@ -271,6 +289,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               } else {
                                 _selectedFoodAllergies = values;
                               }
+                              _showErrors = false;
                             });
                           },
                         ),
@@ -287,8 +306,20 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 } else {
                                   _selectedFoodAllergies = values;
                                 }
+                                _showErrors = false;
                               });
                             },
+                          ),
+                        ],
+                        if (_showErrors && _selectedFoodAllergies.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select your food allergies (or "No allergies" if you have none)',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
                           ),
                         ],
                       ],
@@ -321,6 +352,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 onChanged: (value) {
                                   setState(() {
                                     _dailyFruitIntake = value;
+                                    _showErrors = false;
                                   });
                                 },
                                 hintText: 'Fruit',
@@ -334,6 +366,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 onChanged: (value) {
                                   setState(() {
                                     _dailyVegetableIntake = value;
+                                    _showErrors = false;
                                   });
                                 },
                                 hintText: 'Vegetable',
@@ -341,6 +374,24 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             ),
                           ],
                         ),
+                        if (_showErrors &&
+                            (_dailyFruitIntake == null ||
+                                _dailyVegetableIntake == null)) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _dailyFruitIntake == null &&
+                                    _dailyVegetableIntake == null
+                                ? 'Please select daily fruit and vegetable intake'
+                                : _dailyFruitIntake == null
+                                    ? 'Please select daily fruit intake'
+                                    : 'Please select daily vegetable intake',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -355,25 +406,42 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppRadioGroup<String>(
-                      label: 'Daily Water Intake',
-                      value: _dailyWaterIntake,
-                      options: const [
-                        {'0 glass': '0 glass'},
-                        {
-                          'less than 8 glasses (64 oz)':
-                              'less than 8 glasses (64 oz)'
-                        },
-                        {
-                          '8 or more glasses (64 oz)':
-                              '8 or more glasses (64 oz)'
-                        },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppRadioGroup<String>(
+                          label: 'Daily Water Intake',
+                          value: _dailyWaterIntake,
+                          options: const [
+                            {'0 glass': '0 glass'},
+                            {
+                              'less than 8 glasses (64 oz)':
+                                  'less than 8 glasses (64 oz)'
+                            },
+                            {
+                              '8 or more glasses (64 oz)':
+                                  '8 or more glasses (64 oz)'
+                            },
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _dailyWaterIntake = value;
+                              _showErrors = false;
+                            });
+                          },
+                        ),
+                        if (_showErrors && _dailyWaterIntake == null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select daily water intake',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
                       ],
-                      onChanged: (value) {
-                        setState(() {
-                          _dailyWaterIntake = value;
-                        });
-                      },
                     ),
                   ),
                   // Activity Level
@@ -387,17 +455,34 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppRadioGroup<String>(
-                      label: 'How physically active are you?',
-                      value: _activityLevel,
-                      options: _activityLevels
-                          .map((level) => {level: level})
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _activityLevel = value;
-                        });
-                      },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppRadioGroup<String>(
+                          label: 'How physically active are you?',
+                          value: _activityLevel,
+                          options: _activityLevels
+                              .map((level) => {level: level})
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _activityLevel = value;
+                              _showErrors = false;
+                            });
+                          },
+                        ),
+                        if (_showErrors && _activityLevel == null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select your activity level',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
