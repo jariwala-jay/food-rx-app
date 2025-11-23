@@ -461,8 +461,8 @@ void main() {
       });
     });
 
-    group('Medical Conditions and Health Goals Tests', () {
-      test('should handle multiple medical conditions', () {
+    group('Diet-related Chronic Condition and Health Goals Tests', () {
+      test('should handle multiple diet-related chronic conditions', () {
         final result = service.personalize(
           dob: DateTime(1990, 1, 1),
           sex: 'male',
@@ -482,7 +482,9 @@ void main() {
         expect(rule['hypertension'], equals('YES'));
       });
 
-      test('should handle empty medical conditions and health goals', () {
+      test(
+          'should handle empty diet-related chronic conditions and health goals',
+          () {
         final result = service.personalize(
           dob: DateTime(1990, 1, 1),
           sex: 'male',

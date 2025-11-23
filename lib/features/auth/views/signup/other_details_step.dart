@@ -58,7 +58,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     _preferredMealPrepTime = signupData.preferredMealPrepTime;
     _cookingForPeopleController.text = signupData.cookingForPeople ?? '';
     _cookingSkill = signupData.cookingSkill;
-    
+
     // Clear error state when user types in cooking for people field
     _cookingForPeopleController.addListener(() {
       if (_showErrors && _cookingForPeopleController.text.trim().isNotEmpty) {
@@ -78,10 +78,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   Future<void> _handleSubmit() async {
     // Collect all validation errors first in the correct order (as they appear on screen)
     final List<String> missingFields = [];
-    
+
     // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
-    
+
     // Check all required fields in the order they appear on screen
     // 1. Health Goals
     if (_selectedHealthGoals.isEmpty) {
@@ -99,23 +99,23 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     if (_cookingSkill == null) {
       missingFields.add('Cooking skill rating');
     }
-    
+
     // If there are any missing fields or form validation failed, show all errors
     if (!isFormValid || missingFields.isNotEmpty) {
       // Show errors on fields
       setState(() {
         _showErrors = true;
       });
-      
+
       // Trigger form validation to show field errors
       _formKey.currentState?.validate();
-      
+
       // Show all missing fields in one message
       if (missingFields.isNotEmpty) {
         final errorMessage = missingFields.length == 1
             ? 'Please fill in: ${missingFields.first}'
             : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -148,8 +148,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
       try {
         // Load nutrition content and create personalization service
         final nutritionContent = await NutritionContentLoader.load();
-        final personalizationService =
-            PersonalizationService(nutritionContent);
+        final personalizationService = PersonalizationService(nutritionContent);
 
         final personalizationResult = personalizationService.personalize(
           dob: signupData.dateOfBirth!,
@@ -236,7 +235,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppCheckboxGroup(
-                          label: 'Health Goals',
+                          label: 'Diet-related Health Goals',
                           selectedValues: _selectedHealthGoals,
                           options: _healthGoals,
                           onChanged: (values) {
@@ -275,7 +274,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'Preferred Meal Prep time',
+                          label: 'Preferred Meal Prep Time',
                           value: _preferredMealPrepTime,
                           options: _mealPrepTimeOptions
                               .map((option) => {option: option})
@@ -318,7 +317,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       controller: _cookingForPeopleController,
                       keyboardType: TextInputType.number,
                       validator: (value) {
-                        if (_showErrors && (value == null || value.trim().isEmpty)) {
+                        if (_showErrors &&
+                            (value == null || value.trim().isEmpty)) {
                           return 'Please enter how many people you cook for';
                         }
                         return null;
@@ -340,7 +340,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'Rate Your Cooking Skill',
+                          label: 'Rate Your Cooking Skills',
                           value: _cookingSkill,
                           options: _cookingSkillOptions
                               .map((option) => {option: option})

@@ -32,8 +32,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
   final List<String> _activityLevels = [
     'Not Active',
-    'Light',
-    'Moderate',
+    'Seldom Active',
+    'Moderately Active',
     'Very Active',
   ];
 
@@ -185,12 +185,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Your Preferences', style: AppTypography.bg_24_b),
-                  Text(
-                    'Help us understand your preferences for personalized recommendations',
-                    style: AppTypography.bg_14_r
-                        .copyWith(color: const Color(0xFF90909A)),
-                  ),
                   const SizedBox(height: 24),
                   // Favorite Cuisines (multi-select modal)
                   Container(
@@ -207,7 +201,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Favorite',
+                          label: 'Favorite Cuisines',
                           value: null,
                           options: _cuisineOptions,
                           onChanged: (_) {},
@@ -340,7 +334,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Daily Intake',
+                        const Text('Daily Fruit & Vegetable Intake',
                             style: AppTypography.bg_16_m),
                         const SizedBox(height: 16),
                         Row(
@@ -410,18 +404,14 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'Daily Water Intake',
+                          label: 'Daily Water Intake (1 cup = 8 oz)',
                           value: _dailyWaterIntake,
                           options: const [
-                            {'0 glass': '0 glass'},
-                            {
-                              'less than 8 glasses (64 oz)':
-                                  'less than 8 glasses (64 oz)'
-                            },
-                            {
-                              '8 or more glasses (64 oz)':
-                                  '8 or more glasses (64 oz)'
-                            },
+                            {'less than 1 cup': 'less than 1 cup'},
+                            {'1-2 cups': '1-2 cups'},
+                            {'3-4 cups': '3-4 cups'},
+                            {'5-7 cups': '5-7 cups'},
+                            {'8 cups or more': '8 cups or more'},
                           ],
                           onChanged: (value) {
                             setState(() {

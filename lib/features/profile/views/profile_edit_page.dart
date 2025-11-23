@@ -290,9 +290,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       case 'weight':
         return 'Edit Weight';
       case 'medicalConditions':
-        return 'Edit Medical Conditions';
+        return 'Edit Diet-related Chronic Condition';
       case 'healthGoals':
-        return 'Edit Health Goals';
+        return 'Edit Diet-related Health Goals';
       case 'allergies':
         return 'Edit Allergies';
       default:
@@ -438,7 +438,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         options: const [
           {'male': 'Male'},
           {'female': 'Female'},
-          {'decline': 'Decline to answer'},
+          {'intersex': 'Intersex'},
         ],
         onChanged: (value) {
           setState(() {
@@ -461,8 +461,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         value: _selectedValue,
         options: const [
           {'Not Active': 'Not Active'},
-          {'Light': 'Light'},
-          {'Moderate': 'Moderate'},
+          {'Seldom Active': 'Seldom Active'},
+          {'Moderately Active': 'Moderately Active'},
           {'Very Active': 'Very Active'},
         ],
         onChanged: (value) {
@@ -660,18 +660,18 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppDropdownField(
-            label: 'Medical Conditions',
+            label: 'Diet-related Chronic Condition',
             value: null,
             options: options,
             onChanged: (_) {},
-            hintText: 'Select Medical Conditions',
+            hintText: 'Select Diet-related Chronic Condition',
             showSearchBar: true,
             multiSelect: true,
             selectedValues: _selectedMultiValues,
             onChangedMulti: (values) {
               setState(() {
-                if (values.contains('None')) {
-                  _selectedMultiValues = ['None'];
+                if (values.contains('Other')) {
+                  _selectedMultiValues = ['Other'];
                 } else {
                   _selectedMultiValues = values;
                 }
@@ -684,8 +684,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               values: _selectedMultiValues,
               onChanged: (values) {
                 setState(() {
-                  if (values.contains('None') && values.length > 1) {
-                    _selectedMultiValues = ['None'];
+                  if (values.contains('Other') && values.length > 1) {
+                    _selectedMultiValues = ['Other'];
                   } else {
                     _selectedMultiValues = values;
                   }
@@ -780,7 +780,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppCheckboxGroup(
-            label: 'Health Goals',
+            label: 'Diet-related Health Goals',
             selectedValues: _selectedMultiValues,
             options: options,
             onChanged: (values) {

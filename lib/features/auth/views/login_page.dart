@@ -125,9 +125,16 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Welcome!', style: AppTypography.bg_24_b),
+                  const Text('Welcome to MyFoodRx!',
+                      style: AppTypography.bg_24_b),
                   Text(
-                    'Login to your account to continue',
+                    'Login to your account to continue.',
+                    style: AppTypography.bg_14_r
+                        .copyWith(color: const Color(0xFF90909A)),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'If you don\'t have an account, click the Create Now button at the bottom of the screen to make your account and get started',
                     style: AppTypography.bg_14_r
                         .copyWith(color: const Color(0xFF90909A)),
                   ),
