@@ -69,6 +69,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
   @override
   void initState() {
     super.initState();
+    // Reset loading state when widget is initialized
+    _isLoading = false;
+    _showErrors = false;
+
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
     _activityLevel = signupData.activityLevel;
@@ -156,17 +160,22 @@ class _PreferencesStepState extends State<PreferencesStep> {
             dailyWaterIntake: _dailyWaterIntake,
           );
 
-      // Advance to next step
+      // Reset loading state before navigating to next step
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Advance to next step (Other Details)
       widget.onSubmit();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('An error occurred: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (!mounted) return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       setState(() {
         _isLoading = false;
       });
@@ -501,7 +510,16 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: widget.onPrevious,
+                        onPressed: () {
+                          // Always allow going back, but reset loading state first
+                          if (_isLoading) {
+                            setState(() {
+                              _isLoading = false;
+                              _showErrors = false;
+                            });
+                          }
+                          widget.onPrevious();
+                        },
                         child: Text(
                           'Previous',
                           style: AppTypography.bg_16_sb

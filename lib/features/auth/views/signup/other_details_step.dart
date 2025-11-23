@@ -53,6 +53,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   @override
   void initState() {
     super.initState();
+    // Reset loading state when widget is initialized
+    _isLoading = false;
+    _showErrors = false;
+
     final signupData = context.read<SignupProvider>().data;
     _selectedHealthGoals = List.from(signupData.healthGoals);
     _preferredMealPrepTime = signupData.preferredMealPrepTime;
@@ -187,7 +191,12 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
         }
       }
 
-      // Move to next step; actual registration happens at the end
+      // Reset loading state before navigating to next step
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Advance to next step (Diet Plan)
       widget.onSubmit();
     } catch (e) {
       if (mounted) {
@@ -392,7 +401,16 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: widget.onPrevious,
+                        onPressed: () {
+                          // Always allow going back, but reset loading state first
+                          if (_isLoading) {
+                            setState(() {
+                              _isLoading = false;
+                              _showErrors = false;
+                            });
+                          }
+                          widget.onPrevious();
+                        },
                         child: Text(
                           'Previous',
                           style: AppTypography.bg_16_sb

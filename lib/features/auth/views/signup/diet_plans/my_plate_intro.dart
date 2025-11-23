@@ -22,12 +22,12 @@ class MyPlateIntro extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 const Text(
-                  "Great! We've Got Your Info!",
+                  "Your Personalized Plan",
                   style: AppTypography.bg_24_b,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Based on your health goals and dietary needs, the MyPlate Diet is a great fit for you! It helps balance essential nutrients while keeping you energized.",
+                  "Based on the information you provided in your health profile, the MyPlate nutrition guide is best suited to meet your diet-related health goals. MyPlate will help guide you in creating balanced meals with the right mix of fruits, vegetables, grains, protein, and dairy; thus, making healthy eating easier.",
                   style: AppTypography.bg_14_r
                       .copyWith(color: const Color(0xFF90909A)),
                 ),
@@ -36,42 +36,6 @@ class MyPlateIntro extends StatelessWidget {
                   child: Image.asset(
                     'assets/images/myplate_diet.png',
                     fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  "This diet ensures you get the right mix of proteins, carbs, and healthy fats to support your lifestyle",
-                  style: AppTypography.bg_14_r
-                      .copyWith(color: const Color(0xFF90909A)),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEFE7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFF6A00).withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.play_circle_outline,
-                        color: Color(0xFFFF6A00),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "We'll walk you through this plan in detail with a video tutorial once you're set up!",
-                          style: AppTypography.bg_14_r.copyWith(
-                            color: const Color(0xFF2C2C2C),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -99,7 +63,7 @@ class MyPlateIntro extends StatelessWidget {
                   final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                   final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                   return Text(
-                    "See My Personalized Diet Plan",
+                    "Click here to learn more about your personal plan",
                     style: AppTypography.bg_16_sb.copyWith(
                       color: Colors.white,
                       fontSize: 16 * clampedScale,
