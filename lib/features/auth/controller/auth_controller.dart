@@ -8,11 +8,14 @@ import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
+import 'package:flutter_app/core/services/email_service.dart';
+import 'package:flutter_app/core/services/gmail_smtp_email_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class AuthController with ChangeNotifier {
   final MongoDBService _mongoDBService = MongoDBService();
+  final EmailService _emailService = GmailSMTPEmailService();
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -146,8 +149,15 @@ class AuthController with ChangeNotifier {
         if (userData != null) {
           _currentUser = _createUserModel(userData);
 
-          // Initialize notification services
-          await _initializeNotificationServices(_currentUser!.id!);
+          // Initialize notification services (don't fail login if this fails)
+          try {
+            await _initializeNotificationServices(_currentUser!.id!);
+          } catch (e) {
+            // Log error but don't fail login
+            debugPrint(
+                'Warning: Failed to initialize notification services: $e');
+            // Login should still succeed even if notifications fail
+          }
 
           return true;
         }
@@ -378,6 +388,130 @@ class AuthController with ChangeNotifier {
       await notificationService.syncFCMTokenToDatabase();
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
+    }
+  }
+
+  /// Request a password reset for the given email
+  /// Returns true if the request was processed (even if email doesn't exist, for security)
+  Future<bool> requestPasswordReset(String email) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Generate reset token (this will return empty string if email doesn't exist)
+      final token = await _mongoDBService.generatePasswordResetToken(email);
+
+      // If token is empty, email doesn't exist, but we still return success
+      // to prevent user enumeration attacks
+      if (token.isEmpty) {
+        // Still return true to maintain security (don't reveal if email exists)
+        return true;
+      }
+
+      // Get user data for email personalization
+      final user = await _mongoDBService.findUserByEmail(email);
+      final userName = user?['name'] as String?;
+
+      // Send password reset email
+      final emailSent = await _emailService.sendPasswordResetEmail(
+        email: email,
+        resetToken: token,
+        userName: userName,
+      );
+
+      if (!emailSent) {
+        _error = 'Failed to send password reset email. Please try again later.';
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      // Check if it's a rate limiting error
+      if (e.toString().contains('Too many reset requests')) {
+        _error = 'Too many reset requests. Please try again later.';
+      } else {
+        _error = 'Failed to process password reset request: $e';
+      }
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Validate a password reset token
+  /// Returns true if token is valid and not expired
+  Future<bool> validatePasswordResetToken(String token) async {
+    _error = null;
+    // Don't call notifyListeners() here to avoid build phase issues
+    // The calling widget will handle state updates
+
+    try {
+      final tokenDoc = await _mongoDBService.validatePasswordResetToken(token);
+      if (tokenDoc == null) {
+        _error = 'Invalid or expired reset token';
+        return false;
+      }
+      return true;
+    } catch (e) {
+      _error = 'Failed to validate reset token: $e';
+      return false;
+    }
+    // Removed notifyListeners() to prevent build phase errors
+  }
+
+  /// Reset password using a valid reset token
+  /// Returns true if password was successfully reset
+  Future<bool> resetPassword(String token, String newPassword) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Validate password requirements (same as signup)
+      if (newPassword.length < 8) {
+        _error = 'Password must be at least 8 characters';
+        return false;
+      }
+      if (!newPassword.contains(RegExp(r'[A-Z]'))) {
+        _error = 'Password must contain at least one uppercase letter';
+        return false;
+      }
+      if (!newPassword.contains(RegExp(r'[a-z]'))) {
+        _error = 'Password must contain at least one lowercase letter';
+        return false;
+      }
+      if (!newPassword.contains(RegExp(r'[0-9]'))) {
+        _error = 'Password must contain at least one number';
+        return false;
+      }
+      if (!newPassword.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+        _error = 'Password must contain at least one special character';
+        return false;
+      }
+
+      // Reset password in database
+      final success = await _mongoDBService.resetPassword(token, newPassword);
+
+      if (!success) {
+        _error =
+            'Invalid or expired reset token. Please request a new password reset.';
+        return false;
+      }
+
+      // Clear any existing session after password reset
+      // This ensures user must login with new password
+      await _mongoDBService.clearSession();
+      _currentUser = null;
+
+      return true;
+    } catch (e) {
+      _error = 'Failed to reset password: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 }

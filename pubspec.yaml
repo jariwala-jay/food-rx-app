@@ -36,6 +36,7 @@ dependencies:
   shared_preferences: ^2.2.2
   crypto: ^3.0.3
   http: ^1.1.0
+  mailer: ^6.6.0
   image_picker: ^1.0.7
   path_provider: ^2.1.2
   flutter_dotenv: ^5.1.0
@@ -51,6 +52,7 @@ dependencies:
   cached_network_image: ^3.4.1
   showcaseview: ^5.0.1
   video_player: ^2.8.2
+  app_links: ^6.4.1
 
 dev_dependencies:
   flutter_test:
