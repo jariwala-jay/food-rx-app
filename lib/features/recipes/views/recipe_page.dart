@@ -4,6 +4,7 @@ import 'package:flutter_app/features/recipes/widgets/recipe_card.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter_app/features/recipes/views/create_recipe_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/recipes/views/saved_recipes_page.dart';
@@ -88,9 +89,26 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasInitialized) {
         _hasInitialized = true;
-        Provider.of<RecipeController>(context, listen: false).initialize();
+        final controller = Provider.of<RecipeController>(context, listen: false);
+        controller.initialize();
+        
+        // If tour is active and on recipes step, generate fallback recipes
+        final tourProvider = Provider.of<ForcedTourProvider>(context, listen: false);
+        if (tourProvider.isOnStep(TourStep.recipes)) {
+          _generateFallbackRecipes(controller);
+        }
       }
     });
+  }
+
+  Future<void> _generateFallbackRecipes(RecipeController controller) async {
+    // Use a simple query that always returns results
+    final fallbackFilter = const RecipeFilter(
+      query: 'healthy',
+      veryHealthy: true,
+    );
+    
+    await controller.generateRecipes(filter: fallbackFilter);
   }
 
   @override
@@ -227,16 +245,33 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                             '📝 Showing empty state - generation completed with no recipes');
                       }
 
+                      // If tour is active, try fallback recipes
+                      final tourProvider = Provider.of<ForcedTourProvider>(
+                          context,
+                          listen: false);
+                      final recipeController = Provider.of<RecipeController>(
+                          context,
+                          listen: false);
+                      if (tourProvider.isOnStep(TourStep.recipes) && 
+                          state.recipes.isEmpty) {
+                        // Generate fallback recipes for tour
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _generateFallbackRecipes(recipeController);
+                        });
+                        // Return loading state while generating
+                        return _buildAnimatedLoadingState();
+                      }
+
                       // Trigger recipes showcase when showing empty state if tour is active
                       // Use a flag to prevent multiple triggers
                       if (!_hasTriggeredRecipesShowcase) {
                         _hasTriggeredRecipesShowcase = true;
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (!mounted) return;
-                          final tourProvider = Provider.of<ForcedTourProvider>(
+                          final tp = Provider.of<ForcedTourProvider>(
                               context,
                               listen: false);
-                          if (tourProvider.isOnStep(TourStep.recipes)) {
+                          if (tp.isOnStep(TourStep.recipes)) {
                             try {
                               ShowcaseView.get()
                                   .startShowCase([TourKeys.recipesKey]);
