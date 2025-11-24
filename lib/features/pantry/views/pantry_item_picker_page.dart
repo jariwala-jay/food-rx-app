@@ -92,10 +92,13 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
     super.dispose();
   }
 
-  Future<void> _handleSaveButtonClick(BuildContext context, PantryItemPickerProvider provider, ForcedTourProvider tourProvider) async {
+  Future<void> _handleSaveButtonClick(
+      BuildContext context,
+      PantryItemPickerProvider provider,
+      ForcedTourProvider tourProvider) async {
     final success = await provider.saveSelectedItemsToPantry();
     if (!mounted) return;
-    
+
     // Store context before async operations to avoid linter warnings
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -105,12 +108,10 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
       // Refresh the pantry controller to show new items
       try {
         final pantryController =
-            Provider.of<PantryController>(context,
-                listen: false);
+            Provider.of<PantryController>(context, listen: false);
         await pantryController.refreshItems();
       } catch (e) {
-        developer
-            .log('Failed to refresh pantry controller: $e');
+        developer.log('Failed to refresh pantry controller: $e');
       }
 
       scaffoldMessenger.showSnackBar(
@@ -123,26 +124,28 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
       // Complete saveItem step if we're on it (during tour)
       if (tp.isOnStep(TourStep.saveItem)) {
         tp.completeCurrentStep();
-        
+
         // Close the page and modal automatically during tour
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
             // Pop item picker page
             navigator.pop();
-            
+
             // Pop category picker modal
             Future.delayed(const Duration(milliseconds: 200), () {
               if (mounted) {
                 navigator.pop();
-                
+
                 // Trigger pantry items showcase after closing
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (!mounted) return;
                     try {
-                      final tp2 = Provider.of<ForcedTourProvider>(context, listen: false);
+                      final tp2 = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
                       if (tp2.isOnStep(TourStep.pantryItems)) {
-                        ShowcaseView.get().startShowCase([TourKeys.pantryItemsKey]);
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.pantryItemsKey]);
                       }
                     } catch (e) {
                       print('Error triggering pantry items showcase: $e');
@@ -161,15 +164,13 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
       if (provider.error != null) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(
-                'Failed to save items: ${provider.error}'),
+            content: Text('Failed to save items: ${provider.error}'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
-
 
   // Show modal dialog to add quantity and unit
   void _showAddItemModal(BuildContext context, Ingredient item) {
@@ -210,7 +211,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         }
       });
     });
-    
+
     // After adding item, trigger save button showcase if on saveItem step
     // This will be triggered when the Save button appears (hasSelectedItems becomes true)
   }
@@ -436,15 +437,23 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       child: Consumer<ForcedTourProvider>(
                         builder: (context, tourProvider, child) {
                           // Check if we're on tour and in fresh_fruits category
-                          final isTourStep = tourProvider.isOnStep(TourStep.selectCategory);
-                          final isFreshFruits = widget.categoryKey == 'fresh_fruits';
-                          final isTourInFreshFruits = isTourStep && isFreshFruits;
-                          
+                          final isTourStep =
+                              tourProvider.isOnStep(TourStep.selectCategory);
+                          final isFreshFruits =
+                              widget.categoryKey == 'fresh_fruits';
+                          final isTourInFreshFruits =
+                              isTourStep && isFreshFruits;
+
                           // Use first item (index 0) for tour demo - it will always be apples in fresh_fruits
-                          final firstItemIndex = isTourInFreshFruits && provider.searchResults.isNotEmpty ? 0 : null;
-                          
+                          final firstItemIndex = isTourInFreshFruits &&
+                                  provider.searchResults.isNotEmpty
+                              ? 0
+                              : null;
+
                           // Scroll to first item when items load during tour
-                          if (isTourInFreshFruits && firstItemIndex != null && !_hasScrolledToApple) {
+                          if (isTourInFreshFruits &&
+                              firstItemIndex != null &&
+                              !_hasScrolledToApple) {
                             WidgetsBinding.instance.addPostFrameCallback((_) {
                               if (_scrollController.hasClients && mounted) {
                                 _hasScrolledToApple = true;
@@ -456,25 +465,29 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                               }
                             });
                           }
-                          
+
                           return ListView.separated(
                             controller: _scrollController,
                             padding: const EdgeInsets.symmetric(
                                 vertical: 8, horizontal: 16),
                             itemCount: provider.searchResults.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final item = provider.searchResults[index];
                               final itemId = item.id.toString();
-                              final isSelected = provider.isItemSelected(itemId);
+                              final isSelected =
+                                  provider.isItemSelected(itemId);
                               final selectedItem = isSelected
                                   ? provider.getSelectedItem(itemId)
                                   : null;
-                              
+
                               // Check if this is the first item during tour (for demo)
                               final isFirstItem = index == 0;
-                              final shouldHighlight = isTourInFreshFruits && isFirstItem;
-                              final isOnlyAllowedItem = isTourInFreshFruits && !isFirstItem;
+                              final shouldHighlight =
+                                  isTourInFreshFruits && isFirstItem;
+                              final isOnlyAllowedItem =
+                                  isTourInFreshFruits && !isFirstItem;
 
                               return Container(
                                 key: shouldHighlight ? _appleItemKey : null,
@@ -523,7 +536,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                                         height: 50,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFEEEEEE),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: const Icon(
                                           Icons.food_bank,
@@ -547,7 +561,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                                   ),
                                   subtitle: isSelected
                                       ? Padding(
-                                          padding: const EdgeInsets.only(top: 4),
+                                          padding:
+                                              const EdgeInsets.only(top: 4),
                                           child: Text(
                                             selectedItem!.quantityDisplay,
                                             style: const TextStyle(
@@ -581,7 +596,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                                       : GestureDetector(
                                           onTap: isOnlyAllowedItem
                                               ? null
-                                              : () => _showAddItemModal(context, item),
+                                              : () => _showAddItemModal(
+                                                  context, item),
                                           child: Container(
                                             width: 36,
                                             height: 36,
@@ -616,7 +632,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
             Consumer<ForcedTourProvider>(
               builder: (context, tourProvider, child) {
                 final isSaveStep = tourProvider.isOnStep(TourStep.saveItem);
-                
+
                 // Trigger showcase when Save button appears during tour
                 if (isSaveStep && !_hasTriggeredSaveShowcase) {
                   _hasTriggeredSaveShowcase = true;
@@ -625,11 +641,14 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                     Future.delayed(const Duration(milliseconds: 300), () {
                       if (!mounted) return;
                       try {
-                        final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+                        final tp = Provider.of<ForcedTourProvider>(context,
+                            listen: false);
                         if (tp.isOnStep(TourStep.saveItem)) {
-                          ShowcaseView.get().startShowCase([TourKeys.saveItemButtonKey]);
+                          ShowcaseView.get()
+                              .startShowCase([TourKeys.saveItemButtonKey]);
                         } else {
-                          _hasTriggeredSaveShowcase = false; // Reset if step changed
+                          _hasTriggeredSaveShowcase =
+                              false; // Reset if step changed
                         }
                       } catch (e) {
                         print('Error triggering saveItem showcase: $e');
@@ -638,15 +657,17 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                     });
                   });
                 } else if (!isSaveStep) {
-                  _hasTriggeredSaveShowcase = false; // Reset when not on save step
+                  _hasTriggeredSaveShowcase =
+                      false; // Reset when not on save step
                 }
-                
+
                 return Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Showcase(
                     key: isSaveStep ? TourKeys.saveItemButtonKey : GlobalKey(),
                     title: 'Save Item',
-                    description: 'Now tap the \'Save\' button to add this item to your pantry. You MUST click the Save button to continue.',
+                    description:
+                        'Now tap the \'Save\' button to add this item to your pantry. You MUST click the Save button to continue.',
                     targetShapeBorder: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -681,7 +702,8 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
-                          await _handleSaveButtonClick(context, provider, tourProvider);
+                          await _handleSaveButtonClick(
+                              context, provider, tourProvider);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,

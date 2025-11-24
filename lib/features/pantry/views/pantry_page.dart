@@ -1172,123 +1172,167 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Auto-dismiss showcase after 5 seconds so user can swipe immediately
+    // This gives them time to read the instructions but then allows interaction
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          try {
+            ShowcaseView.get().dismiss();
+          } catch (e) {
+            // Showcase might already be dismissed
+          }
+        }
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // The actual interactive item - NOT wrapped by showcase so it's fully interactive
-        Stack(
-          children: [
-            // The real item - fully interactive
-            _buildPantryItemTile(widget.item, isRemoveStep: true),
-            // Animated demo overlay that shows the swipe gesture (non-interactive)
-            // This loops continuously until user swipes
-            IgnorePointer(
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFF6A00),
-                      width: 2,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      IngredientImage(
-                        imageUrl: widget.item.imageUrl,
-                        width: 64,
-                        height: 64,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          bottomLeft: Radius.circular(12),
-                        ),
+    return GestureDetector(
+      // Detect any pan gesture and dismiss showcase immediately
+      onPanStart: (_) {
+        try {
+          ShowcaseView.get().dismiss();
+        } catch (e) {
+          // Showcase might already be dismissed
+        }
+      },
+      onPanUpdate: (details) {
+        // Also dismiss on pan update (swipe movement)
+        try {
+          ShowcaseView.get().dismiss();
+        } catch (e) {
+          // Showcase might already be dismissed
+        }
+      },
+      // Allow gestures to pass through to child
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        children: [
+          // The actual interactive item - NOT wrapped by showcase so it's fully interactive
+          Stack(
+            children: [
+              // The real item - fully interactive
+              _buildPantryItemTile(widget.item, isRemoveStep: true),
+              // Animated demo overlay that shows the swipe gesture (non-interactive)
+              // This loops continuously until user swipes
+              IgnorePointer(
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF6A00),
+                        width: 2,
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.item.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.swipe_left,
-                                    color: const Color(0xFFFF6A00),
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Swipe left to remove',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                    ),
+                    child: Row(
+                      children: [
+                        IngredientImage(
+                          imageUrl: widget.item.imageUrl,
+                          width: 64,
+                          height: 64,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            bottomLeft: Radius.circular(12),
                           ),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.item.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.swipe_left,
+                                      color: const Color(0xFFFF6A00),
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Swipe left to remove',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        // Showcase positioned on top but with IgnorePointer so gestures pass through
-        // This way it shows the tooltip but doesn't block interaction
-        Positioned.fill(
-          child: IgnorePointer(
-            ignoring:
-                true, // Ignore all pointer events so they pass through to item below
-            child: Showcase(
-              key: TourKeys.removePantryItemKey,
-              title: 'Remove Items',
-              description:
-                  'To remove an item, swipe from right to left. Watch the animation below, then try swiping left yourself.',
-              targetShapeBorder: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              tooltipBackgroundColor: Colors.white,
-              tooltipPosition: TooltipPosition.bottom,
-              textColor: Colors.black,
-              overlayColor: Colors.transparent,
-              overlayOpacity: 0.0,
-              showArrow: true,
-              onTargetClick: () {
-                // Don't dismiss - let user swipe
-              },
-              onToolTipClick: () {
-                // Don't dismiss - let user swipe
-              },
-              disposeOnTap: true,
-              child: Container(
-                // Invisible container that matches the item size for highlighting
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+            ],
+          ),
+          // Showcase positioned on top but with IgnorePointer so gestures pass through
+          // This way it shows the tooltip but doesn't block interaction
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring:
+                  true, // Ignore all pointer events so they pass through to item below
+              child: Showcase(
+                key: TourKeys.removePantryItemKey,
+                title: 'Remove Items',
+                description:
+                    'To remove an item, swipe from right to left. Watch the animation below, then try swiping left yourself.',
+                targetShapeBorder: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                tooltipBackgroundColor: Colors.white,
+                tooltipPosition: TooltipPosition.bottom,
+                textColor: Colors.black,
+                overlayColor: Colors.transparent,
+                overlayOpacity: 0.0,
+                showArrow: true,
+                onTargetClick: () {
+                  // Dismiss immediately on any touch
+                  ShowcaseView.get().dismiss();
+                },
+                onToolTipClick: () {
+                  // Dismiss immediately on any touch
+                  ShowcaseView.get().dismiss();
+                },
+                onBarrierClick: () {
+                  // Dismiss on barrier click (anywhere on overlay)
+                  ShowcaseView.get().dismiss();
+                },
+                disposeOnTap: true,
+                child: Container(
+                  // Invisible container that matches the item size for highlighting
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
