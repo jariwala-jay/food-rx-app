@@ -57,45 +57,44 @@ class PantryCategoryPicker extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Flexible(
-              child: Showcase(
-                key: TourKeys.pantryCategoryListKey,
-                title: 'Add All Your Pantry Items',
-                description:
-                    'Add all items from your food pantry visit today. More items = better recipe recommendations! Tap any category to continue.',
-                targetShapeBorder: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
                 ),
-                tooltipBackgroundColor: Colors.white,
-                tooltipPosition: TooltipPosition.bottom,
-                textColor: Colors.black,
-                overlayColor: Colors.black54,
-                overlayOpacity: 0.8,
-                showArrow: true,
-                onTargetClick: () {
-                  // Dismiss showcase to allow category selection
-                  ShowcaseView.get().dismiss();
-                },
-                onToolTipClick: () {
-                  // Dismiss showcase to allow category selection
-                  ShowcaseView.get().dismiss();
-                },
-                disposeOnTap: true,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.6,
-                  ),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: categories
-                        .map((cat) => ListTile(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: categories
+                      .map((cat) {
+                        final isTourStep = tourProvider.isOnStep(TourStep.selectCategory);
+                        final isFreshFruits = cat['key'] == 'fresh_fruits';
+                        final shouldHighlight = isTourStep && isFreshFruits;
+                        
+                        // Only wrap Fresh Fruits with showcase during tour
+                        final listTile = ListTile(
+                              tileColor: shouldHighlight
+                                  ? const Color(0xFFFFF3EB)
+                                  : null,
+                              shape: shouldHighlight
+                                  ? RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: const BorderSide(
+                                        color: Color(0xFFFF6A00),
+                                        width: 2,
+                                      ),
+                                    )
+                                  : null,
                               leading: SvgPicture.asset(cat['icon']!,
                                   width: 40, height: 40),
                               title: Text(
                                 cat['title']!,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: shouldHighlight
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
                                   fontSize: 15 * clampedScale,
-                                  color: Colors.black,
+                                  color: shouldHighlight
+                                      ? const Color(0xFFFF6A00)
+                                      : Colors.black,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -112,26 +111,52 @@ class PantryCategoryPicker extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                     )
                                   : null,
-                              trailing: const Icon(Icons.chevron_right_rounded,
-                                  color: Colors.grey),
-                              onTap: () {
-                                // Dismiss showcase if it's showing
-                                try {
-                                  ShowcaseView.get().dismiss();
-                                } catch (e) {
-                                  // Showcase might not be active
-                                }
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
+                                color: shouldHighlight
+                                    ? const Color(0xFFFF6A00)
+                                    : Colors.grey,
+                              ),
+                          onTap: () {
+                            // During tour, only allow Fresh Fruits
+                            if (isTourStep && !isFreshFruits) {
+                              // Show a message or just return
+                              return;
+                            }
 
-                                // Complete selectCategory step if we're on it
-                                final tp = Provider.of<ForcedTourProvider>(context,
-                                    listen: false);
-                                if (tp.isOnStep(TourStep.selectCategory)) {
-                                  tp.completeCurrentStep();
-                                }
-
-                                // Small delay to ensure showcase is dismissed
-                                Future.delayed(const Duration(milliseconds: 100),
-                                    () {
+                            // Navigate to item picker
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PantryItemPickerPage(
+                                  categoryTitle: cat['title']!,
+                                  categoryKey: cat['key']!,
+                                  isFoodPantryItem: isFoodPantryItem,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                        
+                        // Wrap Fresh Fruits with showcase during tour
+                        if (shouldHighlight) {
+                          return Showcase(
+                            key: TourKeys.pantryCategoryListKey,
+                            title: 'Add All Your Pantry Items',
+                            description: 'Here you can add items to your pantry. For this example, let\'s add an item together. Tap on "Fresh Fruits" category to continue. You MUST click this category to proceed.',
+                            targetShapeBorder: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                            ),
+                            tooltipBackgroundColor: Colors.white,
+                            tooltipPosition: TooltipPosition.bottom,
+                            textColor: Colors.black,
+                            overlayColor: Colors.black54,
+                            overlayOpacity: 0.8,
+                            showArrow: true,
+                            onTargetClick: () {
+                              // Handle click directly - navigate to Fresh Fruits
+                              if (isFreshFruits) {
+                                ShowcaseView.get().dismiss();
+                                Future.delayed(const Duration(milliseconds: 100), () {
                                   if (!context.mounted) return;
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -143,10 +168,34 @@ class PantryCategoryPicker extends StatelessWidget {
                                     ),
                                   );
                                 });
-                              },
-                            ))
-                        .toList(),
-                  ),
+                              }
+                            },
+                            onToolTipClick: () {
+                              // Handle click directly - navigate to Fresh Fruits
+                              if (isFreshFruits) {
+                                ShowcaseView.get().dismiss();
+                                Future.delayed(const Duration(milliseconds: 100), () {
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PantryItemPickerPage(
+                                        categoryTitle: cat['title']!,
+                                        categoryKey: cat['key']!,
+                                        isFoodPantryItem: isFoodPantryItem,
+                                      ),
+                                    ),
+                                  );
+                                });
+                              }
+                            },
+                            disposeOnTap: false,
+                            child: listTile,
+                          );
+                        }
+                        
+                        return listTile;
+                      })
+                      .toList(),
                 ),
               ),
             ),

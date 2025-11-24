@@ -134,6 +134,37 @@ class PantryController extends ChangeNotifier {
     }
   }
 
+  // Clear items added during tour (apples from fresh_fruits category added recently)
+  Future<void> clearTourItems() async {
+    if (_userId == null) return;
+
+    try {
+      final now = DateTime.now();
+      final oneHourAgo = now.subtract(const Duration(hours: 1));
+      
+      // Find tour items (apples from fresh_fruits added in last hour)
+      final tourItems = _pantryItems.where((item) {
+        final isApple = item.name.toLowerCase().contains('apple') &&
+                       !item.name.toLowerCase().contains('applesauce');
+        final isFreshFruits = item.category == 'fresh_fruits';
+        final wasAddedRecently = item.addedDate.isAfter(oneHourAgo);
+        return isApple && isFreshFruits && wasAddedRecently;
+      }).toList();
+
+      // Remove each tour item
+      for (final item in tourItems) {
+        await _mongoDBService.deletePantryItem(item.id);
+      }
+
+      // Reload items to reflect changes
+      if (tourItems.isNotEmpty) {
+        await loadItems();
+      }
+    } catch (e) {
+      print('Error clearing tour items: $e');
+    }
+  }
+
   // Remove a pantry item
   Future<void> removeItem(String itemId, bool isPantryItem) async {
     _setLoading(true);

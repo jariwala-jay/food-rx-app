@@ -19,12 +19,16 @@ class PlanVideoPlayer extends StatefulWidget {
   final String planType;
   final String title;
   final bool isTourActive;
+  final VoidCallback? onFinish; // For signup flow
+  final bool isSignupMode; // For signup flow
 
   const PlanVideoPlayer({
     Key? key,
     required this.planType,
     required this.title,
     required this.isTourActive,
+    this.onFinish,
+    this.isSignupMode = false,
   }) : super(key: key);
 
   @override
@@ -37,6 +41,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   bool _hasError = false;
   bool _isVideoCompleted = false;
   bool _isVideoInitialized = false;
+  bool _isSubmitting = false; // For signup mode registration
   String? _errorMessage;
 
   // Check if video watching is mandatory from env var
@@ -180,7 +185,35 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         '$videoName video URL not configured. Please add $envVarName to your .env file with the Firebase Storage URL.');
   }
 
-  void _handleContinue() {
+  void _handleContinue() async {
+    // Handle signup flow
+    if (widget.isSignupMode && widget.onFinish != null) {
+      // If mandatory video watching is enabled, check if video is completed
+      if (_isMandatoryVideo && !_isVideoCompleted) {
+        // Show a message that user must watch the entire video
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please watch the entire video to continue'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      
+      // Show loading state in button
+      setState(() {
+        _isSubmitting = true;
+      });
+      
+      // Wait for UI to update with loading state, then call onFinish
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // Call onFinish which will trigger registration
+        widget.onFinish!();
+      });
+      return;
+    }
+
     if (!widget.isTourActive) {
       Navigator.of(context).pop();
       return;
@@ -356,18 +389,22 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                                 ? Icons.pause
                                 : Icons.play_arrow,
                           ),
-                          onPressed: () {
-                            setState(() {
-                              if (_controller!.value.isPlaying) {
-                                _controller!.pause();
-                              } else {
-                                _controller!.play();
-                              }
-                            });
-                          },
+                          onPressed: (_isMandatoryVideo &&
+                                  (widget.isTourActive || widget.isSignupMode) &&
+                                  !_isVideoCompleted)
+                              ? null
+                              : () {
+                                  setState(() {
+                                    if (_controller!.value.isPlaying) {
+                                      _controller!.pause();
+                                    } else {
+                                      _controller!.play();
+                                    }
+                                  });
+                                },
                         ),
                         if (_isMandatoryVideo &&
-                            widget.isTourActive &&
+                            (widget.isTourActive || widget.isSignupMode) &&
                             !_isVideoCompleted)
                           Flexible(
                             child: Padding(
@@ -403,10 +440,12 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         Container(
           padding: const EdgeInsets.all(16),
           child: ElevatedButton(
-            onPressed:
-                _isMandatoryVideo && widget.isTourActive && !_isVideoCompleted
-                    ? null
-                    : _handleContinue,
+            onPressed: (_isSubmitting ||
+                    (_isMandatoryVideo &&
+                        !_isVideoCompleted &&
+                        (widget.isSignupMode || widget.isTourActive)))
+                ? null
+                : _handleContinue,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
@@ -416,9 +455,22 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
-            child: Text(
-              widget.isTourActive ? 'Continue Tour' : 'Done',
-            ),
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Text(
+                    widget.isSignupMode
+                        ? "Let's Get Started!"
+                        : widget.isTourActive
+                            ? 'Continue Tour'
+                            : 'Done',
+                  ),
           ),
         ),
         const SizedBox(height: 16),
@@ -437,7 +489,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
 
-    final canSeek = !_isMandatoryVideo || !widget.isTourActive;
+    final canSeek = !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
 
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(

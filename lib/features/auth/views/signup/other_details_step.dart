@@ -28,6 +28,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   String? _preferredMealPrepTime;
   String? _cookingSkill;
   bool _isLoading = false;
+  bool _showErrors = false;
 
   final List<String> _healthGoals = [
     'Avoid diabetes',
@@ -52,11 +53,24 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   @override
   void initState() {
     super.initState();
+    // Reset loading state when widget is initialized
+    _isLoading = false;
+    _showErrors = false;
+
     final signupData = context.read<SignupProvider>().data;
     _selectedHealthGoals = List.from(signupData.healthGoals);
     _preferredMealPrepTime = signupData.preferredMealPrepTime;
     _cookingForPeopleController.text = signupData.cookingForPeople ?? '';
     _cookingSkill = signupData.cookingSkill;
+
+    // Clear error state when user types in cooking for people field
+    _cookingForPeopleController.addListener(() {
+      if (_showErrors && _cookingForPeopleController.text.trim().isNotEmpty) {
+        setState(() {
+          _showErrors = false;
+        });
+      }
+    });
   }
 
   @override
@@ -66,133 +80,138 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   }
 
   Future<void> _handleSubmit() async {
-    if (_formKey.currentState!.validate()) {
+    // Collect all validation errors first in the correct order (as they appear on screen)
+    final List<String> missingFields = [];
+
+    // Validate form fields
+    final isFormValid = _formKey.currentState!.validate();
+
+    // Check all required fields in the order they appear on screen
+    // 1. Health Goals
+    if (_selectedHealthGoals.isEmpty) {
+      missingFields.add('At least one health goal');
+    }
+    // 2. Preferred Meal Prep time
+    if (_preferredMealPrepTime == null) {
+      missingFields.add('Preferred meal prep time');
+    }
+    // 3. Cooking for how many people
+    if (_cookingForPeopleController.text.trim().isEmpty) {
+      missingFields.add('How many people you cook for');
+    }
+    // 4. Cooking Skill
+    if (_cookingSkill == null) {
+      missingFields.add('Cooking skill rating');
+    }
+
+    // If there are any missing fields or form validation failed, show all errors
+    if (!isFormValid || missingFields.isNotEmpty) {
+      // Show errors on fields
       setState(() {
-        _isLoading = true;
+        _showErrors = true;
       });
 
+      // Trigger form validation to show field errors
+      _formKey.currentState?.validate();
+
+      // Show all missing fields in one message
+      if (missingFields.isNotEmpty) {
+        final errorMessage = missingFields.length == 1
+            ? 'Please fill in: ${missingFields.first}'
+            : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _showErrors = false;
+    });
+
+    try {
+      // Update other details in SignupProvider
+      context.read<SignupProvider>().updateOtherDetails(
+            healthGoals: _selectedHealthGoals,
+            preferredMealPrepTime: _preferredMealPrepTime,
+            cookingForPeople: _cookingForPeopleController.text.trim(),
+            cookingSkill: _cookingSkill,
+          );
+
+      // Generate personalized diet plan
+      final signupProvider = context.read<SignupProvider>();
+      final signupData = signupProvider.data;
+
       try {
-        // Required validations with neutral defaults
-        if (_selectedHealthGoals.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select at least one health goal'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
+        // Load nutrition content and create personalization service
+        final nutritionContent = await NutritionContentLoader.load();
+        final personalizationService = PersonalizationService(nutritionContent);
+
+        final personalizationResult = personalizationService.personalize(
+          dob: signupData.dateOfBirth!,
+          sex: signupData.sex!,
+          heightFeet: signupData.heightFeet!,
+          heightInches: signupData.heightInches!,
+          weightLb: signupData.weight!,
+          activityLevel: signupData.activityLevel!,
+          medicalConditions: signupData.medicalConditions,
+          healthGoals: signupData.healthGoals,
+        );
+
+        // Set the personalized diet plan
+        signupProvider.setPersonalizedDietPlan(
+          dietType: personalizationResult.dietType,
+          myPlanType: personalizationResult.myPlanType,
+          showGlycemicIndex: personalizationResult.showGlycemicIndex,
+          targetCalories: personalizationResult.targetCalories,
+          selectedDietPlan: personalizationResult.selectedDietPlan,
+          diagnostics: personalizationResult.diagnostics,
+        );
+
+        if (kDebugMode) {
+          print(
+              'Generated personalized plan: ${personalizationResult.dietType} with ${personalizationResult.targetCalories} calories');
         }
-        if (_preferredMealPrepTime == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select preferred meal prep time'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_cookingForPeopleController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter how many people you cook for'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        if (_cookingSkill == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please rate your cooking skill'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
-        // Update other details in SignupProvider
-        context.read<SignupProvider>().updateOtherDetails(
-              healthGoals: _selectedHealthGoals,
-              preferredMealPrepTime: _preferredMealPrepTime,
-              cookingForPeople: _cookingForPeopleController.text.trim(),
-              cookingSkill: _cookingSkill,
-            );
-
-        // Generate personalized diet plan
-        final signupProvider = context.read<SignupProvider>();
-        final signupData = signupProvider.data;
-
-        try {
-          // Load nutrition content and create personalization service
-          final nutritionContent = await NutritionContentLoader.load();
-          final personalizationService =
-              PersonalizationService(nutritionContent);
-
-          final personalizationResult = personalizationService.personalize(
-            dob: signupData.dateOfBirth!,
-            sex: signupData.sex!,
-            heightFeet: signupData.heightFeet!,
-            heightInches: signupData.heightInches!,
-            weightLb: signupData.weight!,
-            activityLevel: signupData.activityLevel!,
-            medicalConditions: signupData.medicalConditions,
-            healthGoals: signupData.healthGoals,
-          );
-
-          // Set the personalized diet plan
-          signupProvider.setPersonalizedDietPlan(
-            dietType: personalizationResult.dietType,
-            myPlanType: personalizationResult.myPlanType,
-            showGlycemicIndex: personalizationResult.showGlycemicIndex,
-            targetCalories: personalizationResult.targetCalories,
-            selectedDietPlan: personalizationResult.selectedDietPlan,
-            diagnostics: personalizationResult.diagnostics,
-          );
-
-          if (kDebugMode) {
-            print(
-                'Generated personalized plan: ${personalizationResult.dietType} with ${personalizationResult.targetCalories} calories');
-          }
-        } catch (e) {
-          // Fallback to simple diet type selection if personalization fails
-          final bool isDashDiet =
-              signupData.medicalConditions.contains('Hypertension') ||
-                  signupData.healthGoals.contains('Lower blood pressure');
-          signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
-
-          if (kDebugMode) {
-            print('Personalization failed, using fallback: $e');
-          }
-        }
-
-        // Move to next step; actual registration happens at the end
-        widget.onSubmit();
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('An error occurred: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+        // Fallback to simple diet type selection if personalization fails
+        final bool isDashDiet =
+            signupData.medicalConditions.contains('Hypertension') ||
+                signupData.healthGoals.contains('Lower blood pressure');
+        signupProvider.setDietType(isDashDiet ? 'DASH' : 'MyPlate');
+
+        if (kDebugMode) {
+          print('Personalization failed, using fallback: $e');
         }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+      }
+
+      // Reset loading state before navigating to next step
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Advance to next step (Diet Plan)
+      widget.onSubmit();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -221,15 +240,32 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppCheckboxGroup(
-                      label: 'Health Goals',
-                      selectedValues: _selectedHealthGoals,
-                      options: _healthGoals,
-                      onChanged: (values) {
-                        setState(() {
-                          _selectedHealthGoals = values;
-                        });
-                      },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppCheckboxGroup(
+                          label: 'Diet-related Health Goals',
+                          selectedValues: _selectedHealthGoals,
+                          options: _healthGoals,
+                          onChanged: (values) {
+                            setState(() {
+                              _selectedHealthGoals = values;
+                              _showErrors = false;
+                            });
+                          },
+                        ),
+                        if (_showErrors && _selectedHealthGoals.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select at least one health goal',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   // Preferred Meal Prep time
@@ -243,17 +279,34 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppRadioGroup<String>(
-                      label: 'Preferred Meal Prep time',
-                      value: _preferredMealPrepTime,
-                      options: _mealPrepTimeOptions
-                          .map((option) => {option: option})
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _preferredMealPrepTime = value;
-                        });
-                      },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppRadioGroup<String>(
+                          label: 'Preferred Meal Prep Time',
+                          value: _preferredMealPrepTime,
+                          options: _mealPrepTimeOptions
+                              .map((option) => {option: option})
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _preferredMealPrepTime = value;
+                              _showErrors = false;
+                            });
+                          },
+                        ),
+                        if (_showErrors && _preferredMealPrepTime == null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please select preferred meal prep time',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   // Cooking for how many people
@@ -272,6 +325,13 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       hintText: 'Type Here',
                       controller: _cookingForPeopleController,
                       keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (_showErrors &&
+                            (value == null || value.trim().isEmpty)) {
+                          return 'Please enter how many people you cook for';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   // Rate your Cooking Skill
@@ -285,17 +345,34 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppRadioGroup<String>(
-                      label: 'Rate Your Cooking Skill',
-                      value: _cookingSkill,
-                      options: _cookingSkillOptions
-                          .map((option) => {option: option})
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _cookingSkill = value;
-                        });
-                      },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppRadioGroup<String>(
+                          label: 'Rate Your Cooking Skills',
+                          value: _cookingSkill,
+                          options: _cookingSkillOptions
+                              .map((option) => {option: option})
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _cookingSkill = value;
+                              _showErrors = false;
+                            });
+                          },
+                        ),
+                        if (_showErrors && _cookingSkill == null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please rate your cooking skill',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
@@ -324,7 +401,16 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: widget.onPrevious,
+                        onPressed: () {
+                          // Always allow going back, but reset loading state first
+                          if (_isLoading) {
+                            setState(() {
+                              _isLoading = false;
+                              _showErrors = false;
+                            });
+                          }
+                          widget.onPrevious();
+                        },
                         child: Text(
                           'Previous',
                           style: AppTypography.bg_16_sb

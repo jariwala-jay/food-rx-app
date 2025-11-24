@@ -79,8 +79,12 @@ class TourProvider extends ChangeNotifier {
         return TourKeys.selectItemKey;
       case TourStep.setQuantityUnit:
         return TourKeys.quantityUnitKey;
+      case TourStep.saveItem:
+        return TourKeys.saveItemButtonKey;
       case TourStep.pantryItems:
         return TourKeys.pantryItemsKey;
+      case TourStep.removePantryItem:
+        return TourKeys.removePantryItemKey;
       case TourStep.recipes:
         return TourKeys.recipeListKey;
       case TourStep.education:

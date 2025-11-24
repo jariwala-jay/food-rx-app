@@ -196,8 +196,8 @@ class _ProfilePageState extends State<ProfilePage> {
         return 'Male';
       case 'female':
         return 'Female';
-      case 'decline':
-        return 'Decline to answer';
+      case 'intersex':
+        return 'Intersex';
       default:
         return sex;
     }
@@ -526,7 +526,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   // Health Goals Section
                   _buildSection(
                     context: context,
-                    title: 'Health Goals',
+                    title: 'Diet-related Health Goals',
                     children: [
                       InkWell(
                         onTap: () => _navigateToEditField(
@@ -544,7 +544,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Health Goals',
+                                    'Diet-related Health Goals',
                                     style: AppTypography.bg_16_m,
                                   ),
                                   const Icon(
@@ -612,7 +612,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Medical Conditions',
+                                    'Diet-related Chronic Condition',
                                     style: AppTypography.bg_16_m,
                                   ),
                                   const Icon(

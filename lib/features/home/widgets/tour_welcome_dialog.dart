@@ -47,7 +47,7 @@ class TourWelcomeDialog extends StatelessWidget {
 
             // Description
             Text(
-              'We\'re excited to have you! Let\'s take a quick tour to help you get familiar with the app and all its features.',
+              'We\'re excited to have you! Let\'s take you through a tour of the app to help you get familiar with all its features.',
               style: AppTypography.bg_16_r.copyWith(
                 color: const Color(0xFF666666),
               ),
@@ -86,4 +86,3 @@ class TourWelcomeDialog extends StatelessWidget {
     );
   }
 }
-

@@ -62,8 +62,12 @@ class ForcedTourService {
       case TourStep.selectCategory:
         return TourStep.setQuantityUnit;
       case TourStep.setQuantityUnit:
+        return TourStep.saveItem;
+      case TourStep.saveItem:
         return TourStep.pantryItems;
       case TourStep.pantryItems:
+        return TourStep.removePantryItem;
+      case TourStep.removePantryItem:
         return TourStep.recipes;
       case TourStep.recipes:
         return TourStep.education;
@@ -97,8 +101,13 @@ class ForcedTourService {
         return TourDescriptions.selectCategory;
       case TourStep.setQuantityUnit:
         return TourDescriptions.setQuantityUnit;
+      case TourStep.saveItem:
+        return TourDescriptions.saveItem;
       case TourStep.pantryItems:
         return TourDescriptions.pantryItems;
+        return TourDescriptions.pantryItems;
+      case TourStep.removePantryItem:
+        return TourDescriptions.removePantryItem;
       case TourStep.recipes:
         return TourDescriptions.recipes;
       case TourStep.education:
@@ -126,8 +135,13 @@ class ForcedTourService {
         return 'Select Category';
       case TourStep.setQuantityUnit:
         return 'Set Quantity & Unit';
+      case TourStep.saveItem:
+        return 'Save Item';
       case TourStep.pantryItems:
         return 'Your Pantry';
+        return 'Your Pantry';
+      case TourStep.removePantryItem:
+        return 'Remove Items';
       case TourStep.recipes:
         return 'Personalized Recipes';
       case TourStep.education:

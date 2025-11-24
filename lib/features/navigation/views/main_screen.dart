@@ -27,6 +27,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isDisposed = false;
   bool _wasTourActive = false;
   bool _hasShownCompletionDialog = false;
+  bool _hasShownWelcomeDialog = false;
   final List<Widget> _pages = [
     const HomePage(),
     const PantryPage(),
@@ -38,32 +39,6 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-
-    // Show welcome dialog and start tour for first-time users
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _isDisposed) return;
-      final tourProvider =
-          Provider.of<ForcedTourProvider>(context, listen: false);
-
-      // Show welcome dialog if tour should be shown
-      if (tourProvider.tourService.shouldShowTour() &&
-          !tourProvider.isTourActive &&
-          !tourProvider.hasTriggeredInitialShowcase) {
-        // Show welcome dialog first
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (!mounted || _isDisposed) return;
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const TourWelcomeDialog(),
-          ).then((_) {
-            // After dialog is dismissed, start the tour
-            if (!mounted || _isDisposed) return;
-            _startTour();
-          });
-        });
-      }
-    });
   }
 
   void _startTour() {
@@ -191,6 +166,32 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
+        // Show welcome dialog and start tour for first-time users
+        // Only show when user is on home page (index 0) and not during signup
+        if (_currentIndex == 0 &&
+            !_hasShownWelcomeDialog &&
+            tourProvider.tourService.shouldShowTour() &&
+            !tourProvider.isTourActive &&
+            !tourProvider.hasTriggeredInitialShowcase) {
+          _hasShownWelcomeDialog = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _isDisposed || _currentIndex != 0) return;
+            // Show welcome dialog first
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (!mounted || _isDisposed || _currentIndex != 0) return;
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const TourWelcomeDialog(),
+              ).then((_) {
+                // After dialog is dismissed, start the tour
+                if (!mounted || _isDisposed) return;
+                _startTour();
+              });
+            });
+          });
+        }
+
         // Listen for tour completion to show completion dialog (backup method)
         if (_wasTourActive &&
             !tourProvider.isTourActive &&

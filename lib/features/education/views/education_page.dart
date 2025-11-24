@@ -339,11 +339,14 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: const Color(0xFFF7F7F8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: child,
+    return SizedBox(
+      height: 52.0,
+      child: Container(
+        color: const Color(0xFFF7F7F8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: child,
+        ),
       ),
     );
   }

@@ -72,6 +72,10 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   bool _isSearching = false;
   bool _isTyping = false;
   Timer? _debounceTimer;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _appleItemKey = GlobalKey();
+  bool _hasScrolledToApple = false;
+  bool _hasTriggeredSaveShowcase = false;
 
   @override
   void initState() {
@@ -84,7 +88,88 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSaveButtonClick(
+      BuildContext context,
+      PantryItemPickerProvider provider,
+      ForcedTourProvider tourProvider) async {
+    final success = await provider.saveSelectedItemsToPantry();
+    if (!mounted) return;
+
+    // Store context before async operations to avoid linter warnings
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final tp = Provider.of<ForcedTourProvider>(context, listen: false);
+
+    if (success) {
+      // Refresh the pantry controller to show new items
+      try {
+        final pantryController =
+            Provider.of<PantryController>(context, listen: false);
+        await pantryController.refreshItems();
+      } catch (e) {
+        developer.log('Failed to refresh pantry controller: $e');
+      }
+
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Items added to your pantry'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Complete saveItem step if we're on it (during tour)
+      if (tp.isOnStep(TourStep.saveItem)) {
+        tp.completeCurrentStep();
+
+        // Close the page and modal automatically during tour
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            // Pop item picker page
+            navigator.pop();
+
+            // Pop category picker modal
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (mounted) {
+                navigator.pop();
+
+                // Trigger pantry items showcase after closing
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (!mounted) return;
+                    try {
+                      final tp2 = Provider.of<ForcedTourProvider>(context,
+                          listen: false);
+                      if (tp2.isOnStep(TourStep.pantryItems)) {
+                        ShowcaseView.get()
+                            .startShowCase([TourKeys.pantryItemsKey]);
+                      }
+                    } catch (e) {
+                      print('Error triggering pantry items showcase: $e');
+                    }
+                  });
+                });
+              }
+            });
+          }
+        });
+      } else {
+        // Normal behavior - just pop back
+        navigator.pop();
+      }
+    } else {
+      if (provider.error != null) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to save items: ${provider.error}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // Show modal dialog to add quantity and unit
@@ -126,6 +211,9 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         }
       });
     });
+
+    // After adding item, trigger save button showcase if on saveItem step
+    // This will be triggered when the Save button appears (hasSelectedItems becomes true)
   }
 
   @override
@@ -346,111 +434,191 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                     ),
                   if (provider.searchResults.isNotEmpty)
                     Expanded(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 16),
-                        itemCount: provider.searchResults.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final item = provider.searchResults[index];
-                          final itemId = item.id.toString();
-                          final isSelected = provider.isItemSelected(itemId);
-                          final selectedItem = isSelected
-                              ? provider.getSelectedItem(itemId)
+                      child: Consumer<ForcedTourProvider>(
+                        builder: (context, tourProvider, child) {
+                          // Check if we're on tour and in fresh_fruits category
+                          final isTourStep =
+                              tourProvider.isOnStep(TourStep.selectCategory);
+                          final isFreshFruits =
+                              widget.categoryKey == 'fresh_fruits';
+                          final isTourInFreshFruits =
+                              isTourStep && isFreshFruits;
+
+                          // Use first item (index 0) for tour demo - it will always be apples in fresh_fruits
+                          final firstItemIndex = isTourInFreshFruits &&
+                                  provider.searchResults.isNotEmpty
+                              ? 0
                               : null;
 
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: CachedNetworkImage(
-                                  imageUrl: item.imageUrl,
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                  memCacheWidth: 100,
-                                  memCacheHeight: 100,
-                                  placeholder: (context, url) => Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: const Color(0xFFEEEEEE),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                Color(0xFFFF6A00)),
+                          // Scroll to first item when items load during tour
+                          if (isTourInFreshFruits &&
+                              firstItemIndex != null &&
+                              !_hasScrolledToApple) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (_scrollController.hasClients && mounted) {
+                                _hasScrolledToApple = true;
+                                _scrollController.animateTo(
+                                  0.0, // Scroll to top to show first item
+                                  duration: const Duration(milliseconds: 500),
+                                  curve: Curves.easeInOut,
+                                );
+                              }
+                            });
+                          }
+
+                          return ListView.separated(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 16),
+                            itemCount: provider.searchResults.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final item = provider.searchResults[index];
+                              final itemId = item.id.toString();
+                              final isSelected =
+                                  provider.isItemSelected(itemId);
+                              final selectedItem = isSelected
+                                  ? provider.getSelectedItem(itemId)
+                                  : null;
+
+                              // Check if this is the first item during tour (for demo)
+                              final isFirstItem = index == 0;
+                              final shouldHighlight =
+                                  isTourInFreshFruits && isFirstItem;
+                              final isOnlyAllowedItem =
+                                  isTourInFreshFruits && !isFirstItem;
+
+                              return Container(
+                                key: shouldHighlight ? _appleItemKey : null,
+                                decoration: BoxDecoration(
+                                  color: shouldHighlight
+                                      ? const Color(0xFFFFF3EB)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: shouldHighlight
+                                      ? Border.all(
+                                          color: const Color(0xFFFF6A00),
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 6,
+                                  ),
+                                  leading: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: CachedNetworkImage(
+                                      imageUrl: item.imageUrl,
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 100,
+                                      memCacheHeight: 100,
+                                      placeholder: (context, url) => Container(
+                                        width: 50,
+                                        height: 50,
+                                        color: const Color(0xFFEEEEEE),
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Color(0xFFFF6A00)),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) =>
+                                          Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEEEEEE),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.food_bank,
+                                          color: Color(0xFFFF6A00),
+                                          size: 24,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEEEEEE),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.food_bank,
-                                      color: Color(0xFFFF6A00),
-                                      size: 24,
+                                  title: Text(
+                                    item.name,
+                                    style: TextStyle(
+                                      fontWeight: shouldHighlight
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                      fontSize: 16,
+                                      color: shouldHighlight
+                                          ? const Color(0xFFFF6A00)
+                                          : Colors.black,
                                     ),
                                   ),
-                                ),
-                              ),
-                              title: Text(
-                                item.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 16,
-                                  color: Colors.black,
-                                ),
-                              ),
-                              subtitle: isSelected
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Text(
-                                        selectedItem!.quantityDisplay,
-                                        style: const TextStyle(
-                                          color: Color(0xFFFF6A00),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
+                                  subtitle: isSelected
+                                      ? Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            selectedItem!.quantityDisplay,
+                                            style: const TextStyle(
+                                              color: Color(0xFFFF6A00),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        )
+                                      : shouldHighlight
+                                          ? const Padding(
+                                              padding: EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                'Tap + to add (example)',
+                                                style: TextStyle(
+                                                  color: Color(0xFFFF6A00),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            )
+                                          : null,
+                                  trailing: isSelected
+                                      ? IconButton(
+                                          icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                              color: Color(0xFFFF6A00)),
+                                          onPressed: () => provider
+                                              .removeItemFromSelection(itemId),
+                                        )
+                                      : GestureDetector(
+                                          onTap: isOnlyAllowedItem
+                                              ? null
+                                              : () => _showAddItemModal(
+                                                  context, item),
+                                          child: Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: isOnlyAllowedItem
+                                                  ? Colors.grey
+                                                  : const Color(0xFFFF6A00),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.add,
+                                              color: isOnlyAllowedItem
+                                                  ? Colors.grey[400]
+                                                  : Colors.white,
+                                              size: 22,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                  : null,
-                              trailing: isSelected
-                                  ? IconButton(
-                                      icon: const Icon(
-                                          Icons.remove_circle_outline,
-                                          color: Color(0xFFFF6A00)),
-                                      onPressed: () => provider
-                                          .removeItemFromSelection(itemId),
-                                    )
-                                  : GestureDetector(
-                                      onTap: () =>
-                                          _showAddItemModal(context, item),
-                                      child: Container(
-                                        width: 36,
-                                        height: 36,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFFFF6A00),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(Icons.add,
-                                            color: Colors.white, size: 22),
-                                      ),
-                                    ),
-                            ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -461,72 +629,102 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
 
           // Save button at the bottom
           if (provider.hasSelectedItems)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final success = await provider.saveSelectedItemsToPantry();
-                    if (mounted) {
-                      // Store context before async operations to avoid linter warnings
-                      final scaffoldMessenger = ScaffoldMessenger.of(context);
-                      final navigator = Navigator.of(context);
+            Consumer<ForcedTourProvider>(
+              builder: (context, tourProvider, child) {
+                final isSaveStep = tourProvider.isOnStep(TourStep.saveItem);
 
-                      if (success) {
-                        // Refresh the pantry controller to show new items
-                        try {
-                          final pantryController =
-                              Provider.of<PantryController>(context,
-                                  listen: false);
-                          await pantryController.refreshItems();
-                        } catch (e) {
-                          developer
-                              .log('Failed to refresh pantry controller: $e');
+                // Trigger showcase when Save button appears during tour
+                if (isSaveStep && !_hasTriggeredSaveShowcase) {
+                  _hasTriggeredSaveShowcase = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!mounted) return;
+                      try {
+                        final tp = Provider.of<ForcedTourProvider>(context,
+                            listen: false);
+                        if (tp.isOnStep(TourStep.saveItem)) {
+                          ShowcaseView.get()
+                              .startShowCase([TourKeys.saveItemButtonKey]);
+                        } else {
+                          _hasTriggeredSaveShowcase =
+                              false; // Reset if step changed
                         }
-
-                        scaffoldMessenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Items added to your pantry'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-
-                        // Don't complete step here - it was already completed when adding items
-                        // The step completion happens in the pantry items showcase
-
-                        // Pop back to category picker
-                        navigator.pop();
-                      } else {
-                        if (provider.error != null) {
-                          scaffoldMessenger.showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Failed to save items: ${provider.error}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
+                      } catch (e) {
+                        print('Error triggering saveItem showcase: $e');
+                        _hasTriggeredSaveShowcase = false; // Reset on error
                       }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    });
+                  });
+                } else if (!isSaveStep) {
+                  _hasTriggeredSaveShowcase =
+                      false; // Reset when not on save step
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Showcase(
+                    key: isSaveStep ? TourKeys.saveItemButtonKey : GlobalKey(),
+                    title: 'Save Item',
+                    description:
+                        'Now tap the \'Save\' button to add this item to your pantry. You MUST click the Save button to continue.',
+                    targetShapeBorder: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                    ),
+                    tooltipBackgroundColor: Colors.white,
+                    tooltipPosition: TooltipPosition.top,
+                    textColor: Colors.black,
+                    overlayColor: Colors.black54,
+                    overlayOpacity: 0.8,
+                    showArrow: true,
+                    onTargetClick: () {
+                      // Handle click directly - trigger Save button
+                      ShowcaseView.get().dismiss();
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        if (!mounted) return;
+                        // Directly trigger the button's onPressed
+                        final buttonKey = GlobalKey();
+                        // Find the button and trigger it
+                        _handleSaveButtonClick(context, provider, tourProvider);
+                      });
+                    },
+                    onToolTipClick: () {
+                      // Handle click directly - trigger Save button
+                      ShowcaseView.get().dismiss();
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        if (!mounted) return;
+                        // Directly trigger the button's onPressed
+                        _handleSaveButtonClick(context, provider, tourProvider);
+                      });
+                    },
+                    disposeOnTap: false,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await _handleSaveButtonClick(
+                              context, provider, tourProvider);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Save',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+                );
+              },
             ),
         ],
       ),

@@ -28,6 +28,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
   double? _heightFeet;
   double? _heightInches;
   List<String> _selectedMedicalConditions = [];
+  bool _showErrors = false;
 
   @override
   void initState() {
@@ -95,7 +96,18 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Welcome to MyFoodRx!',
+                      style: AppTypography.bg_24_b,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This app is designed to give you a personalized approach to maximize the benefits of using food as medicine to improve your health. Please provide the information requested below. This information will be use to provide you with a personalized plan and resources to best meet your needs.',
+                      style: AppTypography.bg_14_r,
+                      textAlign: TextAlign.justify,
+                    ),
+                    const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -134,19 +146,36 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: AppRadioGroup<String>(
-                        label: 'Sex',
-                        value: _selectedSex,
-                        options: const [
-                          {'male': 'Male'},
-                          {'female': 'Female'},
-                          {'decline': 'Decline to answer'},
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppRadioGroup<String>(
+                            label: 'Sex',
+                            value: _selectedSex,
+                            options: const [
+                              {'male': 'Male'},
+                              {'female': 'Female'},
+                              {'intersex': 'Intersex'},
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedSex = value;
+                                _showErrors = false;
+                              });
+                            },
+                          ),
+                          if (_showErrors && _selectedSex == null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please select your sex',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedSex = value;
-                          });
-                        },
                       ),
                     ),
                     Container(
@@ -176,6 +205,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                     setState(() {
                                       _heightFeet =
                                           double.tryParse(value ?? '');
+                                      _showErrors = false;
                                     });
                                   },
                                   hintText: 'FT',
@@ -192,6 +222,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                     setState(() {
                                       _heightInches =
                                           double.tryParse(value ?? '');
+                                      _showErrors = false;
                                     });
                                   },
                                   hintText: 'INCH',
@@ -199,6 +230,19 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               ),
                             ],
                           ),
+                          if (_showErrors &&
+                              (_heightFeet == null ||
+                                  _heightInches == null)) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please select your height',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -262,14 +306,14 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppDropdownField(
-                            label: 'Medical Conditions',
+                            label: 'Diet-related Chronic Condition',
                             value: null,
                             options: const [
                               'Hypertension',
                               'Pre-Diabetes',
                               'Diabetes',
                               'Overweight/Obesity',
-                              'None',
+                              'Other',
                             ],
                             multiSelect: true,
                             selectedValues: _selectedMedicalConditions,
@@ -281,6 +325,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                 } else {
                                   _selectedMedicalConditions = values;
                                 }
+                                _showErrors = false;
                               });
                             },
                             onChanged: (_) {},
@@ -299,8 +344,21 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                   } else {
                                     _selectedMedicalConditions = values;
                                   }
+                                  _showErrors = false;
                                 });
                               },
+                            ),
+                          ],
+                          if (_showErrors &&
+                              _selectedMedicalConditions.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please select your medical conditions (or None)',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
                             ),
                           ],
                         ],
@@ -355,64 +413,87 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             elevation: 0,
                           ),
                           onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              // Required field validations
-                              if (_selectedSex == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please select your sex'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-                              if (_heightFeet == null ||
-                                  _heightInches == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please select your height'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-                              if (_selectedMedicalConditions.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                        'Please select your medical conditions (or None)'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
+                            // Collect all validation errors first in the correct order
+                            final List<String> missingFields = [];
 
-                              try {
-                                final dateOfBirth =
-                                    _dobController.text.isNotEmpty
-                                        ? DateFormat('MM/dd/yyyy')
-                                            .parse(_dobController.text)
-                                        : null;
+                            // Validate form fields (date of birth, weight)
+                            final isFormValid =
+                                _formKey.currentState!.validate();
 
-                                context.read<SignupProvider>().updateHealthInfo(
-                                      dateOfBirth: dateOfBirth,
-                                      sex: _selectedSex,
-                                      heightFeet: _heightFeet,
-                                      heightInches: _heightInches,
-                                      weight: double.tryParse(
-                                          _weightController.text),
-                                      medicalConditions:
-                                          _selectedMedicalConditions,
-                                    );
-                                widget.onNext();
-                              } catch (e) {
+                            // Check all required fields in the order they appear on screen
+                            if (_dobController.text.trim().isEmpty) {
+                              missingFields.add('Date of birth');
+                            }
+                            if (_selectedSex == null) {
+                              missingFields.add('Sex');
+                            }
+                            if (_heightFeet == null || _heightInches == null) {
+                              missingFields.add('Height');
+                            }
+                            if (_weightController.text.trim().isEmpty) {
+                              missingFields.add('Weight');
+                            }
+                            if (_selectedMedicalConditions.isEmpty) {
+                              missingFields
+                                  .add('Diet-related Chronic Condition');
+                            }
+
+                            // If there are any missing fields or form validation failed, show all errors
+                            if (!isFormValid || missingFields.isNotEmpty) {
+                              // Show errors on fields
+                              setState(() {
+                                _showErrors = true;
+                              });
+
+                              // Trigger form validation to show field errors
+                              _formKey.currentState?.validate();
+
+                              // Show all missing fields in one message
+                              if (missingFields.isNotEmpty) {
+                                final errorMessage = missingFields.length == 1
+                                    ? 'Please fill in: ${missingFields.first}'
+                                    : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
+
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please enter a valid date'),
+                                  SnackBar(
+                                    content: Text(errorMessage),
                                     backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 4),
                                   ),
                                 );
                               }
+                              return;
+                            }
+
+                            try {
+                              // Clear error state
+                              setState(() {
+                                _showErrors = false;
+                              });
+
+                              final dateOfBirth = _dobController.text.isNotEmpty
+                                  ? DateFormat('MM/dd/yyyy')
+                                      .parse(_dobController.text)
+                                  : null;
+
+                              context.read<SignupProvider>().updateHealthInfo(
+                                    dateOfBirth: dateOfBirth,
+                                    sex: _selectedSex,
+                                    heightFeet: _heightFeet,
+                                    heightInches: _heightInches,
+                                    weight:
+                                        double.tryParse(_weightController.text),
+                                    medicalConditions:
+                                        _selectedMedicalConditions,
+                                  );
+                              widget.onNext();
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter a valid date'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
                             }
                           },
                           child: const Text(
