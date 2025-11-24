@@ -22,172 +22,20 @@ class DiabetesPlateIntro extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 const Text(
-                  "Great! We've Got Your Info!",
+                  "Your Personalized Plan",
                   style: AppTypography.bg_24_b,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Based on your health profile, the Diabetes Plate is perfect for managing blood sugar levels. It focuses on portion control and choosing the right foods to help you maintain stable glucose levels.",
+                  "Based on the information you provided in your health profile, the American Diabetes Association Diabetes Plate is best suited to meet your diet-related health goals. The Diabetes Plate will help guide you in controlling your portion sizes and in choosing foods that have less impact on your blood sugar levels; thus, making diabetes management easier.",
                   style: AppTypography.bg_14_r
                       .copyWith(color: const Color(0xFF90909A)),
                 ),
                 const SizedBox(height: 32),
                 Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Diabetes Plate visual representation
-                        Container(
-                          width: 200,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: const Color(0xFFFF6B35), width: 3),
-                          ),
-                          child: Stack(
-                            children: [
-                              // Non-starchy vegetables (half plate)
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                height: 100,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF4CAF50),
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(100),
-                                      topRight: Radius.circular(100),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Non-starchy\nVegetables\n(50%)',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Protein (quarter plate)
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                width: 100,
-                                height: 100,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF2196F3),
-                                    borderRadius: BorderRadius.only(
-                                      bottomLeft: Radius.circular(100),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Lean\nProtein\n(25%)',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Carbohydrates (quarter plate)
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                width: 100,
-                                height: 100,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFFF9800),
-                                    borderRadius: BorderRadius.only(
-                                      bottomRight: Radius.circular(100),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Carbohydrates\n(25%)',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Diabetes Plate Method',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF333333),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  "This method helps you control portion sizes and choose foods that have less impact on your blood sugar levels, making diabetes management easier.",
-                  style: AppTypography.bg_14_r
-                      .copyWith(color: const Color(0xFF90909A)),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEFE7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFFF6A00).withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.play_circle_outline,
-                        color: Color(0xFFFF6A00),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "We'll walk you through this plan in detail with a video tutorial once you're set up!",
-                          style: AppTypography.bg_14_r.copyWith(
-                            color: const Color(0xFF2C2C2C),
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: Image.asset(
+                    'assets/images/diabetes_plate.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -215,7 +63,7 @@ class DiabetesPlateIntro extends StatelessWidget {
                   final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                   final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                   return Text(
-                    "See My Personalized Diet Plan",
+                    "Click here to learn more about your personal plan",
                     style: AppTypography.bg_16_sb.copyWith(
                       color: Colors.white,
                       fontSize: 16 * clampedScale,

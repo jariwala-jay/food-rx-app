@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
+import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 
 class TourCompletionDialog extends StatelessWidget {
   const TourCompletionDialog({Key? key}) : super(key: key);
@@ -91,6 +92,16 @@ class TourCompletionDialog extends StatelessWidget {
                 onPressed: () async {
                   final tourProvider =
                       Provider.of<ForcedTourProvider>(context, listen: false);
+                  
+                  // Clear tour items before completing tour
+                  try {
+                    final pantryController =
+                        Provider.of<PantryController>(context, listen: false);
+                    await pantryController.clearTourItems();
+                  } catch (e) {
+                    print('Error clearing tour items: $e');
+                  }
+                  
                   await tourProvider.completeTour();
                   if (context.mounted) {
                     Navigator.of(context).pop();

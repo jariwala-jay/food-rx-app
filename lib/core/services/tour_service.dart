@@ -71,8 +71,12 @@ class TourService {
       case TourStep.selectItem:
         return TourStep.setQuantityUnit;
       case TourStep.setQuantityUnit:
+        return TourStep.saveItem;
+      case TourStep.saveItem:
         return TourStep.pantryItems;
       case TourStep.pantryItems:
+        return TourStep.removePantryItem;
+      case TourStep.removePantryItem:
         return TourStep.recipes;
       case TourStep.recipes:
         return TourStep.education;

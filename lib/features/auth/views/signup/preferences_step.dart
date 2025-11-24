@@ -32,8 +32,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
   final List<String> _activityLevels = [
     'Not Active',
-    'Light',
-    'Moderate',
+    'Seldom Active',
+    'Moderately Active',
     'Very Active',
   ];
 
@@ -69,6 +69,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
   @override
   void initState() {
     super.initState();
+    // Reset loading state when widget is initialized
+    _isLoading = false;
+    _showErrors = false;
+
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
     _activityLevel = signupData.activityLevel;
@@ -156,17 +160,22 @@ class _PreferencesStepState extends State<PreferencesStep> {
             dailyWaterIntake: _dailyWaterIntake,
           );
 
-      // Advance to next step
+      // Reset loading state before navigating to next step
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Advance to next step (Other Details)
       widget.onSubmit();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('An error occurred: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (!mounted) return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       setState(() {
         _isLoading = false;
       });
@@ -185,12 +194,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Your Preferences', style: AppTypography.bg_24_b),
-                  Text(
-                    'Help us understand your preferences for personalized recommendations',
-                    style: AppTypography.bg_14_r
-                        .copyWith(color: const Color(0xFF90909A)),
-                  ),
                   const SizedBox(height: 24),
                   // Favorite Cuisines (multi-select modal)
                   Container(
@@ -207,7 +210,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Favorite',
+                          label: 'Favorite Cuisines',
                           value: null,
                           options: _cuisineOptions,
                           onChanged: (_) {},
@@ -340,7 +343,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Daily Intake',
+                        const Text('Daily Fruit & Vegetable Intake',
                             style: AppTypography.bg_16_m),
                         const SizedBox(height: 16),
                         Row(
@@ -410,18 +413,14 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'Daily Water Intake',
+                          label: 'Daily Water Intake (1 cup = 8 oz)',
                           value: _dailyWaterIntake,
                           options: const [
-                            {'0 glass': '0 glass'},
-                            {
-                              'less than 8 glasses (64 oz)':
-                                  'less than 8 glasses (64 oz)'
-                            },
-                            {
-                              '8 or more glasses (64 oz)':
-                                  '8 or more glasses (64 oz)'
-                            },
+                            {'less than 1 cup': 'less than 1 cup'},
+                            {'1-2 cups': '1-2 cups'},
+                            {'3-4 cups': '3-4 cups'},
+                            {'5-7 cups': '5-7 cups'},
+                            {'8 cups or more': '8 cups or more'},
                           ],
                           onChanged: (value) {
                             setState(() {
@@ -511,7 +510,16 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        onPressed: widget.onPrevious,
+                        onPressed: () {
+                          // Always allow going back, but reset loading state first
+                          if (_isLoading) {
+                            setState(() {
+                              _isLoading = false;
+                              _showErrors = false;
+                            });
+                          }
+                          widget.onPrevious();
+                        },
                         child: Text(
                           'Previous',
                           style: AppTypography.bg_16_sb

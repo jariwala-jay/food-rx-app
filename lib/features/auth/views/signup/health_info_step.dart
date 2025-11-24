@@ -96,7 +96,18 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Welcome to MyFoodRx!',
+                      style: AppTypography.bg_24_b,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This app is designed to give you a personalized approach to maximize the benefits of using food as medicine to improve your health. Please provide the information requested below. This information will be use to provide you with a personalized plan and resources to best meet your needs.',
+                      style: AppTypography.bg_14_r,
+                      textAlign: TextAlign.justify,
+                    ),
+                    const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -144,7 +155,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             options: const [
                               {'male': 'Male'},
                               {'female': 'Female'},
-                              {'decline': 'Decline to answer'},
+                              {'intersex': 'Intersex'},
                             ],
                             onChanged: (value) {
                               setState(() {
@@ -220,7 +231,8 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             ],
                           ),
                           if (_showErrors &&
-                              (_heightFeet == null || _heightInches == null)) ...[
+                              (_heightFeet == null ||
+                                  _heightInches == null)) ...[
                             const SizedBox(height: 8),
                             Text(
                               'Please select your height',
@@ -294,14 +306,14 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppDropdownField(
-                            label: 'Medical Conditions',
+                            label: 'Diet-related Chronic Condition',
                             value: null,
                             options: const [
                               'Hypertension',
                               'Pre-Diabetes',
                               'Diabetes',
                               'Overweight/Obesity',
-                              'None',
+                              'Other',
                             ],
                             multiSelect: true,
                             selectedValues: _selectedMedicalConditions,
@@ -403,10 +415,11 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           onPressed: () {
                             // Collect all validation errors first in the correct order
                             final List<String> missingFields = [];
-                            
+
                             // Validate form fields (date of birth, weight)
-                            final isFormValid = _formKey.currentState!.validate();
-                            
+                            final isFormValid =
+                                _formKey.currentState!.validate();
+
                             // Check all required fields in the order they appear on screen
                             if (_dobController.text.trim().isEmpty) {
                               missingFields.add('Date of birth');
@@ -421,25 +434,26 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               missingFields.add('Weight');
                             }
                             if (_selectedMedicalConditions.isEmpty) {
-                              missingFields.add('Medical Conditions');
+                              missingFields
+                                  .add('Diet-related Chronic Condition');
                             }
-                            
+
                             // If there are any missing fields or form validation failed, show all errors
                             if (!isFormValid || missingFields.isNotEmpty) {
                               // Show errors on fields
                               setState(() {
                                 _showErrors = true;
                               });
-                              
+
                               // Trigger form validation to show field errors
                               _formKey.currentState?.validate();
-                              
+
                               // Show all missing fields in one message
                               if (missingFields.isNotEmpty) {
                                 final errorMessage = missingFields.length == 1
                                     ? 'Please fill in: ${missingFields.first}'
                                     : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
-                                
+
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(errorMessage),
@@ -456,20 +470,19 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               setState(() {
                                 _showErrors = false;
                               });
-                              
-                              final dateOfBirth =
-                                  _dobController.text.isNotEmpty
-                                      ? DateFormat('MM/dd/yyyy')
-                                          .parse(_dobController.text)
-                                      : null;
+
+                              final dateOfBirth = _dobController.text.isNotEmpty
+                                  ? DateFormat('MM/dd/yyyy')
+                                      .parse(_dobController.text)
+                                  : null;
 
                               context.read<SignupProvider>().updateHealthInfo(
                                     dateOfBirth: dateOfBirth,
                                     sex: _selectedSex,
                                     heightFeet: _heightFeet,
                                     heightInches: _heightInches,
-                                    weight: double.tryParse(
-                                        _weightController.text),
+                                    weight:
+                                        double.tryParse(_weightController.text),
                                     medicalConditions:
                                         _selectedMedicalConditions,
                                   );

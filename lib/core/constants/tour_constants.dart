@@ -36,6 +36,10 @@ class TourKeys {
       GlobalKey(debugLabel: 'select_item');
   static final GlobalKey quantityUnitKey =
       GlobalKey(debugLabel: 'quantity_unit');
+  static final GlobalKey removePantryItemKey =
+      GlobalKey(debugLabel: 'remove_pantry_item');
+  static final GlobalKey saveItemButtonKey =
+      GlobalKey(debugLabel: 'save_item_button');
 }
 
 // Tour step enum
@@ -48,7 +52,9 @@ enum TourStep {
   selectCategory,
   selectItem,
   setQuantityUnit,
+  saveItem,
   pantryItems,
+  removePantryItem,
   recipes,
   education,
 }
@@ -59,7 +65,7 @@ class TourDescriptions {
       "This is where you track your daily nutrition goals. You'll see how well you're following your personalized meal plan. Click on this section to continue.";
 
   static const String trackerInfo =
-      "Tap the i icon to learn what counts as 1 serving for this tracker.";
+      "Tap the i icon to learn what counts as 1 serving for this tracker. You MUST click the i icon to continue.";
 
   static const String dailyTips =
       "Get helpful daily tips based on your health conditions to improve your well-being. Click on this section to continue.";
@@ -71,16 +77,22 @@ class TourDescriptions {
       "Tap the + button to add food items from your pantry or create healthy recipes. You MUST click this button to continue.";
 
   static const String selectCategory =
-      "Choose a category to browse items. Tap any category to continue.";
+      "Here you can add items to your pantry. For this example, let's add an item together. Tap on 'Fresh Fruits' category to continue. You MUST click this category to proceed.";
 
   static const String selectItem =
-      "Tap the + button next to an item to add it to your pantry.";
+      "Here you can add your items. For this example, let's add the first item shown. Tap the + button next to it to add it to your pantry. You MUST click the + button to continue.";
 
   static const String setQuantityUnit =
-      "Set the quantity and unit for this item, then tap Add to save it.";
+      "Set the quantity and unit for this item, then tap 'Add' to save it. You MUST click the Add button to continue.";
+
+  static const String saveItem =
+      "Now tap the 'Save' button to add this item to your pantry. You MUST click the Save button to continue.";
 
   static const String pantryItems =
-      "Here are your pantry items! The more items you add, the better recipe recommendations you'll get. Make sure to add all the items you received from the food pantry today. Click on this section to continue.";
+      "Here are your pantry items! The more items you add, the better recipe recommendations you'll get. Click on this section to continue.";
+
+  static const String removePantryItem =
+      "To remove an item, swipe from right to left on any item. Try swiping left on the apple you just added to see how it works. You MUST swipe left to continue.";
 
   static const String pantryList =
       "Here are your pantry items! We'll use these to suggest recipes you can make. Click on this section to continue.";

@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/widgets/screenshot_viewer_widget.dart';
-import 'package:flutter_app/features/home/widgets/plan_video_player.dart';
-import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
-import 'package:flutter_app/core/constants/tour_constants.dart';
 
 class DietPlanViewer extends StatelessWidget {
   final String myPlanType;
@@ -36,27 +32,11 @@ class DietPlanViewer extends StatelessWidget {
         displayName = myPlanType;
     }
 
-    // Check if tour is active and we're on the myPlan step
-    return Consumer<ForcedTourProvider>(
-      builder: (context, tourProvider, child) {
-        final isTourActive = tourProvider.isTourActive;
-        final isOnMyPlanStep = tourProvider.currentStep == TourStep.myPlan;
-
-        // Show video during tour, slides otherwise
-        if (isTourActive && isOnMyPlanStep) {
-          return PlanVideoPlayer(
-            planType: myPlanType,
-            title: displayName,
-            isTourActive: true,
-          );
-        } else {
-          return ScreenshotViewerWidget(
-            planType: myPlanType,
-            title: displayName,
-            showGlycemicIndex: showGlycemicIndex,
-          );
-        }
-      },
+    // Always show slides (same behavior for tour and non-tour)
+    return ScreenshotViewerWidget(
+      planType: myPlanType,
+      title: displayName,
+      showGlycemicIndex: showGlycemicIndex,
     );
   }
 }
