@@ -43,13 +43,12 @@ Follow these steps to get the Food Rx project up and running on your local machi
 
 - Flutter SDK (version >=3.35.3 <4.0.0)
 - An IDE (like VS Code or Android Studio) with the Flutter plugin.
-- Ruby (Homebrew) + CocoaPods
-  **Install Ruby using Homebrew:**
+- Install Ruby using Homebrew:
   - `brew install ruby`
   - `echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/.zshrc`
   - `echo 'export PATH="/opt/homebrew/lib/ruby/gems/3.4.0/bin:$PATH"' >> ~/.zshrc`
   - `source ~/.zshrc`  
-  **Install CocoaPods:**
+- Install CocoaPods:
   - `gem install cocoapods`
 - Access to:
   - A MongoDB database.
