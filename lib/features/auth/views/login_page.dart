@@ -52,6 +52,10 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // Store credentials before clearing
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -61,8 +65,8 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final authController = context.read<AuthController>();
       final success = await authController.login(
-        _emailController.text.trim(),
-        _passwordController.text,
+        email,
+        password,
       );
 
       if (!mounted) return;
@@ -77,10 +81,19 @@ class _LoginPageState extends State<LoginPage> {
         // Clear the form
         _emailController.clear();
         _passwordController.clear();
-        // Pop back to home - MaterialApp's home Consumer will automatically
-        // show MainScreen when authController.isAuthenticated becomes true
+        // Wait a moment for auth state to update, then navigate
+        // MaterialApp's home Consumer will automatically show MainScreen
+        // when authController.isAuthenticated becomes true
         if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          // Use a small delay to ensure state is updated
+          await Future.delayed(const Duration(milliseconds: 100));
+          if (mounted) {
+            // Clear navigation stack and let the home Consumer handle the navigation
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/home',
+              (route) => false,
+            );
+          }
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -226,15 +239,21 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                         const SizedBox(height: 8),
-                        const Align(
+                        Align(
                           alignment: Alignment.centerRight,
-                          child: Text(
-                            'Forgot Password?',
-                            style: TextStyle(
-                              color: Color(0xFF545454),
-                              fontSize: 12,
-                              fontFamily: 'Bricolage Grotesque',
-                              fontWeight: FontWeight.w400,
+                          child: GestureDetector(
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                              Navigator.pushNamed(context, '/forgot-password');
+                            },
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                color: Color(0xFF545454),
+                                fontSize: 12,
+                                fontFamily: 'Bricolage Grotesque',
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           ),
                         ),

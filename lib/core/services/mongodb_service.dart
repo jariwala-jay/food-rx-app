@@ -20,6 +20,7 @@ class MongoDBService {
   late DbCollection _educationalContentCollection;
   late DbCollection _pantryCollection;
   late DbCollection _notificationsCollection;
+  late DbCollection _passwordResetTokensCollection;
   late GridFS _profilePhotosBucket;
   bool _isInitialized = false;
 
@@ -69,6 +70,7 @@ class MongoDBService {
     _educationalContentCollection = _db.collection('educational_content');
     _pantryCollection = _db.collection('pantry_items');
     _notificationsCollection = _db.collection('notifications');
+    _passwordResetTokensCollection = _db.collection('passwordResetTokens');
     _profilePhotosBucket = GridFS(_db, 'profile_photos');
 
     await _usersCollection.createIndex(keys: {'email': 1}, unique: true);
@@ -103,6 +105,14 @@ class MongoDBService {
     await _notificationsCollection
         .createIndex(keys: {'userId': 1, 'readAt': 1});
     await _notificationsCollection.createIndex(keys: {'sentAt': 1});
+
+    // Create indexes for password reset tokens
+    await _passwordResetTokensCollection.createIndex(
+      keys: {'token': 1},
+      unique: true,
+    );
+    await _passwordResetTokensCollection.createIndex(keys: {'userId': 1});
+    await _passwordResetTokensCollection.createIndex(keys: {'expiresAt': 1});
 
     // Only set _isInitialized to true if all steps complete successfully
     _isInitialized = true;
@@ -724,6 +734,168 @@ class MongoDBService {
       return items;
     } catch (e) {
       throw Exception('Failed to get expiring items: $e');
+    }
+  }
+
+  // Password Reset Token Methods
+
+  String _hashToken(String token) {
+    final bytes = utf8.encode(token);
+    final hash = sha256.convert(bytes);
+    return hash.toString();
+  }
+
+  Future<String> generatePasswordResetToken(String email) async {
+    try {
+      await ensureConnection();
+
+      // Find user by email
+      final user = await findUserByEmail(email);
+      if (user == null) {
+        // Don't reveal if email exists - return success anyway for security
+        // Generate a dummy token to prevent timing attacks
+        final dummyToken = base64.encode(
+          List<int>.generate(32, (_) => Random.secure().nextInt(256)),
+        );
+        _hashToken(dummyToken);
+        return '';
+      }
+
+      // Check rate limiting - max 3 requests per hour
+      final oneHourAgo = DateTime.now().subtract(const Duration(hours: 1));
+      final recentTokens = await _passwordResetTokensCollection
+          .find({
+            'userId': user['_id'],
+            'createdAt': {'\$gte': oneHourAgo.toIso8601String()},
+          })
+          .toList();
+
+      if (recentTokens.length >= 3) {
+        throw Exception('Too many reset requests. Please try again later.');
+      }
+
+      // Invalidate any existing unused tokens for this user
+      await _passwordResetTokensCollection.updateMany(
+        {
+          'userId': user['_id'],
+          'used': false,
+        },
+        {
+          '\$set': {'used': true},
+        },
+      );
+
+      // Generate secure random token
+      final random = Random.secure();
+      final tokenBytes = List<int>.generate(32, (_) => random.nextInt(256));
+      final token = base64.encode(tokenBytes);
+
+      // Hash the token before storing
+      final hashedToken = _hashToken(token);
+
+      // Set expiry to 1 hour from now
+      final expiresAt = DateTime.now().add(const Duration(hours: 1));
+
+      // Store token in database
+      await _passwordResetTokensCollection.insertOne({
+        'userId': user['_id'],
+        'token': hashedToken,
+        'expiresAt': expiresAt.toIso8601String(),
+        'used': false,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+
+      // Return the unhashed token (will be sent via email)
+      return token;
+    } catch (e) {
+      throw Exception('Failed to generate password reset token: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> validatePasswordResetToken(String token) async {
+    try {
+      await ensureConnection();
+
+      // Hash the provided token
+      final hashedToken = _hashToken(token);
+
+      // Find token in database
+      final tokenDoc = await _passwordResetTokensCollection.findOne({
+        'token': hashedToken,
+        'used': false,
+      });
+
+      if (tokenDoc == null) {
+        return null;
+      }
+
+      // Check if token has expired
+      final expiresAt = DateTime.parse(tokenDoc['expiresAt']);
+      if (DateTime.now().isAfter(expiresAt)) {
+        // Mark as used even though expired
+        await _passwordResetTokensCollection.updateOne(
+          {'token': hashedToken},
+          {'\$set': {'used': true}},
+        );
+        return null;
+      }
+
+      return tokenDoc;
+    } catch (e) {
+      throw Exception('Failed to validate password reset token: $e');
+    }
+  }
+
+  Future<bool> resetPassword(String token, String newPassword) async {
+    try {
+      await ensureConnection();
+
+      // Validate token
+      final tokenDoc = await validatePasswordResetToken(token);
+      if (tokenDoc == null) {
+        return false;
+      }
+
+      final userId = tokenDoc['userId'] as ObjectId;
+
+      // Hash the new password
+      final hashedPassword = _hashPassword(newPassword);
+
+      // Update user's password
+      await _usersCollection.updateOne(
+        {'_id': userId},
+        {
+          '\$set': {
+            'password': hashedPassword,
+            'updatedAt': DateTime.now().toIso8601String(),
+          },
+        },
+      );
+
+      // Mark token as used
+      final hashedToken = _hashToken(token);
+      await _passwordResetTokensCollection.updateOne(
+        {'token': hashedToken},
+        {'\$set': {'used': true}},
+      );
+
+      return true;
+    } catch (e) {
+      throw Exception('Failed to reset password: $e');
+    }
+  }
+
+  Future<void> invalidatePasswordResetToken(String token) async {
+    try {
+      await ensureConnection();
+
+      final hashedToken = _hashToken(token);
+      await _passwordResetTokensCollection.updateOne(
+        {'token': hashedToken},
+        {'\$set': {'used': true}},
+      );
+    } catch (e) {
+      throw Exception('Failed to invalidate password reset token: $e');
     }
   }
 }
