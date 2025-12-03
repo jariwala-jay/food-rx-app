@@ -68,3 +68,6 @@ dialogflow_auth.json
 
 #feature prd
 /feature_prd
+
+#migrate db
+/migrate-db

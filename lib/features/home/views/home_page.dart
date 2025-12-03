@@ -626,7 +626,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Provider.of<TrackerProvider>(context, listen: false);
             final authProvider =
                 Provider.of<AuthController>(context, listen: false);
-            final user = authProvider.currentUser;
+            var user = authProvider.currentUser;
 
             // Clear trackers and cache first
             trackerProvider.clearTrackers();
@@ -637,10 +637,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               // Wait a moment to ensure cache is cleared
               await Future.delayed(const Duration(milliseconds: 100));
+
+              // Re-fetch user after delay to ensure it's still valid (user might have logged out)
+              if (mounted && !_isDisposed) {
+                user = authProvider.currentUser;
+              }
             }
 
             // Reload with new diet type and plan (force reload)
-            if (mounted && !_isDisposed) {
+            if (mounted && !_isDisposed && user?.id != null) {
               final personalizedDietPlan = user?.selectedDietPlan;
               final dietType =
                   _mapMyPlanTypeToDietType(user?.myPlanType ?? user?.dietType);

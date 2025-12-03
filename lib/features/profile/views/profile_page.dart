@@ -276,7 +276,11 @@ class _ProfilePageState extends State<ProfilePage> {
       final authController = context.read<AuthController>();
       await authController.logout();
       if (context.mounted) {
-        Navigator.of(context).pushReplacementNamed('/login');
+        // Clear navigation stack and go to login
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
       }
     }
   }

@@ -340,7 +340,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     return SizedBox(
-      height: 52.0,
+      height: maxExtent,
       child: Container(
         color: const Color(0xFFF7F7F8),
         child: Padding(

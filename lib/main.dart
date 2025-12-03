@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,8 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
 import 'package:flutter_app/features/auth/views/signup_page.dart';
+import 'package:flutter_app/features/auth/views/forgot_password_page.dart';
+import 'package:flutter_app/features/auth/views/reset_password_page.dart';
 import 'package:flutter_app/features/chatbot/views/chatbot_page.dart';
 import 'package:flutter_app/features/education/controller/article_controller.dart';
 import 'package:flutter_app/features/education/models/article.dart';
@@ -45,6 +48,7 @@ import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:flutter_app/core/utils/app_logger.dart';
+import 'package:app_links/app_links.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -205,8 +209,103 @@ void main() async {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _appLinks = AppLinks();
+  StreamSubscription<Uri>? _linkSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _handleInitialLink();
+    _handleIncomingLinks();
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _handleInitialLink() async {
+    // Handle deep links when app is opened from email
+    // This will be called when app is opened via foodrx://reset-password?token=...
+    try {
+      final initialLink = await _appLinks.getInitialLink();
+      if (initialLink != null) {
+        _handleDeepLink(initialLink);
+      }
+    } catch (e) {
+      debugPrint('Error getting initial link: $e');
+    }
+  }
+
+  void _handleIncomingLinks() {
+    // Listen for deep links when app is already running
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      (Uri uri) {
+        _handleDeepLink(uri);
+      },
+      onError: (err) {
+        debugPrint('Error handling incoming link: $err');
+      },
+    );
+  }
+
+  void _handleDeepLink(Uri uri) {
+    debugPrint('Deep link received: $uri');
+    debugPrint('Scheme: ${uri.scheme}, Host: ${uri.host}, Path: ${uri.path}, Query: ${uri.query}');
+    
+    // Check if it's a reset password link
+    // Format: foodrx://reset-password?token=... or foodrx://?token=...
+    if (uri.scheme == 'foodrx') {
+      final token = uri.queryParameters['token'];
+      
+      // Check if it's a reset password link by host or path
+      final isResetPassword = uri.host == 'reset-password' || 
+                             uri.path.contains('reset-password') ||
+                             token != null; // If token exists, assume it's reset password
+      
+      if (isResetPassword && token != null && token.isNotEmpty) {
+        debugPrint('Navigating to reset password page with token');
+        // Navigate to reset password page with token
+        // Use addPostFrameCallback to ensure navigation happens after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            final navigator = NavigationService.navigatorKey.currentState;
+            if (navigator != null) {
+              // Clear navigation stack and go to login first, then to reset password
+              // This ensures proper navigation stack
+              navigator.pushNamedAndRemoveUntil(
+                '/login',
+                (route) => false, // Remove all previous routes
+              );
+              // Then navigate to reset password after a short delay
+              Future.delayed(const Duration(milliseconds: 100), () {
+                final currentNavigator = NavigationService.navigatorKey.currentState;
+                if (currentNavigator != null) {
+                  currentNavigator.pushNamed(
+                    '/reset-password',
+                    arguments: {'token': token},
+                  );
+                }
+              });
+            }
+          });
+        });
+      } else {
+        debugPrint('Reset password link missing token or invalid format');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -244,6 +343,33 @@ class MyApp extends StatelessWidget {
       routes: {
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
+        '/forgot-password': (context) => const ForgotPasswordPage(),
+        '/reset-password': (context) {
+          // Try to get token from route arguments first
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
+          String? token = args?['token'] as String?;
+          
+          // If no token in arguments, try to get from query parameters
+          if (token == null) {
+            final route = ModalRoute.of(context);
+            if (route != null && route.settings.name != null) {
+              try {
+                final uri = Uri.parse(route.settings.name!);
+                token = uri.queryParameters['token'];
+              } catch (e) {
+                // If parsing fails, try to extract from the route name directly
+                final routeName = route.settings.name ?? '';
+                if (routeName.contains('token=')) {
+                  final match = RegExp(r'token=([^&]+)').firstMatch(routeName);
+                  token = match?.group(1);
+                }
+              }
+            }
+          }
+          
+          return ResetPasswordPage(token: token);
+        },
         '/home': (context) => const MainScreen(),
         '/chatbot': (context) => const ChatbotPage(),
         '/meal-plan': (context) => const MealPlanPage(),
