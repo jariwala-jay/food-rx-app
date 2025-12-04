@@ -150,9 +150,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               // Segmented control
               Showcase(
                 key: TourKeys.pantryTabToggleKey,
-                title: 'Switch FoodRx and Home Items',
+                title: 'FoodRx vs. Home Items',
                 description:
-                    'Switch between FoodRx Items and Home Items to manage different types of pantry items.',
+                    'Separate foods from foodrx pantry vs. home items.',
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
