@@ -642,7 +642,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildMedicalConditionsEdit() {
-    final options = const [
+    const options = [
       'Hypertension',
       'Pre-Diabetes',
       'Diabetes',
@@ -699,7 +699,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildAllergiesEdit() {
-    final options = const [
+    const options = [
       'No allergies',
       'Tree Nuts',
       'Peanuts',
@@ -762,8 +762,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildHealthGoalsEdit() {
-    final options = const [
-      'Avoid diabetes',
+    const options = [
       'Lower blood pressure',
       'Lower cholesterol',
       'Lower blood glucose (Sugar)',
@@ -791,7 +790,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ),
           if (_selectedMultiValues.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Selected Goals:',
               style: AppTypography.bg_14_m,
             ),
