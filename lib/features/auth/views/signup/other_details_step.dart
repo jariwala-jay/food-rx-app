@@ -321,7 +321,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       ),
                     ),
                     child: AppFormField(
-                      label: 'I am cooking for this many people',
+                      label:
+                          'I am cooking for this many people (Including Yourself)',
                       hintText: 'Type Here',
                       controller: _cookingForPeopleController,
                       keyboardType: TextInputType.number,
