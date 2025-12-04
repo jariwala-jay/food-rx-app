@@ -463,6 +463,37 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           options: _activityLevels
                               .map((level) => {level: level})
                               .toList(),
+                          titleBuilder: (label) {
+                            // Split the label at the opening parenthesis to bold the first part
+                            final parts = label.split(' (');
+                            if (parts.length == 2) {
+                              return RichText(
+                                text: TextSpan(
+                                  style: AppTypography.bg_14_r.copyWith(
+                                    color: const Color(0xFF2C2C2C),
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: parts[0],
+                                      style: AppTypography.bg_14_b.copyWith(
+                                        color: const Color(0xFF2C2C2C),
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' (${parts[1]}',
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            // Fallback to regular text if format doesn't match
+                            return Text(
+                              label,
+                              style: AppTypography.bg_14_r.copyWith(
+                                color: const Color(0xFF2C2C2C),
+                              ),
+                            );
+                          },
                           onChanged: (value) {
                             setState(() {
                               _activityLevel = value;
