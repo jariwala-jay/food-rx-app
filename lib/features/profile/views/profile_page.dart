@@ -138,10 +138,10 @@ class _ProfilePageState extends State<ProfilePage> {
       default:
         planName = myPlan;
     }
-
-    if (user.targetCalories != null) {
-      return '$planName - ${user.targetCalories} Calorie Plan';
-    }
+    // Note: We don't show the target calories in the profile page
+    // if (user.targetCalories != null) {
+    //   return '$planName - ${user.targetCalories} Calorie Plan';
+    // }
     return planName;
   }
 
