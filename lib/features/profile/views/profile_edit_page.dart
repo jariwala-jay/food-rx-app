@@ -244,7 +244,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(needsReplan
-                  ? 'Updated successfully. Your diet plan may be recalculated.'
+                  ? 'Updated successfully. Your meal plan may be recalculated.'
                   : 'Updated successfully'),
               duration: const Duration(seconds: 3),
             ),

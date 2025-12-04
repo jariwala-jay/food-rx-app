@@ -404,7 +404,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Current Diet Plan',
+                            'Current Meal Plan',
                             style: AppTypography.bg_14_r.copyWith(
                               color: Colors.white.withOpacity(0.9),
                             ),
