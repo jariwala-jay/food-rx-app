@@ -63,7 +63,7 @@ class DiabetesPlateIntro extends StatelessWidget {
                   final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                   final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                   return Text(
-                    "Click here to learn more about your personal plan",
+                    "Learn More",
                     style: AppTypography.bg_16_sb.copyWith(
                       color: Colors.white,
                       fontSize: 16 * clampedScale,
