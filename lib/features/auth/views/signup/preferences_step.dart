@@ -31,10 +31,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
   bool _showErrors = false;
 
   final List<String> _activityLevels = [
-    'Not Active',
-    'Seldom Active',
-    'Moderately Active',
-    'Very Active',
+    'Not Very Active (Spend Most of the day sitting)',
+    'Lightly Active (Spend Most of the day on Feet)',
+    'Active (Spend Most of the day doing some physical activity)',
+    'Very Active (Spend most of the day doing heavy physical activity)',
   ];
 
   // Health goals are collected in Other Details step
@@ -239,7 +239,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ],
                         if (_showErrors && _favoriteCuisines.isEmpty) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your favorite cuisines (or "No preference")',
                             style: TextStyle(
                               color: Colors.red,
@@ -316,7 +316,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ],
                         if (_showErrors && _selectedFoodAllergies.isEmpty) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your food allergies (or "No allergies" if you have none)',
                             style: TextStyle(
                               color: Colors.red,
@@ -388,7 +388,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 : _dailyFruitIntake == null
                                     ? 'Please select daily fruit intake'
                                     : 'Please select daily vegetable intake',
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.red,
                               fontSize: 12,
                               fontFamily: 'BricolageGrotesque',
@@ -431,7 +431,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ),
                         if (_showErrors && _dailyWaterIntake == null) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select daily water intake',
                             style: TextStyle(
                               color: Colors.red,
@@ -458,7 +458,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'How physically active are you?',
+                          label: 'How active are you?',
                           value: _activityLevel,
                           options: _activityLevels
                               .map((level) => {level: level})
@@ -472,7 +472,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ),
                         if (_showErrors && _activityLevel == null) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your activity level',
                             style: TextStyle(
                               color: Colors.red,

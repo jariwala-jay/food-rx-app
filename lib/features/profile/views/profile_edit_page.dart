@@ -460,10 +460,22 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         label: 'Activity Level',
         value: _selectedValue,
         options: const [
-          {'Not Active': 'Not Active'},
-          {'Seldom Active': 'Seldom Active'},
-          {'Moderately Active': 'Moderately Active'},
-          {'Very Active': 'Very Active'},
+          {
+            'Not Very Active (Spend Most of the day sitting)':
+                'Not Very Active (Spend Most of the day sitting)'
+          },
+          {
+            'Lightly Active (Spend Most of the day on Feet)':
+                'Lightly Active (Spend Most of the day on Feet)'
+          },
+          {
+            'Active (Spend Most of the day doing some physical activity)':
+                'Active (Spend Most of the day doing some physical activity)'
+          },
+          {
+            'Very Active (Spend most of the day doing heavy physical activity)':
+                'Very Active (Spend most of the day doing heavy physical activity)'
+          },
         ],
         onChanged: (value) {
           setState(() {
