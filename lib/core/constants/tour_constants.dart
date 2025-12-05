@@ -32,7 +32,8 @@ class TourKeys {
       GlobalKey(debugLabel: 'recommended_articles');
   static final GlobalKey articlesListKey =
       GlobalKey(debugLabel: 'articles_list');
-  static final GlobalKey selectItemKey = GlobalKey(debugLabel: 'select_item');
+  static final GlobalKey selectItemKey =
+      GlobalKey(debugLabel: 'select_item');
   static final GlobalKey quantityUnitKey =
       GlobalKey(debugLabel: 'quantity_unit');
   static final GlobalKey removePantryItemKey =
@@ -70,7 +71,7 @@ class TourDescriptions {
       "Get helpful daily tips based on your health conditions to improve your well-being. Click on this section to continue.";
 
   static const String myPlan =
-      "Tap here anytime to view your complete meal plan and learn about healthy eating for your condition. You MUST click this button to continue.";
+      "Tap here anytime to view your complete diet plan and learn about healthy eating for your condition. You MUST click this button to continue.";
 
   static const String addButton =
       "Tap the + button to add food items from your pantry or create healthy recipes. You MUST click this button to continue.";
@@ -97,7 +98,7 @@ class TourDescriptions {
       "Here are your pantry items! We'll use these to suggest recipes you can make. Click on this section to continue.";
 
   static const String recipes =
-      "Browse these personalized recipes that match your meal plan and use your pantry items! Click on this section to continue.";
+      "Browse these personalized recipes that match your diet plan and use your pantry items! Click on this section to continue.";
 
   static const String education =
       "Learn more about managing your health condition with expert articles and tips. Click on this section to continue.";

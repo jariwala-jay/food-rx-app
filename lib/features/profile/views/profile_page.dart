@@ -138,10 +138,10 @@ class _ProfilePageState extends State<ProfilePage> {
       default:
         planName = myPlan;
     }
-    // Note: We don't show the target calories in the profile page
-    // if (user.targetCalories != null) {
-    //   return '$planName - ${user.targetCalories} Calorie Plan';
-    // }
+
+    if (user.targetCalories != null) {
+      return '$planName - ${user.targetCalories} Calorie Plan';
+    }
     return planName;
   }
 
@@ -404,7 +404,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Current Meal Plan',
+                            'Current Diet Plan',
                             style: AppTypography.bg_14_r.copyWith(
                               color: Colors.white.withOpacity(0.9),
                             ),

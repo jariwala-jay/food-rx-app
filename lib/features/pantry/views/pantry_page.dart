@@ -150,9 +150,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               // Segmented control
               Showcase(
                 key: TourKeys.pantryTabToggleKey,
-                title: 'FoodRx vs. Home Items',
+                title: 'Switch FoodRx and Home Items',
                 description:
-                    'Separate foods from foodrx pantry vs. home items.',
+                    'Switch between FoodRx Items and Home Items to manage different types of pantry items.',
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
@@ -394,7 +394,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                 final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                 return Text(
-                  'Your FoodRx Items list is Empty. Add items that you got from foodrx pantryto get started!',
+                  'Your FoodRx Items list is Empty. Add items to get started!',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.grey,
@@ -636,7 +636,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                 final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                 return Text(
-                  'Your Home Items list is empty. Add what you bought from grocery store.',
+                  'Your Home Items list is empty. Add what you have at home or bought from grocery store.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.grey,

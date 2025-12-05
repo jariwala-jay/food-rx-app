@@ -237,7 +237,7 @@ class _TrackerGridState extends State<TrackerGrid>
                       builder: (context) {
                         return showcaseview.Showcase(
                           key: TourKeys.myPlanButtonKey,
-                          title: 'View Your Meal Plan',
+                          title: 'View Your Diet Plan',
                           description:
                               'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
                           targetShapeBorder: const RoundedRectangleBorder(
@@ -454,7 +454,7 @@ class _TrackerGridState extends State<TrackerGrid>
                       '🎯 TrackerGrid: Building My Plan showcase widget (skeleton)');
                   return showcaseview.Showcase(
                     key: TourKeys.myPlanButtonKey,
-                    title: 'View Your Meal Plan',
+                    title: 'View Your Diet Plan',
                     description:
                         'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
                     targetShapeBorder: const RoundedRectangleBorder(

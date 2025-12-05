@@ -105,6 +105,7 @@ class ForcedTourService {
         return TourDescriptions.saveItem;
       case TourStep.pantryItems:
         return TourDescriptions.pantryItems;
+        return TourDescriptions.pantryItems;
       case TourStep.removePantryItem:
         return TourDescriptions.removePantryItem;
       case TourStep.recipes:
@@ -127,7 +128,7 @@ class ForcedTourService {
       case TourStep.dailyTips:
         return 'Daily Health Tips';
       case TourStep.myPlan:
-        return 'Your Meal Plan';
+        return 'Your Diet Plan';
       case TourStep.addButton:
         return 'Add Items';
       case TourStep.selectCategory:
@@ -137,6 +138,7 @@ class ForcedTourService {
       case TourStep.saveItem:
         return 'Save Item';
       case TourStep.pantryItems:
+        return 'Your Pantry';
         return 'Your Pantry';
       case TourStep.removePantryItem:
         return 'Remove Items';

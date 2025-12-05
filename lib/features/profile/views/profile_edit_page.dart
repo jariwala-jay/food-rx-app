@@ -244,7 +244,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(needsReplan
-                  ? 'Updated successfully. Your meal plan may be recalculated.'
+                  ? 'Updated successfully. Your diet plan may be recalculated.'
                   : 'Updated successfully'),
               duration: const Duration(seconds: 3),
             ),
@@ -460,22 +460,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         label: 'Activity Level',
         value: _selectedValue,
         options: const [
-          {
-            'Not Very Active (Spend Most of the day sitting)':
-                'Not Very Active (Spend Most of the day sitting)'
-          },
-          {
-            'Lightly Active (Spend Most of the day on Feet)':
-                'Lightly Active (Spend Most of the day on Feet)'
-          },
-          {
-            'Active (Spend Most of the day doing some physical activity)':
-                'Active (Spend Most of the day doing some physical activity)'
-          },
-          {
-            'Very Active (Spend most of the day doing heavy physical activity)':
-                'Very Active (Spend most of the day doing heavy physical activity)'
-          },
+          {'Not Active': 'Not Active'},
+          {'Seldom Active': 'Seldom Active'},
+          {'Moderately Active': 'Moderately Active'},
+          {'Very Active': 'Very Active'},
         ],
         onChanged: (value) {
           setState(() {
@@ -654,7 +642,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildMedicalConditionsEdit() {
-    const options = [
+    final options = const [
       'Hypertension',
       'Pre-Diabetes',
       'Diabetes',
@@ -711,7 +699,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildAllergiesEdit() {
-    const options = [
+    final options = const [
       'No allergies',
       'Tree Nuts',
       'Peanuts',
@@ -774,7 +762,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildHealthGoalsEdit() {
-    const options = [
+    final options = const [
+      'Avoid diabetes',
       'Lower blood pressure',
       'Lower cholesterol',
       'Lower blood glucose (Sugar)',
@@ -802,7 +791,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ),
           if (_selectedMultiValues.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Selected Goals:',
               style: AppTypography.bg_14_m,
             ),

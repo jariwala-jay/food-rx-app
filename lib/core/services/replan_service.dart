@@ -171,7 +171,7 @@ class ReplanService {
     final suggestions = <String>[];
 
     if (user.selectedDietPlan == null) {
-      suggestions.add('Set up your personalized meal plan');
+      suggestions.add('Set up your personalized diet plan');
     }
 
     if (user.targetCalories == null) {

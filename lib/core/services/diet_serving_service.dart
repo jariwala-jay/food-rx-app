@@ -398,7 +398,7 @@ class DietServingService {
           '1/2 cup sorbet',
           '1 cup sugar-sweetened lemonade'
         ],
-        'notes': 'note: up to 1 serving per day'
+        'notes': 'note: upto 1 serving per day'
       },
       TrackerCategory.sodium: {
         'canonical_amount': 1500.0, // 1500mg daily (stricter DASH goal)

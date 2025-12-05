@@ -68,14 +68,14 @@ class _DietPlanStepState extends State<DietPlanStep> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Meal Plan Not Available',
+                'Diet Plan Not Available',
                 style: AppTypography.bg_24_sb.copyWith(
                   color: const Color(0xFF1A1A1A),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Unable to generate your personalized Meal plan. Please try again.',
+                'Unable to generate your personalized diet plan. Please try again.',
                 style: AppTypography.bg_16_r.copyWith(
                   color: const Color(0xFF666666),
                 ),
