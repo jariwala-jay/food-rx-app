@@ -199,12 +199,12 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         );
         return;
       }
-
+      
       // Show loading state in button
       setState(() {
         _isSubmitting = true;
       });
-
+      
       // Wait for UI to update with loading state, then call onFinish
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -358,11 +358,12 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
         // Video controls
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Column(
             children: [
               // Progress indicator
               _buildProgressIndicator(),
+              const SizedBox(height: 8),
               // Time display and controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -371,9 +372,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                     child: Text(
                       '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
                       style: TextStyle(
-                        fontSize: 12 *
-                            MediaQuery.textScaleFactorOf(context)
-                                .clamp(0.8, 1.0),
+                        fontSize: 12 * MediaQuery.textScaleFactorOf(context).clamp(0.8, 1.0),
                         color: Colors.grey,
                       ),
                       maxLines: 1,
@@ -391,8 +390,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                                 : Icons.play_arrow,
                           ),
                           onPressed: (_isMandatoryVideo &&
-                                  (widget.isTourActive ||
-                                      widget.isSignupMode) &&
+                                  (widget.isTourActive || widget.isSignupMode) &&
                                   !_isVideoCompleted)
                               ? null
                               : () {
@@ -413,10 +411,8 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                               padding: const EdgeInsets.only(left: 8.0),
                               child: Builder(
                                 builder: (context) {
-                                  final textScaleFactor =
-                                      MediaQuery.textScaleFactorOf(context);
-                                  final clampedScale =
-                                      textScaleFactor.clamp(0.8, 1.0);
+                                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+                                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                                   return Text(
                                     'Watch full video',
                                     style: TextStyle(
@@ -442,7 +438,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
         // Continue button
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(16),
           child: ElevatedButton(
             onPressed: (_isSubmitting ||
                     (_isMandatoryVideo &&
@@ -454,6 +450,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
               disabledBackgroundColor: Colors.grey,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -476,6 +473,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                   ),
           ),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -491,8 +489,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
 
-    final canSeek =
-        !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
+    final canSeek = !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
 
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(

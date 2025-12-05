@@ -244,7 +244,7 @@ class CustomNavBar extends StatelessWidget {
                 ),
                 Showcase(
                   key: TourKeys.educationTabKey,
-                  title: 'Access tips and additional resources',
+                  title: 'Learn About Your Health',
                   description:
                       'Access expert articles and tips to help you manage your health condition.',
                   targetShapeBorder: const RoundedRectangleBorder(
