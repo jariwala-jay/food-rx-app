@@ -91,6 +91,7 @@ class AppRadioGroup<T> extends StatelessWidget {
   final T? value;
   final List<Map<T, String>> options;
   final ValueChanged<T?>? onChanged;
+  final Widget Function(String)? titleBuilder;
 
   const AppRadioGroup({
     super.key,
@@ -98,6 +99,7 @@ class AppRadioGroup<T> extends StatelessWidget {
     required this.value,
     required this.options,
     this.onChanged,
+    this.titleBuilder,
   });
 
   @override
@@ -116,12 +118,14 @@ class AppRadioGroup<T> extends StatelessWidget {
           return Container(
             margin: const EdgeInsets.only(bottom: 0),
             child: RadioListTile<T>(
-              title: Text(
-                optionLabel,
-                style: AppTypography.bg_14_r.copyWith(
-                  color: const Color(0xFF2C2C2C),
-                ),
-              ),
+              title: titleBuilder != null
+                  ? titleBuilder!(optionLabel)
+                  : Text(
+                      optionLabel,
+                      style: AppTypography.bg_14_r.copyWith(
+                        color: const Color(0xFF2C2C2C),
+                      ),
+                    ),
               value: optionValue,
               groupValue: value,
               onChanged: onChanged,

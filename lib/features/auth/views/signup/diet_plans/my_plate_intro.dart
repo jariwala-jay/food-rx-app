@@ -21,15 +21,25 @@ class MyPlateIntro extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 24),
-                const Text(
-                  "Your Personalized Plan",
-                  style: AppTypography.bg_24_b,
+                const Center(
+                  child: Text(
+                    "Your Personalized Plan",
+                    style: AppTypography.bg_24_b,
+                  ),
                 ),
                 const SizedBox(height: 8),
+                const Center(
+                  child: Text(
+                    "MyPlate",
+                    style: AppTypography.bg_24_b,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   "Based on the information you provided in your health profile, the MyPlate nutrition guide is best suited to meet your diet-related health goals. MyPlate will help guide you in creating balanced meals with the right mix of fruits, vegetables, grains, protein, and dairy; thus, making healthy eating easier.",
                   style: AppTypography.bg_14_r
                       .copyWith(color: const Color(0xFF90909A)),
+                  textAlign: TextAlign.justify,
                 ),
                 const SizedBox(height: 32),
                 Center(
@@ -63,7 +73,7 @@ class MyPlateIntro extends StatelessWidget {
                   final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                   final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                   return Text(
-                    "Click here to learn more about your personal plan",
+                    "Learn More",
                     style: AppTypography.bg_16_sb.copyWith(
                       color: Colors.white,
                       fontSize: 16 * clampedScale,

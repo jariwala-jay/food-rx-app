@@ -31,10 +31,10 @@ class _PreferencesStepState extends State<PreferencesStep> {
   bool _showErrors = false;
 
   final List<String> _activityLevels = [
-    'Not Active',
-    'Seldom Active',
-    'Moderately Active',
-    'Very Active',
+    'Not Very Active (Spend Most of the day sitting)',
+    'Lightly Active (Spend Most of the day on Feet)',
+    'Active (Spend Most of the day doing some physical activity)',
+    'Very Active (Spend most of the day doing heavy physical activity)',
   ];
 
   // Health goals are collected in Other Details step
@@ -239,7 +239,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ],
                         if (_showErrors && _favoriteCuisines.isEmpty) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your favorite cuisines (or "No preference")',
                             style: TextStyle(
                               color: Colors.red,
@@ -316,7 +316,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ],
                         if (_showErrors && _selectedFoodAllergies.isEmpty) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your food allergies (or "No allergies" if you have none)',
                             style: TextStyle(
                               color: Colors.red,
@@ -388,7 +388,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 : _dailyFruitIntake == null
                                     ? 'Please select daily fruit intake'
                                     : 'Please select daily vegetable intake',
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.red,
                               fontSize: 12,
                               fontFamily: 'BricolageGrotesque',
@@ -431,7 +431,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ),
                         if (_showErrors && _dailyWaterIntake == null) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select daily water intake',
                             style: TextStyle(
                               color: Colors.red,
@@ -458,11 +458,42 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppRadioGroup<String>(
-                          label: 'How physically active are you?',
+                          label: 'How active are you?',
                           value: _activityLevel,
                           options: _activityLevels
                               .map((level) => {level: level})
                               .toList(),
+                          titleBuilder: (label) {
+                            // Split the label at the opening parenthesis to bold the first part
+                            final parts = label.split(' (');
+                            if (parts.length == 2) {
+                              return RichText(
+                                text: TextSpan(
+                                  style: AppTypography.bg_14_r.copyWith(
+                                    color: const Color(0xFF2C2C2C),
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: parts[0],
+                                      style: AppTypography.bg_14_b.copyWith(
+                                        color: const Color(0xFF2C2C2C),
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' (${parts[1]}',
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            // Fallback to regular text if format doesn't match
+                            return Text(
+                              label,
+                              style: AppTypography.bg_14_r.copyWith(
+                                color: const Color(0xFF2C2C2C),
+                              ),
+                            );
+                          },
                           onChanged: (value) {
                             setState(() {
                               _activityLevel = value;
@@ -472,7 +503,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         ),
                         if (_showErrors && _activityLevel == null) ...[
                           const SizedBox(height: 8),
-                          Text(
+                          const Text(
                             'Please select your activity level',
                             style: TextStyle(
                               color: Colors.red,
