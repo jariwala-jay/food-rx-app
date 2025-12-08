@@ -394,7 +394,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 final textScaleFactor = MediaQuery.textScaleFactorOf(context);
                 final clampedScale = textScaleFactor.clamp(0.8, 1.0);
                 return Text(
-                  'Your FoodRx Items list is Empty. Add items that you got from foodrx pantryto get started!',
+                  'Your FoodRx Items list is Empty. Add items that you got from foodrx pantry to get started!',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.grey,

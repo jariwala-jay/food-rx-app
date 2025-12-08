@@ -142,7 +142,7 @@ class TrackerCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14 * clampedScale,
                             fontWeight: FontWeight.w500,
-                            color: const Color(0xFF5F5F5F),
+                            color: AppColors.textTertiary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -215,6 +215,10 @@ class TrackerCard extends StatelessWidget {
   }
 
   Widget _buildInfoIcon(BuildContext context) {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
+    final iconSize = (14 * clampedScale).clamp(14.0, 18.0);
+
     final iconButton = GestureDetector(
       onTap: () => _openInfoAndMaybeAdvanceTour(context),
       child: Container(
@@ -231,10 +235,10 @@ class TrackerCard extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(
+        child: Icon(
           Icons.info_outline,
-          color: AppColors.textLight,
-          size: 12,
+          color: AppColors.textTertiary,
+          size: iconSize,
         ),
       ),
     );
