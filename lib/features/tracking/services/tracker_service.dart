@@ -841,7 +841,10 @@ class TrackerService {
         ? _safeToDouble(sweetsMaxPerDayValue, 0.0)
         : null;
     final hasDailySweets = sweetsMaxPerDay != null && sweetsMaxPerDay > 0;
-    final sodium = _safeToDouble(personalizedDietPlan?['sodium'], 1500.0);
+    // Check both possible keys for sodium: 'sodium_mg_per_day_max' (from personalization) or 'sodium' (legacy)
+    final sodium = _safeToDouble(
+        personalizedDietPlan?['sodium_mg_per_day_max'] ?? personalizedDietPlan?['sodium'], 
+        1500.0);
 
     return [
       TrackerGoal(
@@ -960,7 +963,10 @@ class TrackerService {
     final grains = _safeToDouble(personalizedDietPlan?['grains'], 6.0);
     final protein = _safeToDouble(personalizedDietPlan?['protein'], 5.5);
     final dairy = _safeToDouble(personalizedDietPlan?['dairy'], 3.0);
-    final sodium = _safeToDouble(personalizedDietPlan?['sodiumMax'], 2300.0);
+    // Check both possible keys for sodium: 'sodium_mg_per_day_max' (from personalization) or 'sodiumMax' (legacy)
+    final sodium = _safeToDouble(
+        personalizedDietPlan?['sodium_mg_per_day_max'] ?? personalizedDietPlan?['sodiumMax'], 
+        2300.0);
 
     // Trackers always use "MyPlate" as dietType
     // Note: DiabetesPlate users should already be mapped to DASH before reaching here
