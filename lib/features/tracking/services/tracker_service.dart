@@ -908,7 +908,7 @@ class TrackerService {
         userId: userId,
         name: 'Water',
         category: TrackerCategory.water,
-        goalValue: 3.0,
+        goalValue: 8.0,
         unit: TrackerUnit.cups,
         colorStart: const Color(0xFF2196F3),
         colorEnd: const Color(0xFF90CAF9),
