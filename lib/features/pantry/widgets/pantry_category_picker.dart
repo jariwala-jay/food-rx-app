@@ -29,6 +29,10 @@ class PantryCategoryPicker extends StatelessWidget {
 
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
+        // Check if we're in the middle of tour steps that use this picker
+        final isTourCategoryFlow = tourProvider.isTourActive &&
+            tourProvider.isOnStep(TourStep.selectCategory);
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -36,7 +40,21 @@ class PantryCategoryPicker extends StatelessWidget {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-                  onPressed: onBack,
+                  onPressed: () {
+                    if (isTourCategoryFlow) {
+                      // Block back navigation during tour
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Please complete the tour step first - tap on "Fresh Fruits"'),
+                          duration: Duration(seconds: 2),
+                          backgroundColor: Color(0xFFFF6A00),
+                        ),
+                      );
+                      return;
+                    }
+                    onBack();
+                  },
                   splashRadius: 20,
                 ),
                 Expanded(
@@ -140,17 +158,20 @@ class PantryCategoryPicker extends StatelessWidget {
                     if (shouldHighlight) {
                       return Showcase(
                         key: TourKeys.pantryCategoryListKey,
-                        title: 'Add All Your Food Items',
-                        description:
-                            'Here you can add items to your pantry. For this example, let\'s add an item together. Tap on "Fresh Fruits" category to continue. You MUST click this category to proceed.',
+                        title: 'Add Food Items',
+                        description: TourDescriptions.selectCategory,
                         targetShapeBorder: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(12)),
                         ),
-                        tooltipBackgroundColor: Colors.white,
+                        tooltipBackgroundColor:
+                            TourTooltipStyle.tooltipBackgroundColor,
                         tooltipPosition: TooltipPosition.bottom,
-                        textColor: Colors.black,
-                        overlayColor: Colors.black54,
-                        overlayOpacity: 0.8,
+                        textColor: TourTooltipStyle.textColor,
+                        overlayColor: TourTooltipStyle.overlayColor,
+                        overlayOpacity: TourTooltipStyle.overlayOpacity,
+                        toolTipMargin: TourTooltipStyle.toolTipMargin,
+                        titleTextStyle: TourTooltipStyle.titleStyle,
+                        descTextStyle: TourTooltipStyle.descriptionStyle,
                         showArrow: true,
                         onTargetClick: () {
                           // Handle click directly - navigate to Fresh Fruits

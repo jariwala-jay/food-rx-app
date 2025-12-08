@@ -177,16 +177,18 @@ class _EducationPageState extends State<EducationPage> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: Showcase(
                 key: TourKeys.recommendedArticlesKey,
-                title: 'Recommended Articles',
-                description:
-                    'These articles are specially selected for your health condition and goals.',
+                title: 'Recommended For You',
+                description: TourDescriptions.education,
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                overlayColor: Colors.black54,
-                overlayOpacity: 0.8,
+                tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+                textColor: TourTooltipStyle.textColor,
+                overlayColor: TourTooltipStyle.overlayColor,
+                overlayOpacity: TourTooltipStyle.overlayOpacity,
+                toolTipMargin: TourTooltipStyle.toolTipMargin,
+                titleTextStyle: TourTooltipStyle.titleStyle,
+                descTextStyle: TourTooltipStyle.descriptionStyle,
                 onTargetClick: () async {
                   debugPrint(
                       '🎯 EducationPage: onTargetClick - completing tour');

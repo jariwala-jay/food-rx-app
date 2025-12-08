@@ -451,16 +451,18 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
         Expanded(
           child: Showcase(
             key: TourKeys.recipesKey,
-            title: 'Your Personalized Recipes',
-            description:
-                'These recipes were generated just for you based on your health conditions, meal plan, and pantry items.',
+            title: 'Your Recipes',
+            description: TourDescriptions.recipes,
             targetShapeBorder: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
-            tooltipBackgroundColor: Colors.white,
-            textColor: Colors.black,
-            overlayColor: Colors.black54,
-            overlayOpacity: 0.8,
+            tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+            textColor: TourTooltipStyle.textColor,
+            overlayColor: TourTooltipStyle.overlayColor,
+            overlayOpacity: TourTooltipStyle.overlayOpacity,
+            toolTipMargin: TourTooltipStyle.toolTipMargin,
+            titleTextStyle: TourTooltipStyle.titleStyle,
+            descTextStyle: TourTooltipStyle.descriptionStyle,
             onTargetClick: () {
               final tourProvider =
                   Provider.of<ForcedTourProvider>(context, listen: false);
@@ -597,15 +599,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
           Showcase(
             key: TourKeys.generateRecipeButtonKey,
             title: 'Generate Recipes',
-            description:
-                'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+            description: 'Create recipes from your pantry items.\n\n Tap to continue',
             targetShapeBorder: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(24)),
             ),
-            tooltipBackgroundColor: Colors.white,
-            textColor: Colors.black,
-            overlayColor: Colors.black54,
-            overlayOpacity: 0.8,
+            tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+            textColor: TourTooltipStyle.textColor,
+            overlayColor: TourTooltipStyle.overlayColor,
+            overlayOpacity: TourTooltipStyle.overlayOpacity,
+            toolTipMargin: TourTooltipStyle.toolTipMargin,
+            titleTextStyle: TourTooltipStyle.titleStyle,
+            descTextStyle: TourTooltipStyle.descriptionStyle,
             onTargetClick: () {
               // Don't complete step here - let them explore the recipe creation
               // The tour will end after this step
@@ -658,7 +662,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.recipesKey,
               title: 'No Recipes Available',
               description:
-                  'Try adding more pantry items or removing all cuisine preferences and try again later.',
+                  'Try adding more pantry items or removing all cuisine preferences and try again later.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
@@ -732,7 +736,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.generateRecipeButtonKey,
               title: 'Generate Recipes',
               description:
-                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(24)),
               ),
