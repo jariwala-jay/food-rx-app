@@ -8,6 +8,7 @@ import '../widgets/tracker_card.dart';
 import '../widgets/pantry_tracker_logging_modal.dart';
 import '../widgets/manual_tracker_logging_modal.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:showcaseview/showcaseview.dart' as showcaseview;
 
 class TrackerGrid extends StatefulWidget {
@@ -238,15 +239,18 @@ class _TrackerGridState extends State<TrackerGrid>
                         return showcaseview.Showcase(
                           key: TourKeys.myPlanButtonKey,
                           title: 'View Your Meal Plan',
-                          description:
-                              'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
+                          description: TourDescriptions.myPlan,
                           targetShapeBorder: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(20)),
                           ),
-                          tooltipBackgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          overlayColor: Colors.black54,
-                          overlayOpacity: 0.8,
+                          tooltipBackgroundColor:
+                              TourTooltipStyle.tooltipBackgroundColor,
+                          textColor: TourTooltipStyle.textColor,
+                          overlayColor: TourTooltipStyle.overlayColor,
+                          overlayOpacity: TourTooltipStyle.overlayOpacity,
+                          toolTipMargin: TourTooltipStyle.toolTipMargin,
+                          titleTextStyle: TourTooltipStyle.titleStyle,
+                          descTextStyle: TourTooltipStyle.descriptionStyle,
                           onTargetClick: () {
                             AppLogger.d(
                                 '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
@@ -263,36 +267,49 @@ class _TrackerGridState extends State<TrackerGrid>
                           disposeOnTap: true,
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                AppLogger.d(
-                                    '🎯 TrackerGrid: User clicked on My Plan button');
-                                // Navigate to meal plan page - don't complete step yet
-                                Navigator.pushNamed(context, '/meal-plan');
-                                // Step will be completed when user clicks "Continue Tour" on diet plan page
+                            child: Consumer<ForcedTourProvider>(
+                              builder: (context, tourProvider, child) {
+                                return ElevatedButton(
+                                  onPressed: () {
+                                    // During tour, only allow if on myPlan step
+                                    if (tourProvider.isTourActive &&
+                                        !tourProvider
+                                            .isOnStep(TourStep.myPlan)) {
+                                      return;
+                                    }
+                                    AppLogger.d(
+                                        '🎯 TrackerGrid: User clicked on My Plan button');
+                                    // Navigate to meal plan page - don't complete step yet
+                                    Navigator.pushNamed(context, '/meal-plan');
+                                    // Step will be completed when user clicks "Continue Tour" on diet plan page
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        const Color(0xFFFF6B35), // Orange color
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal:
+                                            16 * clampedScale.clamp(1.0, 1.2),
+                                        vertical:
+                                            8 * clampedScale.clamp(1.0, 1.2)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    elevation: 0,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    'My Plan',
+                                    style: TextStyle(
+                                      fontSize:
+                                          14 * clampedScale.clamp(0.8, 1.0),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                );
                               },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color(0xFFFF6B35), // Orange color
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(
-                                    horizontal:
-                                        16 * clampedScale.clamp(1.0, 1.2),
-                                    vertical: 8 * clampedScale.clamp(1.0, 1.2)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                elevation: 0,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'My Plan',
-                                style: TextStyle(
-                                  fontSize: 14 * clampedScale.clamp(0.8, 1.0),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
                             ),
                           ),
                         );
@@ -455,15 +472,18 @@ class _TrackerGridState extends State<TrackerGrid>
                   return showcaseview.Showcase(
                     key: TourKeys.myPlanButtonKey,
                     title: 'View Your Meal Plan',
-                    description:
-                        'Tap here to see your personalized meal plan with detailed nutrition guidelines.',
+                    description: TourDescriptions.myPlan,
                     targetShapeBorder: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(20)),
                     ),
-                    tooltipBackgroundColor: Colors.white,
-                    textColor: Colors.black,
-                    overlayColor: Colors.black54,
-                    overlayOpacity: 0.8,
+                    tooltipBackgroundColor:
+                        TourTooltipStyle.tooltipBackgroundColor,
+                    textColor: TourTooltipStyle.textColor,
+                    overlayColor: TourTooltipStyle.overlayColor,
+                    overlayOpacity: TourTooltipStyle.overlayOpacity,
+                    toolTipMargin: TourTooltipStyle.toolTipMargin,
+                    titleTextStyle: TourTooltipStyle.titleStyle,
+                    descTextStyle: TourTooltipStyle.descriptionStyle,
                     onTargetClick: () {
                       AppLogger.d(
                           '🎯 TrackerGrid: User tapped on My Plan showcase (skeleton) - navigating');
@@ -479,35 +499,44 @@ class _TrackerGridState extends State<TrackerGrid>
                     disposeOnTap: false,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          AppLogger.d(
-                              '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
-                          // Navigate to meal plan page - don't complete step yet
-                          Navigator.pushNamed(context, '/meal-plan');
-                          // Step will be completed when user clicks "Continue Tour" on diet plan page
+                      child: Consumer<ForcedTourProvider>(
+                        builder: (context, tourProvider, child) {
+                          return ElevatedButton(
+                            onPressed: () {
+                              // During tour, only allow if on myPlan step
+                              if (tourProvider.isTourActive &&
+                                  !tourProvider.isOnStep(TourStep.myPlan)) {
+                                return;
+                              }
+                              AppLogger.d(
+                                  '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
+                              // Navigate to meal plan page - don't complete step yet
+                              Navigator.pushNamed(context, '/meal-plan');
+                              // Step will be completed when user clicks "Continue Tour" on diet plan page
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  const Color(0xFFFF6B35), // Orange color
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 16 * clampedScale.clamp(1.0, 1.2),
+                                  vertical: 8 * clampedScale.clamp(1.0, 1.2)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 0,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'My Plan',
+                              style: TextStyle(
+                                fontSize: 14 * clampedScale.clamp(1.0, 1.2),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFFFF6B35), // Orange color
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 16 * clampedScale.clamp(1.0, 1.2),
-                              vertical: 8 * clampedScale.clamp(1.0, 1.2)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 0,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'My Plan',
-                          style: TextStyle(
-                            fontSize: 14 * clampedScale.clamp(1.0, 1.2),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
                       ),
                     ),
                   );

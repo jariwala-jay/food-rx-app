@@ -381,9 +381,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     String description,
     String imageUrl, {
     VoidCallback? onTap,
+    bool blockDuringTour = false,
   }) {
     return GestureDetector(
       onTap: () {
+        // Block during tour
+        if (blockDuringTour) return;
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -698,6 +701,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           children: [
                             GestureDetector(
                               onTap: () {
+                                // Block navigation during tour
+                                if (tourProvider.isTourActive) return;
                                 Navigator.pushNamed(context, '/profile');
                               },
                               child: Row(
@@ -757,6 +762,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           icon: const Icon(
                                               Icons.notifications_outlined),
                                           onPressed: () {
+                                            // Block navigation during tour
+                                            if (tourProvider.isTourActive)
+                                              return;
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -821,18 +829,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Showcase(
                                   key: TourKeys.trackersKey,
                                   title: 'Track Your Nutrition',
-                                  description:
-                                      'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
+                                  description: TourDescriptions.trackers,
                                   tooltipPosition: TooltipPosition.bottom,
                                   targetShapeBorder:
                                       const RoundedRectangleBorder(
                                     borderRadius:
                                         BorderRadius.all(Radius.circular(12)),
                                   ),
-                                  tooltipBackgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  overlayColor: Colors.black54,
-                                  overlayOpacity: 0.8,
+                                  tooltipBackgroundColor:
+                                      TourTooltipStyle.tooltipBackgroundColor,
+                                  textColor: TourTooltipStyle.textColor,
+                                  overlayColor: TourTooltipStyle.overlayColor,
+                                  overlayOpacity:
+                                      TourTooltipStyle.overlayOpacity,
+                                  toolTipMargin: TourTooltipStyle.toolTipMargin,
+                                  titleTextStyle: TourTooltipStyle.titleStyle,
+                                  descTextStyle:
+                                      TourTooltipStyle.descriptionStyle,
                                   onTargetClick: () {
                                     _handleTrackersShowcase(context);
                                   },
@@ -866,16 +879,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           return Showcase(
                             key: TourKeys.dailyTipsKey,
                             title: 'Daily Health Tips',
-                            description:
-                                'Get personalized health tips and recommendations based on your condition and goals.',
+                            description: TourDescriptions.dailyTips,
                             targetShapeBorder: const RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.all(Radius.circular(12)),
                             ),
-                            tooltipBackgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            overlayColor: Colors.black54,
-                            overlayOpacity: 0.8,
+                            tooltipBackgroundColor:
+                                TourTooltipStyle.tooltipBackgroundColor,
+                            textColor: TourTooltipStyle.textColor,
+                            overlayColor: TourTooltipStyle.overlayColor,
+                            overlayOpacity: TourTooltipStyle.overlayOpacity,
+                            toolTipMargin: TourTooltipStyle.toolTipMargin,
+                            titleTextStyle: TourTooltipStyle.titleStyle,
+                            descTextStyle: TourTooltipStyle.descriptionStyle,
                             onTargetClick: () {
                               _handleDailyTipsShowcase(context);
                             },
@@ -943,6 +959,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                   tip.imageUrl,
                                                   onTap: () =>
                                                       _handleTipTap(tip),
+                                                  blockDuringTour:
+                                                      tourProvider.isTourActive,
                                                 ),
                                               );
                                             },

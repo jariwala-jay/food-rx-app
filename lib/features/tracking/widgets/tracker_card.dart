@@ -95,8 +95,19 @@ class TrackerCard extends StatelessWidget {
     final baseHeight = 68.0;
     final cardHeight = baseHeight * clampedScale;
 
+    // Check if tour is active to block interactions
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
+    final isTourActive = tourProvider.isTourActive;
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // Block taps during tour (except via showcase handlers)
+        if (isTourActive) {
+          return;
+        }
+        onTap?.call();
+      },
       child: Container(
         width: 152,
         height: cardHeight,
@@ -285,13 +296,16 @@ class TrackerCard extends StatelessWidget {
     return Showcase(
       key: infoShowcaseKey!,
       title: 'Serving Size Info',
-      description: 'Tap to see what counts as 1 serving for ${tracker.name}.',
+      description: TourDescriptions.trackerInfo,
       tooltipPosition: TooltipPosition.top,
       targetShapeBorder: const CircleBorder(),
-      tooltipBackgroundColor: Colors.white,
-      textColor: Colors.black,
-      overlayColor: Colors.black54,
-      overlayOpacity: 0.8,
+      tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+      textColor: TourTooltipStyle.textColor,
+      overlayColor: TourTooltipStyle.overlayColor,
+      overlayOpacity: TourTooltipStyle.overlayOpacity,
+      toolTipMargin: TourTooltipStyle.toolTipMargin,
+      titleTextStyle: TourTooltipStyle.titleStyle,
+      descTextStyle: TourTooltipStyle.descriptionStyle,
       disposeOnTap: true,
       onTargetClick: () => _openInfoAndMaybeAdvanceTour(context),
       onToolTipClick: () => _openInfoAndMaybeAdvanceTour(context),

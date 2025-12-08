@@ -115,10 +115,21 @@ class _MainScreenState extends State<MainScreen> {
 
     if (!mounted || _isDisposed) return;
     setState(() => _isAddActive = true);
+
+    // Check if tour is active for add flow steps
+    final isTourAddFlow = tourProvider.isTourActive && 
+        (tourProvider.isOnStep(TourStep.addButton) ||
+         tourProvider.isOnStep(TourStep.selectCategory) ||
+         tourProvider.isOnStep(TourStep.selectItem) ||
+         tourProvider.isOnStep(TourStep.setQuantityUnit) ||
+         tourProvider.isOnStep(TourStep.saveItem));
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: !isTourAddFlow, // Block dismissal by tapping outside during tour
+      enableDrag: !isTourAddFlow, // Block drag-to-dismiss during tour
       builder: (context) => const AddActionSheet(),
     );
 

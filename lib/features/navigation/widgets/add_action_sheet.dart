@@ -48,6 +48,9 @@ class _AddActionSheetState extends State<AddActionSheet> {
             isFoodPantryItem: false,
           );
         } else {
+          // Check if tour is on addButton step - only allow Add FoodRx Items
+          final isAddButtonStep = tourProvider.isOnStep(TourStep.addButton);
+
           content = Wrap(
             key: const ValueKey('action-buttons'),
             spacing: 16,
@@ -58,7 +61,19 @@ class _AddActionSheetState extends State<AddActionSheet> {
                 iconAsset: 'assets/icons/gen_recipe.svg',
                 label: 'Generate Recipe',
                 shouldClose: false,
+                enabled: !isAddButtonStep, // Disable during tour
                 onTap: () {
+                  if (isAddButtonStep) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Please tap "Add FoodRx Items" to continue the tour'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -75,27 +90,30 @@ class _AddActionSheetState extends State<AddActionSheet> {
               ),
               Showcase(
                 key: TourKeys.addFoodRxItemsKey,
-                title: 'Add Your Pantry Items',
+                title: 'Add FoodRx Items',
                 description:
-                    'Let\'s add items you got from food pharmacy. This helps us suggest recipes you can actually make!',
+                    'Add items from food pharmacy for recipe suggestions.\n\n Tap to continue',
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                overlayColor: Colors.black54,
-                overlayOpacity: 0.8,
+                tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+                textColor: TourTooltipStyle.textColor,
+                overlayColor: TourTooltipStyle.overlayColor,
+                overlayOpacity: TourTooltipStyle.overlayOpacity,
+                toolTipMargin: TourTooltipStyle.toolTipMargin,
+                titleTextStyle: TourTooltipStyle.titleStyle,
+                descTextStyle: TourTooltipStyle.descriptionStyle,
                 onTargetClick: () {
                   print(
                       '🎯 AddActionSheet: User clicked on Add FoodRx Items showcase');
                   final tourProvider =
                       Provider.of<ForcedTourProvider>(context, listen: false);
-                  
+
                   // Complete addButton step and move to selectCategory
                   if (tourProvider.isOnStep(TourStep.addButton)) {
                     tourProvider.completeCurrentStep();
                   }
-                  
+
                   setState(() => showPantryPicker = true);
 
                   // Trigger category list showcase after opening
@@ -122,12 +140,12 @@ class _AddActionSheetState extends State<AddActionSheet> {
                       '🎯 AddActionSheet: User clicked on Add FoodRx Items tooltip');
                   final tourProvider =
                       Provider.of<ForcedTourProvider>(context, listen: false);
-                  
+
                   // Complete addButton step and move to selectCategory
                   if (tourProvider.isOnStep(TourStep.addButton)) {
                     tourProvider.completeCurrentStep();
                   }
-                  
+
                   setState(() => showPantryPicker = true);
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
@@ -163,47 +181,97 @@ class _AddActionSheetState extends State<AddActionSheet> {
                 iconAsset: 'assets/icons/shopping_cart.svg',
                 label: 'Add Home Items',
                 shouldClose: false,
-                onTap: () => setState(() => showOtherPantryPicker = true),
+                enabled: !isAddButtonStep, // Disable during tour
+                onTap: () {
+                  if (isAddButtonStep) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Please tap "Add FoodRx Items" to continue the tour'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => showOtherPantryPicker = true);
+                },
               ),
             ],
           );
         }
 
-        return Stack(
-          children: [
-            // Tappable background
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                color: Colors.transparent,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
-            // Centered modal with content (no animation)
-            Center(
-              child: Container(
-                width: sheetWidth,
-                margin:
-                    const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+        // Check if we're in the middle of tour steps that use this sheet
+        final isTourAddFlow = tourProvider.isTourActive &&
+            (tourProvider.isOnStep(TourStep.addButton) ||
+                tourProvider.isOnStep(TourStep.selectCategory) ||
+                tourProvider.isOnStep(TourStep.selectItem) ||
+                tourProvider.isOnStep(TourStep.setQuantityUnit) ||
+                tourProvider.isOnStep(TourStep.saveItem));
+
+        // Wrap with PopScope to block system back gesture during tour
+        return PopScope(
+          canPop: !isTourAddFlow,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && isTourAddFlow) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please complete the tour step first'),
+                  duration: Duration(seconds: 2),
+                  backgroundColor: Color(0xFFFF6A00),
                 ),
-                child: content,
+              );
+            }
+          },
+          child: Stack(
+            children: [
+              // Tappable background - block dismissal during tour
+              GestureDetector(
+                onTap: () {
+                  if (isTourAddFlow) {
+                    // Don't allow dismissal during tour - show message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please complete the tour step first'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  color: Colors.transparent,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
               ),
-            ),
-          ],
+              // Centered modal with content (no animation)
+              Center(
+                child: Container(
+                  width: sheetWidth,
+                  margin:
+                      const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: content,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

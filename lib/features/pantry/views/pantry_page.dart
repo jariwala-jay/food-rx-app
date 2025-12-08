@@ -150,16 +150,19 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
               // Segmented control
               Showcase(
                 key: TourKeys.pantryTabToggleKey,
-                title: 'FoodRx vs. Home Items',
+                title: 'FoodRx vs. Home',
                 description:
-                    'Separate foods from foodrx pantry vs. home items.',
+                    'Separate FoodRx items from home groceries.\n\n Tap to continue',
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                tooltipBackgroundColor: Colors.white,
-                textColor: Colors.black,
-                overlayColor: Colors.black54,
-                overlayOpacity: 0.8,
+                tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+                textColor: TourTooltipStyle.textColor,
+                overlayColor: TourTooltipStyle.overlayColor,
+                overlayOpacity: TourTooltipStyle.overlayOpacity,
+                toolTipMargin: TourTooltipStyle.toolTipMargin,
+                titleTextStyle: TourTooltipStyle.titleStyle,
+                descTextStyle: TourTooltipStyle.descriptionStyle,
                 onTargetClick: () {
                   // Don't complete step here - just show the toggle info
                   // The pantry items showcase will complete the step
@@ -465,16 +468,18 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     // When there are items, show the filtered list
     return Showcase(
       key: TourKeys.pantryItemsKey,
-      title: 'Your Pantry Items',
-      description:
-          'Here you can see all the food items you\'ve added to your pantry. You can filter by category and manage your inventory.',
+      title: 'Your Pantry',
+      description: TourDescriptions.pantryItems,
       targetShapeBorder: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
-      tooltipBackgroundColor: Colors.white,
-      textColor: Colors.black,
-      overlayColor: Colors.black54,
-      overlayOpacity: 0.8,
+      tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+      textColor: TourTooltipStyle.textColor,
+      overlayColor: TourTooltipStyle.overlayColor,
+      overlayOpacity: TourTooltipStyle.overlayOpacity,
+      toolTipMargin: TourTooltipStyle.toolTipMargin,
+      titleTextStyle: TourTooltipStyle.titleStyle,
+      descTextStyle: TourTooltipStyle.descriptionStyle,
       onTargetClick: () {
         final tourProvider =
             Provider.of<ForcedTourProvider>(context, listen: false);
@@ -1297,16 +1302,18 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
               child: Showcase(
                 key: TourKeys.removePantryItemKey,
                 title: 'Remove Items',
-                description:
-                    'To remove an item, swipe from right to left. Watch the animation below, then try swiping left yourself.',
+                description: TourDescriptions.removePantryItem,
                 targetShapeBorder: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                tooltipBackgroundColor: Colors.white,
+                tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
                 tooltipPosition: TooltipPosition.bottom,
-                textColor: Colors.black,
+                textColor: TourTooltipStyle.textColor,
                 overlayColor: Colors.transparent,
                 overlayOpacity: 0.0,
+                toolTipMargin: TourTooltipStyle.toolTipMargin,
+                titleTextStyle: TourTooltipStyle.titleStyle,
+                descTextStyle: TourTooltipStyle.descriptionStyle,
                 showArrow: true,
                 onTargetClick: () {
                   // Dismiss immediately on any touch

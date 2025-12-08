@@ -149,16 +149,18 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
                 return Showcase(
                   key: showTour ? TourKeys.quantityUnitKey : GlobalKey(),
                   title: 'Set Quantity & Unit',
-                  description:
-                      'Enter the quantity and select the unit for this item, then tap Add.',
+                  description: TourDescriptions.setQuantityUnit,
                   targetShapeBorder: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
-                  tooltipBackgroundColor: Colors.white,
+                  tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
                   tooltipPosition: TooltipPosition.bottom,
-                  textColor: Colors.black,
-                  overlayColor: Colors.black54,
-                  overlayOpacity: 0.8,
+                  textColor: TourTooltipStyle.textColor,
+                  overlayColor: TourTooltipStyle.overlayColor,
+                  overlayOpacity: TourTooltipStyle.overlayOpacity,
+                  toolTipMargin: TourTooltipStyle.toolTipMargin,
+                  titleTextStyle: TourTooltipStyle.titleStyle,
+                  descTextStyle: TourTooltipStyle.descriptionStyle,
                   showArrow: true,
                   onTargetClick: () {
                     // Dismiss showcase to allow interaction with fields

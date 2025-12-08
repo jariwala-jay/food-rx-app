@@ -258,9 +258,9 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
                       ),
                     ),
                     child: Text(isLastPage && isTourActive
-                        ? 'Finish'
+                        ? 'Continue Tour'
                         : isLastPage
-                            ? 'Finish'
+                            ? 'Done'
                             : 'Next'),
                   ),
                 ],
