@@ -82,6 +82,71 @@ class _PreferencesStepState extends State<PreferencesStep> {
     _dailyWaterIntake = signupData.dailyWaterIntake;
   }
 
+  void _showServingSizeInfo(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'What is 1 Serving?',
+          style: AppTypography.bg_18_sb,
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Fruits',
+                style: AppTypography.bg_14_sb.copyWith(
+                  color: const Color(0xFFFF6A00),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '• 1 medium fruit (apple, orange, banana)\n'
+                '• ½ cup fresh, frozen, or canned fruit\n'
+                '• ¼ cup dried fruit\n'
+                '• ½ cup 100% fruit juice',
+                style: AppTypography.bg_14_r,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Vegetables',
+                style: AppTypography.bg_14_sb.copyWith(
+                  color: const Color(0xFF4CAF50),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '• 1 cup raw leafy vegetables\n'
+                '• ½ cup other vegetables (raw or cooked)\n'
+                '• ½ cup 100% vegetable juice',
+                style: AppTypography.bg_14_r,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Got it',
+              style: TextStyle(
+                color: Color(0xFFFF6A00),
+                fontWeight: FontWeight.w600,
+                fontFamily: 'BricolageGrotesque',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleSubmit() async {
     // Collect all validation errors first in the correct order (as they appear on screen)
     final List<String> missingFields = [];
@@ -343,8 +408,22 @@ class _PreferencesStepState extends State<PreferencesStep> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Daily Fruit & Vegetable Intake',
-                            style: AppTypography.bg_16_m),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text('Daily Fruit & Vegetable Intake',
+                                  style: AppTypography.bg_16_m),
+                            ),
+                            GestureDetector(
+                              onTap: () => _showServingSizeInfo(context),
+                              child: const Icon(
+                                Icons.info_outline,
+                                size: 20,
+                                color: Color(0xFFFF6A00),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
@@ -467,8 +546,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             // Split the label at the opening parenthesis to bold the first part
                             final parts = label.split(' (');
                             if (parts.length == 2) {
-                              return RichText(
-                                text: TextSpan(
+                              // Use Text.rich instead of RichText to respect system font scaling
+                              return Text.rich(
+                                TextSpan(
                                   style: AppTypography.bg_14_r.copyWith(
                                     color: const Color(0xFF2C2C2C),
                                   ),
