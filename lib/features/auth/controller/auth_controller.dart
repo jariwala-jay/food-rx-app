@@ -114,7 +114,26 @@ class AuthController with ChangeNotifier {
       );
 
       if (success) {
-        return await login(email, password);
+        // Registration succeeded and session is already stored in registerUser()
+        // Directly fetch and set the user instead of calling login() to avoid
+        // race conditions with slow MongoDB responses
+        final fetchedUserData = await _mongoDBService.findUserByEmail(email);
+        if (fetchedUserData != null) {
+          _currentUser = _createUserModel(fetchedUserData);
+
+          // Initialize notification services (don't fail registration if this fails)
+          try {
+            await _initializeNotificationServices(_currentUser!.id!);
+          } catch (e) {
+            debugPrint(
+                'Warning: Failed to initialize notification services: $e');
+          }
+
+          return true;
+        }
+        // User was created but couldn't be fetched - very unlikely edge case
+        _error = 'Registration succeeded but failed to load user data';
+        return false;
       }
       _error = 'Registration failed';
       return false;
