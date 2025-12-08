@@ -464,6 +464,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             height: 1.5,
                           ),
                         ),
+                        const SizedBox(height: 24),
+                        Center(
+                          child: Text(
+                            'Swipe down to close',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[400],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
