@@ -21,35 +21,69 @@ class TrackerCard extends StatelessWidget {
     this.infoShowcaseKey,
   }) : super(key: key);
 
-  // Get progress color based on percentage
-  static Color getProgressColor(double progress, TrackerCategory category) {
-    // Reverse logic for 'limit' trackers like sodium and sweets
-    if (category == TrackerCategory.sodium ||
-        category == TrackerCategory.sweets) {
-      if (progress < 0.75) {
-        return const Color(0xFF2CCC87); // Green for < 75%
-      } else if (progress < 1.0) {
-        return const Color(0xFFFFA800); // Yellow for < 100%
+  // Get progress color based on percentage and goal value
+  // goalValue is needed to calculate the "0.5 below goal" threshold
+  static Color getProgressColor(
+    double progress,
+    TrackerCategory category, {
+    double goalValue = 5.0, // Default goal for backwards compatibility
+  }) {
+    // Categories that stay green above goal (no red overflow)
+    final alwaysGreenAboveGoal = category == TrackerCategory.fruits ||
+        category == TrackerCategory.veggies ||
+        category == TrackerCategory.water;
+
+    // For sodium (measured in mg), use fixed 75% threshold instead of 0.5 rule
+    // Orange: 0-50%, Yellow: 50-75%, Green: 75-100%, Red: >100%
+    if (category == TrackerCategory.sodium) {
+      if (progress < 0.5) {
+        return const Color(0xFFFF6A00); // Orange for < 50%
+      } else if (progress < 0.75) {
+        return const Color(0xFFFFA800); // Yellow for 50% - 75%
+      } else if (progress <= 1.0) {
+        return const Color(0xFF2CCC87); // Green for 75% - 100%
       } else {
-        return const Color(0xFFFF5275); // Red for >= 100%
+        return const Color(0xFFFF5275); // Red for > 100%
       }
     }
 
-    // Normal logic for 'goal' trackers
+    // Calculate the threshold for "0.5 below goal" (e.g., 4.5/5 = 90%)
+    final nearGoalThreshold =
+        goalValue > 0 ? (goalValue - 0.5) / goalValue : 0.9;
+
+    // Color scheme for other trackers:
+    // Orange: 0% - 50%
+    // Yellow: 50% - 0.5 below goal
+    // Green: 0.5 below goal - 100% (and above for fruits/veggies/water)
+    // Red: above 100% (except fruits/veggies/water)
     if (progress < 0.5) {
-      return const Color(0xFFFF5275); // Accent/Red for < 50%
-    } else if (progress < 0.75) {
-      return const Color(0xFFFFA800); // Accent/Yellow for < 75%
+      return const Color(0xFFFF6A00); // Orange for < 50%
+    } else if (progress < nearGoalThreshold) {
+      return const Color(0xFFFFA800); // Yellow for < near goal
+    } else if (progress <= 1.0 || alwaysGreenAboveGoal) {
+      return const Color(
+          0xFF2CCC87); // Green for near goal to 100% (or above for special categories)
     } else {
-      return const Color(0xFF2CCC87); // Accent/Green for >= 75%
+      return const Color(0xFFFF5275); // Red for > 100% (for regular trackers)
     }
+  }
+
+  // Helper to check if a category should stay green above goal
+  static bool shouldStayGreenAboveGoal(TrackerCategory category) {
+    return category == TrackerCategory.fruits ||
+        category == TrackerCategory.veggies ||
+        category == TrackerCategory.water;
   }
 
   @override
   Widget build(BuildContext context) {
     // Calculate progress and determine color
     final progress = tracker.progress;
-    final progressColor = getProgressColor(progress, tracker.category);
+    final progressColor = getProgressColor(
+      progress,
+      tracker.category,
+      goalValue: tracker.goalValue,
+    );
     final iconPath = getTrackerIconAsset(tracker.category);
     final isSvg = iconPath.endsWith('.svg');
 
@@ -107,6 +141,7 @@ class TrackerCard extends StatelessWidget {
                           progress: progress,
                           progressColor: progressColor,
                           backgroundColor: Colors.grey.shade200,
+                          category: tracker.category,
                         ),
                       ),
 
@@ -270,11 +305,13 @@ class ProgressCirclePainter extends CustomPainter {
   final double progress;
   final Color progressColor;
   final Color backgroundColor;
+  final TrackerCategory? category;
 
   ProgressCirclePainter({
     required this.progress,
     required this.progressColor,
     required this.backgroundColor,
+    this.category,
   });
 
   @override
@@ -295,11 +332,18 @@ class ProgressCirclePainter extends CustomPainter {
 
     canvas.drawCircle(center, radius - 3, backgroundPaint);
 
-    // Progress arc - if progress > 1.0, draw full circle in green then overflow in red
+    // Check if this category should stay green above goal
+    final stayGreenAboveGoal =
+        category != null && TrackerCard.shouldStayGreenAboveGoal(category!);
+
+    // Progress arc - if progress > 1.0, show full circle in appropriate color
     if (progress > 1.0) {
-      // First draw complete circle in green
-      final completePaint = Paint()
-        ..color = const Color(0xFF2CCC87) // Green for completed
+      // Full circle - green for fruits/veggies/water, red for others
+      final overColor = stayGreenAboveGoal
+          ? const Color(0xFF2CCC87) // Green for fruits/veggies/water
+          : const Color(0xFFFF5275); // Red for other trackers
+      final overPaint = Paint()
+        ..color = overColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 6
         ..strokeCap = StrokeCap.round;
@@ -309,23 +353,7 @@ class ProgressCirclePainter extends CustomPainter {
         startAngle,
         fullCircle,
         false,
-        completePaint,
-      );
-
-      // Then draw overflow in red
-      final overflowAngle = fullCircle * (progress - 1.0).clamp(0.0, 1.0);
-      final overflowPaint = Paint()
-        ..color = const Color(0xFFFF5275) // Red for overflow
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius - 3),
-        startAngle,
-        overflowAngle,
-        false,
-        overflowPaint,
+        overPaint,
       );
     } else {
       // Normal progress arc
@@ -351,6 +379,7 @@ class ProgressCirclePainter extends CustomPainter {
   bool shouldRepaint(ProgressCirclePainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.progressColor != progressColor ||
-        oldDelegate.backgroundColor != backgroundColor;
+        oldDelegate.backgroundColor != backgroundColor ||
+        oldDelegate.category != category;
   }
 }
