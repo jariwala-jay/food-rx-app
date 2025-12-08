@@ -7,6 +7,7 @@ class TourWelcomeDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -15,23 +16,18 @@ class TourWelcomeDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Welcome icon
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6A00).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.explore,
-                size: 40,
-                color: Color(0xFFFF6A00),
+            // myfoodrx logo
+            SizedBox(
+              width: 100,
+              height: 100,
+              child: Image.asset(
+                'assets/icons/myfoodrx_logo.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
               ),
             ),
-
             const SizedBox(height: 24),
-
             // Title
             const Text(
               'Welcome to MyFoodRx!',
