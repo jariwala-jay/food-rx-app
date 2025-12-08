@@ -23,7 +23,7 @@ class CategoryFilterChips extends StatelessWidget {
     // Get text scale factor and clamp it for UI elements that must fit
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-    
+
     // Calculate responsive height based on text scaling
     final baseHeight = 40.0;
     final chipHeight = baseHeight * clampedScale.clamp(1.0, 1.1);
@@ -66,7 +66,7 @@ class CategoryFilterChips extends StatelessWidget {
     // Get text scale factor and clamp it for UI elements that must fit
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-    
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -136,8 +136,6 @@ class CategoryFilterChips extends StatelessWidget {
         return 'Snacks & Beverages';
       case 'essentials_condiments':
         return 'Essentials & Condiments';
-      case 'miscellaneous':
-        return 'Miscellaneous';
       default:
         // Convert snake_case to Title Case
         return category
@@ -147,4 +145,3 @@ class CategoryFilterChips extends StatelessWidget {
     }
   }
 }
-

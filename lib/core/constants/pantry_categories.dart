@@ -90,11 +90,6 @@ const List<Map<String, String>> otherPantryItemCategories = [
     'title': 'Essentials And Condiments',
     'key': 'essentials_condiments',
   },
-  {
-    'icon': 'assets/icons/other_pantry_icons/miscellaneous.svg',
-    'title': 'Miscellaneous',
-    'key': 'miscellaneous',
-  },
 ];
 
 // Common pantry items for Food Pantry categories
@@ -1092,62 +1087,6 @@ const Map<String, List<Map<String, dynamic>>> commonOtherPantryItems = {
       'id': 'maple-syrup',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/maple-syrup.jpg'
-    },
-  ],
-  'miscellaneous': [
-    {
-      'name': 'Aluminum Foil',
-      'id': 'aluminum-foil',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/aluminum-foil.jpg'
-    },
-    {
-      'name': 'Plastic Wrap',
-      'id': 'plastic-wrap',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/plastic-wrap.jpg'
-    },
-    {
-      'name': 'Paper Towels',
-      'id': 'paper-towels',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/paper-towels.jpg'
-    },
-    {
-      'name': 'Trash Bags',
-      'id': 'trash-bags',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/trash-bags.jpg'
-    },
-    {
-      'name': 'Dish Soap',
-      'id': 'dish-soap',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/dish-soap.jpg'
-    },
-    {
-      'name': 'Laundry Detergent',
-      'id': 'laundry-detergent',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/laundry-detergent.jpg'
-    },
-    {
-      'name': 'Toilet Paper',
-      'id': 'toilet-paper',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/toilet-paper.jpg'
-    },
-    {
-      'name': 'Batteries',
-      'id': 'batteries',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/batteries.jpg'
-    },
-    {
-      'name': 'Light Bulbs',
-      'id': 'light-bulbs',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/light-bulbs.jpg'
     },
   ],
 };
