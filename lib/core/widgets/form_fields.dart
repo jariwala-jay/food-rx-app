@@ -404,12 +404,16 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        widget.label ?? 'Select',
-                        style: AppTypography.bg_16_m,
+                      Expanded(
+                        child: Text(
+                          widget.label ?? 'Select',
+                          style: AppTypography.bg_16_m,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       TextButton(
                         onPressed: () {
                           if (widget.multiSelect) {
@@ -418,7 +422,15 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                             Navigator.pop(sheetContext);
                           }
                         },
-                        child: const Text('Done'),
+                        child: const Text(
+                          'Done',
+                          style: TextStyle(
+                            color: Colors.deepOrange,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'BricolageGrotesque',
+                          ),
+                        ),
                       ),
                     ],
                   ),

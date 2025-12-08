@@ -464,6 +464,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             height: 1.5,
                           ),
                         ),
+                        const SizedBox(height: 24),
+                        Center(
+                          child: Text(
+                            'Swipe down to close',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[400],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -685,13 +696,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.pushNamed(context, '/profile');
-                                  },
-                                  child: CircleAvatar(
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pushNamed(context, '/profile');
+                              },
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
                                     radius: 20,
                                     backgroundImage: _profilePhotoData != null
                                         ? MemoryImage(_profilePhotoData!)
@@ -699,38 +710,39 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 'assets/images/profile_pic.png')
                                             as ImageProvider,
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _timeBasedGreeting(),
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12 *
-                                            MediaQuery.textScaleFactorOf(
-                                                    context)
-                                                .clamp(1.0, 1.0),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _timeBasedGreeting(),
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12 *
+                                              MediaQuery.textScaleFactorOf(
+                                                      context)
+                                                  .clamp(1.0, 1.0),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      user?.name ?? 'Guest',
-                                      style: TextStyle(
-                                        fontSize: 14 *
-                                            MediaQuery.textScaleFactorOf(
-                                                    context)
-                                                .clamp(1.0, 1.0),
-                                        fontWeight: FontWeight.bold,
+                                      Text(
+                                        user?.name ?? 'Guest',
+                                        style: TextStyle(
+                                          fontSize: 14 *
+                                              MediaQuery.textScaleFactorOf(
+                                                      context)
+                                                  .clamp(1.0, 1.0),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                             Row(
                               children: [

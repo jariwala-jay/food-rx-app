@@ -9,6 +9,7 @@ class TourCompletionDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -17,18 +18,15 @@ class TourCompletionDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Celebration icon
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.celebration,
-                size: 40,
-                color: Color(0xFFFF6B35),
+            // myfoodrx logo
+            SizedBox(
+              width: 100,
+              height: 100,
+              child: Image.asset(
+                'assets/icons/myfoodrx_logo.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
               ),
             ),
 
@@ -92,7 +90,7 @@ class TourCompletionDialog extends StatelessWidget {
                 onPressed: () async {
                   final tourProvider =
                       Provider.of<ForcedTourProvider>(context, listen: false);
-                  
+
                   // Clear tour items before completing tour
                   try {
                     final pantryController =
@@ -101,7 +99,7 @@ class TourCompletionDialog extends StatelessWidget {
                   } catch (e) {
                     print('Error clearing tour items: $e');
                   }
-                  
+
                   await tourProvider.completeTour();
                   if (context.mounted) {
                     Navigator.of(context).pop();

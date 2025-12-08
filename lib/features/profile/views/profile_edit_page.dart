@@ -29,7 +29,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   double? _heightFeet;
   double? _heightInches;
   double? _weight;
-  String? _weightUnit;
   List<String> _selectedMultiValues = [];
   bool _isLoading = false;
 
@@ -70,7 +69,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         if (widget.currentValue is Map) {
           final map = widget.currentValue as Map;
           _weight = map['weight']?.toDouble();
-          _weightUnit = map['weightUnit'] ?? 'lbs';
           if (_weight != null) {
             _weightController.text =
                 _weight!.toStringAsFixed(_weight! % 1 == 0 ? 0 : 1);
@@ -206,7 +204,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             final weightValue = double.tryParse(_weightController.text);
             if (weightValue != null) {
               updates['weight'] = weightValue;
-              updates['weightUnit'] = _weightUnit ?? 'lbs';
+              updates['weightUnit'] = 'lbs';
               // Weight affects diet plan, trigger re-plan check
               _triggerReplanCheck();
             }
@@ -581,61 +579,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             ],
             suffixIcon: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _weightUnit = 'lbs';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (_weightUnit ?? 'lbs') == 'lbs'
-                            ? const Color(0xFFFF6A00)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'lbs',
-                        style: AppTypography.bg_14_r.copyWith(
-                          color: (_weightUnit ?? 'lbs') == 'lbs'
-                              ? Colors.white
-                              : const Color(0xFF90909A),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _weightUnit = 'kg';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _weightUnit == 'kg'
-                            ? const Color(0xFFFF6A00)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'kg',
-                        style: AppTypography.bg_14_r.copyWith(
-                          color: _weightUnit == 'kg'
-                              ? Colors.white
-                              : const Color(0xFF90909A),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                'lbs',
+                style: AppTypography.bg_14_r.copyWith(
+                  color: const Color(0xFF90909A),
+                ),
               ),
             ),
             validator: (value) {
