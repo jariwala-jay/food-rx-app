@@ -32,8 +32,7 @@ class TourKeys {
       GlobalKey(debugLabel: 'recommended_articles');
   static final GlobalKey articlesListKey =
       GlobalKey(debugLabel: 'articles_list');
-  static final GlobalKey selectItemKey =
-      GlobalKey(debugLabel: 'select_item');
+  static final GlobalKey selectItemKey = GlobalKey(debugLabel: 'select_item');
   static final GlobalKey quantityUnitKey =
       GlobalKey(debugLabel: 'quantity_unit');
   static final GlobalKey removePantryItemKey =
@@ -59,49 +58,47 @@ enum TourStep {
   education,
 }
 
-// Tour step descriptions
+// Tour step descriptions - kept SHORT for accessibility/large fonts
 class TourDescriptions {
-  static const String trackers =
-      "This is where you track your daily nutrition goals. You'll see how well you're following your personalized meal plan. Click on this section to continue.";
+  // Common instruction suffix - short and clear
+  static const String _tap = "\n\nTap highlighted area to continue";
+  static const String _swipe = "\n\nSwipe left to continue";
 
-  static const String trackerInfo =
-      "Tap the i icon to learn what counts as 1 serving for this tracker. You MUST click the i icon to continue.";
+  static const String trackers = "Track your daily nutrition goals here.$_tap";
+
+  static const String trackerInfo = "Tap to see what counts as 1 serving.$_tap";
 
   static const String dailyTips =
-      "Get helpful daily tips based on your health conditions to improve your well-being. Click on this section to continue.";
+      "Get daily health tips based on your conditions.$_tap";
 
   static const String myPlan =
-      "Tap here anytime to view your complete diet plan and learn about healthy eating for your condition. You MUST click this button to continue.";
+      "View your complete personalized meal plan.$_tap";
 
-  static const String addButton =
-      "Tap the + button to add food items from your pantry or create healthy recipes. You MUST click this button to continue.";
+  static const String addButton = "Add food items to your pantry.$_tap";
 
   static const String selectCategory =
-      "Here you can add items to your pantry. For this example, let's add an item together. Tap on 'Fresh Fruits' category to continue. You MUST click this category to proceed.";
+      "Let's add an item. Tap 'Fresh Fruits' to continue.$_tap";
 
   static const String selectItem =
-      "Here you can add your items. For this example, let's add the first item shown. Tap the + button next to it to add it to your pantry. You MUST click the + button to continue.";
+      "Tap the + button to add the first item.$_tap";
 
   static const String setQuantityUnit =
-      "Set the quantity and unit for this item, then tap 'Add' to save it. You MUST click the Add button to continue.";
+      "Set quantity and unit, then tap 'Add'.$_tap";
 
   static const String saveItem =
-      "Now tap the 'Save' button to add this item to your pantry. You MUST click the Save button to continue.";
+      "Tap 'Save' to add this item to your pantry.$_tap";
 
   static const String pantryItems =
-      "Here are your pantry items! The more items you add, the better recipe recommendations you'll get. Click on this section to continue.";
+      "Your pantry items help us suggest recipes.$_tap";
 
-  static const String removePantryItem =
-      "To remove an item, swipe from right to left on any item. Try swiping left on the apple you just added to see how it works. You MUST swipe left to continue.";
+  static const String removePantryItem = "Swipe left to remove an item.$_swipe";
 
-  static const String pantryList =
-      "Here are your pantry items! We'll use these to suggest recipes you can make. Click on this section to continue.";
+  static const String pantryList = "These items help us suggest recipes.$_tap";
 
-  static const String recipes =
-      "Browse these personalized recipes that match your diet plan and use your pantry items! Click on this section to continue.";
+  static const String recipes = "Personalized recipes based on your plan.$_tap";
 
   static const String education =
-      "Learn more about managing your health condition with expert articles and tips. Click on this section to continue.";
+      "Expert articles for your health condition.$_tap";
 
   // Skip tour option text
   static const String skipTour = "Skip tour";
@@ -128,4 +125,33 @@ class TourTheme {
           ),
         ),
       );
+}
+
+/// Shared tooltip style configuration for tour showcases
+/// Uses fixed font sizes to prevent overflow with accessibility settings
+class TourTooltipStyle {
+  // Fixed title style - won't scale with system font size
+  static const TextStyle titleStyle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    color: Colors.black,
+    fontFamily: 'BricolageGrotesque',
+  );
+
+  // Fixed description style - won't scale with system font size
+  static const TextStyle descriptionStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: Colors.black87,
+    height: 1.4,
+    fontFamily: 'BricolageGrotesque',
+  );
+
+  // Common tooltip properties
+  static const Color tooltipBackgroundColor = Colors.white;
+  static const Color textColor = Colors.black;
+  static const Color overlayColor = Colors.black54;
+  static const double overlayOpacity = 0.8;
+  static const double toolTipMargin = 16.0;
+  static const EdgeInsets tooltipPadding = EdgeInsets.all(16);
 }

@@ -82,6 +82,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/onboarding/
     - assets/icons/food_pantry_icons/
     - assets/icons/other_pantry_icons/
     - assets/icons/tracker_icons/

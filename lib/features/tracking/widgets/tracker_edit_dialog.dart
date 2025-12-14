@@ -99,8 +99,11 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
   @override
   Widget build(BuildContext context) {
     final progress = _currentValue / widget.tracker.goalValue;
-    final progressColor =
-        TrackerCard.getProgressColor(progress, widget.tracker.category);
+    final progressColor = TrackerCard.getProgressColor(
+      progress,
+      widget.tracker.category,
+      goalValue: widget.tracker.goalValue,
+    );
     final iconPath = getTrackerIconAsset(widget.tracker.category);
     final isSvg = iconPath.endsWith('.svg');
     final progressPercent = (progress * 100).toStringAsFixed(0);
@@ -169,23 +172,31 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
                           ),
                         ),
                         if (isOverAchieved)
-                          Container(
-                            margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF5275).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              "OVER",
-                              style: TextStyle(
-                                color: Color(0xFFFF5275),
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                          Builder(builder: (context) {
+                            // Use green for fruits/veggies/water, red for others
+                            final overColor =
+                                TrackerCard.shouldStayGreenAboveGoal(
+                                        widget.tracker.category)
+                                    ? const Color(0xFF2CCC87)
+                                    : const Color(0xFFFF5275);
+                            return Container(
+                              margin: const EdgeInsets.only(left: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: overColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                            ),
-                          ),
+                              child: Text(
+                                "OVER",
+                                style: TextStyle(
+                                  color: overColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }),
                       ],
                     ),
                   ],
@@ -295,15 +306,17 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
 }
 
 // Custom painter for progress circle
-class ProgressCirclePainter extends CustomPainter {
+class ProgressCirclePainterDialog extends CustomPainter {
   final double progress;
   final Color progressColor;
   final Color backgroundColor;
+  final TrackerCategory? category;
 
-  ProgressCirclePainter({
+  ProgressCirclePainterDialog({
     required this.progress,
     required this.progressColor,
     required this.backgroundColor,
+    this.category,
   });
 
   @override
@@ -324,11 +337,18 @@ class ProgressCirclePainter extends CustomPainter {
 
     canvas.drawCircle(center, radius - 5, backgroundPaint);
 
-    // Progress arc - if progress > 1.0, draw full circle in green then overflow in red
+    // Check if this category should stay green above goal
+    final stayGreenAboveGoal = category != null &&
+        TrackerCard.shouldStayGreenAboveGoal(category!);
+
+    // Progress arc - if progress > 1.0, show full circle in appropriate color
     if (progress > 1.0) {
-      // First draw complete circle in green
-      final completePaint = Paint()
-        ..color = const Color(0xFF2CCC87) // Green for completed
+      // Full circle - green for fruits/veggies/water, red for others
+      final overColor = stayGreenAboveGoal
+          ? const Color(0xFF2CCC87) // Green for fruits/veggies/water
+          : const Color(0xFFFF5275); // Red for other trackers
+      final overPaint = Paint()
+        ..color = overColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 10
         ..strokeCap = StrokeCap.round;
@@ -338,23 +358,7 @@ class ProgressCirclePainter extends CustomPainter {
         startAngle,
         fullCircle,
         false,
-        completePaint,
-      );
-
-      // Then draw overflow in red (starts again from top)
-      final overflowAngle = fullCircle * (progress - 1.0).clamp(0.0, 1.0);
-      final overflowPaint = Paint()
-        ..color = const Color(0xFFFF5275) // Red for overflow
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius - 5),
-        startAngle,
-        overflowAngle,
-        false,
-        overflowPaint,
+        overPaint,
       );
     } else {
       // Normal progress arc
@@ -377,9 +381,10 @@ class ProgressCirclePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ProgressCirclePainter oldDelegate) {
+  bool shouldRepaint(ProgressCirclePainterDialog oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.progressColor != progressColor ||
-        oldDelegate.backgroundColor != backgroundColor;
+        oldDelegate.backgroundColor != backgroundColor ||
+        oldDelegate.category != category;
   }
 }

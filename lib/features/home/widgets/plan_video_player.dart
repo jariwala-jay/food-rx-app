@@ -21,6 +21,8 @@ class PlanVideoPlayer extends StatefulWidget {
   final bool isTourActive;
   final VoidCallback? onFinish; // For signup flow
   final bool isSignupMode; // For signup flow
+  final bool
+      useFullVideo; // Use full video URLs (for tour) instead of short videos (for signup)
 
   const PlanVideoPlayer({
     Key? key,
@@ -29,6 +31,7 @@ class PlanVideoPlayer extends StatefulWidget {
     required this.isTourActive,
     this.onFinish,
     this.isSignupMode = false,
+    this.useFullVideo = false,
   }) : super(key: key);
 
   @override
@@ -139,23 +142,50 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   /// Video source information - requires cloud URLs from environment variables
   _VideoSource _getVideoSource(String planType) {
     // Get cloud URL from environment variables
+    // If useFullVideo is true, try full video URLs first, then fall back to regular URLs
     String? cloudUrl;
     String videoName;
+    String? envVarName;
+
     switch (planType) {
       case 'DASH':
-        cloudUrl = dotenv.env['DASH_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['DASH_VIDEO_URL_FULL'];
+          envVarName = 'DASH_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['DASH_VIDEO_URL'];
+        envVarName ??= 'DASH_VIDEO_URL';
         videoName = 'DASH';
         break;
       case 'MyPlate':
-        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
+          envVarName = 'MYPLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['MYPLATE_VIDEO_URL'];
+        envVarName ??= 'MYPLATE_VIDEO_URL';
         videoName = 'MyPlate';
         break;
       case 'DiabetesPlate':
-        cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL_FULL'];
+          envVarName = 'DIABETES_PLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['DIABETES_PLATE_VIDEO_URL'];
+        envVarName ??= 'DIABETES_PLATE_VIDEO_URL';
         videoName = 'Diabetes Plate';
         break;
       default:
-        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
+          envVarName = 'MYPLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['MYPLATE_VIDEO_URL'];
+        envVarName ??= 'MYPLATE_VIDEO_URL';
         videoName = 'MyPlate';
     }
 
@@ -167,20 +197,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     }
 
     // If no cloud URL configured, throw an error with helpful message
-    String envVarName;
-    switch (planType) {
-      case 'DASH':
-        envVarName = 'DASH_VIDEO_URL';
-        break;
-      case 'MyPlate':
-        envVarName = 'MYPLATE_VIDEO_URL';
-        break;
-      case 'DiabetesPlate':
-        envVarName = 'DIABETES_PLATE_VIDEO_URL';
-        break;
-      default:
-        envVarName = 'MYPLATE_VIDEO_URL';
-    }
     throw Exception(
         '$videoName video URL not configured. Please add $envVarName to your .env file with the Firebase Storage URL.');
   }
@@ -199,12 +215,12 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         );
         return;
       }
-      
+
       // Show loading state in button
       setState(() {
         _isSubmitting = true;
       });
-      
+
       // Wait for UI to update with loading state, then call onFinish
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -358,12 +374,11 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
         // Video controls
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Column(
             children: [
               // Progress indicator
               _buildProgressIndicator(),
-              const SizedBox(height: 8),
               // Time display and controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -372,7 +387,9 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                     child: Text(
                       '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
                       style: TextStyle(
-                        fontSize: 12 * MediaQuery.textScaleFactorOf(context).clamp(0.8, 1.0),
+                        fontSize: 12 *
+                            MediaQuery.textScaleFactorOf(context)
+                                .clamp(0.8, 1.0),
                         color: Colors.grey,
                       ),
                       maxLines: 1,
@@ -390,7 +407,8 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                                 : Icons.play_arrow,
                           ),
                           onPressed: (_isMandatoryVideo &&
-                                  (widget.isTourActive || widget.isSignupMode) &&
+                                  (widget.isTourActive ||
+                                      widget.isSignupMode) &&
                                   !_isVideoCompleted)
                               ? null
                               : () {
@@ -411,8 +429,10 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                               padding: const EdgeInsets.only(left: 8.0),
                               child: Builder(
                                 builder: (context) {
-                                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+                                  final textScaleFactor =
+                                      MediaQuery.textScaleFactorOf(context);
+                                  final clampedScale =
+                                      textScaleFactor.clamp(0.8, 1.0);
                                   return Text(
                                     'Watch full video',
                                     style: TextStyle(
@@ -438,7 +458,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
         // Continue button
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: ElevatedButton(
             onPressed: (_isSubmitting ||
                     (_isMandatoryVideo &&
@@ -450,7 +470,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
               disabledBackgroundColor: Colors.grey,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -473,7 +492,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                   ),
           ),
         ),
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -489,7 +507,8 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
 
-    final canSeek = !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
+    final canSeek =
+        !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
 
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(

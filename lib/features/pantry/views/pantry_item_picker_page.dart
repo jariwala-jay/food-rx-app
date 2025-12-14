@@ -182,17 +182,35 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
       tourProvider.completeCurrentStep();
     }
 
+    // Check if tour is active to determine if modal can be dismissed
+    final isTourActive = tourProvider.isTourActive;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => PantryItemAddModal(
-        foodItem: item.toJson(),
-        category: widget.categoryKey,
-        isFoodPantryItem: widget.isFoodPantryItem,
-        onAdd: (pantryItem) {
-          final provider = Provider.of<PantryItemPickerProvider>(this.context,
-              listen: false);
-          provider.addItemToSelection(pantryItem);
+      barrierDismissible: !isTourActive, // Block dismissal during tour
+      builder: (dialogContext) => PopScope(
+        canPop: !isTourActive, // Block system back during tour
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop && isTourActive) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please set quantity and tap "Add" to continue'),
+                duration: Duration(seconds: 2),
+                backgroundColor: Color(0xFFFF6A00),
+              ),
+            );
+          }
         },
+        child: PantryItemAddModal(
+          foodItem: item.toJson(),
+          category: widget.categoryKey,
+          isFoodPantryItem: widget.isFoodPantryItem,
+          onAdd: (pantryItem) {
+            final provider = Provider.of<PantryItemPickerProvider>(this.context,
+                listen: false);
+            provider.addItemToSelection(pantryItem);
+          },
+        ),
       ),
     );
 
@@ -227,16 +245,50 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         'itemCount: ${provider.searchResults.length}, '
         'selectedItems: ${provider.selectedItemsList.length}');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F8),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+    return Consumer<ForcedTourProvider>(
+      builder: (context, tourProvider, child) {
+        // Check if we're in the middle of tour steps that use this page
+        final isTourItemFlow = tourProvider.isTourActive && 
+            (tourProvider.isOnStep(TourStep.selectCategory) ||
+             tourProvider.isOnStep(TourStep.selectItem) ||
+             tourProvider.isOnStep(TourStep.setQuantityUnit) ||
+             tourProvider.isOnStep(TourStep.saveItem));
+
+        return PopScope(
+          canPop: !isTourItemFlow, // Block system back gesture during tour
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && isTourItemFlow) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please complete the tour step first'),
+                  duration: Duration(seconds: 2),
+                  backgroundColor: Color(0xFFFF6A00),
+                ),
+              );
+            }
+          },
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF7F7F8),
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+                onPressed: () {
+                  if (isTourItemFlow) {
+                    // Block back navigation during tour
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please complete the tour step first'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                },
+              ),
         title: Text(
           widget.title,
           style: const TextStyle(
@@ -666,16 +718,18 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                   child: Showcase(
                     key: isSaveStep ? TourKeys.saveItemButtonKey : GlobalKey(),
                     title: 'Save Item',
-                    description:
-                        'Now tap the \'Save\' button to add this item to your pantry. You MUST click the Save button to continue.',
+                    description: TourDescriptions.saveItem,
                     targetShapeBorder: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
-                    tooltipBackgroundColor: Colors.white,
+                    tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
                     tooltipPosition: TooltipPosition.top,
-                    textColor: Colors.black,
-                    overlayColor: Colors.black54,
-                    overlayOpacity: 0.8,
+                    textColor: TourTooltipStyle.textColor,
+                    overlayColor: TourTooltipStyle.overlayColor,
+                    overlayOpacity: TourTooltipStyle.overlayOpacity,
+                    toolTipMargin: TourTooltipStyle.toolTipMargin,
+                    titleTextStyle: TourTooltipStyle.titleStyle,
+                    descTextStyle: TourTooltipStyle.descriptionStyle,
                     showArrow: true,
                     onTargetClick: () {
                       // Handle click directly - trigger Save button
@@ -683,8 +737,6 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       Future.delayed(const Duration(milliseconds: 100), () {
                         if (!mounted) return;
                         // Directly trigger the button's onPressed
-                        final buttonKey = GlobalKey();
-                        // Find the button and trigger it
                         _handleSaveButtonClick(context, provider, tourProvider);
                       });
                     },
@@ -727,8 +779,10 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
               },
             ),
         ],
-      ),
-    );
+          ),
+        ),
+      );
+    });
   }
 }
 

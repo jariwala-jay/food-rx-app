@@ -29,7 +29,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   double? _heightFeet;
   double? _heightInches;
   double? _weight;
-  String? _weightUnit;
   List<String> _selectedMultiValues = [];
   bool _isLoading = false;
 
@@ -70,7 +69,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         if (widget.currentValue is Map) {
           final map = widget.currentValue as Map;
           _weight = map['weight']?.toDouble();
-          _weightUnit = map['weightUnit'] ?? 'lbs';
           if (_weight != null) {
             _weightController.text =
                 _weight!.toStringAsFixed(_weight! % 1 == 0 ? 0 : 1);
@@ -206,7 +204,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             final weightValue = double.tryParse(_weightController.text);
             if (weightValue != null) {
               updates['weight'] = weightValue;
-              updates['weightUnit'] = _weightUnit ?? 'lbs';
+              updates['weightUnit'] = 'lbs';
               // Weight affects diet plan, trigger re-plan check
               _triggerReplanCheck();
             }
@@ -244,7 +242,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(needsReplan
-                  ? 'Updated successfully. Your diet plan may be recalculated.'
+                  ? 'Updated successfully. Your meal plan may be recalculated.'
                   : 'Updated successfully'),
               duration: const Duration(seconds: 3),
             ),
@@ -460,10 +458,22 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         label: 'Activity Level',
         value: _selectedValue,
         options: const [
-          {'Not Active': 'Not Active'},
-          {'Seldom Active': 'Seldom Active'},
-          {'Moderately Active': 'Moderately Active'},
-          {'Very Active': 'Very Active'},
+          {
+            'Not Very Active (Spend Most of the day sitting)':
+                'Not Very Active (Spend Most of the day sitting)'
+          },
+          {
+            'Lightly Active (Spend Most of the day on Feet)':
+                'Lightly Active (Spend Most of the day on Feet)'
+          },
+          {
+            'Active (Spend Most of the day doing some physical activity)':
+                'Active (Spend Most of the day doing some physical activity)'
+          },
+          {
+            'Very Active (Spend most of the day doing heavy physical activity)':
+                'Very Active (Spend most of the day doing heavy physical activity)'
+          },
         ],
         onChanged: (value) {
           setState(() {
@@ -569,61 +579,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             ],
             suffixIcon: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _weightUnit = 'lbs';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (_weightUnit ?? 'lbs') == 'lbs'
-                            ? const Color(0xFFFF6A00)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'lbs',
-                        style: AppTypography.bg_14_r.copyWith(
-                          color: (_weightUnit ?? 'lbs') == 'lbs'
-                              ? Colors.white
-                              : const Color(0xFF90909A),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _weightUnit = 'kg';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _weightUnit == 'kg'
-                            ? const Color(0xFFFF6A00)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'kg',
-                        style: AppTypography.bg_14_r.copyWith(
-                          color: _weightUnit == 'kg'
-                              ? Colors.white
-                              : const Color(0xFF90909A),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                'lbs',
+                style: AppTypography.bg_14_r.copyWith(
+                  color: const Color(0xFF90909A),
+                ),
               ),
             ),
             validator: (value) {
@@ -642,7 +602,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildMedicalConditionsEdit() {
-    final options = const [
+    const options = [
       'Hypertension',
       'Pre-Diabetes',
       'Diabetes',
@@ -699,7 +659,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildAllergiesEdit() {
-    final options = const [
+    const options = [
       'No allergies',
       'Tree Nuts',
       'Peanuts',
@@ -762,8 +722,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   Widget _buildHealthGoalsEdit() {
-    final options = const [
-      'Avoid diabetes',
+    const options = [
       'Lower blood pressure',
       'Lower cholesterol',
       'Lower blood glucose (Sugar)',
@@ -791,7 +750,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           ),
           if (_selectedMultiValues.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Selected Goals:',
               style: AppTypography.bg_14_m,
             ),

@@ -57,7 +57,7 @@ class PersonalizedDietSummary extends StatelessWidget {
               children: [
                 // Header
                 Text(
-                  'Your Personalized Diet Plan',
+                  'Your Personalized Meal Plan',
                   style: AppTypography.bg_28_b.copyWith(
                     color: const Color(0xFF1A1A1A),
                   ),

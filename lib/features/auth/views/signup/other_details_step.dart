@@ -31,7 +31,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   bool _showErrors = false;
 
   final List<String> _healthGoals = [
-    'Avoid diabetes',
     'Lower blood pressure',
     'Lower cholesterol',
     'Lower blood glucose (Sugar)',
@@ -321,7 +320,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                       ),
                     ),
                     child: AppFormField(
-                      label: 'I am cooking for this many people',
+                      label:
+                          'I am cooking for this many people (Including Yourself)',
                       hintText: 'Type Here',
                       controller: _cookingForPeopleController,
                       keyboardType: TextInputType.number,

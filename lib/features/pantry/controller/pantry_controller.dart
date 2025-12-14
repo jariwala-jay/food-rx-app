@@ -141,11 +141,11 @@ class PantryController extends ChangeNotifier {
     try {
       final now = DateTime.now();
       final oneHourAgo = now.subtract(const Duration(hours: 1));
-      
+
       // Find tour items (apples from fresh_fruits added in last hour)
       final tourItems = _pantryItems.where((item) {
         final isApple = item.name.toLowerCase().contains('apple') &&
-                       !item.name.toLowerCase().contains('applesauce');
+            !item.name.toLowerCase().contains('applesauce');
         final isFreshFruits = item.category == 'fresh_fruits';
         final wasAddedRecently = item.addedDate.isAfter(oneHourAgo);
         return isApple && isFreshFruits && wasAddedRecently;
@@ -329,7 +329,6 @@ class PantryController extends ChangeNotifier {
             'frozen_foods',
             'snacks_beverages',
             'essentials_condiments',
-            'miscellaneous',
           ];
 
     // Sort categories by priority, then alphabetically for unlisted categories

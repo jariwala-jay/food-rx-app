@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
@@ -25,23 +27,88 @@ class PantryTrackerLoggingModal extends StatefulWidget {
 }
 
 class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
+  // Tab selection: 0 = Quick Log, 1 = From Pantry
+  int _selectedTab = 0;
+
+  // Manual entry state
+  late TextEditingController _manualValueController;
+  double _manualValue = 0.0;
+
+  // Pantry selection state
   final TextEditingController _searchController = TextEditingController();
   List<PantryItem> _filteredItems = [];
   final Map<String, double> _selectedServings = {};
+
+  // Shared state
   bool _isLoading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _manualValueController = TextEditingController(text: '0');
     _filterItems();
   }
 
   @override
   void dispose() {
+    _manualValueController.dispose();
     _searchController.dispose();
     super.dispose();
   }
+
+  // ==================== MANUAL ENTRY METHODS ====================
+
+  void _incrementManualValue() {
+    setState(() {
+      _manualValue += 0.5;
+      _manualValueController.text = _formatValue(_manualValue);
+    });
+  }
+
+  void _decrementManualValue() {
+    if (_manualValue > 0) {
+      setState(() {
+        _manualValue = (_manualValue - 0.5).clamp(0, double.infinity);
+        _manualValueController.text = _formatValue(_manualValue);
+      });
+    }
+  }
+
+  Future<void> _handleManualLog() async {
+    if (_isLoading) return;
+
+    if (_manualValue <= 0) {
+      setState(() {
+        _error = 'Please enter a value greater than 0';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      await widget.onLog(_manualValue);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ==================== PANTRY METHODS ====================
 
   void _filterItems() {
     final pantryController =
@@ -247,7 +314,6 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
   }
 
   /// Calculate the actual physical amount to deduct from pantry for the given servings
-  /// Uses the existing DietServingService logic in reverse
   double _calculatePhysicalAmountForServings({
     required DietServingService dietServingService,
     required PantryItem item,
@@ -306,16 +372,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     }
   }
 
-  /// Format quantity to show max 1 decimal place
-  String _formatQuantity(double quantity) {
-    if (quantity == quantity.truncateToDouble()) {
-      return quantity.toStringAsFixed(0);
-    } else {
-      return quantity.toStringAsFixed(1);
-    }
-  }
-
-  Future<void> _logToTracker() async {
+  Future<void> _logFromPantry() async {
     if (_selectedServings.isEmpty) {
       setState(() {
         _error = 'Please select at least one item to log';
@@ -359,7 +416,6 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
         );
 
         // The tracker servings should equal the user-selected servings
-        // (since we're converting serving count to physical amount, not the reverse)
         totalServingsLogged += servings;
 
         // Prepare for pantry deduction with actual physical amount
@@ -411,13 +467,39 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     }
   }
 
+  // ==================== HELPER METHODS ====================
+
+  String _formatValue(double value) {
+    if (value == value.truncateToDouble()) {
+      return value.toStringAsFixed(0);
+    } else if ((value * 10) == (value * 10).truncateToDouble()) {
+      return value.toStringAsFixed(1);
+    } else {
+      return value.toStringAsFixed(2);
+    }
+  }
+
+  String _formatQuantity(double quantity) {
+    if (quantity == quantity.truncateToDouble()) {
+      return quantity.toStringAsFixed(0);
+    } else {
+      return quantity.toStringAsFixed(1);
+    }
+  }
+
+  double get _totalSelectedServings {
+    return _selectedServings.values.fold(0.0, (sum, v) => sum + v);
+  }
+
+  // ==================== BUILD METHODS ====================
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Container(
         width: double.infinity,
@@ -425,462 +507,877 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         child: Column(
           children: [
-            // Header
-            Builder(
-              builder: (context) {
-                final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Log ${widget.tracker.name}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 20 * clampedScale,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'BricolageGrotesque',
-                          color: const Color(0xFF2C2C2C),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      child: Icon(
-                        Icons.close,
-                        color: const Color(0xFF2C2C2C),
-                        size: 24 * clampedScale,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+            // Header with close button
+            _buildHeader(),
             const SizedBox(height: 20),
 
-            // Search bar
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F7F8),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Search pantry items...',
-                  hintStyle: TextStyle(
-                    color: Color(0xFF8E8E93),
-                    fontFamily: 'BricolageGrotesque',
-                    fontSize: 14,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: Color(0xFF8E8E93),
-                    size: 20,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                style: const TextStyle(
-                  fontFamily: 'BricolageGrotesque',
-                  fontSize: 14,
-                  color: Color(0xFF2C2C2C),
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    if (value.isEmpty) {
-                      _filterItems();
-                    } else {
-                      _filteredItems = _filteredItems
-                          .where((item) => item.name
-                              .toLowerCase()
-                              .contains(value.toLowerCase()))
-                          .toList();
-                    }
-                  });
-                },
-              ),
-            ),
+            // Tab selector
+            _buildTabSelector(),
             const SizedBox(height: 20),
 
             // Error message
-            if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF5275).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final textScaleFactor =
-                        MediaQuery.textScaleFactorOf(context);
-                    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                    return Text(
-                      _error!,
-                      style: TextStyle(
-                        color: const Color(0xFFFF5275),
-                        fontFamily: 'BricolageGrotesque',
-                        fontSize: 14 * clampedScale,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
-                ),
-              ),
+            if (_error != null) _buildErrorMessage(),
 
-            // Items list
+            // Content based on selected tab
             Expanded(
-              child: _filteredItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF7F7F8),
-                              borderRadius: BorderRadius.circular(32),
-                            ),
-                            child: const Icon(
-                              Icons.inventory_2_outlined,
-                              size: 32,
-                              color: Color(0xFF8E8E93),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Builder(
-                            builder: (context) {
-                              final textScaleFactor =
-                                  MediaQuery.textScaleFactorOf(context);
-                              final clampedScale =
-                                  textScaleFactor.clamp(0.8, 1.0);
-                              return Column(
-                                children: [
-                                  Text(
-                                    'No matching items in pantry',
-                                    style: TextStyle(
-                                      fontSize: 16 * clampedScale,
-                                      fontFamily: 'BricolageGrotesque',
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF2C2C2C),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  SizedBox(height: 8 * clampedScale),
-                                  Text(
-                                    'Add items to your pantry first',
-                                    style: TextStyle(
-                                      fontSize: 14 * clampedScale,
-                                      fontFamily: 'BricolageGrotesque',
-                                      color: const Color(0xFF8E8E93),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _filteredItems.length,
-                      itemBuilder: (context, index) {
-                        final item = _filteredItems[index];
-                        final servings = _selectedServings[item.id] ?? 0;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFE5E5EA),
-                              width: 1,
-                            ),
-                          ),
-                          child: Builder(
-                            builder: (context) {
-                              final textScaleFactor =
-                                  MediaQuery.textScaleFactorOf(context);
-                              final clampedScale =
-                                  textScaleFactor.clamp(0.8, 1.0);
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Item image/icon
-                                  Container(
-                                    width: 48 * clampedScale.clamp(1.0, 1.1),
-                                    height: 48 * clampedScale.clamp(1.0, 1.1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF7F7F8),
-                                      borderRadius: BorderRadius.circular(24),
-                                    ),
-                                    child: item.imageUrl.isNotEmpty
-                                        ? ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(24),
-                                            child: CachedNetworkImage(
-                                              imageUrl: item.imageUrl,
-                                              fit: BoxFit.cover,
-                                              placeholder: (context, url) =>
-                                                  Icon(
-                                                Icons.food_bank,
-                                                color: const Color(0xFF8E8E93),
-                                                size: 24 * clampedScale,
-                                              ),
-                                              errorWidget:
-                                                  (context, url, error) => Icon(
-                                                Icons.food_bank,
-                                                color: const Color(0xFF8E8E93),
-                                                size: 24 * clampedScale,
-                                              ),
-                                            ),
-                                          )
-                                        : Icon(
-                                            Icons.food_bank,
-                                            color: const Color(0xFF8E8E93),
-                                            size: 24 * clampedScale,
-                                          ),
-                                  ),
-                                  SizedBox(width: 12 * clampedScale),
-                                  // Item details
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          item.name,
-                                          style: TextStyle(
-                                            fontSize: 16 * clampedScale,
-                                            fontFamily: 'BricolageGrotesque',
-                                            fontWeight: FontWeight.w600,
-                                            color: const Color(0xFF2C2C2C),
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        SizedBox(height: 4 * clampedScale),
-                                        Wrap(
-                                          spacing: 8 * clampedScale,
-                                          runSpacing: 4 * clampedScale,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            Text(
-                                              '${_formatQuantity(item.quantity)} ${item.unitLabel}',
-                                              style: TextStyle(
-                                                fontSize: 14 * clampedScale,
-                                                fontFamily:
-                                                    'BricolageGrotesque',
-                                                color: const Color(0xFF8E8E93),
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 6 * clampedScale,
-                                                vertical: 2 * clampedScale,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF7F7F8),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                'Max: ${_formatQuantity(_getMaxServingsAvailable(item))}',
-                                                style: TextStyle(
-                                                  fontSize: 10 * clampedScale,
-                                                  fontFamily:
-                                                      'BricolageGrotesque',
-                                                  color:
-                                                      const Color(0xFF8E8E93),
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (servings > 0) ...[
-                                          SizedBox(height: 6 * clampedScale),
-                                          Text(
-                                            'Deduct: ${_getDeductionAmountText(item, servings)}',
-                                            style: TextStyle(
-                                              fontSize: 10 *
-                                                  clampedScale.clamp(0.8, 1.0),
-                                              fontFamily: 'BricolageGrotesque',
-                                              color: const Color(0xFFFF6A00),
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(width: 8 * clampedScale),
-                                  // Quantity controls
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 4 * clampedScale,
-                                      vertical: 2 * clampedScale,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF7F7F8),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: servings > 0
-                                            ? const Color(0xFFFF6A00)
-                                                .withValues(alpha: 0.3)
-                                            : const Color(0xFFE5E5EA),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        GestureDetector(
-                                          onTap: servings > 0
-                                              ? () => _removeServing(item.id)
-                                              : null,
-                                          child: Container(
-                                            width: 28 * clampedScale,
-                                            height: 28 * clampedScale,
-                                            decoration: BoxDecoration(
-                                              color: servings > 0
-                                                  ? const Color(0xFFFF5275)
-                                                      .withValues(alpha: 0.15)
-                                                  : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                            ),
-                                            child: Icon(
-                                              Icons.remove,
-                                              size: 16 * clampedScale,
-                                              color: servings > 0
-                                                  ? const Color(0xFFFF5275)
-                                                  : const Color(0xFFC7C7CC),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: 8 * clampedScale),
-                                        Container(
-                                          constraints: BoxConstraints(
-                                              minWidth: 24 * clampedScale),
-                                          child: Text(
-                                            servings.toString(),
-                                            style: TextStyle(
-                                              fontSize: 14 * clampedScale,
-                                              fontFamily: 'BricolageGrotesque',
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF2C2C2C),
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8 * clampedScale),
-                                        GestureDetector(
-                                          onTap: () {
-                                            final maxServings =
-                                                _getMaxServingsAvailable(item);
-                                            if (servings < maxServings) {
-                                              _addServing(item.id);
-                                            }
-                                          },
-                                          child: Container(
-                                            width: 28 * clampedScale,
-                                            height: 28 * clampedScale,
-                                            decoration: BoxDecoration(
-                                              color: servings <
-                                                      _getMaxServingsAvailable(
-                                                          item)
-                                                  ? const Color(0xFFFF6A00)
-                                                      .withValues(alpha: 0.15)
-                                                  : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                            ),
-                                            child: Icon(
-                                              Icons.add,
-                                              size: 16 * clampedScale,
-                                              color: servings <
-                                                      _getMaxServingsAvailable(
-                                                          item)
-                                                  ? const Color(0xFFFF6A00)
-                                                  : const Color(0xFFC7C7CC),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+              child: _selectedTab == 0
+                  ? _buildQuickLogContent()
+                  : _buildPantryContent(),
             ),
 
-            // Save button
+            // Action button
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _logToTracker,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6A00),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
+            _buildActionButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Builder(
+      builder: (context) {
+        final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+        final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+        final iconPath = getTrackerIconAsset(widget.tracker.category);
+        final isSvg = iconPath.endsWith('.svg');
+
+        return Row(
+          children: [
+            // Tracker icon
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: isSvg
+                      ? SvgPicture.asset(iconPath)
+                      : Image.asset(iconPath),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Builder(
-                        builder: (context) {
-                          final textScaleFactor =
-                              MediaQuery.textScaleFactorOf(context);
-                          final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                          return Text(
-                            'Log to Tracker',
-                            style: TextStyle(
-                              fontSize: 16 * clampedScale,
-                              fontFamily: 'BricolageGrotesque',
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
-                          );
-                        },
-                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Log ${widget.tracker.name}',
+                    style: TextStyle(
+                      fontSize: 18 * clampedScale,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'BricolageGrotesque',
+                      color: const Color(0xFF2C2C2C),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${_formatValue(widget.tracker.currentValue)}/${_formatValue(widget.tracker.goalValue)} ${widget.tracker.unitString}',
+                    style: TextStyle(
+                      fontSize: 13 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      color: const Color(0xFF8E8E93),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7F8),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.close,
+                  color: const Color(0xFF8E8E93),
+                  size: 18 * clampedScale,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTabSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildTabButton(
+              index: 0,
+              icon: Icons.edit_outlined,
+              label: 'Quick Log',
+              subtitle: 'Ate outside?',
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildTabButton(
+              index: 1,
+              icon: Icons.kitchen_outlined,
+              label: 'From Pantry',
+              subtitle: 'Use ingredients',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton({
+    required int index,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+  }) {
+    final isSelected = _selectedTab == index;
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTab = index;
+          _error = null;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 22 * clampedScale,
+              color: isSelected
+                  ? const Color(0xFFFF6A00)
+                  : const Color(0xFF8E8E93),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13 * clampedScale,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontFamily: 'BricolageGrotesque',
+                color: isSelected
+                    ? const Color(0xFF2C2C2C)
+                    : const Color(0xFF8E8E93),
+              ),
+            ),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10 * clampedScale,
+                fontFamily: 'BricolageGrotesque',
+                color: const Color(0xFFAEAEB2),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF5275).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: const Color(0xFFFF5275),
+            size: 18 * clampedScale,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _error!,
+              style: TextStyle(
+                color: const Color(0xFFFF5275),
+                fontFamily: 'BricolageGrotesque',
+                fontSize: 13 * clampedScale,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== QUICK LOG TAB ====================
+
+  Widget _buildQuickLogContent() {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+
+          // Description
+          Text(
+            'How many servings did you have?',
+            style: TextStyle(
+              fontSize: 16 * clampedScale,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'BricolageGrotesque',
+              color: const Color(0xFF2C2C2C),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Perfect for meals eaten outside or when\nyou don\'t have ingredients in your pantry',
+            style: TextStyle(
+              fontSize: 13 * clampedScale,
+              fontFamily: 'BricolageGrotesque',
+              color: const Color(0xFF8E8E93),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+
+          // Quantity selector
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F8),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Decrement button
+                GestureDetector(
+                  onTap: _isLoading ? null : _decrementManualValue,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _manualValue > 0
+                          ? const Color(0xFFFF5275).withOpacity(0.15)
+                          : const Color(0xFFE5E5EA),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Icon(
+                      Icons.remove,
+                      size: 24,
+                      color: _manualValue > 0
+                          ? const Color(0xFFFF5275)
+                          : const Color(0xFFC7C7CC),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+
+                // Value display
+                SizedBox(
+                  width: 100,
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _manualValueController,
+                        enabled: !_isLoading,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 32 * clampedScale,
+                          fontFamily: 'BricolageGrotesque',
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2C2C2C),
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d*$')),
+                        ],
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            setState(() {
+                              _manualValue =
+                                  double.tryParse(value) ?? _manualValue;
+                            });
+                          } else {
+                            setState(() {
+                              _manualValue = 0;
+                            });
+                          }
+                        },
+                      ),
+                      Text(
+                        widget.tracker.unitString,
+                        style: TextStyle(
+                          fontSize: 14 * clampedScale,
+                          fontFamily: 'BricolageGrotesque',
+                          color: const Color(0xFF8E8E93),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+
+                // Increment button
+                GestureDetector(
+                  onTap: _isLoading ? null : _incrementManualValue,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6A00).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Icon(
+                      Icons.add,
+                      size: 24,
+                      color: Color(0xFFFF6A00),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Quick add buttons
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [0.5, 1.0, 1.5, 2.0].map((value) {
+              return GestureDetector(
+                onTap: _isLoading
+                    ? null
+                    : () {
+                        setState(() {
+                          _manualValue = value;
+                          _manualValueController.text = _formatValue(value);
+                        });
+                      },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _manualValue == value
+                        ? const Color(0xFFFF6A00)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _manualValue == value
+                          ? const Color(0xFFFF6A00)
+                          : const Color(0xFFE5E5EA),
+                    ),
+                  ),
+                  child: Text(
+                    '${_formatValue(value)} ${widget.tracker.unitString}',
+                    style: TextStyle(
+                      fontSize: 13 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      fontWeight: FontWeight.w500,
+                      color: _manualValue == value
+                          ? Colors.white
+                          : const Color(0xFF2C2C2C),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== PANTRY TAB ====================
+
+  Widget _buildPantryContent() {
+    return Column(
+      children: [
+        // Search bar
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F7F8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: 'Search pantry items...',
+              hintStyle: TextStyle(
+                color: Color(0xFF8E8E93),
+                fontFamily: 'BricolageGrotesque',
+                fontSize: 14,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: Color(0xFF8E8E93),
+                size: 20,
+              ),
+              border: InputBorder.none,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            style: const TextStyle(
+              fontFamily: 'BricolageGrotesque',
+              fontSize: 14,
+              color: Color(0xFF2C2C2C),
+            ),
+            onChanged: (value) {
+              setState(() {
+                if (value.isEmpty) {
+                  _filterItems();
+                } else {
+                  final pantryController =
+                      Provider.of<PantryController>(context, listen: false);
+                  final allItems = [
+                    ...pantryController.pantryItems,
+                    ...pantryController.otherItems
+                  ];
+                  _filteredItems = allItems.where((item) {
+                    final matchesCategory =
+                        _itemMatchesCategory(item, widget.tracker.category);
+                    final matchesSearch =
+                        item.name.toLowerCase().contains(value.toLowerCase());
+                    return matchesCategory && matchesSearch;
+                  }).toList();
+                }
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Selected count indicator
+        if (_selectedServings.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6A00).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.check_circle,
+                  size: 16,
+                  color: Color(0xFFFF6A00),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${_formatValue(_totalSelectedServings)} ${widget.tracker.unitString} selected',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'BricolageGrotesque',
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF6A00),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Items list
+        Expanded(
+          child: _filteredItems.isEmpty
+              ? _buildEmptyPantryState()
+              : ListView.builder(
+                  itemCount: _filteredItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _filteredItems[index];
+                    return _buildPantryItemCard(item);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyPantryState() {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F8),
+              borderRadius: BorderRadius.circular(40),
+            ),
+            child: const Icon(
+              Icons.inventory_2_outlined,
+              size: 40,
+              color: Color(0xFF8E8E93),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No matching items in pantry',
+            style: TextStyle(
+              fontSize: 16 * clampedScale,
+              fontFamily: 'BricolageGrotesque',
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF2C2C2C),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Use Quick Log to track manually',
+            style: TextStyle(
+              fontSize: 14 * clampedScale,
+              fontFamily: 'BricolageGrotesque',
+              color: const Color(0xFF8E8E93),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedTab = 0;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6A00).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 16 * clampedScale,
+                    color: const Color(0xFFFF6A00),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Switch to Quick Log',
+                    style: TextStyle(
+                      fontSize: 13 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFFF6A00),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPantryItemCard(PantryItem item) {
+    final servings = _selectedServings[item.id] ?? 0;
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+    final maxServings = _getMaxServingsAvailable(item);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: servings > 0
+              ? const Color(0xFFFF6A00).withOpacity(0.3)
+              : const Color(0xFFE5E5EA),
+          width: servings > 0 ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Item image/icon
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F8),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: item.imageUrl.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: CachedNetworkImage(
+                      imageUrl: item.imageUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Icon(
+                        Icons.food_bank,
+                        color: const Color(0xFF8E8E93),
+                        size: 22 * clampedScale,
+                      ),
+                      errorWidget: (context, url, error) => Icon(
+                        Icons.food_bank,
+                        color: const Color(0xFF8E8E93),
+                        size: 22 * clampedScale,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    Icons.food_bank,
+                    color: const Color(0xFF8E8E93),
+                    size: 22 * clampedScale,
+                  ),
+          ),
+          const SizedBox(width: 12),
+          // Item details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontSize: 15 * clampedScale,
+                    fontFamily: 'BricolageGrotesque',
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF2C2C2C),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      '${_formatQuantity(item.quantity)} ${item.unitLabel}',
+                      style: TextStyle(
+                        fontSize: 13 * clampedScale,
+                        fontFamily: 'BricolageGrotesque',
+                        color: const Color(0xFF8E8E93),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F7F8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Max: ${_formatQuantity(maxServings)}',
+                        style: TextStyle(
+                          fontSize: 10 * clampedScale,
+                          fontFamily: 'BricolageGrotesque',
+                          color: const Color(0xFF8E8E93),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (servings > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Will deduct: ${_getDeductionAmountText(item, servings)}',
+                    style: TextStyle(
+                      fontSize: 11 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      color: const Color(0xFFFF6A00),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Quantity controls
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F7F8),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: servings > 0
+                    ? const Color(0xFFFF6A00).withOpacity(0.3)
+                    : const Color(0xFFE5E5EA),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: servings > 0 ? () => _removeServing(item.id) : null,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: servings > 0
+                          ? const Color(0xFFFF5275).withOpacity(0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.remove,
+                      size: 16,
+                      color: servings > 0
+                          ? const Color(0xFFFF5275)
+                          : const Color(0xFFC7C7CC),
+                    ),
+                  ),
+                ),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 32),
+                  child: Text(
+                    servings.toStringAsFixed(0),
+                    style: TextStyle(
+                      fontSize: 14 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2C2C2C),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: servings < maxServings
+                      ? () => _addServing(item.id)
+                      : null,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: servings < maxServings
+                          ? const Color(0xFFFF6A00).withOpacity(0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.add,
+                      size: 16,
+                      color: servings < maxServings
+                          ? const Color(0xFFFF6A00)
+                          : const Color(0xFFC7C7CC),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton() {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    final isQuickLog = _selectedTab == 0;
+    final hasValue =
+        isQuickLog ? _manualValue > 0 : _selectedServings.isNotEmpty;
+    final valueText = isQuickLog
+        ? '${_formatValue(_manualValue)} ${widget.tracker.unitString}'
+        : '${_formatValue(_totalSelectedServings)} ${widget.tracker.unitString}';
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isLoading
+            ? null
+            : (isQuickLog ? _handleManualLog : _logFromPantry),
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              hasValue ? const Color(0xFFFF6A00) : const Color(0xFFE5E5EA),
+          foregroundColor: hasValue ? Colors.white : const Color(0xFF8E8E93),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 20 * clampedScale,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasValue ? 'Log $valueText' : 'Select servings to log',
+                    style: TextStyle(
+                      fontSize: 15 * clampedScale,
+                      fontFamily: 'BricolageGrotesque',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

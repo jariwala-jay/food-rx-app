@@ -6,49 +6,49 @@ const List<Map<String, String>> foodPantryCategories = [
   {
     'icon': 'assets/icons/food_pantry_icons/fresh_fruits.svg',
     'title': 'Fresh Fruits',
-    'subtitle': 'Select upto 4',
+    'subtitle': 'Select up to 4',
     'key': 'fresh_fruits',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/canned_fruits.svg',
     'title': 'Canned Fruits',
-    'subtitle': 'Select upto 2',
+    'subtitle': 'Select up to 2',
     'key': 'canned_fruits',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/fresh_veggies.svg',
     'title': 'Fresh Veggies',
-    'subtitle': 'Select upto 6',
+    'subtitle': 'Select up to 6',
     'key': 'fresh_veggies',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/canned_veggies.svg',
     'title': 'Canned Veggies',
-    'subtitle': 'Select upto 4',
+    'subtitle': 'Select up to 4',
     'key': 'canned_veggies',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/grains.svg',
     'title': 'Grains And Cereals',
-    'subtitle': 'Select upto 4',
+    'subtitle': 'Select up to 4',
     'key': 'grains',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/protein.svg',
     'title': 'Protein And Beans',
-    'subtitle': 'Select upto 4',
+    'subtitle': 'Select up to 4',
     'key': 'protein',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/dairy.svg',
     'title': 'Dairy And Other',
-    'subtitle': 'Select upto 4',
+    'subtitle': 'Select up to 4',
     'key': 'dairy',
   },
   {
     'icon': 'assets/icons/food_pantry_icons/seasonings.svg',
     'title': 'Seasonings & Spices',
-    'subtitle': 'Select upto 2',
+    'subtitle': 'Select up to 2',
     'key': 'seasonings',
   },
 ];
@@ -89,11 +89,6 @@ const List<Map<String, String>> otherPantryItemCategories = [
     'icon': 'assets/icons/other_pantry_icons/seasonings.svg',
     'title': 'Essentials And Condiments',
     'key': 'essentials_condiments',
-  },
-  {
-    'icon': 'assets/icons/other_pantry_icons/miscellaneous.svg',
-    'title': 'Miscellaneous',
-    'key': 'miscellaneous',
   },
 ];
 
@@ -1092,62 +1087,6 @@ const Map<String, List<Map<String, dynamic>>> commonOtherPantryItems = {
       'id': 'maple-syrup',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/maple-syrup.jpg'
-    },
-  ],
-  'miscellaneous': [
-    {
-      'name': 'Aluminum Foil',
-      'id': 'aluminum-foil',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/aluminum-foil.jpg'
-    },
-    {
-      'name': 'Plastic Wrap',
-      'id': 'plastic-wrap',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/plastic-wrap.jpg'
-    },
-    {
-      'name': 'Paper Towels',
-      'id': 'paper-towels',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/paper-towels.jpg'
-    },
-    {
-      'name': 'Trash Bags',
-      'id': 'trash-bags',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/trash-bags.jpg'
-    },
-    {
-      'name': 'Dish Soap',
-      'id': 'dish-soap',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/dish-soap.jpg'
-    },
-    {
-      'name': 'Laundry Detergent',
-      'id': 'laundry-detergent',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/laundry-detergent.jpg'
-    },
-    {
-      'name': 'Toilet Paper',
-      'id': 'toilet-paper',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/toilet-paper.jpg'
-    },
-    {
-      'name': 'Batteries',
-      'id': 'batteries',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/batteries.jpg'
-    },
-    {
-      'name': 'Light Bulbs',
-      'id': 'light-bulbs',
-      'imageUrl':
-          'https://spoonacular.com/cdn/ingredients_100x100/light-bulbs.jpg'
     },
   ],
 };

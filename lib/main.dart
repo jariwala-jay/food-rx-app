@@ -8,6 +8,7 @@ import 'package:showcaseview/showcaseview.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
+import 'package:flutter_app/features/auth/views/welcome_page.dart';
 import 'package:flutter_app/features/auth/views/signup_page.dart';
 import 'package:flutter_app/features/auth/views/forgot_password_page.dart';
 import 'package:flutter_app/features/auth/views/reset_password_page.dart';
@@ -262,18 +263,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _handleDeepLink(Uri uri) {
     debugPrint('Deep link received: $uri');
-    debugPrint('Scheme: ${uri.scheme}, Host: ${uri.host}, Path: ${uri.path}, Query: ${uri.query}');
-    
+    debugPrint(
+        'Scheme: ${uri.scheme}, Host: ${uri.host}, Path: ${uri.path}, Query: ${uri.query}');
+
     // Check if it's a reset password link
     // Format: foodrx://reset-password?token=... or foodrx://?token=...
     if (uri.scheme == 'foodrx') {
       final token = uri.queryParameters['token'];
-      
+
       // Check if it's a reset password link by host or path
-      final isResetPassword = uri.host == 'reset-password' || 
-                             uri.path.contains('reset-password') ||
-                             token != null; // If token exists, assume it's reset password
-      
+      final isResetPassword = uri.host == 'reset-password' ||
+          uri.path.contains('reset-password') ||
+          token != null; // If token exists, assume it's reset password
+
       if (isResetPassword && token != null && token.isNotEmpty) {
         debugPrint('Navigating to reset password page with token');
         // Navigate to reset password page with token
@@ -290,7 +292,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               );
               // Then navigate to reset password after a short delay
               Future.delayed(const Duration(milliseconds: 100), () {
-                final currentNavigator = NavigationService.navigatorKey.currentState;
+                final currentNavigator =
+                    NavigationService.navigatorKey.currentState;
                 if (currentNavigator != null) {
                   currentNavigator.pushNamed(
                     '/reset-password',
@@ -337,10 +340,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             return const MainScreen();
           }
 
-          return const LoginPage();
+          return const WelcomePage();
         },
       ),
       routes: {
+        '/welcome': (context) => const WelcomePage(),
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
         '/forgot-password': (context) => const ForgotPasswordPage(),
@@ -349,7 +353,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>?;
           String? token = args?['token'] as String?;
-          
+
           // If no token in arguments, try to get from query parameters
           if (token == null) {
             final route = ModalRoute.of(context);
@@ -367,7 +371,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               }
             }
           }
-          
+
           return ResetPasswordPage(token: token);
         },
         '/home': (context) => const MainScreen(),

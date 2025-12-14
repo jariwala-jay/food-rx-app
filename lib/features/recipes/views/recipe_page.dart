@@ -363,38 +363,80 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Medical conditions indicator
+        // Medical conditions indicator with Generate button
         if (state.userMedicalConditionsDisplay.isNotEmpty) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F8FF),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE3F2FD)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.health_and_safety,
-                  color: Colors.blue[600],
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Filtered for: ${state.userMedicalConditionsDisplay.join(', ')}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue[700],
-                      fontWeight: FontWeight.w500,
-                    ),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F8FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE3F2FD)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.health_and_safety,
+                        color: Colors.blue[600],
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Filtered for: ${state.userMedicalConditionsDisplay.join(', ')}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CreateRecipeView(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEEFE4),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add,
+                        color: Color(0xFFFF6A00),
+                        size: 14,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Generate',
+                        style: TextStyle(
+                          color: Color(0xFFFF6A00),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 16),
         ],
         Text(
           'Recommended for you (${state.recipes.length})',
@@ -409,16 +451,18 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
         Expanded(
           child: Showcase(
             key: TourKeys.recipesKey,
-            title: 'Your Personalized Recipes',
-            description:
-                'These recipes were generated just for you based on your health conditions, meal plan, and pantry items.',
+            title: 'Your Recipes',
+            description: TourDescriptions.recipes,
             targetShapeBorder: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
-            tooltipBackgroundColor: Colors.white,
-            textColor: Colors.black,
-            overlayColor: Colors.black54,
-            overlayOpacity: 0.8,
+            tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+            textColor: TourTooltipStyle.textColor,
+            overlayColor: TourTooltipStyle.overlayColor,
+            overlayOpacity: TourTooltipStyle.overlayOpacity,
+            toolTipMargin: TourTooltipStyle.toolTipMargin,
+            titleTextStyle: TourTooltipStyle.titleStyle,
+            descTextStyle: TourTooltipStyle.descriptionStyle,
             onTargetClick: () {
               final tourProvider =
                   Provider.of<ForcedTourProvider>(context, listen: false);
@@ -555,15 +599,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
           Showcase(
             key: TourKeys.generateRecipeButtonKey,
             title: 'Generate Recipes',
-            description:
-                'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+            description: 'Create recipes from your pantry items.\n\n Tap to continue',
             targetShapeBorder: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(24)),
             ),
-            tooltipBackgroundColor: Colors.white,
-            textColor: Colors.black,
-            overlayColor: Colors.black54,
-            overlayOpacity: 0.8,
+            tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
+            textColor: TourTooltipStyle.textColor,
+            overlayColor: TourTooltipStyle.overlayColor,
+            overlayOpacity: TourTooltipStyle.overlayOpacity,
+            toolTipMargin: TourTooltipStyle.toolTipMargin,
+            titleTextStyle: TourTooltipStyle.titleStyle,
+            descTextStyle: TourTooltipStyle.descriptionStyle,
             onTargetClick: () {
               // Don't complete step here - let them explore the recipe creation
               // The tour will end after this step
@@ -616,7 +662,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.recipesKey,
               title: 'No Recipes Available',
               description:
-                  'Try adding more pantry items or removing all cuisine preferences and try again later.',
+                  'Try adding more pantry items or removing all cuisine preferences and try again later.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
@@ -690,7 +736,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.generateRecipeButtonKey,
               title: 'Generate Recipes',
               description:
-                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.',
+                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(24)),
               ),

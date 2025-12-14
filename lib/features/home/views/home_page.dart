@@ -381,9 +381,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     String description,
     String imageUrl, {
     VoidCallback? onTap,
+    bool blockDuringTour = false,
   }) {
     return GestureDetector(
       onTap: () {
+        // Block during tour
+        if (blockDuringTour) return;
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -462,6 +465,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             fontSize: 16,
                             color: Colors.grey[600],
                             height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Center(
+                          child: Text(
+                            'Swipe down to close',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[400],
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
                       ],
@@ -685,13 +699,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.pushNamed(context, '/profile');
-                                  },
-                                  child: CircleAvatar(
+                            GestureDetector(
+                              onTap: () {
+                                // Block navigation during tour
+                                if (tourProvider.isTourActive) return;
+                                Navigator.pushNamed(context, '/profile');
+                              },
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
                                     radius: 20,
                                     backgroundImage: _profilePhotoData != null
                                         ? MemoryImage(_profilePhotoData!)
@@ -699,38 +715,39 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 'assets/images/profile_pic.png')
                                             as ImageProvider,
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _timeBasedGreeting(),
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12 *
-                                            MediaQuery.textScaleFactorOf(
-                                                    context)
-                                                .clamp(1.0, 1.0),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _timeBasedGreeting(),
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12 *
+                                              MediaQuery.textScaleFactorOf(
+                                                      context)
+                                                  .clamp(1.0, 1.0),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      user?.name ?? 'Guest',
-                                      style: TextStyle(
-                                        fontSize: 14 *
-                                            MediaQuery.textScaleFactorOf(
-                                                    context)
-                                                .clamp(1.0, 1.0),
-                                        fontWeight: FontWeight.bold,
+                                      Text(
+                                        user?.name ?? 'Guest',
+                                        style: TextStyle(
+                                          fontSize: 14 *
+                                              MediaQuery.textScaleFactorOf(
+                                                      context)
+                                                  .clamp(1.0, 1.0),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                             Row(
                               children: [
@@ -745,6 +762,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           icon: const Icon(
                                               Icons.notifications_outlined),
                                           onPressed: () {
+                                            // Block navigation during tour
+                                            if (tourProvider.isTourActive)
+                                              return;
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -809,18 +829,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Showcase(
                                   key: TourKeys.trackersKey,
                                   title: 'Track Your Nutrition',
-                                  description:
-                                      'This is where you track your daily nutrition goals. You\'ll see how well you\'re following your personalized meal plan.',
+                                  description: TourDescriptions.trackers,
                                   tooltipPosition: TooltipPosition.bottom,
                                   targetShapeBorder:
                                       const RoundedRectangleBorder(
                                     borderRadius:
                                         BorderRadius.all(Radius.circular(12)),
                                   ),
-                                  tooltipBackgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  overlayColor: Colors.black54,
-                                  overlayOpacity: 0.8,
+                                  tooltipBackgroundColor:
+                                      TourTooltipStyle.tooltipBackgroundColor,
+                                  textColor: TourTooltipStyle.textColor,
+                                  overlayColor: TourTooltipStyle.overlayColor,
+                                  overlayOpacity:
+                                      TourTooltipStyle.overlayOpacity,
+                                  toolTipMargin: TourTooltipStyle.toolTipMargin,
+                                  titleTextStyle: TourTooltipStyle.titleStyle,
+                                  descTextStyle:
+                                      TourTooltipStyle.descriptionStyle,
                                   onTargetClick: () {
                                     _handleTrackersShowcase(context);
                                   },
@@ -854,16 +879,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           return Showcase(
                             key: TourKeys.dailyTipsKey,
                             title: 'Daily Health Tips',
-                            description:
-                                'Get personalized health tips and recommendations based on your condition and goals.',
+                            description: TourDescriptions.dailyTips,
                             targetShapeBorder: const RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.all(Radius.circular(12)),
                             ),
-                            tooltipBackgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            overlayColor: Colors.black54,
-                            overlayOpacity: 0.8,
+                            tooltipBackgroundColor:
+                                TourTooltipStyle.tooltipBackgroundColor,
+                            textColor: TourTooltipStyle.textColor,
+                            overlayColor: TourTooltipStyle.overlayColor,
+                            overlayOpacity: TourTooltipStyle.overlayOpacity,
+                            toolTipMargin: TourTooltipStyle.toolTipMargin,
+                            titleTextStyle: TourTooltipStyle.titleStyle,
+                            descTextStyle: TourTooltipStyle.descriptionStyle,
                             onTargetClick: () {
                               _handleDailyTipsShowcase(context);
                             },
@@ -931,6 +959,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                   tip.imageUrl,
                                                   onTap: () =>
                                                       _handleTipTap(tip),
+                                                  blockDuringTour:
+                                                      tourProvider.isTourActive,
                                                 ),
                                               );
                                             },

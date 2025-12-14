@@ -464,13 +464,13 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
   String _formatMinutesLabel(int minutes) {
     if (minutes == 60) return '1hr';
     if (minutes == 30) return '30mn';
-    if (minutes == 15) return '15m';
+    if (minutes == 15) return '15mn';
     // Fallbacks (should not be hit with current presets)
     final hours = minutes ~/ 60;
     final mins = minutes % 60;
-    if (hours == 0) return '${mins}m';
+    if (hours == 0) return '${mins}mn';
     if (mins == 0) return hours == 1 ? '1hr' : '${hours}hr';
-    return '${hours}hr ${mins}m';
+    return '${hours}hr ${mins}mn';
   }
 
   Widget _buildTimeChip({

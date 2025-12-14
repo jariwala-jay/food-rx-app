@@ -16,7 +16,7 @@ class UserModel {
   final double? weight;
   final String? weightUnit; // kg or lbs
   final String?
-      activityLevel; // not active, seldom active, moderately active, very active
+      activityLevel; // Not Very Active, Lightly Active, Active , Very Active
   final List<String>? medicalConditions;
   final List<String>? allergies;
 
