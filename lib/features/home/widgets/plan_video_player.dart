@@ -21,6 +21,8 @@ class PlanVideoPlayer extends StatefulWidget {
   final bool isTourActive;
   final VoidCallback? onFinish; // For signup flow
   final bool isSignupMode; // For signup flow
+  final bool
+      useFullVideo; // Use full video URLs (for tour) instead of short videos (for signup)
 
   const PlanVideoPlayer({
     Key? key,
@@ -29,6 +31,7 @@ class PlanVideoPlayer extends StatefulWidget {
     required this.isTourActive,
     this.onFinish,
     this.isSignupMode = false,
+    this.useFullVideo = false,
   }) : super(key: key);
 
   @override
@@ -139,23 +142,50 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   /// Video source information - requires cloud URLs from environment variables
   _VideoSource _getVideoSource(String planType) {
     // Get cloud URL from environment variables
+    // If useFullVideo is true, try full video URLs first, then fall back to regular URLs
     String? cloudUrl;
     String videoName;
+    String? envVarName;
+
     switch (planType) {
       case 'DASH':
-        cloudUrl = dotenv.env['DASH_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['DASH_VIDEO_URL_FULL'];
+          envVarName = 'DASH_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['DASH_VIDEO_URL'];
+        envVarName ??= 'DASH_VIDEO_URL';
         videoName = 'DASH';
         break;
       case 'MyPlate':
-        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
+          envVarName = 'MYPLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['MYPLATE_VIDEO_URL'];
+        envVarName ??= 'MYPLATE_VIDEO_URL';
         videoName = 'MyPlate';
         break;
       case 'DiabetesPlate':
-        cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL_FULL'];
+          envVarName = 'DIABETES_PLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['DIABETES_PLATE_VIDEO_URL'];
+        envVarName ??= 'DIABETES_PLATE_VIDEO_URL';
         videoName = 'Diabetes Plate';
         break;
       default:
-        cloudUrl = dotenv.env['MYPLATE_VIDEO_URL'];
+        if (widget.useFullVideo) {
+          cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
+          envVarName = 'MYPLATE_VIDEO_URL_FULL';
+        }
+        // Fall back to regular URL if full video not found
+        cloudUrl ??= dotenv.env['MYPLATE_VIDEO_URL'];
+        envVarName ??= 'MYPLATE_VIDEO_URL';
         videoName = 'MyPlate';
     }
 
@@ -167,20 +197,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     }
 
     // If no cloud URL configured, throw an error with helpful message
-    String envVarName;
-    switch (planType) {
-      case 'DASH':
-        envVarName = 'DASH_VIDEO_URL';
-        break;
-      case 'MyPlate':
-        envVarName = 'MYPLATE_VIDEO_URL';
-        break;
-      case 'DiabetesPlate':
-        envVarName = 'DIABETES_PLATE_VIDEO_URL';
-        break;
-      default:
-        envVarName = 'MYPLATE_VIDEO_URL';
-    }
     throw Exception(
         '$videoName video URL not configured. Please add $envVarName to your .env file with the Firebase Storage URL.');
   }
