@@ -44,7 +44,7 @@ class DashDietIntro extends StatelessWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: Image.asset(
-                    'assets/images/dash_diet.jpg',
+                    'assets/images/dash_diet.png',
                     fit: BoxFit.contain,
                   ),
                 ),
