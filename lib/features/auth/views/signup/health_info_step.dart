@@ -96,18 +96,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Welcome to MyFoodRx!',
-                      style: AppTypography.bg_24_b,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'This app is designed to give you a personalized approach to maximize the benefits of using food as medicine to improve your health. Please provide the information requested below. This information will be use to provide you with a personalized plan and resources to best meet your needs.',
-                      style: AppTypography.bg_14_r,
-                      textAlign: TextAlign.justify,
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
