@@ -292,7 +292,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       case 'healthGoals':
         return 'Edit Diet-related Health Goals';
       case 'allergies':
-        return 'Edit Allergies';
+        return 'Edit Food Allergies & Intolerances';
       default:
         return 'Edit';
     }
@@ -681,11 +681,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppDropdownField(
-            label: 'Food Allergies',
+            label: 'Food Allergies & Intolerances',
             value: null,
             options: options,
             onChanged: (_) {},
-            hintText: 'Select Allergies',
+            hintText: 'Select Allergies & Intolerances',
             showSearchBar: true,
             multiSelect: true,
             selectedValues: _selectedMultiValues,

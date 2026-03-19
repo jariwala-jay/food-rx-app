@@ -4,6 +4,7 @@ import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
 
@@ -795,14 +796,17 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
     if (!mounted) return;
 
-    // Pop back to MainScreen - the Recipe tab is already selected
-    Navigator.of(context).pop();
+    // Pop back so caller can close sheet and switch to Recipe tab
+    Navigator.of(context).pop(true);
 
-    // Wait for recipes to be generated, then trigger showcase
-    // Poll for recipes with increasing delays
+    // Only trigger tour showcase when tour is active and on recipes step
+    final tourProvider = Provider.of<ForcedTourProvider>(context, listen: false);
+
+    // Wait for recipes to be generated, then trigger showcase (only during tour)
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
-      if (controller.recipes.isNotEmpty) {
+      if (controller.recipes.isNotEmpty &&
+          tourProvider.isOnStep(TourStep.recipes)) {
         try {
           ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
         } catch (e) {}
@@ -811,7 +815,8 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (!mounted) return;
-      if (controller.recipes.isNotEmpty) {
+      if (controller.recipes.isNotEmpty &&
+          tourProvider.isOnStep(TourStep.recipes)) {
         try {
           ShowcaseView.get().startShowCase([TourKeys.recipesKey]);
         } catch (e) {}

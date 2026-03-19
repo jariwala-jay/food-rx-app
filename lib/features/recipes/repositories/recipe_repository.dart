@@ -8,4 +8,18 @@ abstract class RecipeRepository {
   Future<void> saveRecipe(String userId, Recipe recipe);
   Future<void> unsaveRecipe(String userId, int recipeId);
   Future<void> cookRecipe(String userId, Recipe recipe);
+
+  /// Prepared recipes (leftovers from "I Cooked This").
+  Future<List<Map<String, dynamic>>> getPreparedRaw(String userId);
+  Future<void> logPreparedCook(
+    String userId,
+    Recipe recipe,
+    double totalServings,
+    double consumedServings,
+  );
+  Future<void> logPreparedConsumption(
+    String userId,
+    int recipeId,
+    double servingsConsumed,
+  );
 }

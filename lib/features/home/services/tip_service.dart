@@ -1,20 +1,19 @@
-import 'package:mongo_dart/mongo_dart.dart';
 import 'package:flutter_app/features/home/models/tip.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/api_client.dart';
 
 class TipService {
-  final MongoDBService _mongoDBService;
-  final String _collectionName = 'tips';
-
-  TipService(this._mongoDBService);
-
   Future<List<Tip>> getTipsByCategory(String category) async {
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.db.collection(_collectionName);
-      final cursor = collection.find(where.eq('category', category));
-      final tips = await cursor.toList();
-      return tips.map((doc) => Tip.fromJson(doc)).toList();
+      final list = await ApiClient.get(
+        '/tips',
+        queryParameters: {'category': category},
+        requireAuth: false,
+      );
+      if (list is! List) return [];
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map((doc) => Tip.fromJson(doc))
+          .toList();
     } catch (e) {
       throw Exception('Failed to get tips by category: $e');
     }
@@ -22,26 +21,18 @@ class TipService {
 
   Future<List<Tip>> getAllTips() async {
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.db.collection(_collectionName);
-      final cursor = collection.find();
-      final tips = await cursor.toList();
-      return tips.map((doc) => Tip.fromJson(doc)).toList();
+      final list = await ApiClient.get('/tips', requireAuth: false);
+      if (list is! List) return [];
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map((doc) => Tip.fromJson(doc))
+          .toList();
     } catch (e) {
       throw Exception('Failed to get all tips: $e');
     }
   }
 
   Future<void> updateTip(Tip tip) async {
-    try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.db.collection(_collectionName);
-      await collection.update(
-        where.eq('id', tip.id),
-        tip.toJson(),
-      );
-    } catch (e) {
-      throw Exception('Failed to update tip: $e');
-    }
+    throw UnimplementedError('Update tip via API not implemented');
   }
 }

@@ -1,41 +1,15 @@
-import 'package:mongo_dart/mongo_dart.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
+import 'package:flutter_app/features/tracking/services/tracker_api_service.dart';
 import '../models/tracker_progress.dart';
 import '../models/tracker_goal.dart';
 import 'dart:async';
 
 class TrackerProgressService {
-  final MongoDBService _mongoDBService;
+  final TrackerApiService _api = TrackerApiService();
   static final TrackerProgressService _instance =
       TrackerProgressService._internal();
 
-  // Singleton pattern
   factory TrackerProgressService() => _instance;
-  TrackerProgressService._internal() : _mongoDBService = MongoDBService();
-
-  // Collection name for progress history
-  static const String _collectionName = 'tracker_progress';
-
-  // Get DB collection with proper connection check
-  Future<DbCollection?> get _collection async {
-    try {
-      await _ensureMongoConnection();
-      return _mongoDBService.db.collection(_collectionName);
-    } catch (e) {
-      print('Failed to get progress collection: $e');
-      return null;
-    }
-  }
-
-  // Ensure MongoDB connection
-  Future<void> _ensureMongoConnection() async {
-    try {
-      await _mongoDBService.ensureConnection();
-    } catch (e) {
-      throw Exception('MongoDB connection failed: $e');
-    }
-  }
+  TrackerProgressService._internal();
 
   /// Save progress snapshot before resetting tracker goals
   Future<void> saveProgressSnapshot(
@@ -43,23 +17,16 @@ class TrackerProgressService {
     if (trackers.isEmpty) return;
 
     try {
-      final collection = await _collection;
-      if (collection == null) {
-        print('Cannot save progress snapshot - MongoDB unavailable');
-        return;
-      }
-
       final now = DateTime.now();
       final progressDate = periodType == ProgressPeriodType.daily
-          ? DateTime(now.year, now.month, now.day) // End of current day
-          : _getWeekEndDate(now); // End of current week
+          ? DateTime(now.year, now.month, now.day)
+          : _getWeekEndDate(now);
 
-      List<TrackerProgress> progressRecords = [];
+      List<Map<String, dynamic>> docs = [];
 
       for (final tracker in trackers) {
-        // Only save if there was some progress (avoid saving empty records)
         if (tracker.currentValue > 0) {
-          final progress = TrackerProgress(
+          final p = TrackerProgress(
             userId: tracker.userId,
             trackerId: tracker.id,
             trackerName: tracker.name,
@@ -71,24 +38,16 @@ class TrackerProgressService {
             dietType: tracker.dietType,
             unit: tracker.unitString,
           );
-
-          progressRecords.add(progress);
+          final json = p.toJson();
+          json.remove('_id');
+          docs.add(json);
         }
       }
 
-      // Batch insert all progress records
-      if (progressRecords.isNotEmpty) {
-        final documents = progressRecords
-            .map((p) => {
-                  '_id': ObjectIdHelper.parseObjectId(p.id),
-                  ...p.toJson()
-                    ..remove('_id'), // Remove the string ID, use ObjectId
-                })
-            .toList();
-
-        await collection.insertMany(documents);
+      if (docs.isNotEmpty) {
+        await _api.saveProgress(docs);
         print(
-            'Saved ${progressRecords.length} progress snapshots for ${periodType.name}');
+            'Saved ${docs.length} progress snapshots for ${periodType.name}');
       }
     } catch (e) {
       print('Error saving progress snapshot: $e');
@@ -105,41 +64,21 @@ class TrackerProgressService {
     int? limit,
   }) async {
     try {
-      final collection = await _collection;
-      if (collection == null) return [];
-
-      // Build query
-      final query = <String, dynamic>{'userId': userId};
-
-      if (trackerId != null) {
-        query['trackerId'] = trackerId;
-      }
-
-      if (periodType != null) {
-        query['periodType'] = periodType.toString().split('.').last;
-      }
+      var progressList = await _api.getProgress(
+        trackerId: trackerId,
+        periodType: periodType?.toString().split('.').last,
+      );
 
       if (startDate != null || endDate != null) {
-        query['progressDate'] = <String, dynamic>{};
-        if (startDate != null) {
-          query['progressDate']['\$gte'] = startDate.toIso8601String();
-        }
-        if (endDate != null) {
-          query['progressDate']['\$lte'] = endDate.toIso8601String();
-        }
+        progressList = progressList.where((p) {
+          if (startDate != null && p.progressDate.isBefore(startDate)) return false;
+          if (endDate != null && p.progressDate.isAfter(endDate)) return false;
+          return true;
+        }).toList();
       }
 
-      // Execute query
-      final results = await collection.find(query).toList();
-
-      // Convert to TrackerProgress objects
-      var progressList =
-          results.map((doc) => TrackerProgress.fromJson(doc)).toList();
-
-      // Sort by date (most recent first)
       progressList.sort((a, b) => b.progressDate.compareTo(a.progressDate));
 
-      // Apply limit if specified
       if (limit != null && progressList.length > limit) {
         progressList = progressList.take(limit).toList();
       }
@@ -231,25 +170,13 @@ class TrackerProgressService {
     return completionRates;
   }
 
-  /// Clean up old progress data (optional, for data management)
+  /// Clean up old progress data (optional, for data management).
+  /// Backend does not yet support bulk delete by date; no-op for now.
   Future<void> cleanupOldProgress({
     required String userId,
     required DateTime olderThan,
   }) async {
-    try {
-      final collection = await _collection;
-      if (collection == null) return;
-
-      await collection.deleteMany({
-        'userId': userId,
-        'progressDate': {'\$lt': olderThan.toIso8601String()},
-      });
-
-      print(
-          'Cleaned up progress data older than ${olderThan.toIso8601String()}');
-    } catch (e) {
-      print('Error cleaning up old progress: $e');
-    }
+    // TODO: add DELETE /trackers/progress?olderThan=... on backend if needed
   }
 
   /// Helper to get the end date of the current week (Sunday)

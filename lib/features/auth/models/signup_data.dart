@@ -64,7 +64,8 @@ class SignupData {
       'heightInches': heightInches,
       'weight': weight,
       'medicalConditions': medicalConditions,
-      'foodAllergies': foodAllergies,
+      // Persist allergies under the same key the backend and UserModel use
+      'allergies': foodAllergies,
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,

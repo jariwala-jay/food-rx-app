@@ -5,8 +5,11 @@ import 'package:flutter_app/features/navigation/widgets/custom_nav_bar.dart';
 import 'package:flutter_app/features/pantry/views/pantry_page.dart';
 import 'package:flutter_app/features/recipes/views/recipe_page.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
+// ignore: unused_import - used when tour is re-enabled
 import 'package:flutter_app/features/home/widgets/tour_welcome_dialog.dart';
+// ignore: unused_import - used when tour is re-enabled
 import 'package:flutter_app/features/home/widgets/tour_completion_dialog.dart';
+// ignore: unused_import - used when tour debug buttons are re-enabled
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -25,8 +28,11 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _isAddActive = false;
   bool _isDisposed = false;
+  // ignore: unused_field - used when tour is re-enabled
   bool _wasTourActive = false;
+  // ignore: unused_field - used when tour is re-enabled
   bool _hasShownCompletionDialog = false;
+  // ignore: unused_field - used when tour is re-enabled
   bool _hasShownWelcomeDialog = false;
   final List<Widget> _pages = [
     const HomePage(),
@@ -41,6 +47,7 @@ class _MainScreenState extends State<MainScreen> {
     _currentIndex = widget.initialIndex;
   }
 
+  // ignore: unused_element - used when tour is re-enabled
   void _startTour() {
     if (!mounted || _isDisposed) return;
     final tourProvider =
@@ -117,18 +124,19 @@ class _MainScreenState extends State<MainScreen> {
     setState(() => _isAddActive = true);
 
     // Check if tour is active for add flow steps
-    final isTourAddFlow = tourProvider.isTourActive && 
+    final isTourAddFlow = tourProvider.isTourActive &&
         (tourProvider.isOnStep(TourStep.addButton) ||
-         tourProvider.isOnStep(TourStep.selectCategory) ||
-         tourProvider.isOnStep(TourStep.selectItem) ||
-         tourProvider.isOnStep(TourStep.setQuantityUnit) ||
-         tourProvider.isOnStep(TourStep.saveItem));
+            tourProvider.isOnStep(TourStep.selectCategory) ||
+            tourProvider.isOnStep(TourStep.selectItem) ||
+            tourProvider.isOnStep(TourStep.setQuantityUnit) ||
+            tourProvider.isOnStep(TourStep.saveItem));
 
-    await showModalBottomSheet(
+    final tabIndex = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      isDismissible: !isTourAddFlow, // Block dismissal by tapping outside during tour
+      isDismissible:
+          !isTourAddFlow, // Block dismissal by tapping outside during tour
       enableDrag: !isTourAddFlow, // Block drag-to-dismiss during tour
       builder: (context) => const AddActionSheet(),
     );
@@ -136,6 +144,10 @@ class _MainScreenState extends State<MainScreen> {
     // Only update state if still mounted
     if (mounted && !_isDisposed) {
       setState(() => _isAddActive = false);
+      // If user generated recipes from the sheet, switch to Recipe tab
+      if (tabIndex != null && tabIndex == 2) {
+        setState(() => _currentIndex = 2);
+      }
     }
 
     // Handle tour progression - only if we're past the item adding steps
@@ -177,8 +189,10 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Consumer<ForcedTourProvider>(
       builder: (context, tourProvider, child) {
+        // TOUR DISABLED - uncomment block to re-enable welcome dialog and tour start
         // Show welcome dialog and start tour for first-time users
         // Only show when user is on home page (index 0) and not during signup
+        /*
         if (_currentIndex == 0 &&
             !_hasShownWelcomeDialog &&
             tourProvider.tourService.shouldShowTour() &&
@@ -202,8 +216,11 @@ class _MainScreenState extends State<MainScreen> {
             });
           });
         }
+        */
 
+        // TOUR DISABLED - uncomment block to re-enable completion dialog
         // Listen for tour completion to show completion dialog (backup method)
+        /*
         if (_wasTourActive &&
             !tourProvider.isTourActive &&
             tourProvider.tourCompleted &&
@@ -229,6 +246,7 @@ class _MainScreenState extends State<MainScreen> {
             }
           });
         }
+        */
         _wasTourActive = tourProvider.isTourActive;
         Widget scaffold = WillPopScope(
           onWillPop: () async => false,
@@ -239,7 +257,9 @@ class _MainScreenState extends State<MainScreen> {
                   index: _currentIndex,
                   children: _pages,
                 ),
-                // DEBUG: Tour control buttons
+                // TOUR DISABLED - DEBUG tour buttons commented out
+                // Uncomment block below to re-enable tour debugging
+                /*
                 if (dotenv.env['SHOW_TOUR_DEBUG_BUTTON'] == 'true')
                   Positioned(
                     top: 50,
@@ -286,6 +306,7 @@ class _MainScreenState extends State<MainScreen> {
                       ],
                     ),
                   ),
+                */
               ],
             ),
             bottomNavigationBar: Padding(

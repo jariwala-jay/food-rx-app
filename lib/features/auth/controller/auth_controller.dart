@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
@@ -10,11 +10,8 @@ import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/services/email_service.dart';
 import 'package:flutter_app/core/services/gmail_smtp_email_service.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 class AuthController with ChangeNotifier {
-  final MongoDBService _mongoDBService = MongoDBService();
   final EmailService _emailService = GmailSMTPEmailService();
   UserModel? _currentUser;
   bool _isLoading = false;
@@ -35,40 +32,39 @@ class AuthController with ChangeNotifier {
     notifyListeners();
 
     try {
-      await _mongoDBService.initialize();
-
-      // Initialize re-plan service
       try {
         final nutritionContent = await NutritionContentLoader.load();
         final personalizationService = PersonalizationService(nutritionContent);
         _replanService = ReplanService(personalizationService);
       } catch (e) {
-        print('Warning: Failed to initialize re-plan service: $e');
+        debugPrint('Warning: Failed to initialize re-plan service: $e');
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-      final userEmail = prefs.getString('user_email');
+      final token = await ApiClient.getToken();
+      final userId = await ApiClient.userId;
+      final userEmail = await ApiClient.userEmail;
 
-      if (userId != null && userEmail != null) {
+      if (token != null && token.isNotEmpty && userId != null && userEmail != null) {
         try {
-          // Validate the user ID format before using it
           if (userId.length != 24) {
-            await _mongoDBService.clearSession();
+            await ApiClient.clearSession();
             throw Exception('Invalid user ID format');
           }
-
-          final userData = await _mongoDBService.findUserById(userId);
+          final userData = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
           if (userData != null && userData['email'] == userEmail) {
             _currentUser = _createUserModel(userData);
-
-            // Initialize notification services
             await _initializeNotificationServices(_currentUser!.id!);
           } else {
-            await _mongoDBService.clearSession();
+            await ApiClient.clearSession();
+          }
+        } on ApiException catch (e) {
+          if (e.statusCode == 401 || e.statusCode == 404) {
+            await ApiClient.clearSession();
+          } else {
+            _error = 'Failed to restore session: ${e.message}';
           }
         } catch (e) {
-          await _mongoDBService.clearSession();
+          await ApiClient.clearSession();
         }
       }
     } catch (e) {
@@ -80,15 +76,8 @@ class AuthController with ChangeNotifier {
   }
 
   UserModel _createUserModel(Map<String, dynamic> userData) {
-    // Use robust ObjectId handling for ID conversion
-    final id = userData['_id'] != null
-        ? ObjectIdHelper.toHexString(userData['_id'])
-        : ObjectIdHelper.generateNew().toHexString();
-
-    return UserModel.fromJson({
-      ...userData,
-      '_id': id,
-    });
+    final id = userData['_id']?.toString() ?? '';
+    return UserModel.fromJson({...userData, '_id': id});
   }
 
   Future<bool> register({
@@ -102,40 +91,61 @@ class AuthController with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Remove password from userData if it exists
       final cleanUserData = Map<String, dynamic>.from(userData);
       cleanUserData.remove('password');
+      cleanUserData['email'] = email;
+      cleanUserData['password'] = password;
 
-      final success = await _mongoDBService.registerUser(
-        email: email,
-        password: password,
-        userData: cleanUserData,
-        profilePhoto: profilePhoto,
-      );
+      final res = await ApiClient.post('/auth/register', body: cleanUserData, requireAuth: false)
+          as Map<String, dynamic>;
+      final token = res['access_token'] as String?;
+      final userId = res['user_id'] as String?;
+      final emailRes = res['email'] as String?;
+      final user = res['user'] as Map<String, dynamic>?;
 
-      if (success) {
-        // Registration succeeded and session is already stored in registerUser()
-        // Directly fetch and set the user instead of calling login() to avoid
-        // race conditions with slow MongoDB responses
-        final fetchedUserData = await _mongoDBService.findUserByEmail(email);
-        if (fetchedUserData != null) {
-          _currentUser = _createUserModel(fetchedUserData);
-
-          // Initialize notification services (don't fail registration if this fails)
-          try {
-            await _initializeNotificationServices(_currentUser!.id!);
-          } catch (e) {
-            debugPrint(
-                'Warning: Failed to initialize notification services: $e');
-          }
-
-          return true;
+      if (token != null && userId != null && emailRes != null) {
+        await ApiClient.setSession(accessToken: token, userId: userId, email: emailRes);
+        if (user != null) {
+          _currentUser = _createUserModel(user);
+        } else {
+          final me = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+          if (me != null) _currentUser = _createUserModel(me);
         }
-        // User was created but couldn't be fetched - very unlikely edge case
-        _error = 'Registration succeeded but failed to load user data';
-        return false;
+
+        if (profilePhoto != null) {
+          try {
+            final photoRes = await ApiClient.uploadFile('/auth/profile-photo', profilePhoto)
+                as Map<String, dynamic>?;
+            final photoId = photoRes?['profilePhotoId'] as String?;
+            if (photoId != null) {
+              await ApiClient.patch('/auth/profile', body: {'profilePhotoId': photoId});
+              final updated = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+              if (updated != null) _currentUser = _createUserModel(updated);
+            }
+          } catch (e) {
+            debugPrint('Warning: Failed to upload profile photo: $e');
+          }
+        }
+
+        // Kick off notification initialization without blocking
+        try {
+          unawaited(_initializeNotificationServices(_currentUser!.id!));
+        } catch (e) {
+          debugPrint('Warning: Failed to initialize notification services: $e');
+        }
+        return true;
       }
       _error = 'Registration failed';
+      return false;
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } on SocketException catch (_) {
+      _error = 'Could not reach server. Check that the backend is running and '
+          'API_BASE_URL is correct (e.g. http://localhost:8000 for iOS Simulator).';
+      return false;
+    } on TimeoutException catch (_) {
+      _error = 'Connection timed out. Is the backend running at API_BASE_URL?';
       return false;
     } catch (e) {
       _error = 'Registration failed: $e';
@@ -147,12 +157,16 @@ class AuthController with ChangeNotifier {
   }
 
   Future<bool> checkEmailExists(String email) async {
+    if (email.trim().isEmpty) return false;
     try {
-      final user = await _mongoDBService.findUserByEmail(email);
-      return user != null;
-    } catch (e) {
-      // If there's an error checking, assume email doesn't exist to allow signup
-      return false;
+      final res = await ApiClient.post(
+        '/auth/check-email',
+        body: {'email': email.trim().toLowerCase()},
+        requireAuth: false,
+      ) as Map<String, dynamic>?;
+      return res?['exists'] == true;
+    } catch (_) {
+      return false; // On error, allow user to proceed; register will fail if duplicate
     }
   }
 
@@ -162,26 +176,34 @@ class AuthController with ChangeNotifier {
     notifyListeners();
 
     try {
-      final success = await _mongoDBService.loginUser(email, password);
-      if (success) {
-        final userData = await _mongoDBService.findUserByEmail(email);
-        if (userData != null) {
-          _currentUser = _createUserModel(userData);
+      final res = await ApiClient.post('/auth/login', body: {'email': email, 'password': password},
+              requireAuth: false)
+          as Map<String, dynamic>?;
+      final token = res?['access_token'] as String?;
+      final userId = res?['user_id'] as String?;
+      final emailRes = res?['email'] as String?;
+      final user = res?['user'] as Map<String, dynamic>?;
 
-          // Initialize notification services (don't fail login if this fails)
-          try {
-            await _initializeNotificationServices(_currentUser!.id!);
-          } catch (e) {
-            // Log error but don't fail login
-            debugPrint(
-                'Warning: Failed to initialize notification services: $e');
-            // Login should still succeed even if notifications fail
-          }
-
-          return true;
+      if (token != null && userId != null && emailRes != null) {
+        await ApiClient.setSession(accessToken: token, userId: userId, email: emailRes);
+        if (user != null) {
+          _currentUser = _createUserModel(user);
+        } else {
+          final me = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+          if (me != null) _currentUser = _createUserModel(me);
         }
+        try {
+          await _initializeNotificationServices(_currentUser!.id!);
+        } catch (e) {
+          debugPrint('Warning: Failed to initialize notification services: $e');
+        }
+        return true;
       }
       _error = 'Invalid email or password';
+      return false;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) _error = 'Invalid email or password';
+      else _error = e.message;
       return false;
     } catch (e) {
       _error = 'Login failed: $e';
@@ -195,14 +217,10 @@ class AuthController with ChangeNotifier {
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
-
     try {
-      await _mongoDBService.clearSession();
-
-      // Clean up notification services
+      await ApiClient.clearSession();
       _notificationManager?.dispose();
       _notificationManager = null;
-
       _currentUser = null;
     } catch (e) {
       _error = 'Logout failed: $e';
@@ -215,33 +233,23 @@ class AuthController with ChangeNotifier {
 
   Future<void> updateUserProfile(Map<String, dynamic> updates) async {
     if (_currentUser == null) return;
-
     _isLoading = true;
     notifyListeners();
-
     try {
-      await _mongoDBService.updateUserProfile(_currentUser!.id!, updates);
-      final updatedUser = await _mongoDBService.findUserById(_currentUser!.id!);
+      await ApiClient.patch('/auth/profile', body: updates);
+      final updatedUser = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
       if (updatedUser != null) {
         final oldUser = _currentUser!;
         _currentUser = _createUserModel(updatedUser);
-
-        // Check for re-plan triggers
         if (_replanService != null) {
-          final trigger =
-              await _replanService!.checkReplanTriggers(oldUser, _currentUser!);
+          final trigger = await _replanService!.checkReplanTriggers(oldUser, _currentUser!);
           if (trigger != null) {
-            // Automatically regenerate diet plan for all trigger types
-            // This includes: condition_change, weight_change, height_change, dob_change, activity_change
             try {
-              // Ensure weight is in pounds for personalization service
               final userForReplan = _currentUser!;
               double? weightLb = userForReplan.weight;
               if (weightLb != null && userForReplan.weightUnit == 'kg') {
-                weightLb = weightLb * 2.205; // Convert kg to lbs
+                weightLb = weightLb * 2.205;
               }
-
-              // Create a temporary user with weight in lbs for personalization
               final tempUser = UserModel(
                 id: userForReplan.id,
                 email: userForReplan.email,
@@ -255,43 +263,28 @@ class AuthController with ChangeNotifier {
                 medicalConditions: userForReplan.medicalConditions,
                 healthGoals: userForReplan.healthGoals,
               );
-
               final result = await _replanService!.generateNewPlan(tempUser);
-
-              // Add small delay to allow connection to stabilize between operations
-              await Future.delayed(const Duration(milliseconds: 200));
-
-              await _mongoDBService.updateUserProfile(_currentUser!.id!, {
+              await ApiClient.patch('/auth/profile', body: {
                 'dietType': result.dietType,
                 'myPlanType': result.myPlanType,
                 'showGlycemicIndex': result.showGlycemicIndex,
                 'targetCalories': result.targetCalories,
                 'selectedDietPlan': result.selectedDietPlan,
                 'diagnostics': result.diagnostics,
-                'updatedAt': DateTime.now().toIso8601String(),
               });
-
-              // Add small delay before refresh
-              await Future.delayed(const Duration(milliseconds: 200));
-
-              // Refresh user data with new plan
-              final refreshedUser =
-                  await _mongoDBService.findUserById(_currentUser!.id!);
-              if (refreshedUser != null) {
-                _currentUser = _createUserModel(refreshedUser);
-              }
-
-              // Clear pending trigger since we've handled it
+              final refreshed = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+              if (refreshed != null) _currentUser = _createUserModel(refreshed);
               _pendingReplanTrigger = null;
             } catch (e) {
               debugPrint('Error auto-regenerating diet plan: $e');
-              // Fall back to setting pending trigger if regeneration fails
               _pendingReplanTrigger = trigger;
             }
             notifyListeners();
           }
         }
       }
+    } on ApiException catch (e) {
+      _error = e.message;
     } catch (e) {
       _error = 'Failed to update profile: $e';
     } finally {
@@ -302,22 +295,19 @@ class AuthController with ChangeNotifier {
 
   Future<void> updateProfilePhoto(File photo) async {
     if (_currentUser == null) return;
-
     _isLoading = true;
     notifyListeners();
-
     try {
-      final photoId = await _mongoDBService.uploadProfilePhoto(photo);
+      final photoRes = await ApiClient.uploadFile('/auth/profile-photo', photo)
+          as Map<String, dynamic>?;
+      final photoId = photoRes?['profilePhotoId'] as String?;
       if (photoId != null) {
-        await _mongoDBService.updateUserProfile(_currentUser!.id!, {
-          'profilePhotoId': photoId,
-        });
-        final updatedUser =
-            await _mongoDBService.findUserById(_currentUser!.id!);
-        if (updatedUser != null) {
-          _currentUser = _createUserModel(updatedUser);
-        }
+        await ApiClient.patch('/auth/profile', body: {'profilePhotoId': photoId});
+        final updated = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+        if (updated != null) _currentUser = _createUserModel(updated);
       }
+    } on ApiException catch (e) {
+      _error = e.message;
     } catch (e) {
       _error = 'Failed to update profile photo: $e';
     } finally {
@@ -328,44 +318,30 @@ class AuthController with ChangeNotifier {
 
   Future<List<int>?> getProfilePhoto() async {
     if (_currentUser?.profilePhotoId == null) return null;
-
     try {
-      return await _mongoDBService
-          .getProfilePhoto(_currentUser!.profilePhotoId!);
+      return await ApiClient.getBytes('/api/profile-photos/${_currentUser!.profilePhotoId}');
     } catch (e) {
       _error = 'Failed to get profile photo: $e';
       return null;
     }
   }
 
-  /// Generate a new personalized diet plan
   Future<bool> regenerateDietPlan() async {
     if (_currentUser == null || _replanService == null) return false;
-
     _isLoading = true;
     notifyListeners();
-
     try {
       final result = await _replanService!.generateNewPlan(_currentUser!);
-
-      // Update user with new diet plan
-      await _mongoDBService.updateUserProfile(_currentUser!.id!, {
+      await ApiClient.patch('/auth/profile', body: {
         'dietType': result.dietType,
         'myPlanType': result.myPlanType,
         'showGlycemicIndex': result.showGlycemicIndex,
         'targetCalories': result.targetCalories,
         'selectedDietPlan': result.selectedDietPlan,
         'diagnostics': result.diagnostics,
-        'updatedAt': DateTime.now().toIso8601String(),
       });
-
-      // Refresh user data
-      final updatedUser = await _mongoDBService.findUserById(_currentUser!.id!);
-      if (updatedUser != null) {
-        _currentUser = _createUserModel(updatedUser);
-      }
-
-      // Clear pending trigger
+      final updated = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+      if (updated != null) _currentUser = _createUserModel(updated);
       _pendingReplanTrigger = null;
       return true;
     } catch (e) {
@@ -377,32 +353,25 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// Dismiss the pending re-plan trigger
   void dismissReplanTrigger() {
     _pendingReplanTrigger = null;
     notifyListeners();
   }
 
-  /// Check if user should be offered re-planning
   bool shouldOfferReplan() {
     if (_currentUser == null || _replanService == null) return false;
     return _replanService!.shouldOfferReplan(_currentUser!);
   }
 
-  /// Get re-plan suggestions
   List<String> getReplanSuggestions() {
     if (_currentUser == null || _replanService == null) return [];
     return _replanService!.getReplanSuggestions(_currentUser!);
   }
 
-  /// Initialize notification services for the user
   Future<void> _initializeNotificationServices(String userId) async {
     try {
-      // Initialize notification manager (simplified)
       _notificationManager = NotificationManager();
       await _notificationManager!.initialize(userId);
-
-      // Sync FCM token to database after user is logged in
       final notificationService = NotificationService();
       await notificationService.syncFCMTokenToDatabase();
     } catch (e) {
@@ -410,48 +379,33 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// Request a password reset for the given email
-  /// Returns true if the request was processed (even if email doesn't exist, for security)
   Future<bool> requestPasswordReset(String email) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
-      // Generate reset token (this will return empty string if email doesn't exist)
-      final token = await _mongoDBService.generatePasswordResetToken(email);
-
-      // If token is empty, email doesn't exist, but we still return success
-      // to prevent user enumeration attacks
-      if (token.isEmpty) {
-        // Still return true to maintain security (don't reveal if email exists)
-        return true;
+      final res = await ApiClient.post('/auth/forgot-password',
+          body: {'email': email}, requireAuth: false) as Map<String, dynamic>?;
+      final token = res?['token'] as String?;
+      if (token != null && token.isNotEmpty) {
+        final userName = res?['userName'] as String?;
+        final emailSent = await _emailService.sendPasswordResetEmail(
+          email: email,
+          resetToken: token,
+          userName: userName,
+        );
+        if (!emailSent) {
+          _error = 'Failed to send password reset email. Please try again later.';
+          return false;
+        }
       }
-
-      // Get user data for email personalization
-      final user = await _mongoDBService.findUserByEmail(email);
-      final userName = user?['name'] as String?;
-
-      // Send password reset email
-      final emailSent = await _emailService.sendPasswordResetEmail(
-        email: email,
-        resetToken: token,
-        userName: userName,
-      );
-
-      if (!emailSent) {
-        _error = 'Failed to send password reset email. Please try again later.';
-        return false;
-      }
-
       return true;
+    } on ApiException catch (e) {
+      if (e.statusCode == 429) _error = 'Too many reset requests. Please try again later.';
+      else _error = e.message;
+      return false;
     } catch (e) {
-      // Check if it's a rate limiting error
-      if (e.toString().contains('Too many reset requests')) {
-        _error = 'Too many reset requests. Please try again later.';
-      } else {
-        _error = 'Failed to process password reset request: $e';
-      }
+      _error = 'Failed to process password reset request: $e';
       return false;
     } finally {
       _isLoading = false;
@@ -459,36 +413,23 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// Validate a password reset token
-  /// Returns true if token is valid and not expired
   Future<bool> validatePasswordResetToken(String token) async {
     _error = null;
-    // Don't call notifyListeners() here to avoid build phase issues
-    // The calling widget will handle state updates
-
     try {
-      final tokenDoc = await _mongoDBService.validatePasswordResetToken(token);
-      if (tokenDoc == null) {
-        _error = 'Invalid or expired reset token';
-        return false;
-      }
-      return true;
+      final res = await ApiClient.post('/auth/validate-reset-token',
+          body: {'token': token}, requireAuth: false) as Map<String, dynamic>?;
+      return res?['valid'] == true;
     } catch (e) {
-      _error = 'Failed to validate reset token: $e';
+      _error = 'Invalid or expired reset token';
       return false;
     }
-    // Removed notifyListeners() to prevent build phase errors
   }
 
-  /// Reset password using a valid reset token
-  /// Returns true if password was successfully reset
   Future<bool> resetPassword(String token, String newPassword) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
-      // Validate password requirements (same as signup)
       if (newPassword.length < 8) {
         _error = 'Password must be at least 8 characters';
         return false;
@@ -509,22 +450,14 @@ class AuthController with ChangeNotifier {
         _error = 'Password must contain at least one special character';
         return false;
       }
-
-      // Reset password in database
-      final success = await _mongoDBService.resetPassword(token, newPassword);
-
-      if (!success) {
-        _error =
-            'Invalid or expired reset token. Please request a new password reset.';
-        return false;
-      }
-
-      // Clear any existing session after password reset
-      // This ensures user must login with new password
-      await _mongoDBService.clearSession();
+      await ApiClient.post('/auth/reset-password',
+          body: {'token': token, 'newPassword': newPassword}, requireAuth: false);
+      await ApiClient.clearSession();
       _currentUser = null;
-
       return true;
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
     } catch (e) {
       _error = 'Failed to reset password: $e';
       return false;

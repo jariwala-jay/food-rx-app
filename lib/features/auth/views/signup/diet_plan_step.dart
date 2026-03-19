@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_app/features/home/widgets/plan_video_player.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'diet_plans/dash_diet_intro.dart';
@@ -23,6 +24,20 @@ class DietPlanStep extends StatefulWidget {
 
 class _DietPlanStepState extends State<DietPlanStep> {
   int _currentStep = 0; // 0: intro, 1: details
+
+  @override
+  void initState() {
+    super.initState();
+    // Preload the short plan video for the user's assigned plan so that
+    // when they tap "Learn More" the video starts with minimal delay.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final signupData = context.read<SignupProvider>().data;
+      final myPlanType = signupData.myPlanType;
+      if (myPlanType != null) {
+        PlanVideoPreloader.preload(myPlanType, useFullVideo: false);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

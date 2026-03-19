@@ -29,6 +29,7 @@ class ArticleController extends ChangeNotifier {
   String? _error;
   bool _bookmarksOnly = false;
   String _searchQuery = '';
+  Set<String> _selectedFilterCategories = {};
 
   // Cache
   final Map<String, List<Article>> _cachedArticles = {};
@@ -43,6 +44,7 @@ class ArticleController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get bookmarksOnly => _bookmarksOnly;
+  Set<String> get selectedFilterCategories => _selectedFilterCategories;
   String? get _userId => _authProvider.currentUser?.id;
 
   @override
@@ -66,6 +68,7 @@ class ArticleController extends ChangeNotifier {
     _selectedCategory = null;
     _bookmarksOnly = false;
     _searchQuery = '';
+    _selectedFilterCategories.clear();
     notifyListeners();
   }
 
@@ -97,8 +100,11 @@ class ArticleController extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    final filterKey = _selectedFilterCategories.isEmpty
+        ? 'all'
+        : (List<String>.from(_selectedFilterCategories)..sort()).join(',');
     final cacheKey =
-        '${_bookmarksOnly ? 'bookmarks' : _selectedCategory?.name ?? 'all'}_$_searchQuery';
+        '${_bookmarksOnly ? 'bookmarks' : _selectedCategory?.name ?? 'all'}_${_searchQuery}_$filterKey';
 
     if (_cachedArticles.containsKey(cacheKey)) {
       _articles = _cachedArticles[cacheKey]!;
@@ -114,8 +120,17 @@ class ArticleController extends ChangeNotifier {
         bookmarksOnly: _bookmarksOnly,
         searchQuery: _searchQuery,
       );
-      _articles = fetchedArticles;
-      _cachedArticles[cacheKey] = fetchedArticles;
+      
+      // Apply client-side filtering by selected categories
+      List<Article> filteredArticles = fetchedArticles;
+      if (_selectedFilterCategories.isNotEmpty) {
+        filteredArticles = fetchedArticles.where((article) {
+          return _selectedFilterCategories.contains(article.category);
+        }).toList();
+      }
+      
+      _articles = filteredArticles;
+      _cachedArticles[cacheKey] = filteredArticles;
     } catch (e) {
       _error = 'Failed to load articles: $e';
     } finally {
@@ -181,6 +196,113 @@ class ArticleController extends ChangeNotifier {
           return normalizedConditions.contains(normalizedCategory);
         },
       ).toList();
+
+      // Auto-bookmark recommended articles for this user so they also appear
+      // under the Bookmarks tab by default. Users can unbookmark any they
+      // don't want to keep.
+      if (_userId != null && _recommendedArticles.isNotEmpty) {
+        final planType = user.myPlanType ?? user.dietType;
+        final isDashPlan = planType == 'DASH';
+        final isDiabetesPlatePlan = planType == 'DiabetesPlate';
+        final isMyPlatePlan = planType == 'MyPlate';
+
+        // Detect obesity for MyPlate users
+        final hasObesity = (user.medicalConditions ?? [])
+            .map((c) => c.toLowerCase())
+            .any((c) => c.contains('obesity') || c.contains('overweight'));
+        final isMyPlateObesity = isMyPlatePlan && hasObesity;
+
+        // For DASH: keep only Hypertension docs bookmarked.
+        // For MyPlate with obesity: keep only Obesity/Overweight docs bookmarked.
+        // For DiabetesPlate: keep only Diabetes docs bookmarked.
+        if ((isDashPlan || isMyPlateObesity || isDiabetesPlatePlan) &&
+            _bookmarkedArticles.isNotEmpty) {
+          for (final bookmarked in List<Article>.from(_bookmarkedArticles)) {
+            final normalizedCategory = bookmarked.category
+                .toLowerCase()
+                .replaceAll('-', '')
+                .replaceAll('/', '')
+                .replaceAll(' ', '');
+
+            final isDiabetes = normalizedCategory == 'diabetes';
+            final isHypertension = normalizedCategory == 'hypertension';
+            final isObesity = normalizedCategory.contains('obesity') ||
+                normalizedCategory.contains('overweight');
+
+            bool shouldUnbookmark = false;
+
+            if (isDashPlan) {
+              // DASH: drop anything that is NOT hypertension
+              shouldUnbookmark = !isHypertension;
+            } else if (isMyPlateObesity) {
+              // MyPlate + obesity: drop everything that is NOT obesity/overweight
+              shouldUnbookmark = !isObesity;
+            } else if (isDiabetesPlatePlan) {
+              // DiabetesPlate: keep only Diabetes docs, drop others
+              shouldUnbookmark = !isDiabetes;
+            }
+
+            if (!shouldUnbookmark) continue;
+
+            try {
+              await _articleRepository.updateArticleBookmark(
+                bookmarked.id,
+                false,
+                userId: _userId!,
+              );
+              _updateArticleInLists(bookmarked.id, false);
+            } catch (_) {
+              // Ignore failures here; user can still toggle manually.
+            }
+          }
+        }
+
+        for (final article in _recommendedArticles) {
+          final normalizedCategory = article.category
+              .toLowerCase()
+              .replaceAll('-', '')
+              .replaceAll('/', '')
+              .replaceAll(' ', '');
+
+          // For DASH diet, only auto-bookmark hypertension-specific docs.
+          if (isDashPlan) {
+            if (normalizedCategory != 'hypertension') {
+              continue;
+            }
+          }
+
+          // For DiabetesPlate, only auto-bookmark Diabetes docs.
+          if (isDiabetesPlatePlan) {
+            if (normalizedCategory != 'diabetes') {
+              continue;
+            }
+          }
+
+          // For MyPlate + obesity, only auto-bookmark obesity/overweight docs.
+          if (isMyPlateObesity) {
+            final isObesity = normalizedCategory.contains('obesity') ||
+                normalizedCategory.contains('overweight');
+            if (!isObesity) continue;
+          }
+
+          final alreadyBookmarked = article.isBookmarked ||
+              _bookmarkedArticles.any((a) => a.id == article.id);
+          if (alreadyBookmarked) continue;
+
+          try {
+            await _articleRepository.updateArticleBookmark(
+              article.id,
+              true,
+              userId: _userId!,
+            );
+            // Update local state so UI reflects the bookmark immediately
+            _updateArticleInLists(article.id, true);
+          } catch (_) {
+            // If auto-bookmarking fails for a specific article, skip it
+            // and continue without breaking the rest of the recommendations.
+          }
+        }
+      }
     } catch (e) {
       _error = 'Failed to load recommended articles: $e';
     } finally {
@@ -329,6 +451,16 @@ class ArticleController extends ChangeNotifier {
   void clearSearch() {
     _searchQuery = '';
     _searchSuggestions = [];
+    loadArticles();
+  }
+
+  void applyFilterCategories(Set<String> categories) {
+    _selectedFilterCategories = categories;
+    loadArticles();
+  }
+
+  void clearFilterCategories() {
+    _selectedFilterCategories.clear();
     loadArticles();
   }
 }
