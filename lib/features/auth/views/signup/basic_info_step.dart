@@ -310,6 +310,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           focusNode: _emailFocusNode,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
@@ -329,6 +332,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           hintText: 'Enter your password',
                           controller: _passwordController,
                           obscureText: _obscurePassword,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your password';
@@ -378,6 +384,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           hintText: 'Re-Enter your password',
                           controller: _confirmPasswordController,
                           obscureText: _obscureConfirmPassword,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please confirm your password';

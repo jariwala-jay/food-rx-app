@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/recipes/application/recipe_generation_service.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/features/recipes/models/prepared_recipe.dart';
 import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
@@ -35,6 +36,7 @@ class RecipeController extends ChangeNotifier {
   // State
   List<Recipe> _recipes = [];
   List<Recipe> _savedRecipes = [];
+  List<PreparedRecipe> _preparedRecipes = [];
   RecipeFilter _currentFilter = const RecipeFilter();
   bool _isLoading = false;
   String? _error;
@@ -43,6 +45,7 @@ class RecipeController extends ChangeNotifier {
   // Getters
   List<Recipe> get recipes => _recipes;
   List<Recipe> get savedRecipes => _savedRecipes;
+  List<PreparedRecipe> get preparedRecipes => _preparedRecipes;
   RecipeFilter get currentFilter => _currentFilter;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -173,6 +176,160 @@ class RecipeController extends ChangeNotifier {
 
   bool isRecipeSaved(int recipeId) {
     return _savedRecipes.any((r) => r.id == recipeId);
+  }
+
+  /// After "I Cooked This" with servings consumed: store leftover in prepared recipes.
+  /// Call only when leftover > 0.
+  Future<void> logPreparedFromCook({
+    required Recipe recipe,
+    required double totalServings,
+    required double consumedServings,
+  }) async {
+    final userId = authProvider.currentUser?.id;
+    if (userId == null) return;
+    final leftover = totalServings - consumedServings;
+    if (leftover <= 0) return;
+    await recipeRepository.logPreparedCook(
+      userId,
+      recipe,
+      totalServings,
+      consumedServings,
+    );
+  }
+
+  /// Load prepared recipes (leftovers) from the backend.
+  Future<void> loadPreparedRecipes() async {
+    final userId = authProvider.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final raw = await recipeRepository.getPreparedRaw(userId);
+      _preparedRecipes = raw
+          .map((d) => PreparedRecipe.fromJson(d))
+          .where((p) => p.remainingServings > 0)
+          .toList();
+    } catch (e) {
+      if (kDebugMode) print('Failed to load prepared recipes: $e');
+      _preparedRecipes = [];
+    }
+    notifyListeners();
+  }
+
+  /// Deduct pantry and update diet trackers for [servingsConsumed] of [recipe].
+  /// Used when logging consumption from a prepared (leftover) recipe.
+  Future<void> applyConsumptionToPantryAndGoals(
+    Recipe recipe,
+    double servingsConsumed,
+  ) async {
+    final user = authProvider.currentUser;
+    if (user == null) return;
+    final recipeServings = recipe.servings.toDouble();
+    if (recipeServings <= 0) return;
+    final consumedFraction =
+        (servingsConsumed / recipeServings).clamp(0.0, 1.0);
+    final userDietType =
+        (user.myPlanType ?? user.dietType ?? 'MyPlate').toString().toLowerCase();
+
+    final scaledIngredients = recipe.extendedIngredients
+        .map((ing) => {
+              'name': ing.nameClean,
+              'amount': ing.amount * consumedFraction,
+              'unit': ing.unit,
+            })
+        .toList();
+
+    final deductionResult =
+        await pantryDeductionService.deductIngredientsFromPantry(
+      scaledIngredients: scaledIngredients,
+      pantryItems: [
+        ...pantryController.pantryItems,
+        ...pantryController.otherItems
+      ],
+    );
+
+    for (final updatedItem in deductionResult.updatedItems) {
+      await pantryController.updateItem(updatedItem);
+    }
+    for (final itemId in deductionResult.itemsToRemove) {
+      final itemToRemove = [
+        ...pantryController.pantryItems,
+        ...pantryController.otherItems
+      ].where((item) => item.id == itemId);
+      if (itemToRemove.isNotEmpty) {
+        await pantryController.removeItem(
+            itemId, itemToRemove.first.isPantryItem);
+      }
+    }
+
+    final Map<TrackerCategory, double> categoryServings = {};
+    for (final ingredient in recipe.extendedIngredients) {
+      if (ingredient.unit.toLowerCase() == 'servings' ||
+          ingredient.unit.toLowerCase() == 'serving') continue;
+      final categories = dietServingService.getCategoriesForIngredient(
+          ingredient.nameClean, dietType: userDietType);
+      final perPersonAmount = ingredient.amount / recipe.servings;
+      for (final category in categories) {
+        final dietServings = dietServingService.getServingsForTracker(
+          ingredientName: ingredient.nameClean,
+          amount: perPersonAmount * servingsConsumed,
+          unit: ingredient.unit,
+          category: category,
+          dietType: userDietType,
+        );
+        if (dietServings > 0) {
+          final rounded =
+              double.parse(dietServings.toStringAsFixed(2));
+          categoryServings[category] =
+              (categoryServings[category] ?? 0.0) + rounded;
+        }
+      }
+    }
+
+    if (userDietType == 'dash' && recipe.nutrition != null) {
+      final sodiumNutrient = recipe.nutrition!.nutrients
+          .where((n) => n.name.toLowerCase() == 'sodium')
+          .firstOrNull;
+      if (sodiumNutrient != null) {
+        double sodiumMg = sodiumNutrient.amount * servingsConsumed;
+        if (sodiumNutrient.unit.toLowerCase() == 'g') sodiumMg *= 1000;
+        if (sodiumNutrient.unit.toLowerCase() == 'mcg' ||
+            sodiumNutrient.unit.toLowerCase() == 'μg') sodiumMg /= 1000;
+        if (sodiumMg > 0) {
+          categoryServings[TrackerCategory.sodium] =
+              (categoryServings[TrackerCategory.sodium] ?? 0.0) +
+                  double.parse(sodiumMg.toStringAsFixed(2));
+        }
+      }
+    }
+
+    for (final entry in categoryServings.entries) {
+      final matchingTracker = trackerProvider.findTrackerByCategory(
+          entry.key, userDietType);
+      if (matchingTracker != null) {
+        await trackerProvider.incrementTracker(matchingTracker.id, entry.value);
+      }
+    }
+
+    await pantryController.loadItems();
+  }
+
+  /// Log consumption from a prepared recipe (leftover). Decreases remaining,
+  /// deducts pantry, updates goals, then reloads prepared list.
+  Future<void> logConsumptionFromPrepared(
+    PreparedRecipe item,
+    double servingsConsumed,
+  ) async {
+    final userId = authProvider.currentUser?.id;
+    if (userId == null) return;
+    final toUse = servingsConsumed.clamp(0.0, item.remainingServings);
+    if (toUse <= 0) return;
+
+    await recipeRepository.logPreparedConsumption(
+      userId,
+      item.recipeId,
+      toUse,
+    );
+    await applyConsumptionToPantryAndGoals(item.recipe, toUse);
+    await loadPreparedRecipes();
   }
 
   Future<void> cookRecipe(Recipe recipe) async {

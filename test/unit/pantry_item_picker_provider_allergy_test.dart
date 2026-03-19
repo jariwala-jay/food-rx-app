@@ -3,7 +3,6 @@ import 'package:flutter_app/features/pantry/providers/pantry_item_picker_provide
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 // ignore: unused_import
 import 'package:flutter_app/core/models/user_model.dart';
@@ -37,12 +36,10 @@ class _FakeIngredientRepo implements IngredientRepository {
 void main() {
   group('PantryItemPickerProvider allergy behavior', () {
     late _FakeIngredientRepo repo;
-    late MongoDBService mongo;
     late AuthController auth;
 
     setUp(() {
       repo = _FakeIngredientRepo();
-      mongo = MongoDBService();
       auth = AuthController();
     });
 
@@ -57,7 +54,7 @@ void main() {
       // so we rely on default empty which yields no intolerances. We can still verify method accepts param.
 
       final provider =
-          PantryItemPickerProvider(repo, mongo, auth, isFoodPantryItem: true);
+          PantryItemPickerProvider(repo, auth, isFoodPantryItem: true);
 
       // Act
       await provider.searchSpoonacular('milk');
@@ -74,7 +71,7 @@ void main() {
       // So this test focuses on logic shape: with default no user, adding works; we cannot set allergy here
       // without refactoring AuthController for test hooks. Skipping enforcement test due to controller constraints.
       final provider =
-          PantryItemPickerProvider(repo, mongo, auth, isFoodPantryItem: true);
+          PantryItemPickerProvider(repo, auth, isFoodPantryItem: true);
 
       final item = PantryItem(
         id: '1',

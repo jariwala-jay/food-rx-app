@@ -223,7 +223,7 @@ class _TrackerGridState extends State<TrackerGrid>
                   children: [
                     Flexible(
                       child: Text(
-                        'Daily Meal Plan Goals',
+                        'Daily Meal Goals',
                         style: TextStyle(
                           fontSize: 20 * clampedScale.clamp(0.8, 1.0),
                           fontWeight: FontWeight.bold,
@@ -236,81 +236,112 @@ class _TrackerGridState extends State<TrackerGrid>
                     const SizedBox(width: 8),
                     Builder(
                       builder: (context) {
-                        return showcaseview.Showcase(
-                          key: TourKeys.myPlanButtonKey,
-                          title: 'View Your Meal Plan',
-                          description: TourDescriptions.myPlan,
-                          targetShapeBorder: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                          ),
-                          tooltipBackgroundColor:
-                              TourTooltipStyle.tooltipBackgroundColor,
-                          textColor: TourTooltipStyle.textColor,
-                          overlayColor: TourTooltipStyle.overlayColor,
-                          overlayOpacity: TourTooltipStyle.overlayOpacity,
-                          toolTipMargin: TourTooltipStyle.toolTipMargin,
-                          titleTextStyle: TourTooltipStyle.titleStyle,
-                          descTextStyle: TourTooltipStyle.descriptionStyle,
-                          onTargetClick: () {
-                            AppLogger.d(
-                                '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
-                            // Navigate to meal plan page - don't complete step yet
-                            Navigator.pushNamed(context, '/meal-plan');
-                            // Step will be completed when user clicks "Continue Tour" on diet plan page
-                          },
-                          onToolTipClick: () {
-                            AppLogger.d(
-                                '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
-                            // Navigate to meal plan page
-                            Navigator.pushNamed(context, '/meal-plan');
-                          },
-                          disposeOnTap: true,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Consumer<ForcedTourProvider>(
-                              builder: (context, tourProvider, child) {
-                                return ElevatedButton(
-                                  onPressed: () {
-                                    // During tour, only allow if on myPlan step
-                                    if (tourProvider.isTourActive &&
-                                        !tourProvider
-                                            .isOnStep(TourStep.myPlan)) {
-                                      return;
-                                    }
-                                    AppLogger.d(
-                                        '🎯 TrackerGrid: User clicked on My Plan button');
-                                    // Navigate to meal plan page - don't complete step yet
-                                    Navigator.pushNamed(context, '/meal-plan');
-                                    // Step will be completed when user clicks "Continue Tour" on diet plan page
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        const Color(0xFFFF6B35), // Orange color
-                                    foregroundColor: Colors.white,
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal:
-                                            16 * clampedScale.clamp(1.0, 1.2),
-                                        vertical:
-                                            8 * clampedScale.clamp(1.0, 1.2)),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Consumer<ForcedTourProvider>(
+                            builder: (context, tourProvider, child) {
+                              void onPlanPressed() {
+                                if (tourProvider.isTourActive &&
+                                    !tourProvider.isOnStep(TourStep.myPlan)) {
+                                  return;
+                                }
+                                Navigator.pushNamed(context, '/meal-plan');
+                              }
+
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  showcaseview.Showcase(
+                                    key: TourKeys.myPlanButtonKey,
+                                    title: 'View Your Meal Plan',
+                                    description: TourDescriptions.myPlan,
+                                    targetShapeBorder:
+                                        const RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(20)),
                                     ),
-                                    elevation: 0,
-                                    minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text(
-                                    'My Plan',
-                                    style: TextStyle(
-                                      fontSize:
-                                          14 * clampedScale.clamp(0.8, 1.0),
-                                      fontWeight: FontWeight.w500,
+                                    tooltipBackgroundColor:
+                                        TourTooltipStyle.tooltipBackgroundColor,
+                                    textColor: TourTooltipStyle.textColor,
+                                    overlayColor: TourTooltipStyle.overlayColor,
+                                    overlayOpacity:
+                                        TourTooltipStyle.overlayOpacity,
+                                    toolTipMargin:
+                                        TourTooltipStyle.toolTipMargin,
+                                    titleTextStyle: TourTooltipStyle.titleStyle,
+                                    descTextStyle:
+                                        TourTooltipStyle.descriptionStyle,
+                                    onTargetClick: () {
+                                      AppLogger.d(
+                                          '🎯 TrackerGrid: User tapped on My Plan showcase - navigating');
+                                      Navigator.pushNamed(
+                                          context, '/meal-plan');
+                                    },
+                                    onToolTipClick: () {
+                                      AppLogger.d(
+                                          '🎯 TrackerGrid: User clicked on My Plan tooltip - navigating');
+                                      Navigator.pushNamed(
+                                          context, '/meal-plan');
+                                    },
+                                    disposeOnTap: true,
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        AppLogger.d(
+                                            '🎯 TrackerGrid: User clicked on My Plan button');
+                                        onPlanPressed();
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFFFF6B35),
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 16 *
+                                                clampedScale.clamp(1.0, 1.2),
+                                            vertical: 8 *
+                                                clampedScale.clamp(1.0, 1.2)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        elevation: 0,
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(
+                                        'My Plan',
+                                        style: TextStyle(
+                                          fontSize:
+                                              14 * clampedScale.clamp(0.8, 1.0),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                  SizedBox(
+                                      width: 8 * clampedScale.clamp(0.8, 1.0)),
+                                  IconButton(
+                                    onPressed: () {
+                                      Navigator.pushNamed(
+                                          context, '/portion-size-details');
+                                    },
+                                    icon: Icon(
+                                      Icons.back_hand,
+                                      size: 24 * clampedScale.clamp(0.8, 1.0),
+                                      color: const Color(0xFF4294FF),
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: const Color(0xFF889EE6)
+                                          .withValues(alpha: 0.15),
+                                      padding: const EdgeInsets.all(8),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         );
                       },
@@ -454,7 +485,7 @@ class _TrackerGridState extends State<TrackerGrid>
             children: [
               Flexible(
                 child: Text(
-                  'Daily Meal Plan Goals',
+                  'Daily Meal Goals',
                   style: TextStyle(
                     fontSize: 20 * clampedScale,
                     fontWeight: FontWeight.bold,
@@ -469,75 +500,101 @@ class _TrackerGridState extends State<TrackerGrid>
                 builder: (context) {
                   AppLogger.d(
                       '🎯 TrackerGrid: Building My Plan showcase widget (skeleton)');
-                  return showcaseview.Showcase(
-                    key: TourKeys.myPlanButtonKey,
-                    title: 'View Your Meal Plan',
-                    description: TourDescriptions.myPlan,
-                    targetShapeBorder: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                    ),
-                    tooltipBackgroundColor:
-                        TourTooltipStyle.tooltipBackgroundColor,
-                    textColor: TourTooltipStyle.textColor,
-                    overlayColor: TourTooltipStyle.overlayColor,
-                    overlayOpacity: TourTooltipStyle.overlayOpacity,
-                    toolTipMargin: TourTooltipStyle.toolTipMargin,
-                    titleTextStyle: TourTooltipStyle.titleStyle,
-                    descTextStyle: TourTooltipStyle.descriptionStyle,
-                    onTargetClick: () {
-                      AppLogger.d(
-                          '🎯 TrackerGrid: User tapped on My Plan showcase (skeleton) - navigating');
-                      // Navigate to meal plan page - don't complete step yet
-                      Navigator.pushNamed(context, '/meal-plan');
-                      // Step will be completed when user clicks "Continue Tour" on diet plan page
-                    },
-                    onToolTipClick: () {
-                      AppLogger.d(
-                          '🎯 TrackerGrid: User clicked on My Plan tooltip (skeleton) - navigating');
-                      Navigator.pushNamed(context, '/meal-plan');
-                    },
-                    disposeOnTap: false,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Consumer<ForcedTourProvider>(
-                        builder: (context, tourProvider, child) {
-                          return ElevatedButton(
-                            onPressed: () {
-                              // During tour, only allow if on myPlan step
-                              if (tourProvider.isTourActive &&
-                                  !tourProvider.isOnStep(TourStep.myPlan)) {
-                                return;
-                              }
-                              AppLogger.d(
-                                  '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
-                              // Navigate to meal plan page - don't complete step yet
-                              Navigator.pushNamed(context, '/meal-plan');
-                              // Step will be completed when user clicks "Continue Tour" on diet plan page
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFFFF6B35), // Orange color
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 16 * clampedScale.clamp(1.0, 1.2),
-                                  vertical: 8 * clampedScale.clamp(1.0, 1.2)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Consumer<ForcedTourProvider>(
+                      builder: (context, tourProvider, child) {
+                        void onPlanPressed() {
+                          if (tourProvider.isTourActive &&
+                              !tourProvider.isOnStep(TourStep.myPlan)) {
+                            return;
+                          }
+                          Navigator.pushNamed(context, '/meal-plan');
+                        }
+
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            showcaseview.Showcase(
+                              key: TourKeys.myPlanButtonKey,
+                              title: 'View Your Meal Plan',
+                              description: TourDescriptions.myPlan,
+                              targetShapeBorder: const RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(20)),
                               ),
-                              elevation: 0,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'My Plan',
-                              style: TextStyle(
-                                fontSize: 14 * clampedScale.clamp(1.0, 1.2),
-                                fontWeight: FontWeight.w500,
+                              tooltipBackgroundColor:
+                                  TourTooltipStyle.tooltipBackgroundColor,
+                              textColor: TourTooltipStyle.textColor,
+                              overlayColor: TourTooltipStyle.overlayColor,
+                              overlayOpacity: TourTooltipStyle.overlayOpacity,
+                              toolTipMargin: TourTooltipStyle.toolTipMargin,
+                              titleTextStyle: TourTooltipStyle.titleStyle,
+                              descTextStyle: TourTooltipStyle.descriptionStyle,
+                              onTargetClick: () {
+                                AppLogger.d(
+                                    '🎯 TrackerGrid: User tapped on My Plan showcase (skeleton) - navigating');
+                                Navigator.pushNamed(context, '/meal-plan');
+                              },
+                              onToolTipClick: () {
+                                AppLogger.d(
+                                    '🎯 TrackerGrid: User clicked on My Plan tooltip (skeleton) - navigating');
+                                Navigator.pushNamed(context, '/meal-plan');
+                              },
+                              disposeOnTap: false,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  AppLogger.d(
+                                      '🎯 TrackerGrid: User clicked on My Plan button (skeleton)');
+                                  onPlanPressed();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF6B35),
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal:
+                                          16 * clampedScale.clamp(1.0, 1.2),
+                                      vertical:
+                                          8 * clampedScale.clamp(1.0, 1.2)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  elevation: 0,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'My Plan',
+                                  style: TextStyle(
+                                    fontSize: 14 * clampedScale.clamp(1.0, 1.2),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                            SizedBox(width: 8 * clampedScale.clamp(1.0, 1.2)),
+                            IconButton(
+                              onPressed: () {
+                                Navigator.pushNamed(
+                                    context, '/portion-size-details');
+                              },
+                              icon: Icon(
+                                Icons.back_hand,
+                                size: 24 * clampedScale.clamp(1.0, 1.2),
+                                color: const Color(0xFFFF6B35),
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF6B35)
+                                    .withValues(alpha: 0.15),
+                                padding: const EdgeInsets.all(8),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   );
                 },

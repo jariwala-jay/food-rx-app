@@ -161,6 +161,34 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/cantaloupe.jpg'
     },
+    {
+      'name': 'Blueberries',
+      'id': 'blueberries',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/blueberries.jpg'
+    },
+    {
+      'name': 'Raspberries',
+      'id': 'raspberries',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/raspberries.jpg'
+    },
+    {
+      'name': 'Mango',
+      'id': 'mango',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/mango.jpg'
+    },
+    {
+      'name': 'Pineapple',
+      'id': 'pineapple',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/pineapple.jpg'
+    },
+    {
+      'name': 'Avocado',
+      'id': 'avocado',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/avocado.jpg'
+    },
   ],
   'canned_fruits': [
     {
@@ -292,6 +320,32 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/sweet-potato.jpg'
     },
+    {
+      'name': 'Garlic',
+      'id': 'garlic',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/garlic.jpg'
+    },
+    {
+      'name': 'Mushrooms',
+      'id': 'mushrooms',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/mushrooms.jpg'
+    },
+    {
+      'name': 'Kale',
+      'id': 'kale',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/kale.jpg'
+    },
+    {
+      'name': 'Corn',
+      'id': 'corn',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/corn.jpg'
+    },
+    {
+      'name': 'Peas',
+      'id': 'peas',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/peas.jpg'
+    },
   ],
   'canned_veggies': [
     {
@@ -415,6 +469,18 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'id': 'cornmeal',
       'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cornmeal.jpg'
     },
+    {
+      'name': 'Tortillas',
+      'id': 'tortillas',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/flour-tortilla.jpg'
+    },
+    {
+      'name': 'Rice Noodles',
+      'id': 'rice-noodles',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/rice-noodles.jpg'
+    },
   ],
   'protein': [
     {
@@ -487,6 +553,24 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/split-peas-green.jpg'
     },
+    {
+      'name': 'Chicken Breast',
+      'id': 'chicken-breast',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/chicken-breasts.jpg'
+    },
+    {
+      'name': 'Ground Beef',
+      'id': 'ground-beef',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/ground-beef.jpg'
+    },
+    {
+      'name': 'Olive Oil',
+      'id': 'olive-oil',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/olive-oil.jpg'
+    },
   ],
   'dairy': [
     {
@@ -535,6 +619,12 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'id': 'powdered-milk',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/milk-powdered.jpg'
+    },
+    {
+      'name': 'Evaporated Milk',
+      'id': 'evaporated-milk',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/evaporated-milk.png'
     },
   ],
   'seasonings': [
@@ -603,6 +693,27 @@ const Map<String, List<Map<String, dynamic>>> commonFoodPantryItems = {
       'id': 'italian-seasoning',
       'imageUrl':
           'https://spoonacular.com/cdn/ingredients_100x100/dried-herbs.png'
+    },
+    {
+      'name': 'Cinnamon',
+      'id': 'cinnamon',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/cinnamon.jpg'
+    },
+    {
+      'name': 'Nutmeg',
+      'id': 'nutmeg',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/nutmeg.jpg'
+    },
+    {
+      'name': 'Curry Powder',
+      'id': 'curry-powder',
+      'imageUrl':
+          'https://spoonacular.com/cdn/ingredients_100x100/curry-powder.jpg'
+    },
+    {
+      'name': 'Parsley',
+      'id': 'parsley',
+      'imageUrl': 'https://spoonacular.com/cdn/ingredients_100x100/parsley.jpg'
     },
   ],
 };

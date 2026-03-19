@@ -17,6 +17,9 @@ class AppFormField extends StatelessWidget {
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final Function(String)? onFieldSubmitted;
+  final bool enableSuggestions;
+  final bool autocorrect;
+  final TextCapitalization textCapitalization;
 
   const AppFormField({
     super.key,
@@ -33,6 +36,9 @@ class AppFormField extends StatelessWidget {
     this.focusNode,
     this.textInputAction,
     this.onFieldSubmitted,
+    this.enableSuggestions = true,
+    this.autocorrect = true,
+    this.textCapitalization = TextCapitalization.sentences,
   });
 
   @override
@@ -52,6 +58,9 @@ class AppFormField extends StatelessWidget {
           validator: validator,
           keyboardType: keyboardType,
           obscureText: obscureText,
+          enableSuggestions: enableSuggestions,
+          autocorrect: autocorrect,
+          textCapitalization: textCapitalization,
           inputFormatters: inputFormatters,
           readOnly: readOnly,
           onTap: onTap,
@@ -789,6 +798,8 @@ class AppSearchAnchor extends StatelessWidget {
   final FutureOr<Iterable<Widget>> Function(BuildContext, SearchController)
       suggestionsBuilder;
   final SearchController? controller;
+  /// Optional padding to control search bar height (e.g. match header height with Recipe page).
+  final EdgeInsetsGeometry? barPadding;
 
   const AppSearchAnchor({
     super.key,
@@ -797,6 +808,7 @@ class AppSearchAnchor extends StatelessWidget {
     this.leading,
     this.trailing,
     this.controller,
+    this.barPadding,
   });
 
   @override
@@ -812,6 +824,9 @@ class AppSearchAnchor extends StatelessWidget {
           hintText: hintText,
           leading: leading ?? Icon(Icons.search, color: Colors.grey[400]),
           trailing: trailing,
+          padding: barPadding != null
+              ? WidgetStateProperty.all(barPadding!)
+              : null,
           backgroundColor: WidgetStateProperty.all(Colors.white),
           elevation: WidgetStateProperty.all(0.0),
           shape: WidgetStateProperty.all(

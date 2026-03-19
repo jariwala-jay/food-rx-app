@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
+import 'package:flutter_app/core/services/simple_notification_service.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
+import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -13,15 +16,48 @@ class NotificationCenterPage extends StatefulWidget {
 }
 
 class _NotificationCenterPageState extends State<NotificationCenterPage> {
+  static final SimpleNotificationService _expiringService =
+      SimpleNotificationService();
+
   @override
   void initState() {
     super.initState();
-    // Load notifications when the page opens
+    // Load notifications and ensure expiring-ingredient digest exists for today
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final notificationManager =
           Provider.of<NotificationManager>(context, listen: false);
       notificationManager.loadNotifications();
+      _ensureExpiringNotificationThenReload(notificationManager);
+      _ensureExpiredNotificationThenReload(notificationManager);
     });
+  }
+
+  /// If user has pantry items expiring in the next 3 days, ensure we have
+  /// an expiring_ingredient notification for today, then reload the list.
+  Future<void> _ensureExpiringNotificationThenReload(
+      NotificationManager notificationManager) async {
+    try {
+      final userId = await ApiClient.userId;
+      if (userId == null || userId.isEmpty) return;
+      await _expiringService.checkExpiringIngredients(userId);
+      await notificationManager.loadNotifications();
+    } catch (_) {
+      // Ignore; list already loaded
+    }
+  }
+
+  /// If user has expired pantry items, ensure we have an expired_items
+  /// notification for today, then reload the list.
+  Future<void> _ensureExpiredNotificationThenReload(
+      NotificationManager notificationManager) async {
+    try {
+      final userId = await ApiClient.userId;
+      if (userId == null || userId.isEmpty) return;
+      await _expiringService.checkExpiredItems(userId);
+      await notificationManager.loadNotifications();
+    } catch (_) {
+      // Ignore; list already loaded
+    }
   }
 
   @override
@@ -327,6 +363,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     switch (type) {
       case NotificationType.expiring_ingredient:
         return Colors.orange;
+      case NotificationType.expired_items:
+        return const Color(0xFFFF6A00);
       case NotificationType.tracker_reminder:
         return Colors.green;
       case NotificationType.admin:
@@ -340,6 +378,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     switch (type) {
       case NotificationType.expiring_ingredient:
         return Icons.warning;
+      case NotificationType.expired_items:
+        return Icons.warning_amber_rounded;
       case NotificationType.tracker_reminder:
         return Icons.restaurant_menu;
       case NotificationType.admin:
@@ -355,6 +395,12 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       case NotificationType.expiring_ingredient:
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 1)),
+          (route) => false,
+        );
+        break;
+      case NotificationType.expired_items:
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ExpiredItemsPage()),
           (route) => false,
         );
         break;

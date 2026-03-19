@@ -63,9 +63,9 @@ class TrackerCard extends StatelessWidget {
     } else if (progress <= 1.0 || alwaysGreenAboveGoal) {
       return const Color(
           0xFF2CCC87); // Green for near goal to 100% (or above for special categories)
-    } else {
-      return const Color(0xFFFF5275); // Red for > 100% (for regular trackers)
-    }
+      } else {
+        return const Color(0xFFFF3B30); // Red for > 100% (for regular trackers)
+      }
   }
 
   // Helper to check if a category should stay green above goal
@@ -355,7 +355,7 @@ class ProgressCirclePainter extends CustomPainter {
       // Full circle - green for fruits/veggies/water, red for others
       final overColor = stayGreenAboveGoal
           ? const Color(0xFF2CCC87) // Green for fruits/veggies/water
-          : const Color(0xFFFF5275); // Red for other trackers
+          : const Color(0xFFFF3B30); // Red for other trackers
       final overPaint = Paint()
         ..color = overColor
         ..style = PaintingStyle.stroke

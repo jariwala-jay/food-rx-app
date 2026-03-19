@@ -11,6 +11,7 @@ import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
+import 'package:flutter_app/features/recipes/widgets/servings_consumed_modal.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -18,11 +19,17 @@ import 'package:provider/provider.dart';
 class RecipeDetailPage extends StatefulWidget {
   final Recipe recipe;
   final int? targetServings;
+  /// When true (e.g. opened from Prepared recipes), hide "I Cooked This" and show only back.
+  final bool fromPreparedRecipes;
+  /// Optional leftover servings when opened from Prepared recipes.
+  final double? leftoverServings;
 
   const RecipeDetailPage({
     Key? key,
     required this.recipe,
     this.targetServings,
+    this.fromPreparedRecipes = false,
+    this.leftoverServings,
   }) : super(key: key);
 
   @override
@@ -98,7 +105,35 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
   }
 
-  Future<void> _cookRecipe() async {
+  /// Shows the servings consumed modal; on confirm, runs cook logic with scaled values.
+  Future<void> _showServingsModalAndCook() async {
+    final recipeServings = _adjustedRecipe.servings;
+    if (recipeServings <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid recipe servings'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    final result = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => ServingsConsumedModal(
+        recipeServings: recipeServings,
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    await _performCookRecipe(result);
+  }
+
+  Future<void> _performCookRecipe(double servingsConsumed) async {
     setState(() {
       _isCooking = true;
     });
@@ -111,18 +146,24 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       final trackerProvider =
           Provider.of<TrackerProvider>(context, listen: false);
 
+      final recipeServings = _adjustedRecipe.servings.toDouble();
+      final consumedFraction = (recipeServings > 0)
+          ? (servingsConsumed / recipeServings).clamp(0.0, 1.0)
+          : 1.0;
+
       if (kDebugMode) {
         print('\n🍳 ===== RECIPE DETAIL PAGE COOKING =====');
         print('Recipe: ${_adjustedRecipe.title}');
-        print('Recipe servings: ${_adjustedRecipe.servings}');
+        print('Recipe servings: $recipeServings, consumed: $servingsConsumed');
+        print('Consumed fraction: $consumedFraction');
       }
 
-      // Step 1: Deduct ingredients from pantry
+      // Step 1: Deduct ingredients from pantry (scaled by consumed fraction)
       final scaledIngredients = _adjustedRecipe.extendedIngredients
           .map((ing) => {
                 'name': ing.nameClean,
-                'amount': ing.amount,
-                'unit': ing.unit, // Units are now clean from the source
+                'amount': ing.amount * consumedFraction,
+                'unit': ing.unit,
               })
           .toList();
 
@@ -179,19 +220,15 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         print('✅ Pantry changes persisted to database');
       }
 
-      // Step 2: Add to diet tracking (1 serving per person)
-      // Track ALL ingredients from the recipe for dietary purposes
-      // This is separate from pantry deduction - we track nutrition regardless
+      // Step 2: Add to diet tracking (scaled by servings consumed)
       final user = authController.currentUser;
       final userDietType =
           user?.dietType?.toLowerCase() ?? 'myplate'; // Default to MyPlate
 
-      const servingsPerPerson = 1;
-
       if (kDebugMode) {
         print('\n🥗 DIET TRACKING...');
-        print('User diet type: $userDietType');
-        print('Tracking ALL recipe ingredients for dietary purposes:');
+        print('User diet type: $userDietType, servings consumed: $servingsConsumed');
+        print('Tracking recipe ingredients for consumed portions:');
       }
 
       // Aggregate servings by category to avoid duplicate updates
@@ -216,13 +253,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             continue;
           }
 
-          // Calculate servings for the user's selected diet only
-          // This is the amount per person (total recipe amount divided by servings)
+          // Calculate servings: amount per serving * servings consumed
           final perPersonAmount = ingredient.amount / _adjustedRecipe.servings;
 
           dietServings = _dietService.getServingsForTracker(
             ingredientName: ingredient.nameClean,
-            amount: perPersonAmount * servingsPerPerson,
+            amount: perPersonAmount * servingsConsumed,
             unit: ingredient.unit,
             category: category,
             dietType: userDietType,
@@ -245,9 +281,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             .firstOrNull;
 
         if (sodiumNutrient != null) {
-          // Convert sodium amount per serving to mg if needed
-          // The nutrition data is typically per serving, so we multiply by servingsPerPerson
-          double sodiumMg = sodiumNutrient.amount * servingsPerPerson;
+          // Convert sodium amount per serving to mg (scale by servings consumed)
+          double sodiumMg = sodiumNutrient.amount * servingsConsumed;
 
           // Convert to mg if in different units
           if (sodiumNutrient.unit.toLowerCase() == 'g') {
@@ -290,17 +325,37 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
       // Step 3: Show success message
       if (mounted) {
+        final servingText = servingsConsumed == servingsConsumed.truncateToDouble()
+            ? servingsConsumed.toInt().toString()
+            : servingsConsumed.toStringAsFixed(2);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Recipe cooked! Ingredients deducted from pantry (${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} successful) and ALL recipe ingredients added to diet tracking.',
+              'Logged $servingText serving(s)! Pantry: ${deductionResult.successfulDeductions}/${deductionResult.totalIngredientsProcessed} deducted. Diet tracking updated.',
             ),
             backgroundColor: Colors.green,
           ),
         );
       }
 
-      // Navigate back to home
+      // Step 4: Store leftover in Prepared recipes (for "Prepared recipes" list)
+      final leftoverServings =
+          _adjustedRecipe.servings.toDouble() - servingsConsumed;
+      if (leftoverServings > 0 && mounted) {
+        try {
+          final recipeController =
+              Provider.of<RecipeController>(context, listen: false);
+          await recipeController.logPreparedFromCook(
+            recipe: _adjustedRecipe,
+            totalServings: _adjustedRecipe.servings.toDouble(),
+            consumedServings: servingsConsumed,
+          );
+        } catch (e) {
+          debugPrint('Failed to save prepared recipe leftover: $e');
+        }
+      }
+
+      // Navigate back to recipe tab
       if (mounted) {
         Navigator.of(context).pop();
       }
@@ -337,12 +392,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: _buildCookButton(),
-        ),
-      ),
+      bottomNavigationBar: widget.fromPreparedRecipes
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _buildCookButton(),
+              ),
+            ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,7 +439,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isCooking ? null : _cookRecipe,
+        onPressed: _isCooking ? null : _showServingsModalAndCook,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFFF6A00),
           foregroundColor: Colors.white,
@@ -473,6 +530,18 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                 style:
                     const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
+              if (widget.fromPreparedRecipes &&
+                  (widget.leftoverServings ?? 0) > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '${(widget.leftoverServings! == widget.leftoverServings!.truncateToDouble()) ? widget.leftoverServings!.toInt().toString() : widget.leftoverServings!.toStringAsFixed(2)} serving${widget.leftoverServings == 1 ? '' : 's'} left',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFFFF6A00),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -481,8 +550,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             return IconButton(
               icon: Icon(
                 controller.isRecipeSaved(_adjustedRecipe.id)
-                    ? Icons.bookmark
-                    : Icons.bookmark_border,
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
                 color: const Color(0xFFFF6A00),
                 size: 28,
               ),

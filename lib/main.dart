@@ -16,10 +16,11 @@ import 'package:flutter_app/features/chatbot/views/chatbot_page.dart';
 import 'package:flutter_app/features/education/controller/article_controller.dart';
 import 'package:flutter_app/features/education/models/article.dart';
 import 'package:flutter_app/features/education/repositories/article_repository.dart';
-import 'package:flutter_app/features/education/repositories/mongo_article_repository.dart';
+import 'package:flutter_app/features/education/repositories/http_article_repository.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/features/home/views/meal_plan_page.dart';
 import 'package:flutter_app/features/home/views/diet_plan_viewer_page.dart';
+import 'package:flutter_app/features/home/views/portion_size_details_page.dart';
 import 'package:flutter_app/features/profile/views/profile_page.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
@@ -28,7 +29,6 @@ import 'package:flutter_app/features/recipes/application/recipe_generation_servi
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart';
 import 'package:flutter_app/features/recipes/repositories/spoonacular_recipe_repository.dart';
-import 'package:flutter_app/features/recipes/repositories/mongo_recipe_repository.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository_impl.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
@@ -38,7 +38,6 @@ import 'package:flutter_app/core/services/forced_tour_service.dart';
 import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/core/services/diet_constraints_service.dart';
 import 'package:flutter_app/features/home/services/tip_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
@@ -70,9 +69,6 @@ void main() async {
       // Continue without Firebase - the app will use local notifications only
     }
 
-    final mongoDBService = MongoDBService();
-    await mongoDBService.initialize();
-
     // Initialize notification service
     final notificationService = NotificationService();
     await notificationService.initialize();
@@ -95,7 +91,6 @@ void main() async {
       MultiProvider(
         providers: [
           // Core services
-          Provider<MongoDBService>.value(value: mongoDBService),
           Provider<UnitConversionService>(
               create: (_) => UnitConversionService()),
           Provider<FoodCategoryService>(
@@ -117,13 +112,11 @@ void main() async {
 
           // Feature-specific Repositories
           Provider<ArticleRepository>(
-            create: (context) =>
-                MongoArticleRepository(context.read<MongoDBService>()),
+            create: (context) => HttpArticleRepository(),
           ),
           Provider<RecipeRepository>(
             create: (context) => RecipeRepositoryImpl(
               SpoonacularRecipeRepository(),
-              MongoRecipeRepository(context.read<MongoDBService>()),
             ),
           ),
           Provider<IngredientRepository>(
@@ -138,8 +131,7 @@ void main() async {
 
           // Dependent Controllers (as ProxyProviders)
           ChangeNotifierProvider(
-              create: (context) =>
-                  TipProvider(TipService(context.read<MongoDBService>()))),
+              create: (context) => TipProvider(TipService())),
 
           // Forced Tour Provider
           ChangeNotifierProvider<ForcedTourProvider>(
@@ -152,7 +144,6 @@ void main() async {
 
           ChangeNotifierProxyProvider<AuthController, PantryController>(
             create: (context) => PantryController(
-              context.read<MongoDBService>(),
               conversionService: context.read<UnitConversionService>(),
               ingredientSubstitutionService:
                   context.read<IngredientSubstitutionService>(),
@@ -377,6 +368,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         '/home': (context) => const MainScreen(),
         '/chatbot': (context) => const ChatbotPage(),
         '/meal-plan': (context) => const MealPlanPage(),
+        '/portion-size-details': (context) => const PortionSizeDetailsPage(),
         '/diet-plan-viewer': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>;

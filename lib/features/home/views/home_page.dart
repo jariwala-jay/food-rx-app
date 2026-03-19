@@ -8,11 +8,10 @@ import 'dart:typed_data';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/home/providers/tip_provider.dart';
 import 'package:flutter_app/features/home/models/tip.dart';
+import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/image_cache_service.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/tracking/views/tracker_grid.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
-import 'package:flutter_app/features/tracking/services/tracker_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/features/notifications/views/notification_center_page.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -27,8 +26,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  // Add WidgetsBindingObserver mixin
-  final _mongoDBService = MongoDBService();
   Uint8List? _profilePhotoData;
   String? _lastDietType; // Track last diet type to detect changes
   bool _isDisposed = false;
@@ -115,25 +112,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // Flag to prevent duplicate initial data loads on first build
   bool _isInitialLoadComplete = false;
+  // One-time retry if initial load failed (e.g. connection not ready yet)
+  bool _hasRetriedLoad = false;
 
   // Track last diet plan to detect changes (even if dietType stays the same)
   int? _lastTargetCalories;
   Map<String, dynamic>? _lastSelectedDietPlan;
 
-  // Map myPlanType to tracker dietType
-  // According to the diet assignment matrix:
-  // - When diabetes is detected, the matrix assigns diet: "DASH"
-  // - myPlanType is set to 'DiabetesPlate' for display/education purposes
-  // - But the actual dietType returned is 'DASH', so DiabetesPlate users get DASH trackers
-  // - Regular users: myPlanType == dietType (DASH or MyPlate)
-  String _mapMyPlanTypeToDietType(String? planType) {
-    if (planType == null) return 'MyPlate';
-    if (planType == 'DASH') return 'DASH';
-    if (planType == 'DiabetesPlate')
-      return 'DASH'; // DiabetesPlate uses DASH trackers (per matrix rules)
-    if (planType == 'MyPlate') return 'MyPlate';
-    // Default fallback
-    return 'MyPlate';
+  /// Plan key for tracker storage: MyPlate, DASH (Hypertension), or DiabetesPlate.
+  String _planKeyForTrackers(String? myPlanType, String? dietType) {
+    return myPlanType ?? dietType ?? 'MyPlate';
   }
 
   // Helper to check if diet plan values have changed
@@ -182,9 +170,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _isInitialLoadComplete = true; // Mark as started
         final authProvider =
             Provider.of<AuthController>(context, listen: false);
+        final trackerProvider =
+            Provider.of<TrackerProvider>(context, listen: false);
         final user = authProvider.currentUser;
         _lastDietType =
-            _mapMyPlanTypeToDietType(user?.myPlanType ?? user?.dietType);
+            _planKeyForTrackers(user?.myPlanType, user?.dietType);
         _lastTargetCalories = user?.targetCalories;
         _lastSelectedDietPlan = user?.selectedDietPlan != null
             ? Map<String, dynamic>.from(user!.selectedDietPlan!)
@@ -192,6 +182,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _loadDataForRefresh(); // Initial data load
         _loadProfilePhoto(); // Profile photo loads once
         _initializeNotificationManager(); // Initialize notification manager
+        // If first load failed (e.g. connection), retry once after a short delay
+        if (user != null && user.id != null) {
+          Future.delayed(const Duration(seconds: 3), () {
+            if (!mounted || _isDisposed || _hasRetriedLoad) return;
+            if (trackerProvider.dailyTrackers.isEmpty &&
+                trackerProvider.weeklyTrackers.isEmpty &&
+                !trackerProvider.isLoading) {
+              _hasRetriedLoad = true;
+              _loadDataForRefresh();
+            }
+          });
+        }
       }
     });
   }
@@ -241,13 +243,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final user = authProvider.currentUser;
     if (user != null && user.id != null) {
-      // Map myPlanType to tracker dietType
-      // According to diet assignment matrix: DiabetesPlate users get DASH diet
-      // myPlanType can be "DASH", "MyPlate", or "DiabetesPlate"
-      // For trackers: DiabetesPlate -> DASH, MyPlate -> MyPlate, DASH -> DASH
+      // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
       String? myPlanType = user.myPlanType;
       final dietType =
-          _mapMyPlanTypeToDietType(myPlanType ?? user.dietType ?? 'MyPlate');
+          _planKeyForTrackers(myPlanType, user.dietType);
 
       // Check if diet type has changed from last known value
       if (_lastDietType != null && _lastDietType != dietType) {
@@ -312,7 +311,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (photoId != null) {
       try {
-        final photoData = await _mongoDBService.getProfilePhoto(photoId);
+        final photoData = await ApiClient.getBytes('/api/profile-photos/$photoId');
         if (photoData != null && mounted) {
           setState(() {
             _profilePhotoData = Uint8List.fromList(photoData);
@@ -599,9 +598,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Consumer<AuthController>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
-        // Map myPlanType to tracker dietType (DiabetesPlate -> MyPlate)
+        // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
         final dietType =
-            _mapMyPlanTypeToDietType(user?.myPlanType ?? user?.dietType);
+            _planKeyForTrackers(user?.myPlanType, user?.dietType);
 
         // Get current diet plan values
         final currentTargetCalories = user?.targetCalories;
@@ -635,39 +634,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!mounted || _isDisposed) return;
-            // Clear old tracker cache and force reload
+            // Clear in-memory trackers only; keep SharedPreferences cache for
+            // all diet types so switching back (e.g. MyPlate → DASH) can use
+            // cached data if the API fails or is slow.
             final trackerProvider =
                 Provider.of<TrackerProvider>(context, listen: false);
             final authProvider =
                 Provider.of<AuthController>(context, listen: false);
             var user = authProvider.currentUser;
 
-            // Clear trackers and cache first
             trackerProvider.clearTrackers();
             if (user?.id != null) {
-              // Clear cache to force fresh load
-              final trackerService = TrackerService();
-              await trackerService.clearUserTrackerCache(user!.id!);
-
-              // Wait a moment to ensure cache is cleared
-              await Future.delayed(const Duration(milliseconds: 100));
-
-              // Re-fetch user after delay to ensure it's still valid (user might have logged out)
+              // Re-fetch user after a brief moment (user might have logged out)
+              await Future.delayed(const Duration(milliseconds: 50));
               if (mounted && !_isDisposed) {
                 user = authProvider.currentUser;
               }
             }
 
-            // Reload with new diet type and plan (force reload)
+            // Reload with new diet type and plan (force reload).
+            // Only reinitialize trackers when diet type changed; when only plan changed
+            // (e.g. DASH <-> Diabetes, both map to DASH), preserve logged values.
             if (mounted && !_isDisposed && user?.id != null) {
               final personalizedDietPlan = user?.selectedDietPlan;
               final dietType =
-                  _mapMyPlanTypeToDietType(user?.myPlanType ?? user?.dietType);
+                  _planKeyForTrackers(user?.myPlanType, user?.dietType);
               await trackerProvider.loadUserTrackers(
                 user!.id!,
                 dietType,
                 personalizedDietPlan: personalizedDietPlan,
                 forceReload: true,
+                // Do NOT reinitialize trackers here; that would wipe today's
+                // logged values when switching between plans. Reinit is handled
+                // explicitly when generating a new personalized plan.
+                reinitializeTrackers: false,
               );
             }
           });
@@ -751,6 +751,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             ),
                             Row(
                               children: [
+                                // Chatbot icon temporarily disabled
+                                // IconButton(
+                                //   icon: const Icon(Icons.chat_bubble_outline),
+                                //   onPressed: () {
+                                //     if (tourProvider.isTourActive) return;
+                                //     Navigator.pushNamed(context, '/chatbot');
+                                //   },
+                                // ),
                                 Consumer<NotificationManager>(
                                   builder:
                                       (context, notificationManager, child) {

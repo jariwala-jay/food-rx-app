@@ -2,6 +2,7 @@ import 'package:flutter_app/core/utils/objectid_helper.dart';
 
 enum NotificationType {
   expiring_ingredient,
+  expired_items,
   tracker_reminder,
   admin,
   education,

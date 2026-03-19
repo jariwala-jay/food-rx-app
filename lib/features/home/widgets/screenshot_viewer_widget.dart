@@ -60,6 +60,30 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
     List<String> mainImages =
         await _loadImagesFromFolder(mainFolderPath, widget.planType);
 
+    // Exclude 8.png and 9.png for MyPlate (shown on Portion Size Details page)
+    if (widget.planType == 'MyPlate') {
+      mainImages = mainImages
+          .where((path) => !path.endsWith('8.png') && !path.endsWith('9.png'))
+          .toList();
+    }
+
+    // For Diabetes Plate \"My Plan\", only show 1–6 and 9 (skip 7 & 8),
+    // then append glycemic index images (if enabled) below.
+    if (widget.planType == 'DiabetesPlate') {
+      const keepSuffixes = [
+        '1.png',
+        '2.png',
+        '3.png',
+        '4.png',
+        '5.png',
+        '6.png',
+        '9.png',
+      ];
+      mainImages = mainImages
+          .where((path) => keepSuffixes.any((s) => path.endsWith(s)))
+          .toList();
+    }
+
     // Then, if showGlycemicIndex is true, load glycemic index images
     List<String> glycemicImages = [];
     if (widget.showGlycemicIndex && widget.planType != 'GlycemicIndex') {

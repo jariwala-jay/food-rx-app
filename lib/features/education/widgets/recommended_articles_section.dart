@@ -2,14 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/features/education/models/article.dart';
 import 'package:flutter_app/features/education/views/article_detail_page.dart';
 import 'package:flutter_app/features/education/widgets/article_card.dart';
+import 'package:flutter_app/features/education/widgets/plan_video_card.dart';
 
 class RecommendedArticlesSection extends StatelessWidget {
   final List<Article> articles;
+  /// User's plan type (DiabetesPlate, DASH, MyPlate) - when set, shows plan video card first
+  final String? myPlanType;
 
   const RecommendedArticlesSection({
     Key? key,
     required this.articles,
+    this.myPlanType,
   }) : super(key: key);
+
+  static String _planDisplayTitle(String planType) {
+    switch (planType) {
+      case 'DiabetesPlate':
+        return 'Diabetes Plate';
+      case 'DASH':
+        return 'DASH Diet';
+      case 'MyPlate':
+        return 'MyPlate';
+      default:
+        return planType;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +38,10 @@ class RecommendedArticlesSection extends StatelessWidget {
     // Base: 120 (image) + 24 (padding) + ~40 (text) = ~184, add buffer for scaling
     final baseHeight = 220.0;
     final sectionHeight = baseHeight * clampedScale.clamp(1.0, 1.15);
+
+    final hasVideoCard = myPlanType != null &&
+        (myPlanType == 'DiabetesPlate' || myPlanType == 'DASH' || myPlanType == 'MyPlate');
+    final itemCount = (hasVideoCard ? 1 : 0) + articles.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,15 +58,26 @@ class RecommendedArticlesSection extends StatelessWidget {
           height: sectionHeight,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: articles.length,
+            itemCount: itemCount,
             itemBuilder: (context, index) {
-              final article = articles[index];
+              if (hasVideoCard && index == 0) {
+                return Container(
+                  width: MediaQuery.of(context).size.width * 0.7,
+                  margin: const EdgeInsets.only(right: 16),
+                  child: PlanVideoCard(
+                    planType: myPlanType!,
+                    title: _planDisplayTitle(myPlanType!),
+                  ),
+                );
+              }
+              final articleIndex = hasVideoCard ? index - 1 : index;
+              final article = articles[articleIndex];
               return Container(
                 width: MediaQuery.of(context).size.width * 0.7,
                 margin: const EdgeInsets.only(right: 16),
                 child: ArticleCard(
                   article: article,
-                  isRecommended: true, // Use different layout for recommended
+                  isRecommended: true,
                   onTap: () {
                     Navigator.push(
                       context,

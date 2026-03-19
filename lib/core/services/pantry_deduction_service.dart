@@ -71,7 +71,12 @@ class PantryDeductionService {
       updatedItems: updatedPantryItems,
       itemsToRemove: itemsToRemove,
       totalIngredientsProcessed: scaledIngredients.length,
-      successfulDeductions: deductionResults.where((r) => r.wasDeducted).length,
+      // Count an ingredient as "deducted" if we matched at least one pantry
+      // item and removed some quantity, even if we couldn't satisfy the full
+      // required amount. This makes the UI summary (e.g. "3/7 deducted")
+      // reflect partial matches instead of only fully-covered ingredients.
+      successfulDeductions:
+          deductionResults.where((r) => r.pantryDeductions.isNotEmpty).length,
       averageConfidence: _calculateAverageConfidence(deductionResults),
       deductedAt: DateTime.now(),
     );
@@ -221,19 +226,46 @@ class PantryDeductionService {
       return true;
     }
 
-    // Remove common prefixes/suffixes and check again
+    // Remove common prefixes/suffixes, sizes, and descriptors, then check again
     final cleanRequired = _cleanIngredientName(requiredLower);
     final cleanAvailable = _cleanIngredientName(availableLower);
-    
-    return cleanRequired == cleanAvailable;
+
+    if (cleanRequired.isEmpty || cleanAvailable.isEmpty) {
+      return cleanRequired == cleanAvailable;
+    }
+
+    if (cleanRequired == cleanAvailable) return true;
+
+    // Final loose check: singular/plural forms after cleaning
+    String singularize(String s) {
+      if (s.endsWith('ses')) return s.substring(0, s.length - 2); // e.g. "dresses" → "dres" (best-effort)
+      if (s.endsWith('ies')) return s.substring(0, s.length - 3) + 'y';
+      if (s.endsWith('s') && !s.endsWith('ss')) return s.substring(0, s.length - 1);
+      return s;
+    }
+
+    return singularize(cleanRequired) == singularize(cleanAvailable);
   }
 
   /// Cleans ingredient names for better matching
   String _cleanIngredientName(String name) {
-    return name
-        .replaceAll(RegExp(r'\b(fresh|dried|ground|chopped|diced|sliced|organic|raw)\b'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    var cleaned = name;
+
+    // Remove punctuation and parentheses content for matching purposes
+    cleaned = cleaned.replaceAll(RegExp(r'\(.*?\)'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
+
+    // Remove common descriptors (sizes, prep, quality)
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'\b(fresh|dried|ground|chopped|diced|sliced|organic|raw|small|medium|large|ripe|very ripe|boneless|skinless|low[- ]fat|nonfat|fat[- ]free)\b',
+      ),
+      '',
+    );
+
+    // Collapse whitespace
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return cleaned;
   }
 
   /// Calculates average confidence across all deductions

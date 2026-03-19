@@ -115,10 +115,11 @@ class RecipeCard extends StatelessWidget {
                           return IconButton(
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
+                            iconSize: 28,
                             icon: Icon(
                               controller.isRecipeSaved(recipe.id)
-                                  ? Icons.bookmark
-                                  : Icons.bookmark_border,
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
                               color: const Color(0xFFFF6A00),
                             ),
                             onPressed: () {

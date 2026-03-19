@@ -87,19 +87,21 @@ class TrackerProvider extends ChangeNotifier {
 
   Future<void> loadUserTrackers(String userId, String dietType,
       {Map<String, dynamic>? personalizedDietPlan,
-      bool forceReload = false}) async {
+      bool forceReload = false,
+      bool reinitializeTrackers = false}) async {
     // Prevent concurrent loads for the same diet type (unless forced)
     if (!forceReload && _isLoading && _currentLoadingDietType == dietType) {
       return;
     }
 
-    // If forced reload, clear state first
+    // If forced reload, clear in-memory state only.
+    // Do not clear SharedPreferences cache for the user; keeping other diet
+    // types' cache allows fallback when switching back (e.g. MyPlate → DASH).
     if (forceReload) {
       _dailyTrackers = [];
       _weeklyTrackers = [];
       _lastLoadedDietType = null;
       _currentLoadingDietType = null;
-      await _trackerService.clearUserTrackerCache(userId);
     }
 
     // If we're already loaded with this diet type, skip reload (unless forced)
@@ -108,7 +110,8 @@ class TrackerProvider extends ChangeNotifier {
         (_dailyTrackers.isNotEmpty || _weeklyTrackers.isEmpty)) {
       final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
       if (allTrackers.isNotEmpty &&
-          allTrackers.every((t) => t.dietType == dietType)) {
+          allTrackers.every((t) =>
+              t.dietType.toLowerCase() == dietType.toLowerCase())) {
         return;
       }
     }
@@ -133,7 +136,8 @@ class TrackerProvider extends ChangeNotifier {
           // Strictly verify trackers match the requested diet type
           final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
           final hasMatchingDietType = allTrackers.isNotEmpty &&
-              allTrackers.every((t) => t.dietType == dietType);
+              allTrackers.every((t) =>
+                  t.dietType.toLowerCase() == dietType.toLowerCase());
 
           if (hasMatchingDietType &&
               (_dailyTrackers.isNotEmpty || _weeklyTrackers.isNotEmpty)) {
@@ -145,7 +149,7 @@ class TrackerProvider extends ChangeNotifier {
                 final categoryName = tracker.category.name.toLowerCase();
                 double? expectedValue;
 
-                if (dietType == 'DASH') {
+                if (dietType == 'DASH' || dietType == 'DiabetesPlate') {
                   if (categoryName == 'vegetables' ||
                       categoryName == 'veggies') {
                     expectedValue =
@@ -204,18 +208,20 @@ class TrackerProvider extends ChangeNotifier {
               // Clear cached trackers if they don't match personalized plan
               _dailyTrackers = [];
               _weeklyTrackers = [];
-              await _trackerService.clearUserTrackerCache(userId);
+              await _trackerService.clearUserTrackerCacheForDietType(
+                  userId, dietType);
             }
           } else if (allTrackers.isNotEmpty && !hasMatchingDietType) {
             // Clear mismatched trackers - this indicates stale cache
             _dailyTrackers = [];
             _weeklyTrackers = [];
-            // Clear all cache for this user to prevent future conflicts
-            await _trackerService.clearUserTrackerCache(userId);
+            await _trackerService.clearUserTrackerCacheForDietType(
+                userId, dietType);
           }
         } catch (localError) {
           // Clear cache on error and continue to database
-          await _trackerService.clearUserTrackerCache(userId);
+          await _trackerService.clearUserTrackerCacheForDietType(
+              userId, dietType);
         }
       } // End of forceReload check for cache
 
@@ -234,14 +240,14 @@ class TrackerProvider extends ChangeNotifier {
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
 
-        // If personalized diet plan is provided and we're forcing a reload,
-        // ALWAYS reinitialize trackers with new personalized values
-        // This ensures we get fresh trackers with correct values, not updates to old ones
-        if (forceReload && personalizedDietPlan != null) {
-          // Clear cache again before reinitializing to ensure no stale data
-          await _trackerService.clearUserTrackerCache(userId);
-          // Delete existing trackers and create new ones with personalized values
-          // This is more reliable than trying to update existing trackers
+        // Only reinitialize when diet type actually changed (e.g. DASH -> MyPlate).
+        // When only selectedDietPlan changed within same diet type (e.g. DASH <-> Diabetes),
+        // skip reinit to preserve logged currentValue on existing trackers.
+        if (forceReload &&
+            personalizedDietPlan != null &&
+            reinitializeTrackers) {
+          await _trackerService.clearUserTrackerCacheForDietType(
+              userId, dietType);
           await _initializeDefaultTrackers(userId, dietType,
               personalizedDietPlan: personalizedDietPlan);
           // Reload trackers after reinitialization to get fresh values
@@ -258,31 +264,56 @@ class TrackerProvider extends ChangeNotifier {
       // Verify trackers match the requested diet type (critical validation)
       final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
       final hasMatchingDietType = allTrackers.isNotEmpty &&
-          allTrackers.every((t) => t.dietType == dietType);
+          allTrackers.every((t) =>
+              t.dietType.toLowerCase() == dietType.toLowerCase());
 
-      // If trackers are empty OR don't match diet type, initialize new ones
+      // MyPlate: 7 daily; DASH/DiabetesPlate: 8 daily + 2 weekly
+      final expectedDailyCount =
+          dietType == 'MyPlate' ? 7 : 8;
+      final expectedWeeklyCount = dietType == 'MyPlate' ? 0 : 2;
+      final hasIncompleteTrackers = hasMatchingDietType &&
+          (_dailyTrackers.length < expectedDailyCount ||
+              _weeklyTrackers.length < expectedWeeklyCount);
+
+      // Reinitialize only when truly empty or wrong type. Do NOT reinit when we have
+      // valid daily trackers but e.g. weekly failed to load (second switch would wipe progress).
       if (_dailyTrackers.isEmpty && _weeklyTrackers.isEmpty) {
         await _initializeDefaultTrackers(userId, dietType,
             personalizedDietPlan: personalizedDietPlan);
-        // Reload after initialization to get the newly created trackers
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
       } else if (!hasMatchingDietType) {
-        // Clear mismatched trackers from provider
+        // Wrong type only: clear cache and reinitialize
         _dailyTrackers = [];
         _weeklyTrackers = [];
-        // Clear cache to prevent future conflicts
-        await _trackerService.clearUserTrackerCache(userId);
-        // Initialize with correct diet type
+        await _trackerService.clearUserTrackerCacheForDietType(
+            userId, dietType);
         await _initializeDefaultTrackers(userId, dietType,
             personalizedDietPlan: personalizedDietPlan);
-        // Reload after initialization to get the newly created trackers
         _dailyTrackers =
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
+      } else if (hasIncompleteTrackers) {
+        // If we're missing daily trackers (e.g. only 1 daily), reinit so the
+        // dashboard shows all goals. If we have all daily but missing weekly,
+        // keep current state so we don't wipe progress on second switch.
+        final hasFullDailySet = _dailyTrackers.length >= expectedDailyCount;
+        if (!hasFullDailySet) {
+          _dailyTrackers = [];
+          _weeklyTrackers = [];
+          await _trackerService.clearUserTrackerCacheForDietType(
+              userId, dietType);
+          await _initializeDefaultTrackers(userId, dietType,
+              personalizedDietPlan: personalizedDietPlan);
+          _dailyTrackers =
+              await _trackerService.getDailyTrackers(userId, dietType);
+          _weeklyTrackers =
+              await _trackerService.getWeeklyTrackers(userId, dietType);
+        }
+        // else: have all daily, only weekly short - keep state (no reinit)
       } else if (personalizedDietPlan != null) {
         // Trackers are valid and match diet type, check if they need personalized updates
         // Compare current tracker values with personalized diet plan values
@@ -294,7 +325,7 @@ class TrackerProvider extends ChangeNotifier {
           double? expectedValue;
 
           // Map category names to personalized diet plan keys
-          if (dietType == 'DASH') {
+          if (dietType == 'DASH' || dietType == 'DiabetesPlate') {
             if (categoryName == 'vegetables' || categoryName == 'veggies') {
               expectedValue =
                   (personalizedDietPlan['vegetablesMax'] as num?)?.toDouble();
@@ -336,12 +367,13 @@ class TrackerProvider extends ChangeNotifier {
         }
 
         if (needsUpdate) {
-          // Clear cache first to ensure fresh load
-          await _trackerService.clearUserTrackerCache(userId);
-          // Update trackers with personalized values
-          await _trackerService.updateTrackersWithPersonalizedPlan(
-              userId, dietType, personalizedDietPlan);
-          // Reload trackers after update
+          await _trackerService.clearUserTrackerCacheForDietType(
+              userId, dietType);
+          // Update only goal values so currentValue (today's progress) is preserved
+          final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
+          await _trackerService.updateTrackerGoalsFromPlan(
+              allTrackers, dietType, personalizedDietPlan);
+          // Reload trackers to get updated goal values
           _dailyTrackers =
               await _trackerService.getDailyTrackers(userId, dietType);
           _weeklyTrackers =

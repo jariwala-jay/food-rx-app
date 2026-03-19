@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/features/tracking/views/meal_goals_history_page.dart';
 
 class AddActionSheet extends StatefulWidget {
   const AddActionSheet({Key? key}) : super(key: key);
@@ -62,7 +64,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
                 label: 'Generate Recipe',
                 shouldClose: false,
                 enabled: !isAddButtonStep, // Disable during tour
-                onTap: () {
+                onTap: () async {
                   if (isAddButtonStep) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -74,19 +76,60 @@ class _AddActionSheetState extends State<AddActionSheet> {
                     );
                     return;
                   }
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
+                  // Push Create Recipe and wait for result; then close sheet and switch to Recipe tab if user generated
+                  final switched = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(
                       builder: (_) => const CreateRecipeView(),
                     ),
                   );
+                  if (switched == true && context.mounted) {
+                    Navigator.of(context).pop(2); // close sheet, tell MainScreen to switch to Recipe tab (index 2)
+                  }
                 },
               ),
               ModalActionButton(
                 iconAsset: 'assets/icons/activity.svg',
-                label: 'Coming soon',
-                enabled: false,
-                onTap: () {},
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: 'Goal Progress',
+                shouldClose: true,
+                enabled: !isAddButtonStep,
+                onTap: () {
+                  if (isAddButtonStep) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Please tap \"Add FoodRx Items\" to continue the tour'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
+                  final auth =
+                      Provider.of<AuthController>(context, listen: false);
+                  final user = auth.currentUser;
+                  if (user == null || user.id == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please log in again to view history.'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: Color(0xFFFF6A00),
+                      ),
+                    );
+                    return;
+                  }
+                  // Close the sheet first
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => MealGoalsHistoryPage(
+                        userId: user.id!,
+                        dietType: user.dietType,
+                        accountCreatedAt: user.createdAt,
+                      ),
+                    ),
+                  );
+                },
               ),
               Showcase(
                 key: TourKeys.addFoodRxItemsKey,

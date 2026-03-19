@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
-import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/pantry_api_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter/foundation.dart';
@@ -11,7 +11,7 @@ import '../repositories/spoonacular_ingredient_repository.dart';
 
 class PantryItemPickerProvider extends ChangeNotifier {
   final IngredientRepository _ingredientRepository;
-  final MongoDBService _mongoDBService;
+  final PantryApiService _pantryApi = PantryApiService();
   final AuthController _authProvider;
   final bool isFoodPantryItem;
 
@@ -30,7 +30,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
   List<PantryItem> get selectedItemsList => _selectedItems.values.toList();
 
   PantryItemPickerProvider(
-      this._ingredientRepository, this._mongoDBService, this._authProvider,
+      this._ingredientRepository, this._authProvider,
       {this.isFoodPantryItem = true});
 
   List<String> _mapUserAllergiesToIntolerances() {
@@ -418,7 +418,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
         final itemToSave = item.copyWith(isPantryItem: isFoodPantryItem);
         developer.log(
             'Attempting to save item: ${itemToSave.name} with isPantryItem: ${itemToSave.isPantryItem}');
-        await _mongoDBService.addPantryItem(userId, itemToSave.toMap());
+        await _pantryApi.addPantryItem(userId, itemToSave.toMap());
       }
       _selectedItems.clear();
       isLoading = false;
