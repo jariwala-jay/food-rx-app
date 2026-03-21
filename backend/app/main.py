@@ -5,12 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 
 from app.database import get_database, close_database
-from app.routers import auth, education, pantry, recipes, trackers, notifications, tips
+from app.routers import auth, education, pantry, recipes, trackers, notifications, tips, chatbot
+from app.services.rag_service import rag_service
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     await get_database()
+    await rag_service.initialize()
     yield
     await close_database()
 
@@ -37,6 +39,7 @@ app.include_router(recipes.router)
 app.include_router(trackers.router)
 app.include_router(notifications.router)
 app.include_router(tips.router)
+app.include_router(chatbot.router)
 
 
 @app.get("/")

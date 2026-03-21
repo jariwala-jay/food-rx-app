@@ -35,7 +35,7 @@ import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/features/home/providers/tip_provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/services/forced_tour_service.dart';
-import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
+import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/diet_constraints_service.dart';
@@ -58,7 +58,7 @@ void main() async {
 
   try {
     await dotenv.load(fileName: ".env");
-    DialogflowService.initialize();
+    RagChatbotService.resetConversation(); // ensure clean state on startup
 
     // Initialize Firebase first (before any Firebase services)
     try {

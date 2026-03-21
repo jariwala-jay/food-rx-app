@@ -248,9 +248,30 @@ class _MainScreenState extends State<MainScreen> {
         }
         */
         _wasTourActive = tourProvider.isTourActive;
+        // Show chatbot FAB on Home, Recipe and Education tabs (not Pantry)
+        final showChatFab =
+            _currentIndex == 0 || _currentIndex == 2 || _currentIndex == 3;
+
         Widget scaffold = WillPopScope(
           onWillPop: () async => false,
           child: Scaffold(
+            floatingActionButton: showChatFab
+                ? FloatingActionButton(
+                    heroTag: 'chatbot_fab',
+                    backgroundColor: const Color(0xFFFF6A00),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/chatbot'),
+                    tooltip: 'Ask Nutrition Assistant',
+                    child: Image.asset(
+                      'assets/icons/chatbot.png',
+                      width: 26,
+                      height: 26,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
+            floatingActionButtonLocation:
+                FloatingActionButtonLocation.endFloat,
             body: Stack(
               children: [
                 IndexedStack(

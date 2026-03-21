@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
     # Optional: set BROADCAST_SECRET in .env to enable POST /notifications/broadcast
     broadcast_secret: str = ""
+    # Gemini API key for RAG chatbot
+    gemini_api_key: str = ""
 
     class Config:
         env_file = "../.env"  # Read from project root .env (shared with Flutter)

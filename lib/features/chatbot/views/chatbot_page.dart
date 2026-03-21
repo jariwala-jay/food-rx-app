@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/features/chatbot/services/dialogflow_service.dart';
+import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'dart:math';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
@@ -90,7 +90,7 @@ class _ChatbotPageState extends State<ChatbotPage>
       if (mounted) await Future.delayed(const Duration(milliseconds: 500));
 
       if (!mounted) return;
-      final response = await DialogflowService.sendMessage(message);
+      final response = await RagChatbotService.sendMessage(message);
 
       if (!mounted) return;
       _addBotMessage(response);
