@@ -48,6 +48,8 @@ app.*.map.json
 /android/app/release
 
 # GCloud
+/gcloud/functions/notification-scheduler/node_modules/
+/gcloud/functions/notification-delivery/node_modules/
 /gcloud/functions/tracker-reset/node_modules/
 /gcloud/functions/tracker-reset/.env
 /gcloud/functions/tracker-reset/package-lock.json

@@ -60,11 +60,28 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     }
   }
 
+  void _goBackToHome() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const MainScreen(initialIndex: 0),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: _goBackToHome,
+          tooltip: 'Back to Home',
+        ),
         title: const Text('Notifications'),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -367,6 +384,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         return const Color(0xFFFF6A00);
       case NotificationType.tracker_reminder:
         return Colors.green;
+      case NotificationType.app_inactivity_reminder:
+        return const Color(0xFF5C6BC0);
       case NotificationType.admin:
         return Colors.blue;
       case NotificationType.education:
@@ -382,6 +401,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         return Icons.warning_amber_rounded;
       case NotificationType.tracker_reminder:
         return Icons.restaurant_menu;
+      case NotificationType.app_inactivity_reminder:
+        return Icons.notifications_active_outlined;
       case NotificationType.admin:
         return Icons.admin_panel_settings;
       case NotificationType.education:
@@ -417,6 +438,12 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         );
         break;
       case NotificationType.tracker_reminder:
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
+          (route) => false,
+        );
+        break;
+      case NotificationType.app_inactivity_reminder:
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
           (route) => false,

@@ -1,5 +1,5 @@
 // Google Cloud Function for Notification Scheduling
-// Handles only expiring ingredients and tracker reminders
+// Handles expiring ingredients and inactivity reminders.
 
 const { MongoClient, ObjectId } = require("mongodb");
 
@@ -51,7 +51,13 @@ exports.notificationScheduler = async (req, res) => {
         result = await checkExpiringIngredients();
         break;
       case "tracker_reminder":
-        result = await checkTrackerReminders();
+        result = await checkMealLoggingInactivityReminders();
+        break;
+      case "app_inactivity_reminder":
+        result = await checkAppInactivityReminders();
+        break;
+      case "run_all":
+        result = await runAllNotificationChecks();
         break;
       case "test":
         result = {
@@ -62,7 +68,7 @@ exports.notificationScheduler = async (req, res) => {
       default:
         return res.status(400).json({
           error:
-            "Invalid notification type. Use: expiring_ingredients, tracker_reminder, or test",
+            "Invalid notification type. Use: expiring_ingredients, tracker_reminder, app_inactivity_reminder, run_all, or test",
         });
     }
 
@@ -72,6 +78,84 @@ exports.notificationScheduler = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+const MEAL_LOGGING_DAY_MILESTONES = [1, 2, 3, 4, 5, 6];
+const MEAL_LOGGING_WEEK_MILESTONES = [7, 14, 21, 28];
+const MEAL_LOGGING_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+const APP_OPEN_DAY_MILESTONES = [1, 2, 3, 4, 5, 6];
+const APP_OPEN_WEEK_MILESTONES = [7, 14, 21, 28];
+const APP_OPEN_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+function toStartOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function dayDiffFloor(later, earlier) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor(
+    (toStartOfDay(later).getTime() - toStartOfDay(earlier).getTime()) / msPerDay
+  );
+}
+
+function addMonths(date, months) {
+  const d = new Date(date);
+  const originalDay = d.getDate();
+  d.setMonth(d.getMonth() + months);
+  if (d.getDate() < originalDay) {
+    d.setDate(0);
+  }
+  return d;
+}
+
+function getInactivityBucket(now, referenceDate, dayMilestones, weekMilestones, monthMilestones) {
+  if (!referenceDate) return null;
+
+  const days = dayDiffFloor(now, referenceDate);
+  if (days <= 0) return null;
+
+  for (const d of dayMilestones) {
+    if (days === d) {
+      return { key: `d${d}`, days };
+    }
+  }
+
+  for (const w of weekMilestones) {
+    if (days === w) {
+      return { key: `w${w / 7}`, days };
+    }
+  }
+
+  for (const m of monthMilestones) {
+    const target = addMonths(toStartOfDay(referenceDate), m);
+    const targetDay = toStartOfDay(target).getTime();
+    const todayDay = toStartOfDay(now).getTime();
+    if (targetDay === todayDay) {
+      return { key: `m${m}`, days };
+    }
+  }
+
+  return null;
+}
+
+function bucketLabel(bucketKey) {
+  if (!bucketKey || bucketKey.length < 2) return "";
+  const kind = bucketKey[0];
+  const value = parseInt(bucketKey.slice(1), 10);
+  if (Number.isNaN(value)) return "";
+  if (kind === "d") return `${value} day${value > 1 ? "s" : ""}`;
+  if (kind === "w") return `${value} week${value > 1 ? "s" : ""}`;
+  if (kind === "m") return `${value} month${value > 1 ? "s" : ""}`;
+  return "";
+}
+
+function formatBucketMessage(prefix, bucketKey) {
+  const label = bucketLabel(bucketKey);
+  if (!label) return prefix;
+  return `${prefix} It's been ${label}.`;
+}
 
 /**
  * Check for expiring pantry items (3 days before expiry)
@@ -217,9 +301,9 @@ async function checkExpiringIngredients() {
 }
 
 /**
- * Check if users need tracker reminders (8 PM EST)
+ * Meal logging inactivity reminders.
  */
-async function checkTrackerReminders() {
+async function checkMealLoggingInactivityReminders() {
   let db;
   try {
     db = await connectToMongo();
@@ -227,16 +311,13 @@ async function checkTrackerReminders() {
     const notificationsCollection = db.collection("notifications");
     const usersCollection = db.collection("users");
 
-    console.log("[Tracker Reminder] Starting check");
+    console.log("[Meal Logging Reminder] Starting check");
 
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Get total user count
     const totalUsers = await usersCollection.countDocuments({});
-    console.log(`[Tracker Reminder] Total users to check: ${totalUsers}`);
+    console.log(`[Meal Logging Reminder] Total users to check: ${totalUsers}`);
 
     // Process users in batches to avoid memory issues
     const BATCH_SIZE = 1000;
@@ -258,54 +339,62 @@ async function checkTrackerReminders() {
       }
 
       console.log(
-        `[Tracker Reminder] Processing batch: ${users.length} users (${processedUsers + users.length}/${totalUsers} total)`
+        `[Meal Logging Reminder] Processing batch: ${users.length} users (${processedUsers + users.length}/${totalUsers} total)`
       );
 
       for (const user of users) {
         const userId = user._id.toHexString();
 
-        // Check if user has any progress today
-        const todayProgress = await progressCollection
+        const latestProgress = await progressCollection
           .find({
             userId: userId,
-            progressDate: {
-              $gte: today,
-              $lt: tomorrow,
-            },
           })
+          .sort({ progressDate: -1 })
+          .limit(1)
           .toArray();
 
-        if (todayProgress.length > 0) {
-          console.log(
-            `[Tracker Reminder] User ${userId} has logged today, skipping`
-          );
+        if (latestProgress.length === 0) {
           continue;
         }
 
-        // Check if reminder already sent today
-        const today2 = new Date();
-        today2.setHours(0, 0, 0, 0);
+        const latestDate = new Date(latestProgress[0].progressDate);
+        if (Number.isNaN(latestDate.getTime())) {
+          continue;
+        }
 
+        const bucket = getInactivityBucket(
+          now,
+          latestDate,
+          MEAL_LOGGING_DAY_MILESTONES,
+          MEAL_LOGGING_WEEK_MILESTONES,
+          MEAL_LOGGING_MONTH_MILESTONES
+        );
+
+        if (!bucket) {
+          continue;
+        }
+
+        // Dedupe per bucket.
         const existing = await notificationsCollection.findOne({
           userId: userId,
           type: "tracker_reminder",
-          createdAt: { $gte: today2 },
+          bucketKey: bucket.key,
         });
 
         if (existing) {
-          console.log(
-            `[Tracker Reminder] Reminder already sent today for user ${userId}`
-          );
           continue;
         }
 
-        // Create reminder
         await notificationsCollection.insertOne({
           userId: userId,
           type: "tracker_reminder",
-          title: "Time to log your food!",
-          message:
-            "You haven't logged anything in your tracker today. Don't forget to track your food!",
+          title: "Don't forget to log your meals",
+          message: formatBucketMessage(
+            "It's time to log your food and stay on track with your nutrition goals.",
+            bucket.key
+          ),
+          bucketKey: bucket.key,
+          daysSinceLastLog: bucket.days,
           createdAt: new Date(),
         });
 
@@ -320,12 +409,12 @@ async function checkTrackerReminders() {
       }
 
       console.log(
-        `[Tracker Reminder] Batch complete. Progress: ${processedUsers}/${totalUsers} users processed, ${notificationsCreated} reminders created so far`
+        `[Meal Logging Reminder] Batch complete. Progress: ${processedUsers}/${totalUsers} users processed, ${notificationsCreated} reminders created so far`
       );
     }
 
     console.log(
-      `[Tracker Reminder] Completed. Processed ${processedUsers} users, created ${notificationsCreated} reminders`
+      `[Meal Logging Reminder] Completed. Processed ${processedUsers} users, created ${notificationsCreated} reminders`
     );
 
     return {
@@ -333,7 +422,112 @@ async function checkTrackerReminders() {
       notificationsCreated: notificationsCreated,
     };
   } catch (error) {
-    console.error("Error checking tracker reminders:", error);
-    throw new Error(`Tracker reminder check failed: ${error.message}`);
+    console.error("Error checking meal logging inactivity reminders:", error);
+    throw new Error(`Meal logging reminder check failed: ${error.message}`);
   }
+}
+
+/**
+ * App-open inactivity reminders.
+ */
+async function checkAppInactivityReminders() {
+  let db;
+  try {
+    db = await connectToMongo();
+    const usersCollection = db.collection("users");
+    const notificationsCollection = db.collection("notifications");
+
+    console.log("[App Inactivity Reminder] Starting check");
+
+    const now = new Date();
+    const totalUsers = await usersCollection.countDocuments({});
+    console.log(`[App Inactivity Reminder] Total users to check: ${totalUsers}`);
+
+    const BATCH_SIZE = 1000;
+    let notificationsCreated = 0;
+    let processedUsers = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const users = await usersCollection
+        .find({})
+        .skip(processedUsers)
+        .limit(BATCH_SIZE)
+        .toArray();
+
+      if (users.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const user of users) {
+        const userId = user._id.toHexString();
+        const rawLastActive = user.lastActiveAt || user.lastLoginAt || user.updatedAt;
+        if (!rawLastActive) continue;
+
+        const lastActiveDate = new Date(rawLastActive);
+        if (Number.isNaN(lastActiveDate.getTime())) continue;
+
+        const bucket = getInactivityBucket(
+          now,
+          lastActiveDate,
+          APP_OPEN_DAY_MILESTONES,
+          APP_OPEN_WEEK_MILESTONES,
+          APP_OPEN_MONTH_MILESTONES
+        );
+
+        if (!bucket) continue;
+
+        const existing = await notificationsCollection.findOne({
+          userId: userId,
+          type: "app_inactivity_reminder",
+          bucketKey: bucket.key,
+        });
+
+        if (existing) continue;
+
+        await notificationsCollection.insertOne({
+          userId: userId,
+          type: "app_inactivity_reminder",
+          title: "We miss you at MyFoodRx",
+          message: formatBucketMessage(
+            "Open the app to review your pantry, trackers, and recommendations.",
+            bucket.key
+          ),
+          bucketKey: bucket.key,
+          daysSinceLastActive: bucket.days,
+          createdAt: new Date(),
+        });
+
+        notificationsCreated++;
+      }
+
+      processedUsers += users.length;
+      if (users.length < BATCH_SIZE) hasMore = false;
+    }
+
+    console.log(
+      `[App Inactivity Reminder] Completed. Processed ${processedUsers} users, created ${notificationsCreated} reminders`
+    );
+
+    return {
+      status: "success",
+      notificationsCreated: notificationsCreated,
+    };
+  } catch (error) {
+    console.error("Error checking app inactivity reminders:", error);
+    throw new Error(`App inactivity reminder check failed: ${error.message}`);
+  }
+}
+
+async function runAllNotificationChecks() {
+  const expiring = await checkExpiringIngredients();
+  const meal = await checkMealLoggingInactivityReminders();
+  const app = await checkAppInactivityReminders();
+  return {
+    status: "success",
+    expiringIngredients: expiring.notificationsCreated || 0,
+    mealLoggingReminders: meal.notificationsCreated || 0,
+    appInactivityReminders: app.notificationsCreated || 0,
+  };
 }

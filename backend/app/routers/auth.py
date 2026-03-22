@@ -73,6 +73,7 @@ async def register(body: dict):
         "createdAt": now,
         "updatedAt": now,
         "lastLoginAt": None,
+        "lastActiveAt": now,
         "failedLoginAttempts": 0,
         "isLocked": False,
         "lockUntil": None,
@@ -184,6 +185,7 @@ async def _handle_successful_login(users, user_id: ObjectId):
                 "isLocked": False,
                 "lockUntil": None,
                 "lastLoginAt": now,
+                "lastActiveAt": now,
                 "updatedAt": now,
             }
         },
@@ -219,7 +221,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
         "preferredMealPrepTime", "cookingForPeople", "cookingSkill",
         "selectedDietPlan", "targetCalories", "macroNutrients", "mealTimings",
         "requiresGroceryList", "diagnostics", "healthGoals", "hasCompletedTour", "profilePhotoId",
-        "fcmToken",
+        "fcmToken", "lastActiveAt",
     }
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:

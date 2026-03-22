@@ -72,6 +72,14 @@ class PantryController extends ChangeNotifier {
       _pantryItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       _otherItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
 
+      // Merge rows that are the same item added on the same calendar day (sum qty).
+      try {
+        await _mergeDuplicatePantryRowsInDatabase(isPantryItem: true);
+        await _mergeDuplicatePantryRowsInDatabase(isPantryItem: false);
+      } catch (e) {
+        debugPrint('Pantry duplicate merge skipped/failed: $e');
+      }
+
       // Apply current filters after loading
       _applyFilters();
 
@@ -100,6 +108,20 @@ class PantryController extends ChangeNotifier {
     _setLoading(true);
 
     try {
+      // If the same ingredient was already added today (same category + unit), merge qty.
+      final duplicate = _findSameDayDuplicate(item);
+      if (duplicate != null) {
+        final earliestExpiry = duplicate.expirationDate.isBefore(item.expirationDate)
+            ? duplicate.expirationDate
+            : item.expirationDate;
+        final merged = duplicate.copyWith(
+          quantity: duplicate.quantity + item.quantity,
+          expirationDate: earliestExpiry,
+        );
+        await updateItem(merged);
+        return;
+      }
+
       final itemData = item.toMap();
       final itemId = await _pantryApi.addPantryItem(_userId!, itemData);
 
@@ -328,6 +350,75 @@ class PantryController extends ChangeNotifier {
     });
 
     return categories;
+  }
+
+  /// Same logical product row: name + category + calendar day added + unit.
+  String _duplicateGroupKey(PantryItem p) {
+    final d = DateTime(p.addedDate.year, p.addedDate.month, p.addedDate.day);
+    return '${p.name.toLowerCase().trim()}|${p.category}|${d.year}-${d.month}-${d.day}|${p.unitLabel}';
+  }
+
+  /// Finds an existing row that should merge with [candidate] (same day add).
+  PantryItem? _findSameDayDuplicate(PantryItem candidate) {
+    final list = candidate.isPantryItem ? _pantryItems : _otherItems;
+    final candidateKey = _duplicateGroupKey(candidate);
+    for (final p in list) {
+      if (_duplicateGroupKey(p) == candidateKey) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /// Collapses existing DB duplicates (e.g. from before merge-on-add existed).
+  Future<void> _mergeDuplicatePantryRowsInDatabase({
+    required bool isPantryItem,
+  }) async {
+    if (_userId == null) return;
+
+    final items = isPantryItem ? _pantryItems : _otherItems;
+    final groups = <String, List<PantryItem>>{};
+    for (final item in List<PantryItem>.from(items)) {
+      groups.putIfAbsent(_duplicateGroupKey(item), () => []).add(item);
+    }
+
+    var changed = false;
+    for (final list in groups.values) {
+      if (list.length < 2) continue;
+      changed = true;
+      list.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      final keeper = list.first;
+      var total = 0.0;
+      DateTime earliestExpiry = list.first.expirationDate;
+      for (final i in list) {
+        total += i.quantity;
+        if (i.expirationDate.isBefore(earliestExpiry)) {
+          earliestExpiry = i.expirationDate;
+        }
+      }
+      final merged = keeper.copyWith(
+        quantity: total,
+        expirationDate: earliestExpiry,
+      );
+      await _pantryApi.updatePantryItem(keeper.id, merged.toMap());
+      for (var i = 1; i < list.length; i++) {
+        await _pantryApi.deletePantryItem(list[i].id);
+      }
+    }
+
+    if (changed) {
+      final refreshed =
+          await _pantryApi.getPantryItems(_userId!, isPantryItem: isPantryItem);
+      if (isPantryItem) {
+        _pantryItems = refreshed;
+        _pantryItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      } else {
+        _otherItems = refreshed;
+        _otherItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      }
+    }
   }
 
   // Helper methods

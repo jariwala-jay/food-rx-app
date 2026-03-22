@@ -20,6 +20,16 @@ class AuthController with ChangeNotifier {
   ReplanTrigger? _pendingReplanTrigger;
   NotificationManager? _notificationManager;
 
+  Future<void> _markUserActive() async {
+    try {
+      await ApiClient.patch('/auth/profile', body: {
+        'lastActiveAt': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // Non-blocking heartbeat; ignore failures.
+    }
+  }
+
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -54,6 +64,7 @@ class AuthController with ChangeNotifier {
           if (userData != null && userData['email'] == userEmail) {
             _currentUser = _createUserModel(userData);
             await _initializeNotificationServices(_currentUser!.id!);
+            unawaited(_markUserActive());
           } else {
             await ApiClient.clearSession();
           }
@@ -197,6 +208,7 @@ class AuthController with ChangeNotifier {
         } catch (e) {
           debugPrint('Warning: Failed to initialize notification services: $e');
         }
+        unawaited(_markUserActive());
         return true;
       }
       _error = 'Invalid email or password';

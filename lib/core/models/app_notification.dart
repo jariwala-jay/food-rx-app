@@ -4,6 +4,7 @@ enum NotificationType {
   expiring_ingredient,
   expired_items,
   tracker_reminder,
+  app_inactivity_reminder,
   admin,
   education,
 }

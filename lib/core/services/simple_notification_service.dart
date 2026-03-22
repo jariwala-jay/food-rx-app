@@ -7,7 +7,8 @@ class SimpleNotificationService {
 
   Future<void> checkExpiringIngredients(String userId) async {
     try {
-      final expiringItems = await _pantryApi.getExpiringItems(userId, daysThreshold: 3);
+      final expiringItems =
+          await _pantryApi.getExpiringItems(userId, daysThreshold: 3);
       final now = DateTime.now();
       final threshold = now.add(const Duration(days: 3));
       final inWindow = expiringItems.where((i) {
@@ -44,16 +45,17 @@ class SimpleNotificationService {
       final list = await ApiClient.get('/notifications') as List?;
       final startOfDay = DateTime(now.year, now.month, now.day);
       final hasToday = list?.any((n) {
-        if (n is! Map) return false;
-        if (n['type'] != 'expiring_ingredient') return false;
-        final createdAt = n['createdAt']?.toString();
-        if (createdAt == null) return false;
-        try {
-          return DateTime.parse(createdAt).isAfter(startOfDay);
-        } catch (_) {
-          return false;
-        }
-      }) ?? false;
+            if (n is! Map) return false;
+            if (n['type'] != 'expiring_ingredient') return false;
+            final createdAt = n['createdAt']?.toString();
+            if (createdAt == null) return false;
+            try {
+              return DateTime.parse(createdAt).isAfter(startOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
 
       if (hasToday) {
         debugPrint('✅ Expiring digest already sent today');
@@ -73,7 +75,8 @@ class SimpleNotificationService {
 
   Future<void> checkExpiredItems(String userId) async {
     try {
-      final expiringItems = await _pantryApi.getExpiringItems(userId, daysThreshold: 0);
+      final expiringItems =
+          await _pantryApi.getExpiringItems(userId, daysThreshold: 0);
       final now = DateTime.now();
 
       final expired = expiringItems.where((i) {
@@ -102,16 +105,17 @@ class SimpleNotificationService {
       final list = await ApiClient.get('/notifications') as List?;
       final startOfDay = DateTime(now.year, now.month, now.day);
       final hasToday = list?.any((n) {
-        if (n is! Map) return false;
-        if (n['type'] != 'expired_items') return false;
-        final createdAt = n['createdAt']?.toString();
-        if (createdAt == null) return false;
-        try {
-          return DateTime.parse(createdAt).isAfter(startOfDay);
-        } catch (_) {
-          return false;
-        }
-      }) ?? false;
+            if (n is! Map) return false;
+            if (n['type'] != 'expired_items') return false;
+            final createdAt = n['createdAt']?.toString();
+            if (createdAt == null) return false;
+            try {
+              return DateTime.parse(createdAt).isAfter(startOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
 
       if (hasToday) {
         debugPrint('✅ Expired digest already sent today');
@@ -139,16 +143,17 @@ class SimpleNotificationService {
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final hasProgressToday = list?.any((p) {
-        if (p is! Map) return false;
-        final d = p['progressDate']?.toString();
-        if (d == null) return false;
-        try {
-          final dt = DateTime.parse(d);
-          return !dt.isBefore(startOfDay) && dt.isBefore(endOfDay);
-        } catch (_) {
-          return false;
-        }
-      }) ?? false;
+            if (p is! Map) return false;
+            final d = p['progressDate']?.toString();
+            if (d == null) return false;
+            try {
+              final dt = DateTime.parse(d);
+              return !dt.isBefore(startOfDay) && dt.isBefore(endOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
 
       if (!hasProgressToday) {
         await ApiClient.post('/notifications', body: {

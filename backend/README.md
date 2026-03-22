@@ -27,3 +27,7 @@ Or without activating (using the venv’s Python directly):
 ```
 
 API will be available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+
+## Deploy to Google Cloud Run (real devices)
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for steps, runtime env vars, and Flutter `API_BASE_URL`.

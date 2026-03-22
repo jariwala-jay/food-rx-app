@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
+import 'package:flutter_app/features/notifications/views/notification_center_page.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 
 class ExpiredItemsPage extends StatefulWidget {
@@ -116,6 +117,17 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
     await _confirmAndExtend(item, result);
   }
 
+  void _goBackToNotifications() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const NotificationCenterPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,6 +135,10 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: _goBackToNotifications,
+        ),
         title: const Text('Expired items'),
       ),
       body: _isLoading
