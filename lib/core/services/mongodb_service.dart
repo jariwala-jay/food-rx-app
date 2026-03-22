@@ -36,14 +36,25 @@ class MongoDBService {
   // Security constants
   static const int _saltLength = 32;
 
+  /// Ensures the connection URI has TLS enabled for Atlas (mongodb+srv).
+  /// Prevents "connection reset by peer" when the server requires TLS.
+  static String _ensureTlsInUri(String uri) {
+    final lower = uri.toLowerCase();
+    if (!lower.contains('mongodb+srv')) return uri;
+    if (lower.contains('tls=true') || lower.contains('ssl=true')) return uri;
+    final separator = uri.contains('?') ? '&' : '?';
+    return '$uri${separator}tls=true';
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     await dotenv.load();
-    final connectionString = dotenv.env['MONGODB_URL'];
+    var connectionString = dotenv.env['MONGODB_URL'];
     if (connectionString == null) {
       throw Exception('MONGODB_URL not found in .env file');
     }
+    connectionString = _ensureTlsInUri(connectionString);
 
     Db localDb;
     try {
@@ -125,21 +136,12 @@ class MongoDBService {
         return;
       }
 
-      // Check connection status
-      if (_db.state == State.CLOSED) {
-        try {
-          await _db.open().timeout(const Duration(seconds: 15), onTimeout: () {
-            throw TimeoutException(
-                'MongoDB connection timed out during reopen (15 seconds)');
-          });
-          // Add a small delay to allow connection to stabilize
-          await Future.delayed(const Duration(milliseconds: 300));
-        } catch (e) {
-          // If reopen fails, reinitialize
-          _isInitialized = false;
-          await initialize();
-          return;
-        }
+      // When Db is CLOSED, do a full reinitialize to get a fresh connection (with TLS).
+      // Reopening the same instance can leave the connection in a bad state.
+      if (_db.state == State.closed) {
+        _isInitialized = false;
+        await initialize();
+        return;
       }
 
       // Verify server status with a ping
@@ -153,9 +155,10 @@ class MongoDBService {
           throw Exception("MongoDB ping failed");
         }
       } catch (e) {
-        // If ping fails, try to reinitialize the connection
+        // If ping fails, connection may have been closed by server (e.g. Atlas idle timeout).
+        // Close and reinitialize with a fresh connection.
         try {
-          if (_db.state != State.CLOSED) {
+          if (_db.state != State.closed) {
             await _db.close();
           }
         } catch (_) {
@@ -163,6 +166,7 @@ class MongoDBService {
         }
         _isInitialized = false;
         await initialize();
+        return;
       }
     } catch (e) {
       // If retry is requested and this is the first attempt, try once more
@@ -177,7 +181,7 @@ class MongoDBService {
   }
 
   Future<void> close() async {
-    if (_isInitialized && _db.state != State.CLOSED) {
+    if (_isInitialized && _db.state != State.closed) {
       await _db.close();
       _isInitialized = false;
     }
@@ -763,12 +767,10 @@ class MongoDBService {
 
       // Check rate limiting - max 3 requests per hour
       final oneHourAgo = DateTime.now().subtract(const Duration(hours: 1));
-      final recentTokens = await _passwordResetTokensCollection
-          .find({
-            'userId': user['_id'],
-            'createdAt': {'\$gte': oneHourAgo.toIso8601String()},
-          })
-          .toList();
+      final recentTokens = await _passwordResetTokensCollection.find({
+        'userId': user['_id'],
+        'createdAt': {'\$gte': oneHourAgo.toIso8601String()},
+      }).toList();
 
       if (recentTokens.length >= 3) {
         throw Exception('Too many reset requests. Please try again later.');
@@ -835,7 +837,9 @@ class MongoDBService {
         // Mark as used even though expired
         await _passwordResetTokensCollection.updateOne(
           {'token': hashedToken},
-          {'\$set': {'used': true}},
+          {
+            '\$set': {'used': true}
+          },
         );
         return null;
       }
@@ -876,7 +880,9 @@ class MongoDBService {
       final hashedToken = _hashToken(token);
       await _passwordResetTokensCollection.updateOne(
         {'token': hashedToken},
-        {'\$set': {'used': true}},
+        {
+          '\$set': {'used': true}
+        },
       );
 
       return true;
@@ -892,7 +898,9 @@ class MongoDBService {
       final hashedToken = _hashToken(token);
       await _passwordResetTokensCollection.updateOne(
         {'token': hashedToken},
-        {'\$set': {'used': true}},
+        {
+          '\$set': {'used': true}
+        },
       );
     } catch (e) {
       throw Exception('Failed to invalidate password reset token: $e');

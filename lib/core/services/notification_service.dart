@@ -5,10 +5,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
+import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -18,7 +18,6 @@ class NotificationService {
   FirebaseMessaging? _firebaseMessaging;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final MongoDBService _mongoDBService = MongoDBService();
   String? _fcmToken;
   bool _verbose = false; // Toggle to reduce console noise
 
@@ -250,32 +249,18 @@ class NotificationService {
     }
   }
 
-  // Store FCM token in MongoDB
   Future<void> _storeFCMTokenInDatabase(String token) async {
     try {
-      await _mongoDBService.ensureConnection();
-      final usersCollection = _mongoDBService.usersCollection;
-
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-
+      final userId = await ApiClient.userId;
       if (userId != null) {
-        await usersCollection.updateOne(
-          {'_id': ObjectIdHelper.parseObjectId(userId)},
-          {
-            '\$set': {
-              'fcmToken': token,
-              'updatedAt': DateTime.now().toIso8601String()
-            }
-          },
-        );
-        debugPrint('✅ FCM token stored in database for user');
+        await ApiClient.patch('/auth/profile', body: {'fcmToken': token});
+        debugPrint('✅ FCM token stored for user');
       } else {
         debugPrint(
             '⚠️ No current user ID found, cannot store FCM token (will sync after login)');
       }
     } catch (e) {
-      debugPrint('❌ Error storing FCM token in database: $e');
+      debugPrint('❌ Error storing FCM token: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
@@ -354,20 +339,8 @@ class NotificationService {
         return;
       }
 
-      await _mongoDBService.ensureConnection();
-      final usersCollection = _mongoDBService.usersCollection;
-
-      await usersCollection.updateOne(
-        {'_id': ObjectIdHelper.parseObjectId(userId)},
-        {
-          '\$set': {
-            'fcmToken': tokenToSync,
-            'updatedAt': DateTime.now().toIso8601String()
-          }
-        },
-      );
-
-      debugPrint('✅ FCM token synced to database for user');
+      await ApiClient.patch('/auth/profile', body: {'fcmToken': tokenToSync});
+      debugPrint('✅ FCM token synced for user');
       _fcmToken = tokenToSync; // Update internal token reference
     } catch (e) {
       debugPrint('❌ Error syncing FCM token to database: $e');
@@ -464,22 +437,10 @@ class NotificationService {
     _navigateByType(type);
   }
 
-  // Mark notification as read
   Future<bool> markAsRead(String notificationId) async {
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      final result = await collection.updateOne(
-        {'_id': ObjectIdHelper.parseObjectId(notificationId)},
-        {
-          '\$set': {
-            'readAt': DateTime.now(),
-          }
-        },
-      );
-
-      return result.isSuccess;
+      await ApiClient.patch('/notifications/$notificationId/read');
+      return true;
     } catch (e) {
       debugPrint('Error marking notification as read: $e');
       return false;
@@ -598,6 +559,13 @@ void _navigateByType(dynamic type) {
 
   // 0 = Home, 1 = Pantry
   int targetIndex = 0;
+  if (type == 'expired_items') {
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ExpiredItemsPage()),
+      (route) => false,
+    );
+    return;
+  }
   if (type == 'expiring_ingredient') {
     targetIndex = 1;
   } else if (type == 'tracker_reminder') {

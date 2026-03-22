@@ -140,6 +140,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             controller: _emailController,
                             focusNode: _emailFocusNode,
                             keyboardType: TextInputType.emailAddress,
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            textCapitalization: TextCapitalization.none,
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _handleRequestReset(),
                             validator: (value) {

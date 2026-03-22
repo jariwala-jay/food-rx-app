@@ -20,7 +20,7 @@ class SpoonacularRecipeRepository {
     final Map<String, String> queryParams = {
       ...filter.toSpoonacularParams(),
       'includeIngredients': pantryIngredients.join(','),
-      'number': '20',
+      'number': '100',
       'addRecipeInformation': 'true',
       'instructionsRequired': 'true',
       'fillIngredients': 'true',
@@ -30,13 +30,20 @@ class SpoonacularRecipeRepository {
     };
 
     final uri = Uri.parse('$_baseUrl/recipes/complexSearch')
-        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
+        .replace(queryParameters: queryParams);
+
+    final headers = {
+      'X-RapidAPI-Key': _apiKey!,
+      'X-RapidAPI-Host': 'spoonacular-recipe-food-nutrition-v1.p.rapidapi.com',
+    };
 
     developer.log('Spoonacular Request URI: $uri',
         name: 'SpoonacularRecipeRepo');
 
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final String jsonString = utf8.decode(response.bodyBytes);
         // developer.log('Spoonacular complexSearch Response: $jsonString',

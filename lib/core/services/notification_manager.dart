@@ -1,58 +1,42 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
+import 'package:flutter_app/core/services/api_client.dart';
 
 class NotificationManager extends ChangeNotifier {
   final NotificationService _notificationService = NotificationService();
-  final MongoDBService _mongoDBService = MongoDBService();
 
   List<AppNotification> _notifications = [];
   String? _userId;
   bool _isLoading = false;
   String? _error;
 
-  // Getters
   List<AppNotification> get notifications => _notifications;
   bool get isLoading => _isLoading;
   String? get error => _error;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  // Initialize with user ID
   Future<void> initialize(String userId) async {
     _userId = userId;
     await loadNotifications();
   }
 
-  // Load notifications from database
   Future<void> loadNotifications() async {
     if (_userId == null) return;
-
     _setLoading(true);
     _setError(null);
-
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      final results = await collection.find({'userId': _userId!}).toList();
-
-      // Sort by createdAt descending (supports BSON Date or ISO string)
-      DateTime _asDate(dynamic v) {
-        if (v is DateTime) return v;
-        return DateTime.parse(v.toString());
+      final list = await ApiClient.get('/notifications');
+      if (list is List) {
+        _notifications = list
+            .whereType<Map<String, dynamic>>()
+            .map((doc) => AppNotification.fromJson(doc))
+            .toList();
+      } else {
+        _notifications = [];
       }
-
-      results.sort(
-          (a, b) => _asDate(b['createdAt']).compareTo(_asDate(a['createdAt'])));
-
-      // Limit to last 50 notifications
-      final limitedResults = results.take(50).toList();
-
-      _notifications =
-          limitedResults.map((doc) => AppNotification.fromJson(doc)).toList();
-
+      debugPrint(
+          'Notifications: loaded ${_notifications.length} for userId=$_userId');
       notifyListeners();
     } catch (e) {
       _setError('Failed to load notifications: $e');
@@ -62,13 +46,10 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
-  // Mark notification as read
   Future<void> markAsRead(String notificationId) async {
     try {
       final success = await _notificationService.markAsRead(notificationId);
-
       if (success) {
-        // Update local state
         final index = _notifications.indexWhere((n) => n.id == notificationId);
         if (index != -1) {
           _notifications[index] = _notifications[index].copyWith(
@@ -82,17 +63,9 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
-  // Dismiss notification
   Future<void> dismissNotification(String notificationId) async {
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      await collection.deleteOne(
-        {'_id': ObjectIdHelper.parseObjectId(notificationId)},
-      );
-
-      // Update local state
+      await ApiClient.delete('/notifications/$notificationId');
       _notifications.removeWhere((n) => n.id == notificationId);
       notifyListeners();
     } catch (e) {
@@ -100,30 +73,14 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
-  // Get unread notifications
   List<AppNotification> get unreadNotifications {
     return _notifications.where((n) => !n.isRead).toList();
   }
 
-  // Mark all notifications as read
   Future<void> markAllAsRead() async {
     if (_userId == null) return;
-
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      await collection.updateMany(
-        {'userId': _userId!},
-        {
-          '\$set': {
-            // Store as BSON Date
-            'readAt': DateTime.now(),
-          }
-        },
-      );
-
-      // Update local state
+      await ApiClient.post('/notifications/mark-all-read');
       for (int i = 0; i < _notifications.length; i++) {
         if (!_notifications[i].isRead) {
           _notifications[i] = _notifications[i].copyWith(
@@ -137,16 +94,10 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
-  // Clear all notifications
   Future<void> clearAllNotifications() async {
     if (_userId == null) return;
-
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      await collection.deleteMany({'userId': _userId!});
-
+      await ApiClient.delete('/notifications');
       _notifications.clear();
       notifyListeners();
     } catch (e) {
@@ -154,7 +105,6 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
-  // Helper methods
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -170,26 +120,14 @@ class NotificationManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Debug method to create a test notification
   Future<void> createTestNotification() async {
     if (_userId == null) return;
-
     try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      final testNotification = AppNotification(
-        userId: _userId!,
-        type: NotificationType.admin,
-        title: 'Test Notification',
-        message: 'This is a test notification to verify the system is working.',
-      );
-
-      await collection.insertOne({
-        '_id': ObjectIdHelper.parseObjectId(testNotification.id),
-        ...testNotification.toJson(),
+      await ApiClient.post('/notifications', body: {
+        'type': 'admin',
+        'title': 'Test Notification',
+        'message': 'This is a test notification to verify the system is working.',
       });
-
       debugPrint('✅ Test notification created');
       await loadNotifications();
     } catch (e) {

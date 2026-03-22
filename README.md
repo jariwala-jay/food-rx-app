@@ -27,6 +27,7 @@ Food Rx is built with a modern stack, designed for scalability and a smooth user
 - **Frontend**: Flutter
 - **State Management**: Provider
 - **Database**: MongoDB
+- **Backend API**: FastAPI (Python 3.10+) – sits between the Flutter app and MongoDB
 - **Food Data & Recipes**: Spoonacular API
 - **Chatbot**: Google Cloud Dialogflow
 - **Backend Automation**: Google Cloud Functions (for scheduled tasks like resetting trackers)
@@ -43,6 +44,7 @@ Follow these steps to get the Food Rx project up and running on your local machi
 
 - Flutter SDK (version >=3.35.3 <4.0.0)
 - An IDE (like VS Code or Android Studio) with the Flutter plugin.
+- Python 3.10+ and pip (for the backend API in `backend/`).
 - Install Ruby using Homebrew:
   - `brew install ruby`
   - `echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/.zshrc`
@@ -79,6 +81,10 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
     # MongoDB Connection String
     MONGODB_URL="mongodb+srv://<user>:<password>@<cluster-uri>/<database-name>?retryWrites=true&w=majority"
 
+    # Backend API (used by Flutter app)
+    API_BASE_URL=http://10.0.2.2:8000   # Android emulator; use http://localhost:8000 for iOS simulator
+    SECRET_KEY=<your-secret-key-32-chars>   # Backend JWT signing
+
     # Dialogflow Configuration
     DIALOGFLOW_PROJECT_ID="your-gcp-project-id"
     DIALOGFLOW_AGENT_ID="your-dialogflow-agent-id"
@@ -104,9 +110,35 @@ The application uses a `.env` file to manage sensitive API keys and configuratio
 
 > **Note**: The `.env` file and `dialogflow_auth.json` are listed in `.gitignore` and should **never** be committed to your repository.
 
-### 5. Run the Application
+### 5. Backend API (required for full app functionality)
 
-You can now run the app on a connected device or simulator:
+The app talks to a FastAPI backend instead of MongoDB directly. Set up and run it as follows:
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+The backend reads from the **root `.env`** (shared with Flutter). Ensure your root `.env` includes:
+- `MONGODB_URL` – MongoDB Atlas connection string
+- `SECRET_KEY` – Long random string (32+ chars) for JWT signing
+- `API_HOST` – Backend host (default: 0.0.0.0)
+- `API_PORT` – Backend port (default: 8000)
+
+Run the backend:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Docs: http://localhost:8000/docs  
+API spec: [backend/API.md](backend/API.md)
+
+### 6. Run the Application
+
+With the backend running (see step 5), run the app on a connected device or simulator:
 
 ```bash
 flutter run

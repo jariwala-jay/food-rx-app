@@ -159,9 +159,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
     if (_favoriteCuisines.isEmpty) {
       missingFields.add('Favorite cuisines (or "No preference")');
     }
-    // 2. Food Allergies
+    // 2. Food Allergies & Intolerances
     if (_selectedFoodAllergies.isEmpty) {
-      missingFields.add('Food allergies (or "No allergies" if you have none)');
+      missingFields.add('Food allergies & intolerances (or "No allergies" if you have none)');
     }
     // 3. Daily Fruit Intake
     if (_dailyFruitIntake == null) {
@@ -331,7 +331,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppDropdownField(
-                          label: 'Food Allergies',
+                          label: 'Food Allergies & Intolerances',
                           value: null,
                           options: const [
                             'No allergies',
@@ -345,7 +345,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             'Shellfish',
                           ],
                           onChanged: (_) {},
-                          hintText: 'Food Allergies',
+                          hintText: 'Food Allergies & Intolerances',
                           showSearchBar: true,
                           multiSelect: true,
                           selectedValues: _selectedFoodAllergies,
@@ -382,7 +382,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                         if (_showErrors && _selectedFoodAllergies.isEmpty) ...[
                           const SizedBox(height: 8),
                           const Text(
-                            'Please select your food allergies (or "No allergies" if you have none)',
+                            'Please select your food allergies & intolerances (or "No allergies" if you have none)',
                             style: TextStyle(
                               color: Colors.red,
                               fontSize: 12,

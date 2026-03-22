@@ -676,7 +676,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Allergies',
+                                    'Food Allergies & Intolerances',
                                     style: AppTypography.bg_16_m,
                                   ),
                                   const Icon(

@@ -322,6 +322,9 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             controller: _passwordController,
                             focusNode: _passwordFocusNode,
                             obscureText: _obscurePassword,
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            textCapitalization: TextCapitalization.none,
                             textInputAction: TextInputAction.next,
                             onFieldSubmitted: (_) {
                               _passwordFocusNode.unfocus();
@@ -377,6 +380,9 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             controller: _confirmPasswordController,
                             focusNode: _confirmPasswordFocusNode,
                             obscureText: _obscureConfirmPassword,
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            textCapitalization: TextCapitalization.none,
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _handleResetPassword(),
                             validator: (value) {

@@ -1,15 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
+import 'package:flutter_app/core/services/pantry_api_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/simple_notification_service.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../../recipes/models/recipe.dart';
 
 class PantryController extends ChangeNotifier {
-  final MongoDBService _mongoDBService;
+  final PantryApiService _pantryApi = PantryApiService();
   final UnitConversionService _unitConversionService;
   final IngredientSubstitutionService _ingredientSubstitutionService;
   final SimpleNotificationService _notificationService =
@@ -26,8 +25,7 @@ class PantryController extends ChangeNotifier {
   List<PantryItem> _filteredPantryItems = [];
   List<PantryItem> _filteredOtherItems = [];
 
-  PantryController(
-    this._mongoDBService, {
+  PantryController({
     required UnitConversionService conversionService,
     required IngredientSubstitutionService ingredientSubstitutionService,
   })  : _unitConversionService = conversionService,
@@ -62,23 +60,32 @@ class PantryController extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      await _mongoDBService.ensureConnection();
       final pantryItemsData =
-          await _mongoDBService.getPantryItems(_userId!, isPantryItem: true);
+          await _pantryApi.getPantryItems(_userId!, isPantryItem: true);
       final otherItemsData =
-          await _mongoDBService.getPantryItems(_userId!, isPantryItem: false);
+          await _pantryApi.getPantryItems(_userId!, isPantryItem: false);
 
-      _pantryItems =
-          pantryItemsData.map((data) => PantryItem.fromMap(data)).toList();
-      _otherItems =
-          otherItemsData.map((data) => PantryItem.fromMap(data)).toList();
+      _pantryItems = pantryItemsData;
+      _otherItems = otherItemsData;
 
       // Sort main lists by expiration date - items expiring soonest first
       _pantryItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
       _otherItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
 
+      // Merge rows that are the same item added on the same calendar day (sum qty).
+      try {
+        await _mergeDuplicatePantryRowsInDatabase(isPantryItem: true);
+        await _mergeDuplicatePantryRowsInDatabase(isPantryItem: false);
+      } catch (e) {
+        debugPrint('Pantry duplicate merge skipped/failed: $e');
+      }
+
       // Apply current filters after loading
       _applyFilters();
+
+      // If user has expired pantry items, ensure we have an expired_items
+      // digest notification for today.
+      await _notificationService.checkExpiredItems(_userId!);
 
       _setLoading(false);
     } catch (e) {
@@ -101,9 +108,22 @@ class PantryController extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      await _mongoDBService.ensureConnection();
+      // If the same ingredient was already added today (same category + unit), merge qty.
+      final duplicate = _findSameDayDuplicate(item);
+      if (duplicate != null) {
+        final earliestExpiry = duplicate.expirationDate.isBefore(item.expirationDate)
+            ? duplicate.expirationDate
+            : item.expirationDate;
+        final merged = duplicate.copyWith(
+          quantity: duplicate.quantity + item.quantity,
+          expirationDate: earliestExpiry,
+        );
+        await updateItem(merged);
+        return;
+      }
+
       final itemData = item.toMap();
-      final itemId = await _mongoDBService.addPantryItem(_userId!, itemData);
+      final itemId = await _pantryApi.addPantryItem(_userId!, itemData);
 
       final newItem = item.copyWith(id: itemId);
       if (item.isPantryItem) {
@@ -153,7 +173,7 @@ class PantryController extends ChangeNotifier {
 
       // Remove each tour item
       for (final item in tourItems) {
-        await _mongoDBService.deletePantryItem(item.id);
+        await _pantryApi.deletePantryItem(item.id);
       }
 
       // Reload items to reflect changes
@@ -170,15 +190,7 @@ class PantryController extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      await _mongoDBService.ensureConnection();
-
-      // Use robust ObjectId handling to convert any ID format to proper ObjectId
-      if (!ObjectIdHelper.isValidObjectId(itemId)) {
-        _setError('Invalid item ID format: $itemId');
-        return;
-      }
-
-      await _mongoDBService.deletePantryItem(itemId);
+      await _pantryApi.deletePantryItem(itemId);
 
       if (isPantryItem) {
         _pantryItems = _pantryItems.where((item) => item.id != itemId).toList();
@@ -202,16 +214,7 @@ class PantryController extends ChangeNotifier {
 
     try {
       final updates = item.toMap();
-
-      await _mongoDBService.ensureConnection();
-
-      // Use robust ObjectId handling
-      if (!ObjectIdHelper.isValidObjectId(item.id)) {
-        _setError('Invalid item ID format: ${item.id}');
-        return;
-      }
-
-      await _mongoDBService.updatePantryItem(item.id, updates);
+      await _pantryApi.updatePantryItem(item.id, updates);
 
       if (item.isPantryItem) {
         _pantryItems =
@@ -251,8 +254,7 @@ class PantryController extends ChangeNotifier {
     }
 
     try {
-      await _mongoDBService.ensureConnection();
-      final expiringItemsData = await _mongoDBService.getExpiringItems(_userId!,
+      final expiringItemsData = await _pantryApi.getExpiringItems(_userId!,
           daysThreshold: daysThreshold);
       return expiringItemsData.map((data) => PantryItem.fromMap(data)).toList();
     } catch (e) {
@@ -348,6 +350,75 @@ class PantryController extends ChangeNotifier {
     });
 
     return categories;
+  }
+
+  /// Same logical product row: name + category + calendar day added + unit.
+  String _duplicateGroupKey(PantryItem p) {
+    final d = DateTime(p.addedDate.year, p.addedDate.month, p.addedDate.day);
+    return '${p.name.toLowerCase().trim()}|${p.category}|${d.year}-${d.month}-${d.day}|${p.unitLabel}';
+  }
+
+  /// Finds an existing row that should merge with [candidate] (same day add).
+  PantryItem? _findSameDayDuplicate(PantryItem candidate) {
+    final list = candidate.isPantryItem ? _pantryItems : _otherItems;
+    final candidateKey = _duplicateGroupKey(candidate);
+    for (final p in list) {
+      if (_duplicateGroupKey(p) == candidateKey) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /// Collapses existing DB duplicates (e.g. from before merge-on-add existed).
+  Future<void> _mergeDuplicatePantryRowsInDatabase({
+    required bool isPantryItem,
+  }) async {
+    if (_userId == null) return;
+
+    final items = isPantryItem ? _pantryItems : _otherItems;
+    final groups = <String, List<PantryItem>>{};
+    for (final item in List<PantryItem>.from(items)) {
+      groups.putIfAbsent(_duplicateGroupKey(item), () => []).add(item);
+    }
+
+    var changed = false;
+    for (final list in groups.values) {
+      if (list.length < 2) continue;
+      changed = true;
+      list.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      final keeper = list.first;
+      var total = 0.0;
+      DateTime earliestExpiry = list.first.expirationDate;
+      for (final i in list) {
+        total += i.quantity;
+        if (i.expirationDate.isBefore(earliestExpiry)) {
+          earliestExpiry = i.expirationDate;
+        }
+      }
+      final merged = keeper.copyWith(
+        quantity: total,
+        expirationDate: earliestExpiry,
+      );
+      await _pantryApi.updatePantryItem(keeper.id, merged.toMap());
+      for (var i = 1; i < list.length; i++) {
+        await _pantryApi.deletePantryItem(list[i].id);
+      }
+    }
+
+    if (changed) {
+      final refreshed =
+          await _pantryApi.getPantryItems(_userId!, isPantryItem: isPantryItem);
+      if (isPantryItem) {
+        _pantryItems = refreshed;
+        _pantryItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      } else {
+        _otherItems = refreshed;
+        _otherItems
+            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      }
+    }
   }
 
   // Helper methods

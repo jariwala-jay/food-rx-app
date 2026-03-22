@@ -10,10 +10,11 @@ class ForcedTourService {
 
   /// Check if the current user should see the tour
   bool shouldShowTour() {
-    final user = _authController.currentUser;
-
-    final shouldShow = user != null && !user.hasCompletedTour;
-    return shouldShow;
+    // TOUR DISABLED - uncomment below to re-enable
+    return false;
+    // final user = _authController.currentUser;
+    // final shouldShow = user != null && !user.hasCompletedTour;
+    // return shouldShow;
   }
 
   /// Mark the entire tour as completed

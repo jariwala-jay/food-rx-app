@@ -6,7 +6,6 @@ import 'dart:developer' as developer;
 import 'dart:async';
 
 import '../widgets/pantry_item_add_modal.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
@@ -30,14 +29,12 @@ class PantryItemPickerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ingredientRepository = SpoonacularIngredientRepository();
-    final mongoDBService = MongoDBService();
     final authController = Provider.of<AuthController>(context, listen: false);
 
     return ChangeNotifierProvider(
       create: (_) {
         final provider = PantryItemPickerProvider(
           ingredientRepository,
-          mongoDBService,
           authController,
           isFoodPantryItem: isFoodPantryItem,
         );

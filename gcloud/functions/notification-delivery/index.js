@@ -293,7 +293,9 @@ async function sendScheduledNotifications() {
 function getNotificationColor(type) {
   const colors = {
     expiring_ingredient: "#FF9800", // Orange
+    expired_items: "#FF9800", // Orange
     tracker_reminder: "#4CAF50", // Green
+    app_inactivity_reminder: "#5C6BC0", // Indigo
     admin: "#9E9E9E", // Grey
     education: "#2196F3", // Blue
   };

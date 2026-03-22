@@ -8,6 +8,7 @@ import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter_app/features/recipes/views/create_recipe_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/features/recipes/views/saved_recipes_page.dart';
+import 'package:flutter_app/features/recipes/views/prepared_recipes_page.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -89,11 +90,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasInitialized) {
         _hasInitialized = true;
-        final controller = Provider.of<RecipeController>(context, listen: false);
+        final controller =
+            Provider.of<RecipeController>(context, listen: false);
         controller.initialize();
-        
+
         // If tour is active and on recipes step, generate fallback recipes
-        final tourProvider = Provider.of<ForcedTourProvider>(context, listen: false);
+        final tourProvider =
+            Provider.of<ForcedTourProvider>(context, listen: false);
         if (tourProvider.isOnStep(TourStep.recipes)) {
           _generateFallbackRecipes(controller);
         }
@@ -107,7 +110,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
       query: 'healthy',
       veryHealthy: true,
     );
-    
+
     await controller.generateRecipes(filter: fallbackFilter);
   }
 
@@ -130,7 +133,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
       backgroundColor: const Color(0xFFF7F7F8),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
           child: Column(
             children: [
               // Header with title
@@ -145,8 +148,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
+                  // Chatbot icon temporarily disabled
+                  // IconButton(
+                  //   icon: const Icon(Icons.chat_bubble_outline),
+                  //   iconSize: 24,
+                  //   onPressed: () {
+                  //     Navigator.pushNamed(context, '/chatbot');
+                  //   },
+                  // ),
                   IconButton(
-                    icon: const Icon(Icons.bookmark_outline),
+                    icon: const Icon(Icons.star_border_rounded),
+                    iconSize: 28,
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -157,7 +169,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
 
               // Main content
               Expanded(
@@ -249,10 +261,9 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                       final tourProvider = Provider.of<ForcedTourProvider>(
                           context,
                           listen: false);
-                      final recipeController = Provider.of<RecipeController>(
-                          context,
-                          listen: false);
-                      if (tourProvider.isOnStep(TourStep.recipes) && 
+                      final recipeController =
+                          Provider.of<RecipeController>(context, listen: false);
+                      if (tourProvider.isOnStep(TourStep.recipes) &&
                           state.recipes.isEmpty) {
                         // Generate fallback recipes for tour
                         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -268,8 +279,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                         _hasTriggeredRecipesShowcase = true;
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (!mounted) return;
-                          final tp = Provider.of<ForcedTourProvider>(
-                              context,
+                          final tp = Provider.of<ForcedTourProvider>(context,
                               listen: false);
                           if (tp.isOnStep(TourStep.recipes)) {
                             try {
@@ -408,7 +418,8 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEEFE4),
                     borderRadius: BorderRadius.circular(8),
@@ -435,6 +446,39 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          // Prepared recipes button (matches FoodRx Items pill style)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PreparedRecipesPage(),
+                  ),
+                );
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6A00),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Prepared recipes',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
         ],
@@ -596,10 +640,40 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 20),
+          // Prepared recipes button (centered) shown before first generation
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PreparedRecipesPage(),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6A00),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Prepared recipes',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                softWrap: false,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Showcase(
             key: TourKeys.generateRecipeButtonKey,
             title: 'Generate Recipes',
-            description: 'Create recipes from your pantry items.\n\n Tap to continue',
+            description:
+                'Create recipes from your pantry items.\n\n Tap to continue',
             targetShapeBorder: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(24)),
             ),
@@ -730,7 +804,42 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+
+            // Prepared recipes button (matches FoodRx Items pill style)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PreparedRecipesPage(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6A00),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Prepared recipes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             Showcase(
               key: TourKeys.generateRecipeButtonKey,

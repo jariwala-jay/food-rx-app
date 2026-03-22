@@ -50,10 +50,11 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       if (success) {
-        // Pop back to home - MaterialApp's home Consumer will automatically
-        // show MainScreen when authController.isAuthenticated becomes true
+        // Registration succeeded: explicitly navigate to the main dashboard.
+        // This avoids any ambiguity about what the root route is after signup.
         if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          Navigator.of(context)
+              .pushNamedAndRemoveUntil('/home', (route) => false);
         }
       } else {
         if (mounted) {
@@ -61,16 +62,20 @@ class _SignupPageState extends State<SignupPage> {
             SnackBar(
               content: Text(authController.error ?? 'Registration failed'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
+        final controller = context.read<AuthController>();
+        final message = controller.error ?? 'An error occurred. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An error occurred: $e'),
+            content: Text(message),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

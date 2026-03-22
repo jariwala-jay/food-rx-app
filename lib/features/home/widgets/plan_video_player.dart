@@ -15,6 +15,44 @@ class _VideoSource {
   _VideoSource({required this.path, required this.isNetwork});
 }
 
+class PlanVideoPreloader {
+  static final Map<String, VideoPlayerController> _cache = {};
+
+  static String _key(String planType, bool useFullVideo) =>
+      '$planType|${useFullVideo ? 'full' : 'short'}';
+
+  static Future<void> preload(String planType,
+      {bool useFullVideo = false}) async {
+    final key = _key(planType, useFullVideo);
+    final existing = _cache[key];
+    if (existing != null && existing.value.isInitialized) {
+      return;
+    }
+
+    try {
+      final source =
+          _PlanVideoPlayerState.getVideoSourceStatic(planType, useFullVideo);
+      VideoPlayerController controller;
+      if (source.isNetwork) {
+        controller = VideoPlayerController.networkUrl(Uri.parse(source.path));
+      } else {
+        controller = VideoPlayerController.asset(source.path);
+      }
+      await controller.initialize();
+      _cache[key] = controller;
+    } catch (e) {
+      debugPrint('PlanVideoPreloader preload error: $e');
+    }
+  }
+
+  static VideoPlayerController? takeController(
+      String planType, bool useFullVideo) {
+    final key = _key(planType, useFullVideo);
+    final controller = _cache.remove(key);
+    return controller;
+  }
+}
+
 class PlanVideoPlayer extends StatefulWidget {
   final String planType;
   final String title;
@@ -49,7 +87,8 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
   // Check if video watching is mandatory from env var
   bool get _isMandatoryVideo =>
-      dotenv.env['MANDATORY_PLAN_VIDEO']?.toLowerCase() == 'true';
+      widget.isSignupMode ||
+      (dotenv.env['MANDATORY_PLAN_VIDEO']?.toLowerCase() == 'true');
 
   @override
   void initState() {
@@ -59,6 +98,25 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
   Future<void> _initializeVideo() async {
     try {
+      // Try to reuse preloaded controller if available
+      final preloaded =
+          PlanVideoPreloader.takeController(widget.planType, widget.useFullVideo);
+      if (preloaded != null) {
+        _controller = preloaded;
+        _controller!.addListener(() {
+          if (mounted) {
+            _checkVideoCompletion();
+            setState(() {});
+          }
+        });
+        setState(() {
+          _isLoading = false;
+          _isVideoInitialized = true;
+        });
+        _controller!.play();
+        return;
+      }
+
       final videoSource = _getVideoSource(widget.planType);
 
       // Create controller based on source type (network URL or local asset)
@@ -139,8 +197,56 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     }
   }
 
+  Widget _buildLoadingPlaceholder() {
+    String thumbnailPath;
+    switch (widget.planType) {
+      case 'DASH':
+        thumbnailPath = 'assets/nutrition/screenshots/dash/1.png';
+        break;
+      case 'MyPlate':
+        thumbnailPath = 'assets/nutrition/screenshots/myplate/1.png';
+        break;
+      case 'DiabetesPlate':
+        thumbnailPath = 'assets/nutrition/screenshots/diabetes_plate/1.png';
+        break;
+      default:
+        thumbnailPath = 'assets/nutrition/screenshots/myplate/1.png';
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: Image.asset(
+              thumbnailPath,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        // Keep the bottom controls space so layout is stable
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              // Empty space where timeline/button will appear once ready
+              SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Video source information - requires cloud URLs from environment variables
   _VideoSource _getVideoSource(String planType) {
+    return _PlanVideoPlayerState.getVideoSourceStatic(
+        planType, widget.useFullVideo);
+  }
+
+  /// Static helper so preloader can compute video source without a widget.
+  static _VideoSource getVideoSourceStatic(
+      String planType, bool useFullVideo) {
     // Get cloud URL from environment variables
     // If useFullVideo is true, try full video URLs first, then fall back to regular URLs
     String? cloudUrl;
@@ -149,7 +255,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
     switch (planType) {
       case 'DASH':
-        if (widget.useFullVideo) {
+        if (useFullVideo) {
           cloudUrl = dotenv.env['DASH_VIDEO_URL_FULL'];
           envVarName = 'DASH_VIDEO_URL_FULL';
         }
@@ -159,7 +265,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         videoName = 'DASH';
         break;
       case 'MyPlate':
-        if (widget.useFullVideo) {
+        if (useFullVideo) {
           cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
           envVarName = 'MYPLATE_VIDEO_URL_FULL';
         }
@@ -169,7 +275,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         videoName = 'MyPlate';
         break;
       case 'DiabetesPlate':
-        if (widget.useFullVideo) {
+        if (useFullVideo) {
           cloudUrl = dotenv.env['DIABETES_PLATE_VIDEO_URL_FULL'];
           envVarName = 'DIABETES_PLATE_VIDEO_URL_FULL';
         }
@@ -179,7 +285,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         videoName = 'Diabetes Plate';
         break;
       default:
-        if (widget.useFullVideo) {
+        if (useFullVideo) {
           cloudUrl = dotenv.env['MYPLATE_VIDEO_URL_FULL'];
           envVarName = 'MYPLATE_VIDEO_URL_FULL';
         }
@@ -344,26 +450,41 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                 alignment: Alignment.center,
                 children: [
                   VideoPlayer(_controller!),
-                  // Play/Pause overlay
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        if (_controller!.value.isPlaying) {
-                          _controller!.pause();
-                        } else {
-                          _controller!.play();
+                  // Tap anywhere on video to play/pause.
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () async {
+                        final c = _controller;
+                        if (c == null) return;
+
+                        // If at end, restart from beginning.
+                        final duration = c.value.duration;
+                        final position = c.value.position;
+                        final isAtEnd = duration != Duration.zero &&
+                            (duration - position) <=
+                                const Duration(milliseconds: 300);
+                        if (isAtEnd) {
+                          await c.seekTo(Duration.zero);
                         }
-                      });
-                    },
-                    child: Container(
-                      color: Colors.transparent,
-                      child: _controller!.value.isPlaying
-                          ? const SizedBox.shrink()
-                          : const Icon(
-                              Icons.play_circle_filled,
-                              size: 64,
-                              color: Colors.white70,
-                            ),
+
+                        setState(() {
+                          if (c.value.isPlaying) {
+                            c.pause();
+                          } else {
+                            c.play();
+                          }
+                        });
+                      },
+                      child: Center(
+                        child: _controller!.value.isPlaying
+                            ? const SizedBox.shrink()
+                            : const Icon(
+                                Icons.play_circle_filled,
+                                size: 64,
+                                color: Colors.white70,
+                              ),
+                      ),
                     ),
                   ),
                 ],
@@ -379,9 +500,9 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
             children: [
               // Progress indicator
               _buildProgressIndicator(),
-              // Time display and controls
+              // Time display
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   Flexible(
                     child: Text(
@@ -394,60 +515,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Flexible(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _controller!.value.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow,
-                          ),
-                          onPressed: (_isMandatoryVideo &&
-                                  (widget.isTourActive ||
-                                      widget.isSignupMode) &&
-                                  !_isVideoCompleted)
-                              ? null
-                              : () {
-                                  setState(() {
-                                    if (_controller!.value.isPlaying) {
-                                      _controller!.pause();
-                                    } else {
-                                      _controller!.play();
-                                    }
-                                  });
-                                },
-                        ),
-                        if (_isMandatoryVideo &&
-                            (widget.isTourActive || widget.isSignupMode) &&
-                            !_isVideoCompleted)
-                          Flexible(
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8.0),
-                              child: Builder(
-                                builder: (context) {
-                                  final textScaleFactor =
-                                      MediaQuery.textScaleFactorOf(context);
-                                  final clampedScale =
-                                      textScaleFactor.clamp(0.8, 1.0);
-                                  return Text(
-                                    'Watch full video',
-                                    style: TextStyle(
-                                      fontSize: 12 * clampedScale,
-                                      color: Colors.orange,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                      ],
                     ),
                   ),
                 ],
@@ -507,15 +574,24 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
 
-    final canSeek =
-        !_isMandatoryVideo || (!widget.isTourActive && !widget.isSignupMode);
+    bool canSeek;
+    if (_isMandatoryVideo && (widget.isTourActive || widget.isSignupMode)) {
+      // For mandatory videos in signup/tour flows, disallow scrubbing until
+      // the user has watched the full video once.
+      canSeek = _isVideoCompleted;
+    } else {
+      canSeek = true;
+    }
 
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         activeTrackColor: const Color(0xFFFF6B35),
-        inactiveTrackColor: Colors.grey,
+        inactiveTrackColor: const Color(0xFFFFC4A3),
         thumbColor: const Color(0xFFFF6B35),
         overlayColor: const Color(0xFFFF6B35).withOpacity(0.2),
+        disabledActiveTrackColor: const Color(0xFFFF6B35),
+        disabledInactiveTrackColor: const Color(0xFFFFC4A3),
+        disabledThumbColor: const Color(0xFFFF6B35),
         trackHeight: 4.0,
       ),
       child: Slider(

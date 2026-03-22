@@ -1,32 +1,30 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app/core/models/app_notification.dart';
-import 'package:flutter_app/core/services/mongodb_service.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
+import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/core/services/pantry_api_service.dart';
 
 class SimpleNotificationService {
-  final MongoDBService _mongoDBService = MongoDBService();
+  final PantryApiService _pantryApi = PantryApiService();
 
-  /// Check expiring pantry items (3 days before expiry)
-  /// Best practice: send a single daily digest per user with a capped list of items.
   Future<void> checkExpiringIngredients(String userId) async {
     try {
-      await _mongoDBService.ensureConnection();
+      final expiringItems =
+          await _pantryApi.getExpiringItems(userId, daysThreshold: 3);
       final now = DateTime.now();
-      final threeDaysFromNow = now.add(const Duration(days: 3));
-
-      // Get expiring items
-      final expiringItems = await _mongoDBService.pantryCollection.find({
-        'userId': ObjectIdHelper.parseObjectId(userId),
-        'expiryDate': {
-          '\$lte': threeDaysFromNow.toIso8601String(),
-          '\$gte': now.toIso8601String()
+      final threshold = now.add(const Duration(days: 3));
+      final inWindow = expiringItems.where((i) {
+        final exp = i['expiryDate']?.toString();
+        if (exp == null) return false;
+        try {
+          final d = DateTime.parse(exp);
+          return d.isAfter(now) && d.isBefore(threshold);
+        } catch (_) {
+          return false;
         }
       }).toList();
 
-      if (expiringItems.isEmpty) return;
+      if (inWindow.isEmpty) return;
 
-      // Summarize items: include up to 3 names, then "+N more"
-      final names = expiringItems
+      final names = inWindow
           .map((i) => (i['name'] ?? '').toString())
           .where((n) => n.isNotEmpty)
           .toList();
@@ -44,149 +42,156 @@ class SimpleNotificationService {
           ? 'Use it in a recipe today so it doesn\'t go to waste.'
           : 'Expiring soon: $itemsSummary';
 
-      // If a digest exists today, update it instead of creating a new one
-      final collection = _mongoDBService.notificationsCollection;
+      final list = await ApiClient.get('/notifications') as List?;
       final startOfDay = DateTime(now.year, now.month, now.day);
-      final existing = await collection.findOne({
-        'userId': userId,
-        'type': 'expiring_ingredient',
-        'createdAt': {'\$gte': startOfDay}
-      });
+      final hasToday = list?.any((n) {
+            if (n is! Map) return false;
+            if (n['type'] != 'expiring_ingredient') return false;
+            final createdAt = n['createdAt']?.toString();
+            if (createdAt == null) return false;
+            try {
+              return DateTime.parse(createdAt).isAfter(startOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
 
-      if (existing != null) {
-        await collection.updateOne({
-          '_id': ObjectIdHelper.parseObjectId(
-              existing['_id']?.toString() ?? existing['id'])
-        }, {
-          '\$set': {
-            'title': title,
-            'message': message,
-            'updatedAt': DateTime.now(),
-          }
-        });
-        debugPrint('✅ Updated expiring items digest for today');
+      if (hasToday) {
+        debugPrint('✅ Expiring digest already sent today');
         return;
       }
 
-      await _createNotification(
-        userId: userId,
-        type: NotificationType.expiring_ingredient,
-        title: title,
-        message: message,
-      );
+      await ApiClient.post('/notifications', body: {
+        'type': 'expiring_ingredient',
+        'title': title,
+        'message': message,
+      });
+      debugPrint('✅ Created expiring items digest');
     } catch (e) {
       debugPrint('Error checking expiring ingredients: $e');
     }
   }
 
-  /// Check if user logged anything in tracker today (for 8 PM reminder)
+  Future<void> checkExpiredItems(String userId) async {
+    try {
+      final expiringItems =
+          await _pantryApi.getExpiringItems(userId, daysThreshold: 0);
+      final now = DateTime.now();
+
+      final expired = expiringItems.where((i) {
+        final exp = i['expiryDate']?.toString();
+        if (exp == null) return false;
+        final d = DateTime.tryParse(exp);
+        if (d == null) return false;
+        // Consider expired if it is strictly before "now" (i.e. not "expires today").
+        return d.isBefore(now);
+      }).toList();
+
+      if (expired.isEmpty) return;
+
+      final names = expired
+          .map((i) => (i['name'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toList();
+
+      const maxNames = 3;
+      final shown = names.take(maxNames).toList();
+      final remaining = names.length - shown.length;
+      final itemsSummary = remaining > 0
+          ? '${shown.join(', ')} and $remaining more'
+          : shown.join(', ');
+
+      final list = await ApiClient.get('/notifications') as List?;
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final hasToday = list?.any((n) {
+            if (n is! Map) return false;
+            if (n['type'] != 'expired_items') return false;
+            final createdAt = n['createdAt']?.toString();
+            if (createdAt == null) return false;
+            try {
+              return DateTime.parse(createdAt).isAfter(startOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
+
+      if (hasToday) {
+        debugPrint('✅ Expired digest already sent today');
+        return;
+      }
+
+      await ApiClient.post('/notifications', body: {
+        'type': 'expired_items',
+        'title': 'Some food items are expired',
+        'message':
+            'Expired: $itemsSummary. Tap to review and extend if it is not spoiled.',
+      });
+
+      debugPrint('✅ Created expired items digest');
+    } catch (e) {
+      debugPrint('Error checking expired items: $e');
+    }
+  }
+
   Future<void> checkTrackerReminder(String userId) async {
     try {
-      await _mongoDBService.ensureConnection();
-
+      final list = await ApiClient.get('/trackers/progress') as List?;
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
-      // Get tracker progress for today
-      final progressCollection =
-          _mongoDBService.db.collection('tracker_progress');
-      final todayProgress = await progressCollection.find({
-        'userId': userId,
-        'progressDate': {
-          '\$gte': startOfDay.toIso8601String(),
-          '\$lt': endOfDay.toIso8601String(),
-        }
-      }).toList();
+      final hasProgressToday = list?.any((p) {
+            if (p is! Map) return false;
+            final d = p['progressDate']?.toString();
+            if (d == null) return false;
+            try {
+              final dt = DateTime.parse(d);
+              return !dt.isBefore(startOfDay) && dt.isBefore(endOfDay);
+            } catch (_) {
+              return false;
+            }
+          }) ??
+          false;
 
-      // If no progress logged today, create reminder
-      if (todayProgress.isEmpty) {
-        await _createNotification(
-          userId: userId,
-          type: NotificationType.tracker_reminder,
-          title: 'Time to log your food!',
-          message:
+      if (!hasProgressToday) {
+        await ApiClient.post('/notifications', body: {
+          'type': 'tracker_reminder',
+          'title': 'Time to log your food!',
+          'message':
               "You haven't logged anything in your tracker today. Don't forget to track your food!",
-        );
+        });
       }
     } catch (e) {
       debugPrint('Error checking tracker reminder: $e');
     }
   }
 
-  /// Admin: Create custom notification
   Future<void> createAdminNotification(
       String userId, String title, String message) async {
     try {
-      await _createNotification(
-        userId: userId,
-        type: NotificationType.admin,
-        title: title,
-        message: message,
-      );
+      await ApiClient.post('/notifications', body: {
+        'type': 'admin',
+        'title': title,
+        'message': message,
+      });
     } catch (e) {
       debugPrint('Error creating admin notification: $e');
       rethrow;
     }
   }
 
-  /// Optional: New education content notification
   Future<void> notifyNewEducation(
       String userId, String articleId, String title) async {
     try {
-      await _createNotification(
-        userId: userId,
-        type: NotificationType.education,
-        title: 'New Educational Content Available!',
-        message: 'Check out the new article: $title',
-      );
+      await ApiClient.post('/notifications', body: {
+        'type': 'education',
+        'title': 'New Educational Content Available!',
+        'message': 'Check out the new article: $title',
+      });
     } catch (e) {
       debugPrint('Error creating education notification: $e');
-    }
-  }
-
-  /// Internal helper to create notification
-  Future<void> _createNotification({
-    required String userId,
-    required NotificationType type,
-    required String title,
-    required String message,
-  }) async {
-    try {
-      await _mongoDBService.ensureConnection();
-      final collection = _mongoDBService.notificationsCollection;
-
-      // Check if similar notification already exists today
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-
-      final existing = await collection.findOne({
-        'userId': userId,
-        'type': type.toString().split('.').last,
-        'createdAt': {'\$gte': startOfDay.toIso8601String()}
-      });
-
-      if (existing != null) {
-        debugPrint('Similar notification already sent today, skipping');
-        return;
-      }
-
-      final notification = AppNotification(
-        userId: userId,
-        type: type,
-        title: title,
-        message: message,
-      );
-
-      await collection.insertOne({
-        '_id': ObjectIdHelper.parseObjectId(notification.id),
-        ...notification.toJson(),
-      });
-
-      debugPrint('✅ Created notification: ${notification.title}');
-    } catch (e) {
-      debugPrint('Error creating notification: $e');
-      rethrow;
     }
   }
 }

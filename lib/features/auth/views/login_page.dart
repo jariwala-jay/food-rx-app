@@ -173,6 +173,9 @@ class _LoginPageState extends State<LoginPage> {
                           controller: _emailController,
                           focusNode: _emailFocusNode,
                           keyboardType: TextInputType.emailAddress,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
                           textInputAction: TextInputAction.next,
                           onFieldSubmitted: (_) {
                             _emailFocusNode.unfocus();
@@ -196,6 +199,9 @@ class _LoginPageState extends State<LoginPage> {
                           controller: _passwordController,
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleLogin(),
                           validator: (value) {

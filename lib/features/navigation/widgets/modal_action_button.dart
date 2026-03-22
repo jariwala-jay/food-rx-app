@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 class ModalActionButton extends StatelessWidget {
   final String iconAsset;
+  final Widget? icon;
   final String label;
   final VoidCallback onTap;
   final bool shouldClose;
@@ -11,6 +12,7 @@ class ModalActionButton extends StatelessWidget {
   const ModalActionButton({
     Key? key,
     required this.iconAsset,
+    this.icon,
     required this.label,
     required this.onTap,
     this.shouldClose = true,
@@ -59,18 +61,28 @@ class ModalActionButton extends StatelessWidget {
                       : const Color(0x11000000),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: iconAsset.endsWith('.svg')
-                    ? SvgPicture.asset(
-                        iconAsset,
-                        width: 27,
-                        height: 27,
-                        fit: BoxFit.contain,
-                        colorFilter: enabled
-                            ? null
-                            : const ColorFilter.mode(
-                                Color(0xFFBDBDBD), BlendMode.srcIn),
+                child: icon != null
+                    ? IconTheme(
+                        data: IconThemeData(
+                          color: enabled
+                              ? const Color(0xFFFF6A00)
+                              : const Color(0xFFBDBDBD),
+                          size: 27,
+                        ),
+                        child: icon!,
                       )
-                    : const Icon(Icons.circle, color: Color(0xFFFF6A00)),
+                    : iconAsset.endsWith('.svg')
+                        ? SvgPicture.asset(
+                            iconAsset,
+                            width: 27,
+                            height: 27,
+                            fit: BoxFit.contain,
+                            colorFilter: enabled
+                                ? null
+                                : const ColorFilter.mode(
+                                    Color(0xFFBDBDBD), BlendMode.srcIn),
+                          )
+                        : const Icon(Icons.circle, color: Color(0xFFFF6A00)),
               ),
               SizedBox(height: 8 * clampedScale),
               Flexible(
