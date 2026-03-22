@@ -60,6 +60,9 @@ class AppFormField extends StatelessWidget {
           obscureText: obscureText,
           enableSuggestions: enableSuggestions,
           autocorrect: autocorrect,
+          // iOS can still show spell-check underlines unless explicitly disabled.
+          spellCheckConfiguration:
+              autocorrect ? null : const SpellCheckConfiguration.disabled(),
           textCapitalization: textCapitalization,
           inputFormatters: inputFormatters,
           readOnly: readOnly,

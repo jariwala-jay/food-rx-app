@@ -30,4 +30,24 @@ Then open **`ios/Runner.xcworkspace`** and **Archive**.
 
 ## Script location
 
-Apple expects **`ci_scripts`** next to the Xcode project. For this app, that is **`ios/ci_scripts/`** (same folder as **`Runner.xcworkspace`**).
+Flutter / Apple expect **`ci_scripts`** next to the Xcode workspace. For this app, that is **`ios/ci_scripts/`** (same folder as **`Runner.xcworkspace`**). See [Flutter — Xcode Cloud](https://docs.flutter.dev/deployment/cd#xcode-cloud).
+
+## Troubleshooting: `PhaseScriptExecution failed with a nonzero exit code`
+
+That message is **generic**. Xcode runs several shell-script phases; the one that failed is usually one of these:
+
+| Build phase name (in logs) | What it runs |
+|----------------------------|----------------|
+| **Run Script** | `$FLUTTER_ROOT/.../xcode_backend.sh` **`build`** (compiles Dart / prepares the app) |
+| **Thin Binary** | `xcode_backend.sh` **`embed_and_thin`** (embeds Flutter, thins frameworks) |
+| **[CP] Check Pods Manifest.lock** | Fails if `Podfile.lock` ≠ `Pods/Manifest.lock` (run `cd ios && pod install` locally, commit **`Podfile.lock`**) |
+| **[CP] Copy Pods Resources** | CocoaPods resource copy script |
+
+**What to do**
+
+1. In the Xcode Cloud log, open the failed **`xcodebuild archive`** step and search for **`error:`** or the phase name above — the **first real error is usually 10–40 lines above** `PhaseScriptExecution`.
+2. Confirm **`ci_post_clone.sh`** finished successfully and printed `ci_post_clone: OK — FLUTTER_ROOT=...`. If post-clone failed, `ios/Flutter/Generated.xcconfig` may be missing and **`FLUTTER_ROOT`** will be empty in the **Run Script** / **Thin Binary** steps.
+3. This project sets **`showEnvVarsInLog = 1`** on the Flutter **Run Script** and **Thin Binary** phases so logs include **`FLUTTER_ROOT`** (verify it points at `$HOME/flutter` on the builder).
+4. Reproduce locally: `flutter pub get && flutter build ios --config-only && (cd ios && pod install)` then **`flutter build ipa`** or **Archive** in Xcode.
+
+If **`Run Script`** fails, scroll up for **Dart / Flutter** compiler output. If **`Thin Binary`** fails, look for **codesign** / **framework** messages (archive uses automatic signing; team **`DEVELOPMENT_TEAM`** must match the app).
