@@ -31,6 +31,7 @@ Food Rx is built with a modern stack, designed for scalability and a smooth user
 - **Food Data & Recipes**: Spoonacular API
 - **Chatbot**: Google Cloud Dialogflow
 - **Backend Automation**: Google Cloud Functions (for scheduled tasks like resetting trackers)
+- **Xcode Cloud**: Flutter iOS archives use [`ios/ci_scripts/ci_post_clone.sh`](ios/ci_scripts/ci_post_clone.sh) — see [docs/XCODE_CLOUD.md](docs/XCODE_CLOUD.md)
 
 The project follows a **feature-first architecture**, where code is organized by feature (e.g., `auth`, `recipes`, `pantry`). This makes the codebase modular, easier to navigate, and simpler to maintain.
 
