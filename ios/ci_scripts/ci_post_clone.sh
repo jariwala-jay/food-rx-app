@@ -5,6 +5,17 @@ set -e
 
 cd "${CI_PRIMARY_REPOSITORY_PATH:?CI_PRIMARY_REPOSITORY_PATH is not set}"
 
+# .env is gitignored but listed as a Flutter asset — clone has no .env unless we create it.
+if [ ! -f .env ]; then
+  if [ -f .env.example ]; then
+    cp .env.example .env
+    echo "ci_post_clone: created .env from .env.example (CI build)"
+  else
+    echo "error: .env missing and .env.example not found in repo" >&2
+    exit 1
+  fi
+fi
+
 # Install Flutter SDK (not present on Xcode Cloud images by default).
 # If `stable` clone fails (rare GitHub issue), set FLUTTER_VERSION to a tag e.g. 3.27.4 in Xcode Cloud env.
 FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"

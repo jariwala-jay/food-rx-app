@@ -6,6 +6,14 @@ This repo includes **`ios/ci_scripts/ci_post_clone.sh`**, which Xcode Cloud runs
 2. Runs **`flutter precache --ios`**, **`flutter pub get`**, and **`flutter build ios --config-only`** so **`ios/Flutter/Generated.xcconfig`** exists (fixes missing `Generated.xcconfig` / Pods `*.xcfilelist` errors).
 3. Runs **`pod install`** under **`ios/`**.
 
+## Environment file (`.env`)
+
+`pubspec.yaml` includes **`.env`** as an asset. The real **`.env`** is **gitignored** (secrets), so Xcode Cloud clones do not contain it unless we create it.
+
+**`ci_post_clone.sh`** copies **`.env.example`** → **`.env`** when `.env` is missing so **`flutter build`** can bundle assets. Production API keys are **not** in `.env.example`; for release builds you should still configure real values via your normal process (e.g. a filled `.env` only on secure builders, or future `--dart-define` migration).
+
+Locally: `cp .env.example .env` and edit.
+
 ## Requirements
 
 - Workflow uses an **Xcode** version compatible with your Flutter channel (see [Flutter docs](https://docs.flutter.dev/deployment/cd#xcode-cloud)).
@@ -51,3 +59,5 @@ That message is **generic**. Xcode runs several shell-script phases; the one tha
 4. Reproduce locally: `flutter pub get && flutter build ios --config-only && (cd ios && pod install)` then **`flutter build ipa`** or **Archive** in Xcode.
 
 If **`Run Script`** fails, scroll up for **Dart / Flutter** compiler output. If **`Thin Binary`** fails, look for **codesign** / **framework** messages (archive uses automatic signing; team **`DEVELOPMENT_TEAM`** must match the app).
+
+If the log says **`No file or variants found for asset: .env`**, the clone had no **`.env`** (it is gitignored). Ensure **`.env.example`** is committed and **`ci_post_clone.sh`** runs (it copies `.env.example` → `.env` when needed).
