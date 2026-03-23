@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/prepared_recipe.dart';
 import 'package:flutter_app/features/recipes/views/recipe_detail_page.dart';
@@ -72,6 +73,19 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
     }
   }
 
+  Future<void> _onSwipeDeletePrepared(PreparedRecipe item) async {
+    final controller = Provider.of<RecipeController>(context, listen: false);
+    await controller.logConsumptionFromPrepared(item, item.remainingServings);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Removed from prepared recipes.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   void _showRecipeActionSheet(BuildContext context, PreparedRecipe item) {
     showModalBottomSheet<void>(
       context: context,
@@ -135,7 +149,7 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
                           _onTapLeftover(item);
                         },
                   icon: const Icon(Icons.restaurant, size: 22),
-                  label: const Text('Log the servings left'),
+                  label: const Text('Log serving'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: canLog
                         ? const Color(0xFFFF6A00)
@@ -226,6 +240,7 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
                 item: item,
                 onTapLeftover: () => _onTapLeftover(item),
                 onTapCard: () => _showRecipeActionSheet(context, item),
+                onSwipeDelete: _onSwipeDeletePrepared,
               );
             },
           );
@@ -239,11 +254,13 @@ class _PreparedRecipeCard extends StatelessWidget {
   final PreparedRecipe item;
   final VoidCallback onTapLeftover;
   final VoidCallback onTapCard;
+  final Future<void> Function(PreparedRecipe item) onSwipeDelete;
 
   const _PreparedRecipeCard({
     required this.item,
     required this.onTapLeftover,
     required this.onTapCard,
+    required this.onSwipeDelete,
   });
 
   @override
@@ -253,112 +270,147 @@ class _PreparedRecipeCard extends StatelessWidget {
         ? remaining.toInt().toString()
         : remaining.toStringAsFixed(2);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+    return Dismissible(
+      key: ValueKey(item.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF5275),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: SvgPicture.asset(
+          'assets/icons/trash.svg',
+          width: 28,
+          height: 28,
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTapCard,
-        child: Padding(
-          padding: const EdgeInsets.all(0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-                child: SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: RecipeImage(
-                    imageUrl: item.recipe.image,
+      confirmDismiss: (_) async {
+        if (remaining <= 0) return false;
+        try {
+          await onSwipeDelete(item);
+          return true;
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return false;
+        }
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTapCard,
+          child: Padding(
+            padding: const EdgeInsets.all(0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    bottomLeft: Radius.circular(12),
+                  ),
+                  child: SizedBox(
                     width: 100,
                     height: 100,
-                    fit: BoxFit.cover,
+                    child: RecipeImage(
+                      imageUrl: item.recipe.image,
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.recipe.title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2C2C2C),
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: remaining > 0 ? onTapLeftover : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.recipe.title,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2C2C2C),
                           ),
-                          decoration: BoxDecoration(
-                            color: remaining > 0
-                                ? const Color(0xFFFF6A00)
-                                    .withValues(alpha: 0.15)
-                                : Colors.grey.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: remaining > 0 ? onTapLeftover : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
                               color: remaining > 0
                                   ? const Color(0xFFFF6A00)
-                                  : Colors.grey,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.restaurant,
-                                size: 16,
+                                      .withValues(alpha: 0.15)
+                                  : Colors.grey.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
                                 color: remaining > 0
                                     ? const Color(0xFFFF6A00)
                                     : Colors.grey,
+                                width: 1,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '$remainingText serving${remaining == 1 ? '' : 's'} left',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.restaurant,
+                                  size: 16,
                                   color: remaining > 0
                                       ? const Color(0xFFFF6A00)
-                                      : Colors.grey[700],
+                                      : Colors.grey,
                                 ),
-                              ),
-                              if (remaining > 0) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.add_circle_outline,
-                                  size: 16,
-                                  color: const Color(0xFFFF6A00),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$remainingText serving${remaining == 1 ? '' : 's'} left',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: remaining > 0
+                                        ? const Color(0xFFFF6A00)
+                                        : Colors.grey[700],
+                                  ),
                                 ),
+                                if (remaining > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.add_circle_outline,
+                                    size: 16,
+                                    color: const Color(0xFFFF6A00),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -44,9 +44,31 @@ async def list_notifications(user_id: str = Depends(get_current_user_id)):
 @router.post("")
 async def create_notification(body: dict, user_id: str = Depends(get_current_user_id)):
     db = await get_database()
+    type_ = body.get("type") or "info"
+    title = body.get("title") or ""
+    message = body.get("message") or ""
+    dedupe_raw = body.get("dedupeWindowHours")
+    dedupe_hours = 24 if dedupe_raw is None else int(dedupe_raw)
+
+    if type_ in ("admin", "education"):
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
+        existing = await db[COLL].find_one(
+            {
+                **_user_match(user_id),
+                "type": type_,
+                "title": title,
+                "message": message,
+                "createdAt": {"$gte": cutoff},
+            }
+        )
+        if existing:
+            return _serialize(dict(existing))
+
     nid = ObjectId()
     now = datetime.now(timezone.utc).isoformat()
-    doc = {"_id": nid, "userId": user_id, **body, "createdAt": now}
+    clean = dict(body)
+    clean.pop("dedupeWindowHours", None)
+    doc = {"_id": nid, "userId": user_id, **clean, "createdAt": now}
     await db[COLL].insert_one(doc)
     return _serialize(doc)
 
@@ -125,11 +147,27 @@ async def broadcast_notification(
     message = body.get("message") or ""
     type_ = body.get("type") or "admin"
     now = datetime.now(timezone.utc).isoformat()
+    dedupe_hours = int(body.get("dedupeWindowHours", 24))
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
 
     cursor = db[USERS].find({}, {"_id": 1})
     user_ids = [str(doc["_id"]) for doc in await cursor.to_list(length=None)]
     inserted = 0
+    skipped = 0
     for uid in user_ids:
+        if type_ in ("admin", "education"):
+            existing = await db[COLL].find_one(
+                {
+                    **_user_match(uid),
+                    "type": type_,
+                    "title": title,
+                    "message": message,
+                    "createdAt": {"$gte": cutoff},
+                }
+            )
+            if existing:
+                skipped += 1
+                continue
         await db[COLL].insert_one({
             "_id": ObjectId(),
             "userId": uid,
@@ -139,4 +177,8 @@ async def broadcast_notification(
             "createdAt": now,
         })
         inserted += 1
-    return {"ok": True, "usersNotified": inserted}
+    return {
+        "ok": True,
+        "usersNotified": inserted,
+        "usersSkippedDuplicate": skipped,
+    }
