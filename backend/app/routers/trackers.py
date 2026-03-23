@@ -10,6 +10,16 @@ TRACKERS = "user_trackers"
 PROGRESS = "tracker_progress"
 
 
+def _user_match(user_id: str) -> dict:
+    """Match userId whether stored as string or ObjectId (e.g. legacy MongoDB rows)."""
+    if not user_id or len(user_id) != 24:
+        return {"userId": user_id}
+    try:
+        return {"$or": [{"userId": user_id}, {"userId": ObjectId(user_id)}]}
+    except Exception:
+        return {"userId": user_id}
+
+
 def _serialize_doc(doc: dict) -> dict:
     if not doc:
         return doc
@@ -29,7 +39,7 @@ async def list_trackers(
     user_id: str = Depends(get_current_user_id),
 ):
     db = await get_database()
-    q = {"userId": user_id}
+    q = {**_user_match(user_id)}
     if dietType:
         q["dietType"] = dietType
     if isWeeklyGoal is not None:
@@ -61,7 +71,7 @@ async def get_progress(
 ):
     db = await get_database()
     uid = userId or user_id
-    q = {"userId": uid}
+    q = {**_user_match(uid)}
     if trackerId:
         q["trackerId"] = trackerId
     if periodType:
@@ -107,7 +117,7 @@ async def get_tracker(
         oid = ObjectId(tracker_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid tracker id")
-    doc = await db[TRACKERS].find_one({"_id": oid, "userId": user_id})
+    doc = await db[TRACKERS].find_one({"_id": oid, **_user_match(user_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Tracker not found")
     return _serialize_doc(doc)
@@ -123,12 +133,14 @@ async def update_tracker(
     now = datetime.now(timezone.utc).isoformat()
     updates = {**body, "lastUpdated": now}
     result = await db[TRACKERS].update_one(
-        {"_id": ObjectId(tracker_id), "userId": user_id},
+        {"_id": ObjectId(tracker_id), **_user_match(user_id)},
         {"$set": updates},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Tracker not found")
-    doc = await db[TRACKERS].find_one({"_id": ObjectId(tracker_id)})
+    doc = await db[TRACKERS].find_one(
+        {"_id": ObjectId(tracker_id), **_user_match(user_id)},
+    )
     return _serialize_doc(doc)
 
 
@@ -139,7 +151,7 @@ async def delete_tracker(
 ):
     db = await get_database()
     result = await db[TRACKERS].delete_one(
-        {"_id": ObjectId(tracker_id), "userId": user_id},
+        {"_id": ObjectId(tracker_id), **_user_match(user_id)},
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Tracker not found")

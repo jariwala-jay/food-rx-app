@@ -130,9 +130,12 @@ class UserModel {
       weightUnit: json['weightUnit'],
       activityLevel: json['activityLevel'],
       medicalConditions: List<String>.from(json['medicalConditions'] ?? []),
-      // Support both 'allergies' and legacy 'foodAllergies' keys
+      // allergies, legacy foodAllergies, or foodRestrictions (signup/API)
       allergies: List<String>.from(
-        (json['allergies'] ?? json['foodAllergies'] ?? []) as List,
+        (json['allergies'] ??
+                json['foodAllergies'] ??
+                json['foodRestrictions'] ??
+                []) as List,
       ),
       // Diet Preferences
       dietType: json['dietType'],

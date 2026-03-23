@@ -119,9 +119,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int? _lastTargetCalories;
   Map<String, dynamic>? _lastSelectedDietPlan;
 
-  /// Plan key for tracker storage: MyPlate, DASH (Hypertension), or DiabetesPlate.
+  /// Plan key for tracker storage. DASH and DiabetesPlate share one bucket so
+  /// switching between those plans keeps logged values.
   String _planKeyForTrackers(String? myPlanType, String? dietType) {
-    return myPlanType ?? dietType ?? 'MyPlate';
+    final plan = (myPlanType ?? dietType ?? 'MyPlate').trim();
+    final upper = plan.toUpperCase();
+    if (plan == 'DiabetesPlate' || upper == 'DASH') {
+      return 'DASH';
+    }
+    return plan;
   }
 
   // Helper to check if diet plan values have changed

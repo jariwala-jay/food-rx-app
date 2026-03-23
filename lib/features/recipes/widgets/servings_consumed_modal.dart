@@ -159,7 +159,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    'Log Recipe',
+                    'Log serving',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,

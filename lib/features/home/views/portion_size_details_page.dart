@@ -20,10 +20,6 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
     if (plan == 'DiabetesPlate') {
       return const [
         (
-          path: 'assets/nutrition/screenshots/Portion_sizes/Portion_sizes.png',
-          label: 'Portion Sizes',
-        ),
-        (
           path:
               'assets/nutrition/screenshots/Portion_sizes/Diabetes_portion_size.png',
           label: 'Diabetes Plate Portion Sizes',
@@ -35,11 +31,8 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
     if (upper == 'DASH') {
       return const [
         (
-          path: 'assets/nutrition/screenshots/Portion_sizes/Portion_sizes.png',
-          label: 'Portion Sizes',
-        ),
-        (
-          path: 'assets/nutrition/screenshots/Portion_sizes/Dash_portion_size.png',
+          path:
+              'assets/nutrition/screenshots/Portion_sizes/Dash_portion_size.png',
           label: 'DASH Portion Sizes',
         ),
       ];
@@ -48,11 +41,8 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
     // Default to MyPlate portion size images
     return const [
       (
-        path: 'assets/nutrition/screenshots/Portion_sizes/Portion_sizes.png',
-        label: 'Portion Sizes',
-      ),
-      (
-        path: 'assets/nutrition/screenshots/Portion_sizes/MyPlate_portion_size.png',
+        path:
+            'assets/nutrition/screenshots/Portion_sizes/MyPlate_portion_size.png',
         label: 'MyPlate Portion Sizes',
       ),
     ];
@@ -132,11 +122,13 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                          const Icon(Icons.image_not_supported,
+                              size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
                           Text(
                             'Image not found: ${item.label}',
-                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.grey),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -147,34 +139,42 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  onPressed: _currentPage > 0 ? _previousPage : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B35),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    disabledForegroundColor: Colors.grey[600],
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(
+                mainAxisAlignment: _currentPage > 0
+                    ? MainAxisAlignment.spaceBetween
+                    : MainAxisAlignment.center,
+                children: [
+                  if (_currentPage > 0)
+                    ElevatedButton(
+                      onPressed: _previousPage,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B35),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                      ),
+                      child: const Text('Previous'),
+                    ),
+                  ElevatedButton(
+                    onPressed: _nextPage,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B35),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: Text(isLastPage ? 'Done' : 'Next'),
                   ),
-                  child: const Text('Previous'),
-                ),
-                ElevatedButton(
-                  onPressed: _nextPage,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B35),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: Text(isLastPage ? 'Done' : 'Next'),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
