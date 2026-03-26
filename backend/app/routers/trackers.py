@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
+from app.config import settings
 from app.database import get_database
 from app.deps import get_current_user_id
 
@@ -30,6 +31,95 @@ def _serialize_doc(doc: dict) -> dict:
         if key in out and hasattr(out.get(key), "binary"):
             out[key] = str(out[key])
     return out
+
+
+def _require_reset_secret(x_reset_secret: str | None = Header(None, alias="X-Reset-Secret")):
+    """Require a shared secret for reset endpoints. Set TRACKER_RESET_SECRET in .env."""
+    if not settings.tracker_reset_secret:
+        raise HTTPException(status_code=501, detail="Reset not configured (TRACKER_RESET_SECRET)")
+    if not x_reset_secret or x_reset_secret != settings.tracker_reset_secret:
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Reset-Secret")
+    return True
+
+
+def _tracker_period_value(is_weekly: bool) -> str:
+    return "weekly" if is_weekly else "daily"
+
+
+async def _save_progress_snapshot_for_docs(db, trackers: list[dict], is_weekly: bool) -> int:
+    """Persist tracker snapshots to tracker_progress before reset."""
+    if not trackers:
+        return 0
+    now = datetime.now(timezone.utc).isoformat()
+    period = _tracker_period_value(is_weekly)
+    docs = []
+    for t in trackers:
+        achieved = float(t.get("currentValue") or 0.0)
+        if achieved <= 0:
+            continue
+        tracker_id = t.get("_id")
+        docs.append(
+            {
+                "_id": ObjectId(),
+                "userId": t.get("userId"),
+                "trackerId": str(tracker_id) if tracker_id is not None else "",
+                "trackerName": t.get("name") or "",
+                "trackerCategory": t.get("category") or "",
+                "targetValue": float(t.get("goalValue") or 0.0),
+                "achievedValue": achieved,
+                "progressDate": now,
+                "periodType": period,
+                "dietType": t.get("dietType") or "",
+                "unit": t.get("unit") or "",
+                "createdAt": now,
+            }
+        )
+    if docs:
+        await db[PROGRESS].insert_many(docs)
+    return len(docs)
+
+
+async def _reset_trackers(
+    db,
+    *,
+    is_weekly: bool,
+    user_id: str | None = None,
+    diet_type: str | None = None,
+    dry_run: bool = False,
+) -> dict:
+    q = {"isWeeklyGoal": is_weekly}
+    if user_id:
+        q = {**q, **_user_match(user_id)}
+    if diet_type:
+        q["dietType"] = diet_type
+
+    trackers = await db[TRACKERS].find(q).to_list(length=None)
+    snapshots_saved = await _save_progress_snapshot_for_docs(db, trackers, is_weekly)
+    tracker_count = len(trackers)
+
+    if dry_run or tracker_count == 0:
+        return {
+            "ok": True,
+            "period": _tracker_period_value(is_weekly),
+            "trackersMatched": tracker_count,
+            "snapshotsSaved": snapshots_saved,
+            "trackersReset": 0,
+            "dryRun": dry_run,
+        }
+
+    ids = [t["_id"] for t in trackers if "_id" in t]
+    result = await db[TRACKERS].update_many(
+        {"_id": {"$in": ids}},
+        {"$set": {"currentValue": 0.0, "lastUpdated": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {
+        "ok": True,
+        "period": _tracker_period_value(is_weekly),
+        "trackersMatched": tracker_count,
+        "snapshotsSaved": snapshots_saved,
+        "trackersReset": result.modified_count,
+        "dryRun": False,
+    }
 
 
 @router.get("")
@@ -156,3 +246,45 @@ async def delete_tracker(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Tracker not found")
     return {"ok": True}
+
+
+@router.post("/reset/daily")
+async def reset_daily_trackers(
+    body: dict | None = Body(default=None),
+    _: bool = Depends(_require_reset_secret),
+):
+    """
+    Reset daily trackers for all users or a filtered subset.
+    Body (optional): { "userId": "...", "dietType": "DASH", "dryRun": true }
+    Requires header: X-Reset-Secret: <TRACKER_RESET_SECRET from .env>.
+    """
+    db = await get_database()
+    body = body or {}
+    return await _reset_trackers(
+        db,
+        is_weekly=False,
+        user_id=body.get("userId"),
+        diet_type=body.get("dietType"),
+        dry_run=bool(body.get("dryRun", False)),
+    )
+
+
+@router.post("/reset/weekly")
+async def reset_weekly_trackers(
+    body: dict | None = Body(default=None),
+    _: bool = Depends(_require_reset_secret),
+):
+    """
+    Reset weekly trackers for all users or a filtered subset.
+    Body (optional): { "userId": "...", "dietType": "DASH", "dryRun": true }
+    Requires header: X-Reset-Secret: <TRACKER_RESET_SECRET from .env>.
+    """
+    db = await get_database()
+    body = body or {}
+    return await _reset_trackers(
+        db,
+        is_weekly=True,
+        user_id=body.get("userId"),
+        diet_type=body.get("dietType"),
+        dry_run=bool(body.get("dryRun", False)),
+    )

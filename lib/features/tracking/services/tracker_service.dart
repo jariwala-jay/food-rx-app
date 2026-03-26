@@ -333,7 +333,16 @@ class TrackerService {
                 personalizedDietPlan['sodium_mg_per_day_max'] ?? personalizedDietPlan['sodium'],
                 t.goalValue);
           } else if (categoryName == 'sweets') {
-            newGoal = _safeToDouble(personalizedDietPlan['sweetsMaxPerWeek'], t.goalValue);
+            newGoal = _safeToDouble(
+                personalizedDietPlan['sweetsMaxPerWeek'], t.goalValue);
+            // Migrate legacy rows where Sweets was stored as a daily tracker
+            if (!t.isWeeklyGoal) {
+              await _trackerApi.updateTracker(t.id, {
+                'isWeeklyGoal': true,
+                'goalValue': newGoal,
+              });
+              continue;
+            }
           } else if (categoryName == 'nutslegumes') {
             newGoal = _safeToDouble(personalizedDietPlan['nutsLegumesPerWeek'], t.goalValue);
           }
@@ -808,12 +817,8 @@ class TrackerService {
     final sweets =
         _safeToDouble(personalizedDietPlan?['sweetsMaxPerWeek'], 5.0);
 
-    // Check if there are daily limits for sweets (2600+ kcal plans)
-    final sweetsMaxPerDayValue = personalizedDietPlan?['sweetsMaxPerDay'];
-    final sweetsMaxPerDay = sweetsMaxPerDayValue != null
-        ? _safeToDouble(sweetsMaxPerDayValue, 0.0)
-        : null;
-    final hasDailySweets = sweetsMaxPerDay != null && sweetsMaxPerDay > 0;
+    // Sweets is always a weekly goal (same as Nuts). Daily "sweetsMaxPerDay" was
+    // incorrectly moving this card to Daily Meal Goals; keep weekly UX consistent.
     // Check both possible keys for sodium: 'sodium_mg_per_day_max' (from personalization) or 'sodium' (legacy)
     final sodium = _safeToDouble(
         personalizedDietPlan?['sodium_mg_per_day_max'] ??
@@ -895,12 +900,12 @@ class TrackerService {
         userId: userId,
         name: 'Sweets',
         category: TrackerCategory.sweets,
-        goalValue: hasDailySweets ? sweetsMaxPerDay! : sweets,
+        goalValue: sweets,
         unit: TrackerUnit.servings,
         colorStart: const Color(0xFF4CAF50),
         colorEnd: const Color(0xFFA5D6A7),
         dietType: storeAsDietType,
-        isWeeklyGoal: !hasDailySweets,
+        isWeeklyGoal: true,
       ),
       TrackerGoal(
         userId: userId,

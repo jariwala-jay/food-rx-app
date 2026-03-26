@@ -114,30 +114,30 @@ class _EducationPageState extends State<EducationPage> {
                     barPadding: const EdgeInsets.only(
                         left: 12, right: 72, top: 10, bottom: 10),
                     suggestionsBuilder: (BuildContext context,
-                          SearchController searchController) async {
-                        await controller.searchArticles(searchController.text);
-                        return controller.searchSuggestions.map((article) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 2.0),
-                            child: ArticleCard(
-                              article: article,
-                              onTap: () {
-                                searchController.closeView(article.title);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        ArticleDetailPage(article: article),
-                                  ),
-                                );
-                              },
-                              onBookmarkTap: () =>
-                                  controller.toggleBookmark(article.id),
-                            ),
-                          );
-                        }).toList();
-                      },
+                        SearchController searchController) async {
+                      await controller.searchArticles(searchController.text);
+                      return controller.searchSuggestions.map((article) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0, vertical: 2.0),
+                          child: ArticleCard(
+                            article: article,
+                            onTap: () {
+                              searchController.closeView(article.title);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ArticleDetailPage(article: article),
+                                ),
+                              );
+                            },
+                            onBookmarkTap: () =>
+                                controller.toggleBookmark(article.id),
+                          ),
+                        );
+                      }).toList();
+                    },
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -150,13 +150,15 @@ class _EducationPageState extends State<EducationPage> {
                       IconButton(
                         icon: const Icon(Icons.tune),
                         onPressed: () async {
-                          final result = await showModalBottomSheet<Set<String>>(
+                          final result =
+                              await showModalBottomSheet<Set<String>>(
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             builder: (sheetContext) => ArticleFilterSheet(
                               categories: controller.categories,
-                              selectedCategories: controller.selectedFilterCategories,
+                              selectedCategories:
+                                  controller.selectedFilterCategories,
                             ),
                           );
                           if (result != null && mounted) {
@@ -334,17 +336,15 @@ class _EducationPageState extends State<EducationPage> {
           // When on Bookmarks tab with no saved items, fall back to showing the
           // same recommended list (video + docs) as the All tab so the user
           // still sees content.
-          controller.bookmarksOnly &&
-                  controller.recommendedArticles.isNotEmpty
+          controller.bookmarksOnly && controller.recommendedArticles.isNotEmpty
               ? Consumer<AuthController>(
                   builder: (_, authController, __) {
-                    final myPlanType =
-                        authController.currentUser?.myPlanType ??
-                            authController.currentUser?.dietType ??
-                            'MyPlate';
+                    final myPlanType = authController.currentUser?.myPlanType ??
+                        authController.currentUser?.dietType ??
+                        'MyPlate';
 
-                    final itemCount =
-                        1 + controller.recommendedArticles.length; // video + docs
+                    final itemCount = 1 +
+                        controller.recommendedArticles.length; // video + docs
 
                     return SliverPadding(
                       padding: const EdgeInsets.all(16),
@@ -400,8 +400,7 @@ class _EducationPageState extends State<EducationPage> {
           // - on the Bookmarks tab, or
           // - when viewing the category that matches the user's plan
           (() {
-            final auth =
-                Provider.of<AuthController>(context, listen: false);
+            final auth = Provider.of<AuthController>(context, listen: false);
             final planType =
                 auth.currentUser?.myPlanType ?? auth.currentUser?.dietType;
             String? planCategory;
@@ -418,10 +417,9 @@ class _EducationPageState extends State<EducationPage> {
           }())
               ? Consumer<AuthController>(
                   builder: (_, authController, __) {
-                    final myPlanType =
-                        authController.currentUser?.myPlanType ??
-                            authController.currentUser?.dietType ??
-                            'MyPlate';
+                    final myPlanType = authController.currentUser?.myPlanType ??
+                        authController.currentUser?.dietType ??
+                        'MyPlate';
 
                     final itemCount = 1 + controller.articles.length;
 
@@ -440,8 +438,7 @@ class _EducationPageState extends State<EducationPage> {
                                   context, myPlanType, title);
                             }
                             final articleIndex = index - 1;
-                            final article =
-                                controller.articles[articleIndex];
+                            final article = controller.articles[articleIndex];
                             return ArticleCard(
                               article: article,
                               onTap: () {
@@ -629,9 +626,7 @@ class _EducationPageState extends State<EducationPage> {
             padding: const EdgeInsets.only(right: 8.0),
             child: IconButton(
               icon: Icon(
-                _isPlanVideoBookmarked
-                    ? Icons.bookmark
-                    : Icons.bookmark_border,
+                _isPlanVideoBookmarked ? Icons.bookmark : Icons.bookmark_border,
                 color: const Color(0xFFFF6A00),
               ),
               onPressed: () {

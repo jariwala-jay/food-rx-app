@@ -179,8 +179,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         final trackerProvider =
             Provider.of<TrackerProvider>(context, listen: false);
         final user = authProvider.currentUser;
-        _lastDietType =
-            _planKeyForTrackers(user?.myPlanType, user?.dietType);
+        _lastDietType = _planKeyForTrackers(user?.myPlanType, user?.dietType);
         _lastTargetCalories = user?.targetCalories;
         _lastSelectedDietPlan = user?.selectedDietPlan != null
             ? Map<String, dynamic>.from(user!.selectedDietPlan!)
@@ -251,8 +250,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (user != null && user.id != null) {
       // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
       String? myPlanType = user.myPlanType;
-      final dietType =
-          _planKeyForTrackers(myPlanType, user.dietType);
+      final dietType = _planKeyForTrackers(myPlanType, user.dietType);
 
       // Check if diet type has changed from last known value
       if (_lastDietType != null && _lastDietType != dietType) {
@@ -317,7 +315,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (photoId != null) {
       try {
-        final photoData = await ApiClient.getBytes('/api/profile-photos/$photoId');
+        final photoData =
+            await ApiClient.getBytes('/api/profile-photos/$photoId');
         if (photoData != null && mounted) {
           setState(() {
             _profilePhotoData = Uint8List.fromList(photoData);
@@ -605,8 +604,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
         // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
-        final dietType =
-            _planKeyForTrackers(user?.myPlanType, user?.dietType);
+        final dietType = _planKeyForTrackers(user?.myPlanType, user?.dietType);
 
         // Get current diet plan values
         final currentTargetCalories = user?.targetCalories;

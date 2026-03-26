@@ -23,6 +23,10 @@ class TrackerProvider extends ChangeNotifier {
       _currentLoadingDietType; // Track what diet type is currently being loaded
   String? _lastLoadedDietType; // Track last successfully loaded diet type
 
+  // Debounced daily progress snapshot writer so "Goal Progress" has data.
+  // Goal Progress reads tracker_progress history; dashboard reads live tracker values.
+  Timer? _dailySnapshotDebounce;
+
   List<TrackerGoal> get dailyTrackers => _dailyTrackers;
   List<TrackerGoal> get weeklyTrackers => _weeklyTrackers;
   bool get isLoading => _isLoading;
@@ -319,6 +323,16 @@ class TrackerProvider extends ChangeNotifier {
         // Compare current tracker values with personalized diet plan values
         bool needsUpdate = false;
 
+        // DASH/Diabetes: Sweets must be weekly — old rows may have isWeeklyGoal: false
+        if (dietType == 'DASH' || dietType == 'DiabetesPlate') {
+          for (final t in [..._dailyTrackers, ..._weeklyTrackers]) {
+            if (t.name == 'Sweets' && !t.isWeeklyGoal) {
+              needsUpdate = true;
+              break;
+            }
+          }
+        }
+
         // Check if tracker values don't match personalized plan values
         for (final tracker in _dailyTrackers) {
           final categoryName = tracker.category.name.toLowerCase();
@@ -598,10 +612,29 @@ class TrackerProvider extends ChangeNotifier {
 
       // Update the tracker value in the service in the background
       await _trackerService.updateTrackerValue(trackerId, newValue);
+
+      // Persist a daily progress snapshot (debounced) so Goal Progress reflects logs.
+      _scheduleDailyProgressSnapshot();
     } catch (e) {
       // If service update fails, try to reload the specific tracker
       await _reloadSpecificTracker(trackerId);
     }
+  }
+
+  void _scheduleDailyProgressSnapshot() {
+    if (_dailyTrackers.isEmpty) return;
+
+    _dailySnapshotDebounce?.cancel();
+    _dailySnapshotDebounce = Timer(const Duration(seconds: 2), () async {
+      try {
+        await _progressService.saveProgressSnapshot(
+          List<TrackerGoal>.from(_dailyTrackers),
+          ProgressPeriodType.daily,
+        );
+      } catch (_) {
+        // Non-critical: history snapshot failure should not break logging UX.
+      }
+    });
   }
 
   // Helper method to update local tracker value without full reload

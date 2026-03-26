@@ -374,9 +374,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         );
       }
     } finally {
-      setState(() {
-        _isCooking = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isCooking = false;
+        });
+      }
     }
   }
 
