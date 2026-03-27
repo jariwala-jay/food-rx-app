@@ -23,6 +23,12 @@ class OtherDetailsStep extends StatefulWidget {
 
 class _OtherDetailsStepState extends State<OtherDetailsStep> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  final _healthGoalsSectionKey = GlobalKey();
+  final _mealPrepSectionKey = GlobalKey();
+  final _cookingForPeopleSectionKey = GlobalKey();
+  final _cookingSkillSectionKey = GlobalKey();
+  final _cookingForPeopleFocusNode = FocusNode();
   final _cookingForPeopleController = TextEditingController();
   List<String> _selectedHealthGoals = [];
   String? _preferredMealPrepTime;
@@ -74,37 +80,32 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
+    _cookingForPeopleFocusNode.dispose();
     _cookingForPeopleController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSubmit() async {
-    // Collect all validation errors first in the correct order (as they appear on screen)
-    final List<String> missingFields = [];
+  Future<void> _scrollToKey(GlobalKey key) async {
+    final contextForKey = key.currentContext;
+    if (contextForKey == null) return;
+    await Scrollable.ensureVisible(
+      contextForKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.2,
+    );
+  }
 
+  Future<void> _handleSubmit() async {
     // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
+    final hasMissingFields = _selectedHealthGoals.isEmpty ||
+        _preferredMealPrepTime == null ||
+        _cookingForPeopleController.text.trim().isEmpty ||
+        _cookingSkill == null;
 
-    // Check all required fields in the order they appear on screen
-    // 1. Health Goals
-    if (_selectedHealthGoals.isEmpty) {
-      missingFields.add('At least one health goal');
-    }
-    // 2. Preferred Meal Prep time
-    if (_preferredMealPrepTime == null) {
-      missingFields.add('Preferred meal prep time');
-    }
-    // 3. Cooking for how many people
-    if (_cookingForPeopleController.text.trim().isEmpty) {
-      missingFields.add('How many people you cook for');
-    }
-    // 4. Cooking Skill
-    if (_cookingSkill == null) {
-      missingFields.add('Cooking skill rating');
-    }
-
-    // If there are any missing fields or form validation failed, show all errors
-    if (!isFormValid || missingFields.isNotEmpty) {
+    if (!isFormValid || hasMissingFields) {
       // Show errors on fields
       setState(() {
         _showErrors = true;
@@ -113,19 +114,23 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
       // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Show all missing fields in one message
-      if (missingFields.isNotEmpty) {
-        final errorMessage = missingFields.length == 1
-            ? 'Please fill in: ${missingFields.first}'
-            : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+      // Move user to the first missing required field.
+      if (_selectedHealthGoals.isEmpty) {
+        await _scrollToKey(_healthGoalsSectionKey);
+        return;
+      }
+      if (_preferredMealPrepTime == null) {
+        await _scrollToKey(_mealPrepSectionKey);
+        return;
+      }
+      if (_cookingForPeopleController.text.trim().isEmpty) {
+        await _scrollToKey(_cookingForPeopleSectionKey);
+        _cookingForPeopleFocusNode.requestFocus();
+        return;
+      }
+      if (_cookingSkill == null) {
+        await _scrollToKey(_cookingSkillSectionKey);
+        return;
       }
       return;
     }
@@ -220,6 +225,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     return Stack(
       children: [
         SingleChildScrollView(
+          controller: _scrollController,
           child: Padding(
             padding: const EdgeInsets.only(bottom: 200, left: 16, right: 16),
             child: Form(
@@ -230,6 +236,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                   const SizedBox(height: 24),
                   // Health Goal
                   Container(
+                    key: _healthGoalsSectionKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -269,6 +276,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                   ),
                   // Preferred Meal Prep time
                   Container(
+                    key: _mealPrepSectionKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -310,6 +318,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                   ),
                   // Cooking for how many people
                   Container(
+                    key: _cookingForPeopleSectionKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -324,6 +333,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           'I am cooking for this many people (Including Yourself)',
                       hintText: 'Type Here',
                       controller: _cookingForPeopleController,
+                      focusNode: _cookingForPeopleFocusNode,
                       keyboardType: TextInputType.number,
                       validator: (value) {
                         if (_showErrors &&
@@ -336,6 +346,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                   ),
                   // Rate your Cooking Skill
                   Container(
+                    key: _cookingSkillSectionKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),

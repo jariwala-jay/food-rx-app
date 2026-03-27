@@ -21,6 +21,11 @@ class BasicInfoStep extends StatefulWidget {
 
 class _BasicInfoStepState extends State<BasicInfoStep> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  final _nameFieldKey = GlobalKey();
+  final _emailFieldKey = GlobalKey();
+  final _passwordFieldKey = GlobalKey();
+  final _confirmPasswordFieldKey = GlobalKey();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -56,12 +61,24 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _emailFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    final contextForKey = key.currentContext;
+    if (contextForKey == null) return;
+    await Scrollable.ensureVisible(
+      contextForKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.2,
+    );
   }
 
   Future<void> _pickImage() async {
@@ -95,43 +112,30 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     // Validate form fields first
     final isFormValid = _formKey.currentState!.validate();
 
-    // Collect all missing required fields
-    final List<String> missingFields = [];
+    final hasMissingFields = _nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty ||
+        _confirmPasswordController.text.trim().isEmpty;
 
-    if (_nameController.text.trim().isEmpty) {
-      missingFields.add('Name');
-    }
-    if (_emailController.text.trim().isEmpty) {
-      missingFields.add('Email');
-    }
-    if (_passwordController.text.trim().isEmpty) {
-      missingFields.add('Password');
-    }
-    if (_confirmPasswordController.text.trim().isEmpty) {
-      missingFields.add('Confirm password');
-    }
-
-    // If form validation failed or there are missing fields, show all errors
-    if (!isFormValid || missingFields.isNotEmpty) {
-      // Build comprehensive error message
-      final List<String> allErrors = [];
-
-      // Add missing required fields
-      allErrors.addAll(missingFields);
-
-      // Show all missing fields in one message (form validators will show their own errors)
-      if (allErrors.isNotEmpty) {
-        final errorMessage = allErrors.length == 1
-            ? 'Please fill in: ${allErrors.first}'
-            : 'Please fill in the following required fields:\n• ${allErrors.join('\n• ')}';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+    // If form validation failed or there are missing fields, move to first missing field.
+    if (!isFormValid || hasMissingFields) {
+      // Move user to the first missing required field.
+      if (_nameController.text.trim().isEmpty) {
+        await _scrollToKey(_nameFieldKey);
+        return;
+      }
+      if (_emailController.text.trim().isEmpty) {
+        await _scrollToKey(_emailFieldKey);
+        _emailFocusNode.requestFocus();
+        return;
+      }
+      if (_passwordController.text.trim().isEmpty) {
+        await _scrollToKey(_passwordFieldKey);
+        return;
+      }
+      if (_confirmPasswordController.text.trim().isEmpty) {
+        await _scrollToKey(_confirmPasswordFieldKey);
+        return;
       }
       return;
     }
@@ -197,6 +201,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       children: [
         Expanded(
           child: SingleChildScrollView(
+            controller: _scrollController,
             padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
             child: Form(
               key: _formKey,
@@ -292,7 +297,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AppFormField(
+                        Container(
+                          key: _nameFieldKey,
+                          child: AppFormField(
                           label: 'Name',
                           hintText: 'Enter your name',
                           controller: _nameController,
@@ -303,8 +310,11 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                             return null;
                           },
                         ),
+                        ),
                         const SizedBox(height: 16),
-                        AppFormField(
+                        Container(
+                          key: _emailFieldKey,
+                          child: AppFormField(
                           label: 'Email',
                           hintText: 'Enter your email',
                           controller: _emailController,
@@ -326,8 +336,11 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                             return null;
                           },
                         ),
+                        ),
                         const SizedBox(height: 16),
-                        AppFormField(
+                        Container(
+                          key: _passwordFieldKey,
+                          child: AppFormField(
                           label: 'Password',
                           hintText: 'Enter your password',
                           controller: _passwordController,
@@ -371,6 +384,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                             },
                           ),
                         ),
+                        ),
                         const SizedBox(height: 8),
                         ValueListenableBuilder<TextEditingValue>(
                           valueListenable: _passwordController,
@@ -379,7 +393,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        AppFormField(
+                        Container(
+                          key: _confirmPasswordFieldKey,
+                          child: AppFormField(
                           label: 'Confirm Password',
                           hintText: 'Re-Enter your password',
                           controller: _confirmPasswordController,
@@ -410,6 +426,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                               });
                             },
                           ),
+                        ),
                         ),
                       ],
                     ),

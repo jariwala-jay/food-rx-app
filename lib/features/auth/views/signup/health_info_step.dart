@@ -22,6 +22,13 @@ class HealthInfoStep extends StatefulWidget {
 
 class _HealthInfoStepState extends State<HealthInfoStep> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  final _dobSectionKey = GlobalKey();
+  final _sexSectionKey = GlobalKey();
+  final _heightSectionKey = GlobalKey();
+  final _weightSectionKey = GlobalKey();
+  final _conditionSectionKey = GlobalKey();
+  final _weightFocusNode = FocusNode();
   final _dobController = TextEditingController();
   final _weightController = TextEditingController();
   String? _selectedSex;
@@ -45,9 +52,22 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
+    _weightFocusNode.dispose();
     _dobController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    final contextForKey = key.currentContext;
+    if (contextForKey == null) return;
+    await Scrollable.ensureVisible(
+      contextForKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.2,
+    );
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -89,6 +109,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
       child: Stack(
         children: [
           SingleChildScrollView(
+            controller: _scrollController,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
               child: Form(
@@ -98,6 +119,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                   children: [
                     const SizedBox(height: 24),
                     Container(
+                      key: _dobSectionKey,
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
@@ -126,6 +148,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                       ),
                     ),
                     Container(
+                      key: _sexSectionKey,
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
@@ -168,6 +191,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                       ),
                     ),
                     Container(
+                      key: _heightSectionKey,
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
@@ -236,6 +260,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                       ),
                     ),
                     Container(
+                      key: _weightSectionKey,
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
@@ -249,6 +274,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                         label: 'Weight',
                         hintText: 'Enter Weight',
                         controller: _weightController,
+                        focusNode: _weightFocusNode,
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _dismissKeyboard(),
@@ -282,6 +308,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                       ),
                     ),
                     Container(
+                      key: _conditionSectionKey,
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
@@ -401,34 +428,20 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             ),
                             elevation: 0,
                           ),
-                          onPressed: () {
-                            // Collect all validation errors first in the correct order
-                            final List<String> missingFields = [];
-
+                          onPressed: () async {
                             // Validate form fields (date of birth, weight)
                             final isFormValid =
                                 _formKey.currentState!.validate();
-
-                            // Check all required fields in the order they appear on screen
-                            if (_dobController.text.trim().isEmpty) {
-                              missingFields.add('Date of birth');
-                            }
-                            if (_selectedSex == null) {
-                              missingFields.add('Sex');
-                            }
-                            if (_heightFeet == null || _heightInches == null) {
-                              missingFields.add('Height');
-                            }
-                            if (_weightController.text.trim().isEmpty) {
-                              missingFields.add('Weight');
-                            }
-                            if (_selectedMedicalConditions.isEmpty) {
-                              missingFields
-                                  .add('Diet-related Chronic Condition');
-                            }
+                            final hasMissingFields =
+                                _dobController.text.trim().isEmpty ||
+                                    _selectedSex == null ||
+                                    _heightFeet == null ||
+                                    _heightInches == null ||
+                                    _weightController.text.trim().isEmpty ||
+                                    _selectedMedicalConditions.isEmpty;
 
                             // If there are any missing fields or form validation failed, show all errors
-                            if (!isFormValid || missingFields.isNotEmpty) {
+                            if (!isFormValid || hasMissingFields) {
                               // Show errors on fields
                               setState(() {
                                 _showErrors = true;
@@ -437,19 +450,28 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               // Trigger form validation to show field errors
                               _formKey.currentState?.validate();
 
-                              // Show all missing fields in one message
-                              if (missingFields.isNotEmpty) {
-                                final errorMessage = missingFields.length == 1
-                                    ? 'Please fill in: ${missingFields.first}'
-                                    : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(errorMessage),
-                                    backgroundColor: Colors.red,
-                                    duration: const Duration(seconds: 4),
-                                  ),
-                                );
+                              // Instead of showing a bottom snackbar, take user to
+                              // the first missing required field.
+                              if (_dobController.text.trim().isEmpty) {
+                                await _scrollToKey(_dobSectionKey);
+                                return;
+                              }
+                              if (_selectedSex == null) {
+                                await _scrollToKey(_sexSectionKey);
+                                return;
+                              }
+                              if (_heightFeet == null || _heightInches == null) {
+                                await _scrollToKey(_heightSectionKey);
+                                return;
+                              }
+                              if (_weightController.text.trim().isEmpty) {
+                                await _scrollToKey(_weightSectionKey);
+                                _weightFocusNode.requestFocus();
+                                return;
+                              }
+                              if (_selectedMedicalConditions.isEmpty) {
+                                await _scrollToKey(_conditionSectionKey);
+                                return;
                               }
                               return;
                             }

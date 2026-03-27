@@ -17,6 +17,7 @@ class _VideoSource {
 
 class PlanVideoPreloader {
   static final Map<String, VideoPlayerController> _cache = {};
+  static final Map<String, Future<void>> _inFlight = {};
 
   static String _key(String planType, bool useFullVideo) =>
       '$planType|${useFullVideo ? 'full' : 'short'}';
@@ -28,21 +29,33 @@ class PlanVideoPreloader {
     if (existing != null && existing.value.isInitialized) {
       return;
     }
-
-    try {
-      final source =
-          _PlanVideoPlayerState.getVideoSourceStatic(planType, useFullVideo);
-      VideoPlayerController controller;
-      if (source.isNetwork) {
-        controller = VideoPlayerController.networkUrl(Uri.parse(source.path));
-      } else {
-        controller = VideoPlayerController.asset(source.path);
-      }
-      await controller.initialize();
-      _cache[key] = controller;
-    } catch (e) {
-      debugPrint('PlanVideoPreloader preload error: $e');
+    final loading = _inFlight[key];
+    if (loading != null) {
+      await loading;
+      return;
     }
+
+    _inFlight[key] = () async {
+      try {
+        final source =
+            _PlanVideoPlayerState.getVideoSourceStatic(planType, useFullVideo);
+        VideoPlayerController controller;
+        if (source.isNetwork) {
+          controller = VideoPlayerController.networkUrl(Uri.parse(source.path));
+        } else {
+          controller = VideoPlayerController.asset(source.path);
+        }
+        await controller.initialize();
+        await controller.setVolume(0);
+        await controller.pause();
+        _cache[key] = controller;
+      } catch (e) {
+        debugPrint('PlanVideoPreloader preload error: $e');
+      } finally {
+        _inFlight.remove(key);
+      }
+    }();
+    await _inFlight[key];
   }
 
   static VideoPlayerController? takeController(
@@ -50,6 +63,17 @@ class PlanVideoPreloader {
     final key = _key(planType, useFullVideo);
     final controller = _cache.remove(key);
     return controller;
+  }
+
+  static void storeController(
+      String planType, bool useFullVideo, VideoPlayerController controller) {
+    final key = _key(planType, useFullVideo);
+    final existing = _cache[key];
+    if (existing == controller) return;
+    if (existing != null) {
+      existing.dispose();
+    }
+    _cache[key] = controller;
   }
 }
 
@@ -84,6 +108,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   bool _isVideoInitialized = false;
   bool _isSubmitting = false; // For signup mode registration
   String? _errorMessage;
+  VoidCallback? _videoListener;
 
   // Check if video watching is mandatory from env var
   bool get _isMandatoryVideo =>
@@ -103,12 +128,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
           PlanVideoPreloader.takeController(widget.planType, widget.useFullVideo);
       if (preloaded != null) {
         _controller = preloaded;
-        _controller!.addListener(() {
-          if (mounted) {
-            _checkVideoCompletion();
-            setState(() {});
-          }
-        });
+        _attachControllerListener();
         setState(() {
           _isLoading = false;
           _isVideoInitialized = true;
@@ -131,12 +151,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
       await _controller!.initialize();
 
       // Listen for video completion and position updates
-      _controller!.addListener(() {
-        if (mounted) {
-          _checkVideoCompletion();
-          setState(() {}); // Update UI for progress bar
-        }
-      });
+      _attachControllerListener();
 
       setState(() {
         _isLoading = false;
@@ -163,6 +178,18 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         }
       });
     }
+  }
+
+  void _attachControllerListener() {
+    final c = _controller;
+    if (c == null) return;
+    _videoListener ??= () {
+      if (mounted) {
+        _checkVideoCompletion();
+        setState(() {}); // Update UI for progress bar
+      }
+    };
+    c.addListener(_videoListener!);
   }
 
   void _checkVideoCompletion() {
@@ -195,47 +222,6 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
         }
       }
     }
-  }
-
-  Widget _buildLoadingPlaceholder() {
-    String thumbnailPath;
-    switch (widget.planType) {
-      case 'DASH':
-        thumbnailPath = 'assets/nutrition/screenshots/dash/1.png';
-        break;
-      case 'MyPlate':
-        thumbnailPath = 'assets/nutrition/screenshots/myplate/1.png';
-        break;
-      case 'DiabetesPlate':
-        thumbnailPath = 'assets/nutrition/screenshots/diabetes_plate/1.png';
-        break;
-      default:
-        thumbnailPath = 'assets/nutrition/screenshots/myplate/1.png';
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: Center(
-            child: Image.asset(
-              thumbnailPath,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ),
-        // Keep the bottom controls space so layout is stable
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              // Empty space where timeline/button will appear once ready
-              SizedBox(height: 40),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 
   /// Video source information - requires cloud URLs from environment variables
@@ -371,7 +357,16 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    final c = _controller;
+    if (c != null && _videoListener != null) {
+      c.removeListener(_videoListener!);
+    }
+    if (c != null && c.value.isInitialized) {
+      PlanVideoPreloader.storeController(
+          widget.planType, widget.useFullVideo, c);
+    } else {
+      c?.dispose();
+    }
     super.dispose();
   }
 

@@ -20,6 +20,12 @@ class PreferencesStep extends StatefulWidget {
 
 class _PreferencesStepState extends State<PreferencesStep> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  final _favoriteCuisinesKey = GlobalKey();
+  final _allergiesKey = GlobalKey();
+  final _dailyIntakeKey = GlobalKey();
+  final _waterIntakeKey = GlobalKey();
+  final _activityLevelKey = GlobalKey();
   List<String> _selectedFoodAllergies = [];
   String? _activityLevel;
   // New preference fields
@@ -80,6 +86,23 @@ class _PreferencesStepState extends State<PreferencesStep> {
     _dailyFruitIntake = signupData.dailyFruitIntake;
     _dailyVegetableIntake = signupData.dailyVegetableIntake;
     _dailyWaterIntake = signupData.dailyWaterIntake;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scrollToKey(GlobalKey key) async {
+    final contextForKey = key.currentContext;
+    if (contextForKey == null) return;
+    await Scrollable.ensureVisible(
+      contextForKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.2,
+    );
   }
 
   void _showServingSizeInfo(BuildContext context) {
@@ -148,40 +171,17 @@ class _PreferencesStepState extends State<PreferencesStep> {
   }
 
   Future<void> _handleSubmit() async {
-    // Collect all validation errors first in the correct order (as they appear on screen)
-    final List<String> missingFields = [];
-
     // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
+    final hasMissingFields = _favoriteCuisines.isEmpty ||
+        _selectedFoodAllergies.isEmpty ||
+        _dailyFruitIntake == null ||
+        _dailyVegetableIntake == null ||
+        _dailyWaterIntake == null ||
+        _activityLevel == null;
 
-    // Check all required fields in the order they appear on screen
-    // 1. Favorite Cuisines
-    if (_favoriteCuisines.isEmpty) {
-      missingFields.add('Favorite cuisines (or "No preference")');
-    }
-    // 2. Food Allergies & Intolerances
-    if (_selectedFoodAllergies.isEmpty) {
-      missingFields.add('Food allergies & intolerances (or "No allergies" if you have none)');
-    }
-    // 3. Daily Fruit Intake
-    if (_dailyFruitIntake == null) {
-      missingFields.add('Daily fruit intake');
-    }
-    // 4. Daily Vegetable Intake
-    if (_dailyVegetableIntake == null) {
-      missingFields.add('Daily vegetable intake');
-    }
-    // 5. Daily Water Intake
-    if (_dailyWaterIntake == null) {
-      missingFields.add('Daily water intake');
-    }
-    // 6. Activity Level
-    if (_activityLevel == null) {
-      missingFields.add('Activity level');
-    }
-
-    // If there are any missing fields or form validation failed, show all errors
-    if (!isFormValid || missingFields.isNotEmpty) {
+    // If there are any missing fields or form validation failed, show inline errors.
+    if (!isFormValid || hasMissingFields) {
       // Show errors on fields
       setState(() {
         _showErrors = true;
@@ -190,19 +190,26 @@ class _PreferencesStepState extends State<PreferencesStep> {
       // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Show all missing fields in one message
-      if (missingFields.isNotEmpty) {
-        final errorMessage = missingFields.length == 1
-            ? 'Please fill in: ${missingFields.first}'
-            : 'Please fill in the following required fields:\n• ${missingFields.join('\n• ')}';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+      // Move user to first missing required field instead of showing snackbar.
+      if (_favoriteCuisines.isEmpty) {
+        await _scrollToKey(_favoriteCuisinesKey);
+        return;
+      }
+      if (_selectedFoodAllergies.isEmpty) {
+        await _scrollToKey(_allergiesKey);
+        return;
+      }
+      if (_dailyFruitIntake == null || _dailyVegetableIntake == null) {
+        await _scrollToKey(_dailyIntakeKey);
+        return;
+      }
+      if (_dailyWaterIntake == null) {
+        await _scrollToKey(_waterIntakeKey);
+        return;
+      }
+      if (_activityLevel == null) {
+        await _scrollToKey(_activityLevelKey);
+        return;
       }
       return;
     }
@@ -252,6 +259,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
     return Stack(
       children: [
         SingleChildScrollView(
+          controller: _scrollController,
           child: Padding(
             padding: const EdgeInsets.only(bottom: 200, left: 16, right: 16),
             child: Form(
@@ -262,6 +270,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                   const SizedBox(height: 24),
                   // Favorite Cuisines (multi-select modal)
                   Container(
+                    key: _favoriteCuisinesKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -318,6 +327,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                   ),
                   // Food Allergies (multi-select modal)
                   Container(
+                    key: _allergiesKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -396,6 +406,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
                   // Daily Intake (Fruit & Vegetable)
                   Container(
+                    key: _dailyIntakeKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -479,6 +490,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                   ),
                   // Daily Water Intake (Radio)
                   Container(
+                    key: _waterIntakeKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -524,6 +536,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                   ),
                   // Activity Level
                   Container(
+                    key: _activityLevelKey,
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 16),
