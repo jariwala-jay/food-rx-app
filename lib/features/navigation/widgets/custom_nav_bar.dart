@@ -107,123 +107,129 @@ class CustomNavBar extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildNavItem(
-                      svgPath: 'assets/icons/home.svg',
-                      label: 'Home',
-                      isSelected: currentIndex == 0,
-                      onTap: _wrapWithTourCheck('home', onHomeTap),
-                      isDisabledDuringTour: isTourActive &&
-                          !_isTabAllowedDuringTour(currentStep, 'home'),
-                    ),
-                    Showcase(
-                      key: TourKeys.pantryTabKey,
-                      title: 'Your Pantry',
-                      description: TourDescriptions.pantryItems,
-                      targetShapeBorder: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      tooltipBackgroundColor:
-                          TourTooltipStyle.tooltipBackgroundColor,
-                      textColor: TourTooltipStyle.textColor,
-                      overlayColor: TourTooltipStyle.overlayColor,
-                      overlayOpacity: TourTooltipStyle.overlayOpacity,
-                      toolTipMargin: TourTooltipStyle.toolTipMargin,
-                      titleTextStyle: TourTooltipStyle.titleStyle,
-                      descTextStyle: TourTooltipStyle.descriptionStyle,
-                      onTargetClick: () {
-                        print(
-                            '🎯 CustomNavBar: User clicked on Pantry tab showcase');
-                        // Don't complete step here - let the pantry items showcase complete it
-                        // We need to stay on pantryItems step so the toggle showcase can trigger the pantry items showcase
-                        onPantryTap();
-
-                        // Trigger toggle showcase after navigation
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!context.mounted) return;
-                            try {
-                              final tp = Provider.of<ForcedTourProvider>(
-                                  context,
-                                  listen: false);
-                              // Only trigger if we're still on pantryItems step
-                              if (tp.isOnStep(TourStep.pantryItems)) {
-                                ShowcaseView.get().dismiss();
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildNavItem(
+                            svgPath: 'assets/icons/home.svg',
+                            label: 'Home',
+                            isSelected: currentIndex == 0,
+                            onTap: _wrapWithTourCheck('home', onHomeTap),
+                            isDisabledDuringTour: isTourActive &&
+                                !_isTabAllowedDuringTour(currentStep, 'home'),
+                          ),
+                          Showcase(
+                            key: TourKeys.pantryTabKey,
+                            title: 'Your Pantry',
+                            description: TourDescriptions.pantryItems,
+                            targetShapeBorder: const RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(12)),
+                            ),
+                            tooltipBackgroundColor:
+                                TourTooltipStyle.tooltipBackgroundColor,
+                            textColor: TourTooltipStyle.textColor,
+                            overlayColor: TourTooltipStyle.overlayColor,
+                            overlayOpacity: TourTooltipStyle.overlayOpacity,
+                            toolTipMargin: TourTooltipStyle.toolTipMargin,
+                            titleTextStyle: TourTooltipStyle.titleStyle,
+                            descTextStyle: TourTooltipStyle.descriptionStyle,
+                            onTargetClick: () {
+                              print(
+                                  '🎯 CustomNavBar: User clicked on Pantry tab showcase');
+                              onPantryTap();
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
                                 Future.delayed(
                                     const Duration(milliseconds: 300), () {
                                   if (!context.mounted) return;
-                                  final tp2 = Provider.of<ForcedTourProvider>(
-                                      context,
-                                      listen: false);
-                                  if (tp2.isOnStep(TourStep.pantryItems)) {
-                                    ShowcaseView.get().startShowCase(
-                                        [TourKeys.pantryTabToggleKey]);
+                                  try {
+                                    final tp = Provider.of<ForcedTourProvider>(
+                                        context,
+                                        listen: false);
+                                    if (tp.isOnStep(TourStep.pantryItems)) {
+                                      ShowcaseView.get().dismiss();
+                                      Future.delayed(
+                                          const Duration(milliseconds: 300), () {
+                                        if (!context.mounted) return;
+                                        final tp2 =
+                                            Provider.of<ForcedTourProvider>(
+                                                context,
+                                                listen: false);
+                                        if (tp2.isOnStep(TourStep.pantryItems)) {
+                                          ShowcaseView.get().startShowCase(
+                                              [TourKeys.pantryTabToggleKey]);
+                                          print(
+                                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                                        }
+                                      });
+                                    }
+                                  } catch (e) {
                                     print(
-                                        '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                                        '🎯 CustomNavBar: Error triggering toggle showcase: $e');
                                   }
                                 });
-                              }
-                            } catch (e) {
+                              });
+                            },
+                            onToolTipClick: () {
                               print(
-                                  '🎯 CustomNavBar: Error triggering toggle showcase: $e');
-                            }
-                          });
-                        });
-                      },
-                      onToolTipClick: () {
-                        print(
-                            '🎯 CustomNavBar: User clicked on Pantry tab tooltip');
-                        // Don't complete step here - let the pantry items showcase complete it
-                        // We need to stay on pantryItems step so the toggle showcase can trigger the pantry items showcase
-                        onPantryTap();
-
-                        // Trigger toggle showcase after navigation
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!context.mounted) return;
-                            try {
-                              final tp = Provider.of<ForcedTourProvider>(
-                                  context,
-                                  listen: false);
-                              // Only trigger if we're still on pantryItems step
-                              if (tp.isOnStep(TourStep.pantryItems)) {
-                                ShowcaseView.get().dismiss();
+                                  '🎯 CustomNavBar: User clicked on Pantry tab tooltip');
+                              onPantryTap();
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
                                 Future.delayed(
                                     const Duration(milliseconds: 300), () {
                                   if (!context.mounted) return;
-                                  final tp2 = Provider.of<ForcedTourProvider>(
-                                      context,
-                                      listen: false);
-                                  if (tp2.isOnStep(TourStep.pantryItems)) {
-                                    ShowcaseView.get().startShowCase(
-                                        [TourKeys.pantryTabToggleKey]);
+                                  try {
+                                    final tp = Provider.of<ForcedTourProvider>(
+                                        context,
+                                        listen: false);
+                                    if (tp.isOnStep(TourStep.pantryItems)) {
+                                      ShowcaseView.get().dismiss();
+                                      Future.delayed(
+                                          const Duration(milliseconds: 300), () {
+                                        if (!context.mounted) return;
+                                        final tp2 =
+                                            Provider.of<ForcedTourProvider>(
+                                                context,
+                                                listen: false);
+                                        if (tp2.isOnStep(TourStep.pantryItems)) {
+                                          ShowcaseView.get().startShowCase(
+                                              [TourKeys.pantryTabToggleKey]);
+                                          print(
+                                              '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                                        }
+                                      });
+                                    }
+                                  } catch (e) {
                                     print(
-                                        '🎯 CustomNavBar: Triggered Pantry tab toggle showcase');
+                                        '🎯 CustomNavBar: Error triggering toggle showcase: $e');
                                   }
                                 });
-                              }
-                            } catch (e) {
-                              print(
-                                  '🎯 CustomNavBar: Error triggering toggle showcase: $e');
-                            }
-                          });
-                        });
-                      },
-                      disposeOnTap: true,
-                      child: _buildNavItem(
-                        svgPath: 'assets/icons/pantry.svg',
-                        label: 'Pantry',
-                        isSelected: currentIndex == 1,
-                        onTap: _wrapWithTourCheck('pantry', onPantryTap),
-                        isDisabledDuringTour: isTourActive &&
-                            !_isTabAllowedDuringTour(currentStep, 'pantry'),
+                              });
+                            },
+                            disposeOnTap: true,
+                            child: _buildNavItem(
+                              svgPath: 'assets/icons/pantry.svg',
+                              label: 'Pantry',
+                              isSelected: currentIndex == 1,
+                              onTap: _wrapWithTourCheck('pantry', onPantryTap),
+                              isDisabledDuringTour: isTourActive &&
+                                  !_isTabAllowedDuringTour(
+                                      currentStep, 'pantry'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     // Empty space for center button
-                    const SizedBox(width: 60),
-                    Showcase(
-                      key: TourKeys.recipesTabKey,
+                    const SizedBox(width: 72),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Showcase(
+                            key: TourKeys.recipesTabKey,
                       title: 'Recipes',
                       description: TourDescriptions.recipes,
                       targetShapeBorder: const RoundedRectangleBorder(
@@ -306,18 +312,19 @@ class CustomNavBar extends StatelessWidget {
                           });
                         }
                       },
-                      disposeOnTap: true,
-                      child: _buildNavItem(
-                        svgPath: 'assets/icons/recipe.svg',
-                        label: 'Recipe',
-                        isSelected: currentIndex == 2,
-                        onTap: _wrapWithTourCheck('recipe', onRecipeTap),
-                        isDisabledDuringTour: isTourActive &&
-                            !_isTabAllowedDuringTour(currentStep, 'recipe'),
-                      ),
-                    ),
-                    Showcase(
-                      key: TourKeys.educationTabKey,
+                            disposeOnTap: true,
+                            child: _buildNavItem(
+                              svgPath: 'assets/icons/recipe.svg',
+                              label: 'Recipe',
+                              isSelected: currentIndex == 2,
+                              onTap: _wrapWithTourCheck('recipe', onRecipeTap),
+                              isDisabledDuringTour: isTourActive &&
+                                  !_isTabAllowedDuringTour(
+                                      currentStep, 'recipe'),
+                            ),
+                          ),
+                          Showcase(
+                            key: TourKeys.educationTabKey,
                       title: 'Education',
                       description: TourDescriptions.education,
                       targetShapeBorder: const RoundedRectangleBorder(
@@ -393,14 +400,19 @@ class CustomNavBar extends StatelessWidget {
                           } catch (e) {}
                         });
                       },
-                      disposeOnTap: true,
-                      child: _buildNavItem(
-                        svgPath: 'assets/icons/education.svg',
-                        label: 'Education',
-                        isSelected: currentIndex == 3,
-                        onTap: _wrapWithTourCheck('education', onEducationTap),
-                        isDisabledDuringTour: isTourActive &&
-                            !_isTabAllowedDuringTour(currentStep, 'education'),
+                            disposeOnTap: true,
+                            child: _buildNavItem(
+                              svgPath: 'assets/icons/education.svg',
+                              label: 'Education',
+                              isSelected: currentIndex == 3,
+                              onTap:
+                                  _wrapWithTourCheck('education', onEducationTap),
+                              isDisabledDuringTour: isTourActive &&
+                                  !_isTabAllowedDuringTour(
+                                      currentStep, 'education'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -410,126 +422,126 @@ class CustomNavBar extends StatelessWidget {
               Positioned(
                 top: -20,
                 child: Showcase(
-                  key: TourKeys.addButtonKey,
-                  title: 'Add Items & Recipes',
-                  description: TourDescriptions.addButton,
-                  targetShapeBorder: const CircleBorder(),
-                  tooltipBackgroundColor:
-                      TourTooltipStyle.tooltipBackgroundColor,
-                  textColor: TourTooltipStyle.textColor,
-                  overlayColor: TourTooltipStyle.overlayColor,
-                  overlayOpacity: TourTooltipStyle.overlayOpacity,
-                  toolTipMargin: TourTooltipStyle.toolTipMargin,
-                  titleTextStyle: TourTooltipStyle.titleStyle,
-                  descTextStyle: TourTooltipStyle.descriptionStyle,
-                  onTargetClick: () {
-                    // Don't complete the step here - let MainScreen._handleAddTap complete it
-                    // after the action sheet closes. This prevents premature step completion
-                    // and ensures the pantry showcase triggers at the right time.
+                    key: TourKeys.addButtonKey,
+                    title: 'Add Items & Recipes',
+                    description: TourDescriptions.addButton,
+                    targetShapeBorder: const CircleBorder(),
+                    tooltipBackgroundColor:
+                        TourTooltipStyle.tooltipBackgroundColor,
+                    textColor: TourTooltipStyle.textColor,
+                    overlayColor: TourTooltipStyle.overlayColor,
+                    overlayOpacity: TourTooltipStyle.overlayOpacity,
+                    toolTipMargin: TourTooltipStyle.toolTipMargin,
+                    titleTextStyle: TourTooltipStyle.titleStyle,
+                    descTextStyle: TourTooltipStyle.descriptionStyle,
+                    onTargetClick: () {
+                      // Don't complete the step here - let MainScreen._handleAddTap complete it
+                      // after the action sheet closes. This prevents premature step completion
+                      // and ensures the pantry showcase triggers at the right time.
 
-                    // Open the action sheet
-                    onAddTap();
-
-                    // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!context.mounted) return;
-                      try {
-                        ShowcaseView.get().dismiss();
-                        Future.delayed(const Duration(milliseconds: 300), () {
-                          if (!context.mounted) return;
-                          final tp = Provider.of<ForcedTourProvider>(context,
-                              listen: false);
-                          // Only trigger if we're still on the addButton step
-                          // (step will be completed after action sheet closes)
-                          if (tp.isOnStep(TourStep.addButton)) {
-                            ShowcaseView.get()
-                                .startShowCase([TourKeys.addFoodRxItemsKey]);
-                          }
-                        });
-                      } catch (e) {
-                        debugPrint(
-                            '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
-                      }
-                    });
-                  },
-                  onToolTipClick: () {
-                    // Don't complete the step here - let MainScreen._handleAddTap complete it
-                    // after the action sheet closes.
-
-                    // Open the action sheet
-                    onAddTap();
-
-                    // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!context.mounted) return;
-                      try {
-                        ShowcaseView.get().dismiss();
-                        Future.delayed(const Duration(milliseconds: 300), () {
-                          if (!context.mounted) return;
-                          final tp = Provider.of<ForcedTourProvider>(context,
-                              listen: false);
-                          // Only trigger if we're still on the addButton step
-                          // (step will be completed after action sheet closes)
-                          if (tp.isOnStep(TourStep.addButton)) {
-                            ShowcaseView.get()
-                                .startShowCase([TourKeys.addFoodRxItemsKey]);
-                          }
-                        });
-                      } catch (e) {
-                        debugPrint(
-                            '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
-                      }
-                    });
-                  },
-                  disposeOnTap: false,
-                  child: GestureDetector(
-                    onTap: () {
-                      // During tour, only allow add button on specific steps
-                      if (isTourActive && currentStep != TourStep.addButton) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Please complete the current tour step first'),
-                            duration: Duration(seconds: 2),
-                            backgroundColor: Color(0xFFFF6A00),
-                          ),
-                        );
-                        return;
-                      }
+                      // Open the action sheet
                       onAddTap();
+
+                      // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!context.mounted) return;
+                        try {
+                          ShowcaseView.get().dismiss();
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!context.mounted) return;
+                            final tp = Provider.of<ForcedTourProvider>(context,
+                                listen: false);
+                            // Only trigger if we're still on the addButton step
+                            // (step will be completed after action sheet closes)
+                            if (tp.isOnStep(TourStep.addButton)) {
+                              ShowcaseView.get()
+                                  .startShowCase([TourKeys.addFoodRxItemsKey]);
+                            }
+                          });
+                        } catch (e) {
+                          debugPrint(
+                              '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                        }
+                      });
                     },
-                    child: AnimatedRotation(
-                      turns: isAddActive ? 0.125 : 0.0, // 45deg = 1/8 turn
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      child: Container(
-                        width: 55,
-                        height: 55,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF6A00),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
+                    onToolTipClick: () {
+                      // Don't complete the step here - let MainScreen._handleAddTap complete it
+                      // after the action sheet closes.
+
+                      // Open the action sheet
+                      onAddTap();
+
+                      // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!context.mounted) return;
+                        try {
+                          ShowcaseView.get().dismiss();
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!context.mounted) return;
+                            final tp = Provider.of<ForcedTourProvider>(context,
+                                listen: false);
+                            // Only trigger if we're still on the addButton step
+                            // (step will be completed after action sheet closes)
+                            if (tp.isOnStep(TourStep.addButton)) {
+                              ShowcaseView.get()
+                                  .startShowCase([TourKeys.addFoodRxItemsKey]);
+                            }
+                          });
+                        } catch (e) {
+                          debugPrint(
+                              '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                        }
+                      });
+                    },
+                    disposeOnTap: false,
+                    child: GestureDetector(
+                      onTap: () {
+                        // During tour, only allow add button on specific steps
+                        if (isTourActive && currentStep != TourStep.addButton) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Please complete the current tour step first'),
+                              duration: Duration(seconds: 2),
+                              backgroundColor: Color(0xFFFF6A00),
                             ),
-                          ],
-                        ),
-                        child: Center(
-                          child: SvgPicture.asset(
-                            'assets/icons/add.svg',
-                            width: 32,
-                            height: 32,
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white,
-                              BlendMode.srcIn,
+                          );
+                          return;
+                        }
+                        onAddTap();
+                      },
+                      child: AnimatedRotation(
+                        turns: isAddActive ? 0.125 : 0.0, // 45deg = 1/8 turn
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        child: Container(
+                          width: 55,
+                          height: 55,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF6A00),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: SvgPicture.asset(
+                              'assets/icons/add.svg',
+                              width: 32,
+                              height: 32,
+                              colorFilter: const ColorFilter.mode(
+                                Colors.white,
+                                BlendMode.srcIn,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ),
               ),
             ],
@@ -569,14 +581,24 @@ class CustomNavBar extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDisabledDuringTour
-                    ? disabledColor
-                    : (isSelected ? activeColor : Colors.grey),
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            SizedBox(
+              width: 70,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDisabledDuringTour
+                        ? disabledColor
+                        : (isSelected ? activeColor : Colors.grey),
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
               ),
             ),
           ],

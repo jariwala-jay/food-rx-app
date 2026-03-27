@@ -332,6 +332,36 @@ class RecipeController extends ChangeNotifier {
     await loadPreparedRecipes();
   }
 
+  /// Remove a prepared recipe entry without applying pantry/goal consumption side effects.
+  /// Used by swipe-delete in Prepared Recipes list.
+  Future<void> removePreparedRecipe(PreparedRecipe item) async {
+    final userId = authProvider.currentUser?.id;
+    if (userId == null) return;
+    if (item.remainingServings <= 0) return;
+
+    await recipeRepository.logPreparedConsumption(
+      userId,
+      item.recipeId,
+      item.remainingServings,
+    );
+    await loadPreparedRecipes();
+  }
+
+  /// Restore a previously removed prepared recipe entry (for undo).
+  Future<void> restorePreparedRecipe(PreparedRecipe item) async {
+    final userId = authProvider.currentUser?.id;
+    if (userId == null) return;
+    if (item.remainingServings <= 0) return;
+
+    await recipeRepository.logPreparedCook(
+      userId,
+      item.recipe,
+      item.remainingServings,
+      0,
+    );
+    await loadPreparedRecipes();
+  }
+
   Future<void> cookRecipe(Recipe recipe) async {
     final userId = authProvider.currentUser?.id;
     if (userId == null) {

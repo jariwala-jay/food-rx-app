@@ -75,15 +75,53 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
 
   Future<void> _onSwipeDeletePrepared(PreparedRecipe item) async {
     final controller = Provider.of<RecipeController>(context, listen: false);
-    await controller.logConsumptionFromPrepared(item, item.remainingServings);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Removed from prepared recipes.'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      await controller.removePreparedRecipe(item);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Removed from prepared recipes.'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Undo',
+              textColor: Colors.white,
+              onPressed: () async {
+                try {
+                  await controller.restorePreparedRecipe(item);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text('Restored prepared recipe.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not restore item: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      await controller.loadPreparedRecipes();
+    }
   }
 
   void _showRecipeActionSheet(BuildContext context, PreparedRecipe item) {
@@ -254,7 +292,7 @@ class _PreparedRecipeCard extends StatelessWidget {
   final PreparedRecipe item;
   final VoidCallback onTapLeftover;
   final VoidCallback onTapCard;
-  final Future<void> Function(PreparedRecipe item) onSwipeDelete;
+  final void Function(PreparedRecipe item) onSwipeDelete;
 
   const _PreparedRecipeCard({
     required this.item,
@@ -273,6 +311,8 @@ class _PreparedRecipeCard extends StatelessWidget {
     return Dismissible(
       key: ValueKey(item.id),
       direction: DismissDirection.endToStart,
+      movementDuration: const Duration(milliseconds: 160),
+      resizeDuration: const Duration(milliseconds: 120),
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -288,22 +328,9 @@ class _PreparedRecipeCard extends StatelessWidget {
         ),
       ),
       confirmDismiss: (_) async {
-        if (remaining <= 0) return false;
-        try {
-          await onSwipeDelete(item);
-          return true;
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return false;
-        }
+        return remaining > 0;
       },
+      onDismissed: (_) => onSwipeDelete(item),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(

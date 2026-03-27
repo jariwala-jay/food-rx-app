@@ -89,6 +89,7 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
                 )
                 if result.get("ok"):
                     push_updates["pushStatus"] = "sent"
+                    push_updates["sentAt"] = datetime.now(timezone.utc).isoformat()
                     if result.get("messageId"):
                         push_updates["pushMessageId"] = str(result.get("messageId"))
                 else:

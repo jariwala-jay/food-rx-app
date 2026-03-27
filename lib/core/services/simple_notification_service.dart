@@ -37,7 +37,7 @@ class SimpleNotificationService {
 
       final title = names.length == 1
           ? '${names.first} expires soon'
-          : '${names.length} food expiring soon';
+          : '${names.length} food items expiring soon';
       final message = names.length == 1
           ? 'Use it in a recipe today so it doesn\'t go to waste.'
           : 'Expiring soon: $itemsSummary';
@@ -156,6 +156,21 @@ class SimpleNotificationService {
           false;
 
       if (!hasProgressToday) {
+        final existing = await ApiClient.get('/notifications') as List?;
+        final hasTodayReminder = existing?.any((n) {
+              if (n is! Map) return false;
+              if (n['type'] != 'tracker_reminder') return false;
+              final createdAt = n['createdAt']?.toString();
+              if (createdAt == null) return false;
+              try {
+                return DateTime.parse(createdAt).isAfter(startOfDay);
+              } catch (_) {
+                return false;
+              }
+            }) ??
+            false;
+        if (hasTodayReminder) return;
+
         await ApiClient.post('/notifications', body: {
           'type': 'tracker_reminder',
           'title': 'Time to log your food!',

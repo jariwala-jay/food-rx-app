@@ -238,7 +238,7 @@ async function checkExpiringIngredients() {
         const title =
           names.length === 1
             ? `${names[0]} expires soon`
-            : `${names.length} food expiring soon`;
+            : `${names.length} food items expiring soon`;
         const message =
           names.length === 1
             ? "Use it in a recipe today so it doesn't go to waste."
@@ -344,6 +344,18 @@ async function checkMealLoggingInactivityReminders() {
 
       for (const user of users) {
         const userId = user._id.toHexString();
+
+        // Only one tracker reminder notification per user per day.
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const existingToday = await notificationsCollection.findOne({
+          userId: userId,
+          type: "tracker_reminder",
+          createdAt: { $gte: today },
+        });
+        if (existingToday) {
+          continue;
+        }
 
         const latestProgress = await progressCollection
           .find({
@@ -462,6 +474,17 @@ async function checkAppInactivityReminders() {
 
       for (const user of users) {
         const userId = user._id.toHexString();
+
+        // Only one app inactivity reminder notification per user per day.
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const existingToday = await notificationsCollection.findOne({
+          userId: userId,
+          type: "app_inactivity_reminder",
+          createdAt: { $gte: today },
+        });
+        if (existingToday) continue;
+
         const rawLastActive = user.lastActiveAt || user.lastLoginAt || user.updatedAt;
         if (!rawLastActive) continue;
 

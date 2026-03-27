@@ -243,9 +243,21 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
                     data={"type": "admin", "deeplink": "notifications"},
                 )
                 if res.get("ok"):
+                    now_iso = datetime.now(timezone.utc).isoformat()
                     await users.update_one(
                         {"_id": ObjectId(user_id)},
-                        {"$set": {"welcomePushSentAt": datetime.now(timezone.utc).isoformat()}},
+                        {"$set": {"welcomePushSentAt": now_iso}},
+                    )
+                    # Mark welcome notification as sent so legacy notification-delivery
+                    # Cloud Function will not send the same welcome message again later.
+                    await db["notifications"].update_one(
+                        {
+                            **({"$or": [{"userId": str(user_id)}, {"userId": ObjectId(user_id)}]}),
+                            "type": "admin",
+                            "title": "Welcome to MyFoodRx",
+                            "sentAt": {"$exists": False},
+                        },
+                        {"$set": {"sentAt": now_iso}},
                     )
         except Exception:
             pass
