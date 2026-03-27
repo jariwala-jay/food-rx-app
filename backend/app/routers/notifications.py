@@ -36,8 +36,25 @@ def _user_match(user_id: str):
 async def list_notifications(user_id: str = Depends(get_current_user_id)):
     db = await get_database()
     q = _user_match(user_id)
-    cursor = db[COLL].find(q).sort("createdAt", -1).limit(50)
-    docs = await cursor.to_list(length=None)
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    pipeline = [
+        {"$match": q},
+        {
+            "$addFields": {
+                "createdAtParsed": {
+                    "$convert": {
+                        "input": "$createdAt",
+                        "to": "date",
+                        "onError": epoch,
+                        "onNull": epoch,
+                    }
+                }
+            }
+        },
+        {"$sort": {"createdAtParsed": -1, "_id": -1}},
+        {"$limit": 50},
+    ]
+    docs = await db[COLL].aggregate(pipeline).to_list(length=50)
     return [_serialize(d) for d in docs]
 
 

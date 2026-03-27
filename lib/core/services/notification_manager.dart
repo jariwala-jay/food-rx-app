@@ -40,6 +40,8 @@ class NotificationManager extends ChangeNotifier {
             .whereType<Map<String, dynamic>>()
             .map((doc) => AppNotification.fromJson(doc))
             .toList();
+        // Defensive client-side ordering: newest first.
+        _notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       } else {
         _notifications = [];
       }

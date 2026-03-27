@@ -32,6 +32,21 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        v = value.strip()
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        dt = datetime.fromisoformat(v)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
 @router.post("/check-email")
 async def check_email(body: dict):
     """
@@ -241,12 +256,19 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
             pass
     updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
     await users.update_one({"_id": ObjectId(user_id)}, {"$set": updates})
-    # If the app just registered an FCM token, opportunistically send a one-time welcome tray notification.
-    # The in-app "welcome" record already exists; this only adds a tray push for onboarding.
+    # If the app just registered an FCM token, only send a welcome tray push for
+    # truly new accounts (prevents legacy users from seeing welcome on re-login).
     if "fcmToken" in updates and updates.get("fcmToken"):
         try:
             user = await users.find_one({"_id": ObjectId(user_id)})
-            if user and not user.get("welcomePushSentAt"):
+            created_at = _parse_iso_datetime((user or {}).get("createdAt"))
+            now_dt = datetime.now(timezone.utc)
+            is_new_account = (
+                created_at is not None
+                and (now_dt - created_at) <= timedelta(hours=24)
+                and (now_dt - created_at) >= timedelta(seconds=0)
+            )
+            if user and not user.get("welcomePushSentAt") and is_new_account:
                 from app.push import send_push_to_fcm_token
 
                 res = await send_push_to_fcm_token(
@@ -256,7 +278,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
                     data={"type": "admin", "deeplink": "notifications"},
                 )
                 if res.get("ok"):
-                    now_iso = datetime.now(timezone.utc).isoformat()
+                    now_iso = now_dt.isoformat()
                     await users.update_one(
                         {"_id": ObjectId(user_id)},
                         {"$set": {"welcomePushSentAt": now_iso}},

@@ -18,6 +18,7 @@ class NotificationCenterPage extends StatefulWidget {
 class _NotificationCenterPageState extends State<NotificationCenterPage> {
   static final SimpleNotificationService _expiringService =
       SimpleNotificationService();
+  bool _sortNewestFirst = true;
 
   @override
   void initState() {
@@ -105,6 +106,14 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   icon: const Icon(Icons.more_vert, color: Colors.black87),
                   onSelected: (value) async {
                     switch (value) {
+                      case 'sort_newest':
+                        if (!mounted) return;
+                        setState(() => _sortNewestFirst = true);
+                        break;
+                      case 'sort_oldest':
+                        if (!mounted) return;
+                        setState(() => _sortNewestFirst = false);
+                        break;
                       case 'mark_all_read':
                         await notificationManager.markAllAsRead();
                         break;
@@ -117,6 +126,26 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                     }
                   },
                   itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'sort_newest',
+                      child: Row(
+                        children: [
+                          Icon(Icons.south, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Sort: Newest to Oldest'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'sort_oldest',
+                      child: Row(
+                        children: [
+                          Icon(Icons.north, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Sort: Oldest to Newest'),
+                        ],
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'refresh',
                       child: Row(
@@ -133,7 +162,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         children: [
                           Icon(Icons.mark_email_read, color: Colors.black87),
                           SizedBox(width: 8),
-                          Text('Mark All Read'),
+                          Text('Mark all as read'),
                         ],
                       ),
                     ),
@@ -143,7 +172,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         children: [
                           Icon(Icons.clear_all, color: Colors.black87),
                           SizedBox(width: 8),
-                          Text('Clear All'),
+                          Text('Clear all'),
                         ],
                       ),
                     ),
@@ -197,7 +226,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
             );
           }
 
-          final notifications = notificationManager.notifications;
+          final notifications = [...notificationManager.notifications]
+            ..sort((a, b) => _sortNewestFirst
+                ? b.createdAt.compareTo(a.createdAt)
+                : a.createdAt.compareTo(b.createdAt));
 
           if (notifications.isEmpty) {
             return Center(
