@@ -230,6 +230,13 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      // Best effort: detach this device token from current user to avoid
+      // receiving pushes for an account after switching users on same device.
+      try {
+        await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
+      } catch (_) {
+        // Ignore; logout should proceed regardless.
+      }
       await ApiClient.clearSession();
       _notificationManager?.dispose();
       _notificationManager = null;

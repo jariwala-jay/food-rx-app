@@ -16,6 +16,14 @@ class NotificationManager extends ChangeNotifier {
   String? get error => _error;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
+  Future<void> _syncAppIconBadge() async {
+    await _notificationService.setAppIconBadgeCount(unreadCount);
+  }
+
+  Future<void> clearAppIconBadge() async {
+    await _notificationService.clearAppIconBadge();
+  }
+
   Future<void> initialize(String userId) async {
     _userId = userId;
     await loadNotifications();
@@ -38,6 +46,7 @@ class NotificationManager extends ChangeNotifier {
       debugPrint(
           'Notifications: loaded ${_notifications.length} for userId=$_userId');
       notifyListeners();
+      await _syncAppIconBadge();
     } catch (e) {
       _setError('Failed to load notifications: $e');
       debugPrint('Error loading notifications: $e');
@@ -56,6 +65,7 @@ class NotificationManager extends ChangeNotifier {
             readAt: DateTime.now(),
           );
           notifyListeners();
+          await _syncAppIconBadge();
         }
       }
     } catch (e) {
@@ -68,6 +78,7 @@ class NotificationManager extends ChangeNotifier {
       await ApiClient.delete('/notifications/$notificationId');
       _notifications.removeWhere((n) => n.id == notificationId);
       notifyListeners();
+      await _syncAppIconBadge();
     } catch (e) {
       debugPrint('Error dismissing notification: $e');
     }
@@ -89,6 +100,7 @@ class NotificationManager extends ChangeNotifier {
         }
       }
       notifyListeners();
+      await _syncAppIconBadge();
     } catch (e) {
       debugPrint('Error marking all notifications as read: $e');
     }
@@ -100,6 +112,7 @@ class NotificationManager extends ChangeNotifier {
       await ApiClient.delete('/notifications');
       _notifications.clear();
       notifyListeners();
+      await _syncAppIconBadge();
     } catch (e) {
       debugPrint('Error clearing notifications: $e');
     }

@@ -226,6 +226,19 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         return {"ok": True}
+    # Enforce one-device-token-per-user to avoid cross-account push delivery
+    # on shared devices. If this token exists on other users, remove it there.
+    if "fcmToken" in updates and updates.get("fcmToken"):
+        try:
+            await users.update_many(
+                {
+                    "fcmToken": updates["fcmToken"],
+                    "_id": {"$ne": ObjectId(user_id)},
+                },
+                {"$unset": {"fcmToken": ""}},
+            )
+        except Exception:
+            pass
     updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
     await users.update_one({"_id": ObjectId(user_id)}, {"$set": updates})
     # If the app just registered an FCM token, opportunistically send a one-time welcome tray notification.

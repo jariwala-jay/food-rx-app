@@ -86,6 +86,7 @@ const MEAL_LOGGING_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const APP_OPEN_DAY_MILESTONES = [1, 2, 3, 4, 5, 6];
 const APP_OPEN_WEEK_MILESTONES = [7, 14, 21, 28];
 const APP_OPEN_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const NEW_ACCOUNT_GRACE_HOURS = 24;
 
 function toStartOfDay(date) {
   const d = new Date(date);
@@ -155,6 +156,15 @@ function formatBucketMessage(prefix, bucketKey) {
   const label = bucketLabel(bucketKey);
   if (!label) return prefix;
   return `${prefix} It's been ${label}.`;
+}
+
+function isWithinNewAccountGracePeriod(now, user) {
+  const rawCreatedAt = user?.createdAt;
+  if (!rawCreatedAt) return false;
+  const createdAt = new Date(rawCreatedAt);
+  if (Number.isNaN(createdAt.getTime())) return false;
+  const ageMs = now.getTime() - createdAt.getTime();
+  return ageMs >= 0 && ageMs < NEW_ACCOUNT_GRACE_HOURS * 60 * 60 * 1000;
 }
 
 /**
@@ -345,6 +355,11 @@ async function checkMealLoggingInactivityReminders() {
       for (const user of users) {
         const userId = user._id.toHexString();
 
+        // Skip reminders for very new accounts to avoid noisy first-day nudges.
+        if (isWithinNewAccountGracePeriod(now, user)) {
+          continue;
+        }
+
         // Only one tracker reminder notification per user per day.
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -474,6 +489,11 @@ async function checkAppInactivityReminders() {
 
       for (const user of users) {
         const userId = user._id.toHexString();
+
+        // Skip reminders for very new accounts to avoid noisy first-day nudges.
+        if (isWithinNewAccountGracePeriod(now, user)) {
+          continue;
+        }
 
         // Only one app inactivity reminder notification per user per day.
         const today = new Date();

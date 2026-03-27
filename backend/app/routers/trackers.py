@@ -33,6 +33,18 @@ def _serialize_doc(doc: dict) -> dict:
     return out
 
 
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        v = value.strip()
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        return datetime.fromisoformat(v)
+    except Exception:
+        return None
+
+
 def _require_reset_secret(x_reset_secret: str | None = Header(None, alias="X-Reset-Secret")):
     """Require a shared secret for reset endpoints. Set TRACKER_RESET_SECRET in .env."""
     if not settings.tracker_reset_secret:
@@ -166,15 +178,34 @@ async def get_progress(
         q["trackerId"] = trackerId
     if periodType:
         q["periodType"] = periodType
-    if startDate or endDate:
-        date_filter = {}
-        if startDate:
-            date_filter["$gte"] = startDate
-        if endDate:
-            date_filter["$lte"] = endDate
-        q["progressDate"] = date_filter
-    cursor = db[PROGRESS].find(q).sort("progressDate", -1)
-    docs = await cursor.to_list(length=200)
+    start_dt = _parse_iso_datetime(startDate)
+    end_dt = _parse_iso_datetime(endDate)
+
+    # Use parsed date filtering/sorting so mixed ISO formats (with/without timezone)
+    # are handled correctly and history charts stay accurate across time zones.
+    if start_dt or end_dt:
+        date_match = {}
+        if start_dt:
+            date_match["$gte"] = start_dt
+        if end_dt:
+            date_match["$lte"] = end_dt
+        pipeline = [
+            {"$match": q},
+            {"$addFields": {"progressDateParsed": {"$toDate": "$progressDate"}}},
+            {"$match": {"progressDateParsed": date_match}},
+            {"$sort": {"progressDateParsed": -1}},
+            {"$limit": 200},
+        ]
+        docs = await db[PROGRESS].aggregate(pipeline).to_list(length=200)
+    else:
+        # No explicit date bounds: still sort by parsed date for consistency.
+        pipeline = [
+            {"$match": q},
+            {"$addFields": {"progressDateParsed": {"$toDate": "$progressDate"}}},
+            {"$sort": {"progressDateParsed": -1}},
+            {"$limit": 200},
+        ]
+        docs = await db[PROGRESS].aggregate(pipeline).to_list(length=200)
     return [_serialize_doc(d) for d in docs]
 
 

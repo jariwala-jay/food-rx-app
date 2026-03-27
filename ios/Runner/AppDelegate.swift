@@ -21,6 +21,37 @@ import UserNotifications
     application.registerForRemoteNotifications()
     
     GeneratedPluginRegistrant.register(with: self)
+    
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let badgeChannel = FlutterMethodChannel(
+        name: "foodrx/badge",
+        binaryMessenger: controller.binaryMessenger
+      )
+      badgeChannel.setMethodCallHandler { call, result in
+        guard call.method == "setBadge" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        
+        guard let args = call.arguments as? [String: Any],
+              let count = args["count"] as? Int else {
+          result(
+            FlutterError(
+              code: "BAD_ARGS",
+              message: "Missing or invalid 'count'",
+              details: nil
+            )
+          )
+          return
+        }
+        
+        DispatchQueue.main.async {
+          application.applicationIconBadgeNumber = max(0, count)
+          result(nil)
+        }
+      }
+    }
+    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -100,8 +101,10 @@ class PlanVideoPlayer extends StatefulWidget {
   State<PlanVideoPlayer> createState() => _PlanVideoPlayerState();
 }
 
-class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
+class _PlanVideoPlayerState extends State<PlanVideoPlayer>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
+  static const double _playbackVolume = 1.0;
   bool _isLoading = true;
   bool _hasError = false;
   bool _isVideoCompleted = false;
@@ -118,14 +121,15 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeVideo();
   }
 
   Future<void> _initializeVideo() async {
     try {
       // Try to reuse preloaded controller if available
-      final preloaded =
-          PlanVideoPreloader.takeController(widget.planType, widget.useFullVideo);
+      final preloaded = PlanVideoPreloader.takeController(
+          widget.planType, widget.useFullVideo);
       if (preloaded != null) {
         _controller = preloaded;
         _attachControllerListener();
@@ -133,6 +137,8 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
           _isLoading = false;
           _isVideoInitialized = true;
         });
+        // Controller is preloaded muted; restore volume for playback.
+        _controller!.setVolume(_playbackVolume);
         _controller!.play();
         return;
       }
@@ -149,6 +155,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
       }
 
       await _controller!.initialize();
+      await _controller!.setVolume(_playbackVolume);
 
       // Listen for video completion and position updates
       _attachControllerListener();
@@ -184,8 +191,17 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     final c = _controller;
     if (c == null) return;
     _videoListener ??= () {
-      if (mounted) {
-        _checkVideoCompletion();
+      if (!mounted) return;
+      _checkVideoCompletion();
+      // Pausing/backgrounding can trigger controller notifications during build.
+      // Schedule UI refresh safely after the current frame.
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {}); // Update UI for progress bar
+        });
+      } else {
         setState(() {}); // Update UI for progress bar
       }
     };
@@ -231,8 +247,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
   }
 
   /// Static helper so preloader can compute video source without a widget.
-  static _VideoSource getVideoSourceStatic(
-      String planType, bool useFullVideo) {
+  static _VideoSource getVideoSourceStatic(String planType, bool useFullVideo) {
     // Get cloud URL from environment variables
     // If useFullVideo is true, try full video URLs first, then fall back to regular URLs
     String? cloudUrl;
@@ -355,13 +370,48 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
     });
   }
 
+  void _pauseAndMuteIfPlaying() {
+    final c = _controller;
+    if (c == null) return;
+    try {
+      if (c.value.isPlaying) {
+        // Don't await here: pausing may be triggered during route/tab transitions.
+        c.pause();
+      }
+      // Defensive: ensure no audio leaks while cached / backgrounded.
+      c.setVolume(0);
+    } catch (_) {
+      // Best-effort only.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Ensure no audio continues when app is backgrounded/locked.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _pauseAndMuteIfPlaying();
+    }
+  }
+
+  @override
+  void deactivate() {
+    // When leaving the page (e.g., switching tabs or popping route),
+    // stop playback immediately to avoid background audio.
+    _pauseAndMuteIfPlaying();
+    super.deactivate();
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     final c = _controller;
     if (c != null && _videoListener != null) {
       c.removeListener(_videoListener!);
     }
     if (c != null && c.value.isInitialized) {
+      _pauseAndMuteIfPlaying();
       PlanVideoPreloader.storeController(
           widget.planType, widget.useFullVideo, c);
     } else {
@@ -463,13 +513,14 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer> {
                           await c.seekTo(Duration.zero);
                         }
 
-                        setState(() {
-                          if (c.value.isPlaying) {
-                            c.pause();
-                          } else {
-                            c.play();
-                          }
-                        });
+                        if (c.value.isPlaying) {
+                          c.pause();
+                          setState(() {});
+                        } else {
+                          await c.setVolume(_playbackVolume);
+                          c.play();
+                          setState(() {});
+                        }
                       },
                       child: Center(
                         child: _controller!.value.isPlaying

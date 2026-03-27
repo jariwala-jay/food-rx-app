@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
@@ -18,6 +19,7 @@ class NotificationService {
   FirebaseMessaging? _firebaseMessaging;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  static const MethodChannel _badgeChannel = MethodChannel('foodrx/badge');
   String? _fcmToken;
   bool _verbose = false; // Toggle to reduce console noise
 
@@ -445,6 +447,24 @@ class NotificationService {
       debugPrint('Error marking notification as read: $e');
       return false;
     }
+  }
+
+  /// Update iOS app icon badge count.
+  /// No-op on non-iOS platforms.
+  Future<void> setAppIconBadgeCount(int count) async {
+    if (!Platform.isIOS) return;
+    try {
+      await _badgeChannel.invokeMethod('setBadge', {
+        'count': count < 0 ? 0 : count,
+      });
+    } catch (e) {
+      debugPrint('Error setting app icon badge count: $e');
+    }
+  }
+
+  /// Clear iOS app icon badge.
+  Future<void> clearAppIconBadge() async {
+    await setAppIconBadgeCount(0);
   }
 
   // Get FCM token

@@ -26,6 +26,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final notificationManager =
           Provider.of<NotificationManager>(context, listen: false);
+      // Opening Notification Center should clear the app icon badge immediately.
+      notificationManager.clearAppIconBadge();
       notificationManager.loadNotifications();
       _ensureExpiringNotificationThenReload(notificationManager);
       _ensureExpiredNotificationThenReload(notificationManager);
