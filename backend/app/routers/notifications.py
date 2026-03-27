@@ -44,11 +44,13 @@ async def list_notifications(user_id: str = Depends(get_current_user_id)):
 @router.post("")
 async def create_notification(body: dict, user_id: str = Depends(get_current_user_id)):
     db = await get_database()
+    users = db[USERS]
     type_ = body.get("type") or "info"
     title = body.get("title") or ""
     message = body.get("message") or ""
     dedupe_raw = body.get("dedupeWindowHours")
     dedupe_hours = 24 if dedupe_raw is None else int(dedupe_raw)
+    send_push = bool(body.get("sendPush", False))
 
     if type_ in ("admin", "education"):
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
@@ -68,8 +70,38 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     now = datetime.now(timezone.utc).isoformat()
     clean = dict(body)
     clean.pop("dedupeWindowHours", None)
+    clean.pop("sendPush", None)
     doc = {"_id": nid, "userId": user_id, **clean, "createdAt": now}
     await db[COLL].insert_one(doc)
+    if send_push:
+        push_updates = {"pushStatus": "skipped", "pushAttemptedAt": datetime.now(timezone.utc).isoformat()}
+        try:
+            user = await users.find_one({"_id": ObjectId(user_id)})
+            token = (user or {}).get("fcmToken")
+            if token:
+                from app.push import send_push_to_fcm_token
+
+                result = await send_push_to_fcm_token(
+                    token=str(token),
+                    title=title or "MyFoodRx",
+                    body=message or "",
+                    data={"type": str(type_), "deeplink": "notifications"},
+                )
+                if result.get("ok"):
+                    push_updates["pushStatus"] = "sent"
+                    if result.get("messageId"):
+                        push_updates["pushMessageId"] = str(result.get("messageId"))
+                else:
+                    push_updates["pushStatus"] = "failed"
+                    # Keep errors small and safe for debugging in app/admin views.
+                    push_updates["pushError"] = str(result.get("error", "unknown_error"))[:500]
+            else:
+                push_updates["pushError"] = "missing_fcm_token"
+        except Exception:
+            push_updates["pushStatus"] = "failed"
+            push_updates["pushError"] = "push_send_exception"
+        await db[COLL].update_one({"_id": nid}, {"$set": push_updates})
+        doc.update(push_updates)
     return _serialize(doc)
 
 

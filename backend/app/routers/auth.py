@@ -228,6 +228,27 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
         return {"ok": True}
     updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
     await users.update_one({"_id": ObjectId(user_id)}, {"$set": updates})
+    # If the app just registered an FCM token, opportunistically send a one-time welcome tray notification.
+    # The in-app "welcome" record already exists; this only adds a tray push for onboarding.
+    if "fcmToken" in updates and updates.get("fcmToken"):
+        try:
+            user = await users.find_one({"_id": ObjectId(user_id)})
+            if user and not user.get("welcomePushSentAt"):
+                from app.push import send_push_to_fcm_token
+
+                res = await send_push_to_fcm_token(
+                    token=str(updates["fcmToken"]),
+                    title="Welcome to MyFoodRx",
+                    body="We're glad you're here. Start by adding items to your pantry!",
+                    data={"type": "admin", "deeplink": "notifications"},
+                )
+                if res.get("ok"):
+                    await users.update_one(
+                        {"_id": ObjectId(user_id)},
+                        {"$set": {"welcomePushSentAt": datetime.now(timezone.utc).isoformat()}},
+                    )
+        except Exception:
+            pass
     user = await users.find_one({"_id": ObjectId(user_id)})
     return _serialize_user(user)
 
