@@ -11,7 +11,11 @@ def _serialize(doc: dict) -> dict:
         return doc
     out = dict(doc)
     if "_id" in out:
-        out["_id"] = str(out["_id"])
+        oid = str(out["_id"])
+        out["_id"] = oid
+        # Flutter Tip model expects `id` (not only Mongo `_id`).
+        if "id" not in out:
+            out["id"] = oid
     return out
 
 

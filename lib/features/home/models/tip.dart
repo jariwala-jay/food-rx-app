@@ -53,19 +53,28 @@ class Tip {
   }
 
   factory Tip.fromJson(Map<String, dynamic> json) {
+    DateTime _parseLastShown(dynamic v) {
+      if (v == null) return DateTime.now();
+      if (v is DateTime) return v;
+      return DateTime.tryParse(v.toString()) ?? DateTime.now();
+    }
+
     return Tip(
-      id: json['id'],
-      title: json['title'],
-      description: json['description'],
-      category: json['category'],
-      imageUrl: json['imageUrl'],
+      id: (json['id'] ?? json['_id'])?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'General',
+      imageUrl: json['imageUrl']?.toString() ?? '',
       lastShownToUsers:
           (json['lastShownToUsers'] as Map<String, dynamic>?)?.map(
-                (key, value) => MapEntry(key, DateTime.parse(value)),
+                (key, value) => MapEntry(key, _parseLastShown(value)),
               ) ??
               {},
       viewCountByUser: (json['viewCountByUser'] as Map<String, dynamic>?)?.map(
-            (key, value) => MapEntry(key, value as int),
+            (key, value) {
+              final n = value is int ? value : int.tryParse(value.toString()) ?? 0;
+              return MapEntry(key, n);
+            },
           ) ??
           {},
     );

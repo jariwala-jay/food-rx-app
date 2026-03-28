@@ -449,10 +449,11 @@ class NotificationService {
     }
   }
 
-  /// Update iOS app icon badge count.
-  /// No-op on non-iOS platforms.
+  /// Update home-screen app icon badge count (unread notifications).
+  /// iOS: UIApplication badge. Android: ShortcutBadger-supported launchers (varies by OEM).
+  /// No-op on other platforms.
   Future<void> setAppIconBadgeCount(int count) async {
-    if (!Platform.isIOS) return;
+    if (!Platform.isIOS && !Platform.isAndroid) return;
     try {
       await _badgeChannel.invokeMethod('setBadge', {
         'count': count < 0 ? 0 : count,
@@ -462,7 +463,7 @@ class NotificationService {
     }
   }
 
-  /// Clear iOS app icon badge.
+  /// Clear home-screen app icon badge.
   Future<void> clearAppIconBadge() async {
     await setAppIconBadgeCount(0);
   }

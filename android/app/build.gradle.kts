@@ -78,4 +78,6 @@ flutter {
 dependencies {
     // Add the desugar library
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Launcher icon badge (Samsung, Xiaomi, Sony, etc.); see ShortcutBadger supported launchers
+    implementation("me.leolin:ShortcutBadger:1.1.22")
 }
