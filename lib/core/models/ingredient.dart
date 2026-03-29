@@ -8,6 +8,8 @@ class Ingredient {
   final String image;
   final String imageName; // e.g., "apple.jpg"
   final String? aisle;
+  /// Bundled asset path (e.g. assets/pantry_ingredients/foo.png). When set, UI uses this instead of CDN.
+  final String? localAssetPath;
 
   const Ingredient({
     required this.id,
@@ -15,9 +17,14 @@ class Ingredient {
     required this.image,
     required this.imageName,
     this.aisle,
+    this.localAssetPath,
   });
 
   String get imageUrl => ImageUrlHelper.getValidImageUrl(imageName);
+
+  /// Network URL or `asset:…` for [CachedNetworkImageWidget] / pantry UI.
+  String get displayImageUrl =>
+      localAssetPath != null ? 'asset:$localAssetPath' : imageUrl;
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
     return Ingredient(

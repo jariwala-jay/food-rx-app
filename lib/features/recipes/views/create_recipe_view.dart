@@ -45,6 +45,10 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     CuisineType.thai,
     CuisineType.french,
     CuisineType.korean,
+    CuisineType.vietnamese,
+    CuisineType.greek,
+    CuisineType.spanish,
+    CuisineType.middleEastern,
   ];
 
   @override
@@ -117,6 +121,10 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       'Japanese': CuisineType.japanese,
       'Mediterranean': CuisineType.mediterranean,
       'Korean': CuisineType.korean,
+      'Vietnamese': CuisineType.vietnamese,
+      'Greek': CuisineType.greek,
+      'Spanish': CuisineType.spanish,
+      'Middle Eastern': CuisineType.middleEastern,
     };
 
     return userCuisines

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:provider/provider.dart';
 
@@ -82,7 +83,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       setState(() {
         _isValidatingToken = false;
         _tokenValid = false;
-        _errorMessage = 'An error occurred while validating the reset link: $e';
+        _errorMessage = userFacingErrorMessage(e);
       });
     }
   }
@@ -131,7 +132,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'An error occurred: $e';
+        _errorMessage = userFacingErrorMessage(e);
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

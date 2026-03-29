@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -206,7 +207,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An error occurred: $e'),
+            content: Text(userFacingErrorMessage(e)),
             backgroundColor: Colors.red,
           ),
         );

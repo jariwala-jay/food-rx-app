@@ -7,6 +7,7 @@ import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 
 /// Helper class to hold video source information
 class _VideoSource {
@@ -172,16 +173,11 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer>
       setState(() {
         _isLoading = false;
         _hasError = true;
-        // Provide helpful error message
         if (e.toString().contains('not configured')) {
-          _errorMessage = e.toString();
+          _errorMessage =
+              'Video is not configured for this app build. Please contact support.';
         } else {
-          _errorMessage = 'Failed to load video from cloud storage.\n\n'
-              'Please check:\n'
-              '1. Video URL is correctly set in .env file\n'
-              '2. Firebase Storage rules allow public read access\n'
-              '3. Internet connection is available\n\n'
-              'Error: $e';
+          _errorMessage = userFacingErrorMessage(e);
         }
       });
     }

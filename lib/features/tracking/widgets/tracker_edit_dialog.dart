@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math;
 import '../models/tracker_goal.dart';
@@ -71,7 +72,7 @@ class _TrackerEditDialogState extends State<TrackerEditDialog> {
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = userFacingErrorMessage(e);
       });
     } finally {
       if (mounted) {

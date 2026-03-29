@@ -14,6 +14,10 @@ class ImageUrlHelper {
       return spoonacularFallbackUrl;
     }
 
+    if (imageInput.startsWith('asset:')) {
+      return imageInput;
+    }
+
     // If it's already a full URL with the correct base, return as-is
     if (imageInput.startsWith(spoonacularBaseUrl)) {
       return imageInput;
@@ -51,6 +55,9 @@ class ImageUrlHelper {
   /// Gets a fallback image URL if the provided URL is invalid
   static String getValidImageUrl(String? imageInput) {
     final processedUrl = getSpoonacularImageUrl(imageInput);
+    if (processedUrl.startsWith('asset:')) {
+      return processedUrl;
+    }
     return isValidImageUrl(processedUrl) ? processedUrl : spoonacularFallbackUrl;
   }
 } 

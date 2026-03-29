@@ -6,6 +6,7 @@ import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/constants/pantry_categories.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import '../repositories/ingredient_repository.dart';
 import '../repositories/spoonacular_ingredient_repository.dart';
 
@@ -150,14 +151,19 @@ class PantryItemPickerProvider extends ChangeNotifier {
       final commonItemsData =
           getCommonItemsForCategory(categoryKey, isFoodPantryItem);
       commonItems = commonItemsData
-          .map((itemData) => Ingredient(
-                id: itemData['id']?.toString() ?? '',
-                name: itemData['name'] ?? '',
-                image: itemData['imageUrl'] ?? '',
-                imageName:
-                    itemData['imageUrl']?.split('/').last ?? 'default.jpg',
-                aisle: categoryKey,
-              ))
+          .map((itemData) {
+            final asset = itemData['imageAsset'] as String?;
+            return Ingredient(
+              id: itemData['id']?.toString() ?? '',
+              name: itemData['name'] ?? '',
+              image: itemData['imageUrl'] ?? '',
+              imageName: asset != null
+                  ? 'default.jpg'
+                  : (itemData['imageUrl']?.split('/').last ?? 'default.jpg'),
+              aisle: categoryKey,
+              localAssetPath: asset,
+            );
+          })
           .where((ing) => !_isAllergyItemName(ing.name))
           .toList();
 
@@ -173,7 +179,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
       _loadAdditionalItemsInBackground(categoryKey);
     } catch (e) {
       developer.log('Error loading items: $e');
-      error = 'Failed to load items: $e';
+      error = userFacingErrorMessage(e);
     } finally {
       isLoading = false;
       notifyListeners();
@@ -309,7 +315,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
           .log('Spoonacular search returned ${searchResults.length} results');
     } catch (e) {
       developer.log('Spoonacular search error: $e');
-      error = 'Failed to search ingredients: $e';
+      error = userFacingErrorMessage(e);
     } finally {
       isLoading = false;
       notifyListeners();
@@ -428,7 +434,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       developer.log('Error saving items to pantry: $e');
-      error = 'Failed to save items: $e';
+      error = userFacingErrorMessage(e);
       isLoading = false;
       notifyListeners();
       return false;

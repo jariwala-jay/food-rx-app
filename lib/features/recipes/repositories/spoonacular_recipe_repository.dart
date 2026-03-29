@@ -11,7 +11,11 @@ class SpoonacularRecipeRepository {
   final String? _apiKey = dotenv.env['RAPID_API_KEY'];
 
   Future<List<Recipe>> getRecipes(
-      RecipeFilter filter, List<String> pantryIngredients) async {
+    RecipeFilter filter,
+    List<String> pantryIngredients, {
+    int number = 100,
+    int offset = 0,
+  }) async {
     if (_apiKey == null) {
       developer.log('No API key available, returning demo recipe data');
       return _getDemoRecipes();
@@ -20,7 +24,8 @@ class SpoonacularRecipeRepository {
     final Map<String, String> queryParams = {
       ...filter.toSpoonacularParams(),
       'includeIngredients': pantryIngredients.join(','),
-      'number': '100',
+      'number': number.toString(),
+      'offset': offset.toString(),
       'addRecipeInformation': 'true',
       'instructionsRequired': 'true',
       'fillIngredients': 'true',

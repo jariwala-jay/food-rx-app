@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:intl/intl.dart';
 
 class ProfileEditPage extends StatefulWidget {
@@ -253,7 +254,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(userFacingErrorMessage(e))),
         );
       }
     } finally {

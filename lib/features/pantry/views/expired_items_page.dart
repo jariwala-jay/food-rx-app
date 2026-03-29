@@ -4,6 +4,7 @@ import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_app/features/notifications/views/notification_center_page.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 
 class ExpiredItemsPage extends StatefulWidget {
@@ -56,7 +57,7 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
       setState(() => _expiredItems = expired);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Failed to load expired items: $e');
+      setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (!mounted) return;
       setState(() => _isLoading = false);

@@ -12,8 +12,17 @@ class RecipeRepositoryImpl implements RecipeRepository {
 
   @override
   Future<List<Recipe>> getRecipes(
-      RecipeFilter filter, List<String> pantryIngredients) {
-    return _spoonacularRecipeRepository.getRecipes(filter, pantryIngredients);
+    RecipeFilter filter,
+    List<String> pantryIngredients, {
+    int number = 100,
+    int offset = 0,
+  }) {
+    return _spoonacularRecipeRepository.getRecipes(
+      filter,
+      pantryIngredients,
+      number: number,
+      offset: offset,
+    );
   }
 
   @override

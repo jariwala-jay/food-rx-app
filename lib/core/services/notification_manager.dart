@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 
 class NotificationManager extends ChangeNotifier {
   final NotificationService _notificationService = NotificationService();
@@ -50,7 +51,7 @@ class NotificationManager extends ChangeNotifier {
       notifyListeners();
       await _syncAppIconBadge();
     } catch (e) {
-      _setError('Failed to load notifications: $e');
+      _setError(userFacingErrorMessage(e));
       debugPrint('Error loading notifications: $e');
     } finally {
       _setLoading(false);

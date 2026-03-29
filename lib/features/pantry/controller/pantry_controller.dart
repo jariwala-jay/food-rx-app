@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/core/services/pantry_api_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
@@ -89,7 +90,7 @@ class PantryController extends ChangeNotifier {
 
       _setLoading(false);
     } catch (e) {
-      _setError('Failed to load pantry items: $e');
+      _setError('Failed to load pantry items. ${userFacingErrorMessage(e)}');
     }
   }
 
@@ -150,7 +151,7 @@ class PantryController extends ChangeNotifier {
       _setLoading(false);
       notifyListeners();
     } catch (e) {
-      _setError('Failed to add item: $e');
+      _setError('Failed to add item. ${userFacingErrorMessage(e)}');
     }
   }
 
@@ -204,7 +205,7 @@ class PantryController extends ChangeNotifier {
       _setLoading(false);
       notifyListeners();
     } catch (e) {
-      _setError('Failed to remove item: $e');
+      _setError('Failed to remove item. ${userFacingErrorMessage(e)}');
     }
   }
 
@@ -242,7 +243,7 @@ class PantryController extends ChangeNotifier {
       _setLoading(false);
       notifyListeners();
     } catch (e) {
-      _setError('Failed to update item: $e');
+      _setError('Failed to update item. ${userFacingErrorMessage(e)}');
     }
   }
 
@@ -258,7 +259,7 @@ class PantryController extends ChangeNotifier {
           daysThreshold: daysThreshold);
       return expiringItemsData.map((data) => PantryItem.fromMap(data)).toList();
     } catch (e) {
-      _setError('Failed to get expiring items: $e');
+      _setError('Failed to get expiring items. ${userFacingErrorMessage(e)}');
       return [];
     }
   }
@@ -471,7 +472,7 @@ class PantryController extends ChangeNotifier {
         }
       }
     } catch (e) {
-      _setError('Failed to deduct ingredients: $e');
+      _setError('Failed to deduct ingredients. ${userFacingErrorMessage(e)}');
     } finally {
       _setLoading(false);
     }

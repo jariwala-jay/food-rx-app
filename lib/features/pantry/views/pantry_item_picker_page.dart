@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import '../providers/pantry_item_picker_provider.dart';
 import 'dart:developer' as developer;
 import 'dart:async';
@@ -559,41 +559,16 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                                   ),
                                   leading: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: CachedNetworkImage(
-                                      imageUrl: item.imageUrl,
+                                    child: CachedNetworkImageWidget(
+                                      imageUrl: item.displayImageUrl,
                                       width: 50,
                                       height: 50,
                                       fit: BoxFit.cover,
-                                      memCacheWidth: 100,
-                                      memCacheHeight: 100,
-                                      placeholder: (context, url) => Container(
-                                        width: 50,
-                                        height: 50,
-                                        color: const Color(0xFFEEEEEE),
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Color(0xFFFF6A00)),
-                                          ),
-                                        ),
-                                      ),
-                                      errorWidget: (context, url, error) =>
-                                          Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEEEEEE),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.food_bank,
-                                          color: Color(0xFFFF6A00),
-                                          size: 24,
-                                        ),
-                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                      fallbackIcon: Icons.food_bank,
+                                      fallbackIconColor: const Color(0xFFFF6A00),
+                                      fallbackBackgroundColor:
+                                          const Color(0xFFEEEEEE),
                                     ),
                                   ),
                                   title: Text(

@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.compile.JavaCompile
+
 allprojects {
     repositories {
         google()
@@ -14,6 +16,13 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+
+// Flutter plugins often default to Java 8, which triggers obsolete source/target warnings on modern JDKs.
+subprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        options.release.set(11)
+    }
 }
 
 tasks.register<Delete>("clean") {

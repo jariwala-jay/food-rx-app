@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 import 'package:flutter_app/features/tracking/models/tracker_progress.dart';
 import 'package:flutter_app/features/tracking/services/tracker_api_service.dart';
@@ -220,7 +221,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = userFacingErrorMessage(e);
           _loading = false;
           _progressList = [];
           _todayTrackers = null;

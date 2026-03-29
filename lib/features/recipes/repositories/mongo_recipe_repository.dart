@@ -11,7 +11,11 @@ class MongoRecipeRepository {
   MongoRecipeRepository(this._mongoDBService);
 
   Future<List<Recipe>> getRecipes(
-      RecipeFilter filter, List<String> pantryIngredients) {
+    RecipeFilter filter,
+    List<String> pantryIngredients, {
+    int number = 100,
+    int offset = 0,
+  }) {
     // This is handled by Spoonacular, so we don't implement it here.
     throw UnimplementedError(
         'getRecipes is not implemented in MongoRecipeRepository');

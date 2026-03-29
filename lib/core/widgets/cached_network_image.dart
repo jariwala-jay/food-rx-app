@@ -26,11 +26,29 @@ class CachedNetworkImageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (imageUrl.startsWith('asset:')) {
+      final path = imageUrl.substring('asset:'.length);
+      Widget imageWidget = Image.asset(
+        path,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => _buildFallbackImage(),
+      );
+      if (borderRadius != null) {
+        imageWidget = ClipRRect(
+          borderRadius: borderRadius!,
+          child: imageWidget,
+        );
+      }
+      return imageWidget;
+    }
+
     // Check if URL is empty or invalid
     if (imageUrl.isEmpty || !_isValidUrl(imageUrl)) {
       return _buildFallbackImage();
     }
-    
+
     Widget imageWidget = Image.network(
       imageUrl,
       width: width,

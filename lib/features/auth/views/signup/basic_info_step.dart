@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class BasicInfoStep extends StatefulWidget {
@@ -98,7 +99,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to pick image: $e';
+        _error = userFacingErrorMessage(e);
       });
     }
   }
@@ -178,12 +179,13 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
 
       widget.onNext();
     } catch (e) {
+      final msg = userFacingErrorMessage(e);
       setState(() {
-        _error = 'An error occurred: $e';
+        _error = msg;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('An error occurred: $e'),
+          content: Text(msg),
           backgroundColor: Colors.red,
         ),
       );

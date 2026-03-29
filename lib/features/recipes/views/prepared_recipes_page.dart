@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/prepared_recipe.dart';
 import 'package:flutter_app/features/recipes/views/recipe_detail_page.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/recipes/widgets/servings_consumed_modal.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 
@@ -65,7 +66,7 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(userFacingErrorMessage(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -103,7 +104,7 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Could not restore item: $e'),
+                      content: Text(userFacingErrorMessage(e)),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -116,7 +117,7 @@ class _PreparedRecipesPageState extends State<PreparedRecipesPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text(userFacingErrorMessage(e)),
           backgroundColor: Colors.red,
         ),
       );

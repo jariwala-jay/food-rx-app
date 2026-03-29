@@ -286,7 +286,7 @@ class RecipeGenerationService {
     // like the bulk endpoint), we can fall back to checking the extendedIngredients list.
     if (recipe.missedIngredientCount != null) {
       // We allow for some missing ingredients to give the user options.
-      return recipe.missedIngredientCount! <= 10;
+      return recipe.missedIngredientCount! <= 15;
     }
 
     // Fallback for recipes that have full ingredient details but not the count.

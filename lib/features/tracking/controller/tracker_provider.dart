@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
 import '../services/tracker_service.dart';
@@ -67,16 +68,7 @@ class TrackerProvider extends ChangeNotifier {
       await loadUserTrackers(userId, dietType);
       _retryCount = 0;
     } catch (e) {
-      String errorMsg;
-
-      if (e is TimeoutException) {
-        errorMsg =
-            'Tracker initialization timed out. Please check your connection and try again.';
-      } else {
-        errorMsg = 'Failed to initialize trackers: ${e.toString()}';
-      }
-
-      _setError(errorMsg);
+      _setError(userFacingErrorMessage(e));
 
       if (_retryCount < _maxRetries) {
         _retryCount++;
@@ -400,20 +392,7 @@ class TrackerProvider extends ChangeNotifier {
       _currentLoadingDietType = null;
       notifyListeners();
     } catch (e) {
-      String errorMsg;
-
-      if (e is TimeoutException) {
-        errorMsg =
-            'Loading trackers timed out. Please check your connection and try again.';
-      } else if (e.toString().contains('MongoDB connection failed') ||
-          e.toString().contains('Database connection failed')) {
-        errorMsg =
-            'Could not connect to the database. Please check your internet connection and try again.';
-      } else {
-        errorMsg = 'Failed to load trackers: ${e.toString()}';
-      }
-
-      _setError(errorMsg);
+      _setError(userFacingErrorMessage(e));
 
       if (_retryCount < _maxRetries) {
         _retryCount++;
@@ -595,7 +574,7 @@ class TrackerProvider extends ChangeNotifier {
       // Update the local tracker immediately for better UX
       _updateLocalTrackerValue(trackerId, newValue);
     } catch (e) {
-      _setError('Failed to update tracker: $e');
+      _setError(userFacingErrorMessage(e));
       // Try to reload the specific tracker even if update failed
       await _reloadSpecificTracker(trackerId);
     } finally {
@@ -817,7 +796,7 @@ class TrackerProvider extends ChangeNotifier {
       }
     } catch (e) {
       print('Error reloading tracker ${trackerId}: $e');
-      _setError('Failed to reload tracker: $e');
+      _setError(userFacingErrorMessage(e));
     }
   }
 
@@ -855,7 +834,7 @@ class TrackerProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      _setError('Failed to reset daily trackers: $e');
+      _setError(userFacingErrorMessage(e));
     } finally {
       _setLoading(false);
     }
@@ -876,7 +855,7 @@ class TrackerProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      _setError('Failed to reset weekly trackers: $e');
+      _setError(userFacingErrorMessage(e));
     } finally {
       _setLoading(false);
     }
@@ -974,7 +953,7 @@ class TrackerProvider extends ChangeNotifier {
       // Reload trackers to get the updated values
       await loadUserTrackers(userId, dietType);
     } catch (e) {
-      _setError('Failed to update trackers with personalized plan: $e');
+      _setError(userFacingErrorMessage(e));
     } finally {
       _setLoading(false);
     }

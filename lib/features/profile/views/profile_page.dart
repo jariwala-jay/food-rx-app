@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/profile/views/profile_edit_page.dart';
 import 'package:flutter_app/features/profile/views/notification_preferences_page.dart';
 import 'package:intl/intl.dart';
@@ -114,7 +115,7 @@ class _ProfilePageState extends State<ProfilePage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update profile photo: $e'),
+            content: Text(userFacingErrorMessage(e)),
             backgroundColor: Colors.red,
           ),
         );

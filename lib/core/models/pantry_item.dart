@@ -109,7 +109,9 @@ class PantryItem {
     return PantryItem(
       id: ingredient.id.toString(), // Spoonacular ID
       name: ingredient.name,
-      imageUrl: ImageUrlHelper.getValidImageUrl(ingredient.imageUrl),
+      imageUrl: ingredient.localAssetPath != null
+          ? 'asset:${ingredient.localAssetPath}'
+          : ingredient.imageUrl,
       category: category,
       quantity: quantity,
       unit: unit,

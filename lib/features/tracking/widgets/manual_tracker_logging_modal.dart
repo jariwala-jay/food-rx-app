@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../models/tracker_goal.dart';
 
@@ -121,7 +122,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = userFacingErrorMessage(e);
       });
     } finally {
       if (mounted) {

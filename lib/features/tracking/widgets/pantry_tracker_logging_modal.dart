@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
@@ -10,6 +10,7 @@ import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 
 class PantryTrackerLoggingModal extends StatefulWidget {
   final TrackerGoal tracker;
@@ -97,7 +98,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = userFacingErrorMessage(e);
       });
     } finally {
       if (mounted) {
@@ -458,7 +459,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to log items: $e';
+        _error = userFacingErrorMessage(e);
       });
     } finally {
       setState(() {
@@ -1155,22 +1156,15 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
               borderRadius: BorderRadius.circular(22),
             ),
             child: item.imageUrl.isNotEmpty
-                ? ClipRRect(
+                ? CachedNetworkImageWidget(
+                    imageUrl: item.imageUrl,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
                     borderRadius: BorderRadius.circular(22),
-                    child: CachedNetworkImage(
-                      imageUrl: item.imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Icon(
-                        Icons.food_bank,
-                        color: const Color(0xFF8E8E93),
-                        size: 22 * clampedScale,
-                      ),
-                      errorWidget: (context, url, error) => Icon(
-                        Icons.food_bank,
-                        color: const Color(0xFF8E8E93),
-                        size: 22 * clampedScale,
-                      ),
-                    ),
+                    fallbackIcon: Icons.food_bank,
+                    fallbackIconColor: const Color(0xFF8E8E93),
+                    fallbackBackgroundColor: const Color(0xFFF7F7F8),
                   )
                 : Icon(
                     Icons.food_bank,

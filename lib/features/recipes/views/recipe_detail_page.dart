@@ -14,6 +14,7 @@ import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 import 'package:flutter_app/features/recipes/widgets/servings_consumed_modal.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:provider/provider.dart';
 
 class RecipeDetailPage extends StatefulWidget {
@@ -368,7 +369,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error cooking recipe: $e'),
+            content: Text(userFacingErrorMessage(e)),
             backgroundColor: Colors.red,
           ),
         );

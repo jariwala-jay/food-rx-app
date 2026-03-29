@@ -10,6 +10,8 @@ import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/services/email_service.dart';
 import 'package:flutter_app/core/services/gmail_smtp_email_service.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:http/http.dart' show ClientException;
 
 class AuthController with ChangeNotifier {
   final EmailService _emailService = GmailSMTPEmailService();
@@ -79,7 +81,7 @@ class AuthController with ChangeNotifier {
         }
       }
     } catch (e) {
-      _error = 'Failed to initialize authentication: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -151,15 +153,17 @@ class AuthController with ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
       return false;
-    } on SocketException catch (_) {
-      _error = 'Could not reach server. Check that the backend is running and '
-          'API_BASE_URL is correct (e.g. http://localhost:8000 for iOS Simulator).';
+    } on SocketException catch (e) {
+      _error = userFacingErrorMessage(e);
       return false;
-    } on TimeoutException catch (_) {
-      _error = 'Connection timed out. Is the backend running at API_BASE_URL?';
+    } on ClientException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
+    } on TimeoutException catch (e) {
+      _error = userFacingErrorMessage(e);
       return false;
     } catch (e) {
-      _error = 'Registration failed: $e';
+      _error = userFacingErrorMessage(e);
       return false;
     } finally {
       _isLoading = false;
@@ -217,8 +221,17 @@ class AuthController with ChangeNotifier {
       if (e.statusCode == 401) _error = 'Invalid email or password';
       else _error = e.message;
       return false;
+    } on SocketException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
+    } on ClientException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
+    } on TimeoutException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
     } catch (e) {
-      _error = 'Login failed: $e';
+      _error = userFacingErrorMessage(e);
       return false;
     } finally {
       _isLoading = false;
@@ -242,7 +255,7 @@ class AuthController with ChangeNotifier {
       _notificationManager = null;
       _currentUser = null;
     } catch (e) {
-      _error = 'Logout failed: $e';
+      _error = userFacingErrorMessage(e);
       rethrow;
     } finally {
       _isLoading = false;
@@ -305,7 +318,7 @@ class AuthController with ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Failed to update profile: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -328,7 +341,7 @@ class AuthController with ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Failed to update profile photo: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -340,7 +353,7 @@ class AuthController with ChangeNotifier {
     try {
       return await ApiClient.getBytes('/api/profile-photos/${_currentUser!.profilePhotoId}');
     } catch (e) {
-      _error = 'Failed to get profile photo: $e';
+      _error = userFacingErrorMessage(e);
       return null;
     }
   }
@@ -364,7 +377,7 @@ class AuthController with ChangeNotifier {
       _pendingReplanTrigger = null;
       return true;
     } catch (e) {
-      _error = 'Failed to regenerate diet plan: $e';
+      _error = userFacingErrorMessage(e);
       return false;
     } finally {
       _isLoading = false;
@@ -424,7 +437,7 @@ class AuthController with ChangeNotifier {
       else _error = e.message;
       return false;
     } catch (e) {
-      _error = 'Failed to process password reset request: $e';
+      _error = userFacingErrorMessage(e);
       return false;
     } finally {
       _isLoading = false;
@@ -478,7 +491,7 @@ class AuthController with ChangeNotifier {
       _error = e.message;
       return false;
     } catch (e) {
-      _error = 'Failed to reset password: $e';
+      _error = userFacingErrorMessage(e);
       return false;
     } finally {
       _isLoading = false;

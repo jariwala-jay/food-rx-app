@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' hide Category;
 import 'package:flutter_app/features/education/models/article.dart';
 import 'package:flutter_app/features/education/models/category.dart';
 import 'package:flutter_app/features/education/repositories/article_repository.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 class ArticleController extends ChangeNotifier {
@@ -88,7 +89,7 @@ class ArticleController extends ChangeNotifier {
       final fetchedCategories = await _articleRepository.getCategories();
       _categories = fetchedCategories;
     } catch (e) {
-      _error = 'Failed to load categories: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -132,7 +133,7 @@ class ArticleController extends ChangeNotifier {
       _articles = filteredArticles;
       _cachedArticles[cacheKey] = filteredArticles;
     } catch (e) {
-      _error = 'Failed to load articles: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -304,7 +305,7 @@ class ArticleController extends ChangeNotifier {
         }
       }
     } catch (e) {
-      _error = 'Failed to load recommended articles: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -321,7 +322,7 @@ class ArticleController extends ChangeNotifier {
         bookmarksOnly: true,
       );
     } catch (e) {
-      _error = 'Failed to load bookmarks: $e';
+      _error = userFacingErrorMessage(e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -383,7 +384,7 @@ class ArticleController extends ChangeNotifier {
         (key, value) => key.contains('bookmarks') || key.contains('all'),
       );
     } catch (e) {
-      _error = 'Failed to update bookmark: $e';
+      _error = userFacingErrorMessage(e);
       // Revert on failure
       _updateArticleInLists(articleId, !newBookmarkStatus);
       notifyListeners();

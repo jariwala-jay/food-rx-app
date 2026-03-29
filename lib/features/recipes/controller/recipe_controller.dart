@@ -12,6 +12,7 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 
 class RecipeController extends ChangeNotifier {
@@ -87,7 +88,8 @@ class RecipeController extends ChangeNotifier {
     try {
       final user = authProvider.currentUser;
       if (user == null) {
-        throw Exception("User not logged in");
+        _error = 'You must be logged in to generate recipes.';
+        return;
       }
 
       await pantryController.loadItems();
@@ -127,9 +129,9 @@ class RecipeController extends ChangeNotifier {
         _recipes = generatedRecipes;
       }
     } catch (e) {
-      _error = "Failed to generate recipes: $e";
+      _error = userFacingErrorMessage(e);
       if (kDebugMode) {
-        print(_error);
+        print('Failed to generate recipes: $e');
       }
     } finally {
       _isLoading = false;
@@ -620,7 +622,7 @@ class RecipeController extends ChangeNotifier {
         print('===== RECIPE COOKING COMPLETE =====\n');
       }
     } catch (e) {
-      _error = "Failed to cook recipe: $e";
+      _error = userFacingErrorMessage(e);
       if (kDebugMode) {
         print('\n❌ RECIPE COOKING FAILED: $e');
         print('Stack trace: ${StackTrace.current}');

@@ -28,6 +28,11 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
+  # Firebase / GoogleDataTransport / sqflite emit noisy upstream linker & Swift warnings
+  # in Xcode Cloud; we do not control their sources. This silences warnings for *pods only*
+  # (Runner app target warnings still show).
+  inhibit_all_warnings!
+
   use_frameworks! :linkage => :static
   use_modular_headers!
 

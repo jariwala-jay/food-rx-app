@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
 
 /// Modal for user to enter how many servings they consumed when cooking a recipe,
 /// or when logging from a prepared (leftover) recipe.
@@ -116,7 +117,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = userFacingErrorMessage(e);
       });
     } finally {
       if (mounted) {
