@@ -145,7 +145,7 @@ class RecipeCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       _buildTag(
                         icon: Icons.shopping_cart, // Placeholder for pantry box
-                        label: '+${recipe.missedIngredientCount ?? 0}',
+                        label: '+${recipe.requiredMissedIngredientCount}',
                         color: Colors.orange,
                       ),
                     ],

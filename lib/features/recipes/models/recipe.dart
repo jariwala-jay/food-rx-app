@@ -354,6 +354,14 @@ class Recipe {
       isSaved: isSaved ?? this.isSaved,
     );
   }
+
+  /// Shopping-cart style count: missed items excluding optional lines (see [RecipeIngredient.isOptionalIngredient]).
+  int get requiredMissedIngredientCount {
+    if (missedIngredients.isNotEmpty) {
+      return missedIngredients.where((e) => !e.isOptionalIngredient).length;
+    }
+    return missedIngredientCount ?? 0;
+  }
 }
 
 class RecipeIngredient {
@@ -388,6 +396,15 @@ class RecipeIngredient {
     this.isAvailableInPantry = false,
     this.isExpiring = false,
   });
+
+  static bool _textSuggestsOptional(String s) =>
+      s.toLowerCase().contains('optional');
+
+  /// True when the ingredient line is marked optional in text (Spoonacular does not exclude these from [Recipe.missedIngredientCount]).
+  bool get isOptionalIngredient =>
+      _textSuggestsOptional(original) ||
+      _textSuggestsOptional(originalName) ||
+      _textSuggestsOptional(name);
 
   factory RecipeIngredient.fromJson(Map<String, dynamic> json) {
     final rawUnit = json['unit'] ?? '';

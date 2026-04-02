@@ -51,6 +51,10 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     CuisineType.middleEastern,
   ];
 
+  /// Options shown in the cuisine bottom sheet (popular list + no preference last).
+  List<CuisineType> get _cuisinePickerOptions =>
+      [..._popularCuisines, CuisineType.noPreference];
+
   @override
   void initState() {
     super.initState();
@@ -259,7 +263,12 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
               child: Text(
                 _selectedCuisines.isEmpty
                     ? 'Select Cuisines'
-                    : _selectedCuisines.map((c) => c.displayName).join(', '),
+                    : (_selectedCuisines.length == 1 &&
+                            _selectedCuisines.single == CuisineType.noPreference)
+                        ? CuisineType.noPreference.displayName
+                        : _selectedCuisines
+                            .map((c) => c.displayName)
+                            .join(', '),
                 style: TextStyle(
                   fontSize: 16,
                   color: _selectedCuisines.isEmpty
@@ -564,70 +573,86 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Select Cuisines',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _popularCuisines.length,
-                itemBuilder: (context, index) {
-                  final cuisine = _popularCuisines[index];
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setModalState) {
+          void applySelection(void Function() update) {
+            setModalState(update);
+            if (mounted) setState(() {});
+          }
 
-                  return StatefulBuilder(
-                    builder: (context, setStateNew) {
-                      final isSelected = _selectedCuisines.contains(cuisine);
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Select Cuisines',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          applySelection(_selectedCuisines.clear);
+                        },
+                        child: const Text('Clear'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _cuisinePickerOptions.length,
+                    itemBuilder: (context, index) {
+                      final cuisine = _cuisinePickerOptions[index];
+                      final isSelected =
+                          _selectedCuisines.contains(cuisine);
 
                       return CheckboxListTile(
                         title: Text(cuisine.displayName),
                         value: isSelected,
                         onChanged: (bool? value) {
-                          setStateNew(() {
+                          applySelection(() {
                             if (value == true) {
-                              if (!_selectedCuisines.contains(cuisine)) {
-                                _selectedCuisines.add(cuisine);
+                              if (cuisine == CuisineType.noPreference) {
+                                _selectedCuisines = [CuisineType.noPreference];
+                              } else {
+                                _selectedCuisines
+                                    .remove(CuisineType.noPreference);
+                                if (!_selectedCuisines.contains(cuisine)) {
+                                  _selectedCuisines.add(cuisine);
+                                }
                               }
                             } else {
                               _selectedCuisines.remove(cuisine);
                             }
                           });
-                          // Also update the main widget state
-                          setState(() {});
                         },
                         activeColor: const Color(0xFFFF6A00),
                         controlAffinity: ListTileControlAffinity.leading,
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -808,7 +833,8 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     Navigator.of(context).pop(true);
 
     // Only trigger tour showcase when tour is active and on recipes step
-    final tourProvider = Provider.of<ForcedTourProvider>(context, listen: false);
+    final tourProvider =
+        Provider.of<ForcedTourProvider>(context, listen: false);
 
     // Wait for recipes to be generated, then trigger showcase (only during tour)
     Future.delayed(const Duration(milliseconds: 500), () {

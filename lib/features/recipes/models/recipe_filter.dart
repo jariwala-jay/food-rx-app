@@ -25,6 +25,8 @@ enum CuisineType {
   spanish,
   thai,
   vietnamese,
+  /// UI-only: no cuisine filter sent to Spoonacular (see [RecipeFilter.toSpoonacularParams]).
+  noPreference,
 }
 
 enum MealType {
@@ -352,8 +354,10 @@ class RecipeFilter {
   Map<String, String> toSpoonacularParams() {
     Map<String, String> params = {};
 
-    if (cuisines.isNotEmpty) {
-      params['cuisine'] = cuisines.map((e) => e.name).join(',');
+    final apiCuisines =
+        cuisines.where((e) => e != CuisineType.noPreference).toList();
+    if (apiCuisines.isNotEmpty) {
+      params['cuisine'] = apiCuisines.map((e) => e.name).join(',');
     }
 
     if (spoonacularMealTypes != null && spoonacularMealTypes!.isNotEmpty) {
@@ -508,6 +512,8 @@ extension CuisineTypeExtension on CuisineType {
         return 'Thai';
       case CuisineType.vietnamese:
         return 'Vietnamese';
+      case CuisineType.noPreference:
+        return 'No preference';
     }
   }
 }

@@ -7,6 +7,7 @@ import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/services/recipe_scaling_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
@@ -415,16 +416,30 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                 children: [
                   _buildTitleSection(context),
                   const SizedBox(height: 16),
-                  _buildIngredientTags(),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle(
-                      'Ingredients for ${_adjustedRecipe.servings} servings'),
-                  const SizedBox(height: 8),
-                  if (_scalingResult != null &&
-                      widget.targetServings != widget.recipe.servings &&
-                      dotenv.env['SHOW_SCALING_CONVERSION'] == 'true')
-                    _buildScalingDetailsSection(),
-                  _buildIngredientsList(),
+                  Consumer<PantryController>(
+                    builder: (context, pantryController, _) {
+                      final pantry = [
+                        ...pantryController.pantryItems,
+                        ...pantryController.otherItems,
+                      ];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildIngredientTags(pantry),
+                          const SizedBox(height: 24),
+                          _buildSectionTitle(
+                              'Ingredients for ${_adjustedRecipe.servings} servings'),
+                          const SizedBox(height: 8),
+                          if (_scalingResult != null &&
+                              widget.targetServings != widget.recipe.servings &&
+                              dotenv.env['SHOW_SCALING_CONVERSION'] ==
+                                  'true')
+                            _buildScalingDetailsSection(),
+                          _buildIngredientsList(pantry),
+                        ],
+                      );
+                    },
+                  ),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Instructions'),
                   const SizedBox(height: 8),
@@ -572,18 +587,45 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
-  Widget _buildIngredientTags() {
+  String _ingredientMatchName(RecipeIngredient ingredient) {
+    final n = ingredient.nameClean.trim();
+    return n.isNotEmpty ? n : ingredient.name;
+  }
+
+  bool _ingredientInPantry(RecipeIngredient ingredient, List<PantryItem> pantry) {
+    return _pantryService.hasPantryMatchForIngredient(
+      _ingredientMatchName(ingredient),
+      pantry,
+    );
+  }
+
+  /// In-pantry vs still-to-buy, aligned with [extendedIngredients] and optional lines.
+  int _liveInPantryCount(List<PantryItem> pantry) {
+    return _adjustedRecipe.extendedIngredients
+        .where((i) => _ingredientInPantry(i, pantry))
+        .length;
+  }
+
+  int _liveRequiredMissingCount(List<PantryItem> pantry) {
+    return _adjustedRecipe.extendedIngredients
+        .where(
+          (i) => !i.isOptionalIngredient && !_ingredientInPantry(i, pantry),
+        )
+        .length;
+  }
+
+  Widget _buildIngredientTags(List<PantryItem> pantry) {
     return Row(
       children: [
         _buildTag(
           icon: Icons.kitchen,
-          label: '+${_adjustedRecipe.usedIngredientCount ?? 0}',
+          label: '+${_liveInPantryCount(pantry)}',
           color: Colors.green,
         ),
         const SizedBox(width: 12),
         _buildTag(
           icon: Icons.shopping_cart,
-          label: '+${_adjustedRecipe.missedIngredientCount ?? 0}',
+          label: '+${_liveRequiredMissingCount(pantry)}',
           color: Colors.orange,
         ),
       ],
@@ -867,17 +909,15 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
-  Widget _buildIngredientsList() {
+  Widget _buildIngredientsList(List<PantryItem> pantry) {
     if (_adjustedRecipe.extendedIngredients.isEmpty) {
       return const Text('No ingredients listed.');
     }
-    final usedIngredientIds =
-        _adjustedRecipe.usedIngredients.map((e) => e.id).toSet();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: _adjustedRecipe.extendedIngredients.map((ingredient) {
-        final bool isAvailable = usedIngredientIds.contains(ingredient.id);
+        final bool isAvailable = _ingredientInPantry(ingredient, pantry);
 
         // Build the display text with scaled amounts
         String displayText = _buildScaledIngredientText(ingredient);

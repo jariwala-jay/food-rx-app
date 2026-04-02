@@ -142,7 +142,7 @@ class RecipeGenerationService {
       if (!_hasEnoughIngredients(recipe, pantryItems)) {
         if (kDebugMode) {
           print(
-              '  ❌ Not enough ingredients (missed: ${recipe.missedIngredientCount})');
+              '  ❌ Not enough ingredients (missed: ${recipe.requiredMissedIngredientCount})');
         }
         continue;
       }
@@ -284,9 +284,10 @@ class RecipeGenerationService {
     // The Spoonacular findByIngredients endpoint provides `missedIngredientCount`.
     // If it's null (which can happen if the recipe comes from another source
     // like the bulk endpoint), we can fall back to checking the extendedIngredients list.
-    if (recipe.missedIngredientCount != null) {
-      // We allow for some missing ingredients to give the user options.
-      return recipe.missedIngredientCount! <= 15;
+    if (recipe.missedIngredientCount != null ||
+        recipe.missedIngredients.isNotEmpty) {
+      // Exclude optional lines from the threshold (matches cart badge).
+      return recipe.requiredMissedIngredientCount <= 8;
     }
 
     // Fallback for recipes that have full ingredient details but not the count.

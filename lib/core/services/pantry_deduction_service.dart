@@ -189,6 +189,14 @@ class PantryDeductionService {
     );
   }
 
+  /// True if [pantryItems] contains (or substitutes) [ingredientName] — same rules as deduction.
+  bool hasPantryMatchForIngredient(
+    String ingredientName,
+    List<PantryItem> pantryItems,
+  ) {
+    return _findMatchingPantryItems(ingredientName, pantryItems).isNotEmpty;
+  }
+
   /// Finds all pantry items that match the ingredient (including substitutes)
   List<PantryItem> _findMatchingPantryItems(String ingredientName, List<PantryItem> pantryItems) {
     final matchingItems = <PantryItem>[];

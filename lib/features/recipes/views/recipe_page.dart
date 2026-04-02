@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/widgets/tab_load_error_view.dart';
 import 'package:flutter_app/core/utils/app_logger.dart';
 import 'package:flutter_app/features/recipes/widgets/recipe_card.dart';
 import 'package:provider/provider.dart';
@@ -68,9 +70,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
 
+  /// Local filter for generated recipes (title match).
+  final TextEditingController _recipeSearchController = TextEditingController();
+  final FocusNode _recipeSearchFocusNode = FocusNode();
+  bool _recipeSearchMode = false;
+
   @override
   void initState() {
     super.initState();
+    _recipeSearchController.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     // Initialize animations
     _fadeAnimationController = AnimationController(
@@ -116,8 +126,123 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _recipeSearchController.dispose();
+    _recipeSearchFocusNode.dispose();
     _fadeAnimationController.dispose();
     super.dispose();
+  }
+
+  List<Recipe> _visibleRecipesForSearch(List<Recipe> all) {
+    final q = _recipeSearchController.text.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    return all
+        .where((r) => r.title.toLowerCase().contains(q))
+        .toList();
+  }
+
+  void _closeRecipeSearch() {
+    _recipeSearchController.clear();
+    _recipeSearchFocusNode.unfocus();
+    setState(() => _recipeSearchMode = false);
+  }
+
+  void _openCreateRecipe() {
+    _closeRecipeSearch();
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => const CreateRecipeView(),
+      ),
+    );
+  }
+
+  Widget _buildPreparedAndSearchRow() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const PreparedRecipesPage(),
+              ),
+            );
+          },
+          child: Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6A00),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'Prepared recipes',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+              maxLines: 1,
+              softWrap: false,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (!_recipeSearchMode)
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _recipeSearchMode = true);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _recipeSearchFocusNode.requestFocus();
+                  }
+                });
+              },
+              child: Container(
+                height: 50,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6A00),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search, color: Colors.white, size: 22),
+                    SizedBox(width: 8),
+                    Text(
+                      'Search recipes',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: AppSearchField(
+              controller: _recipeSearchController,
+              focusNode: _recipeSearchFocusNode,
+              hintText: 'Search recipes',
+              onChanged: (_) => setState(() {}),
+              suffixIcon: IconButton(
+                icon: Icon(Icons.close, color: Colors.grey[600]),
+                onPressed: _closeRecipeSearch,
+                tooltip: 'Close search',
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -173,18 +298,23 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
               // Main content
               Expanded(
-                child: Selector<RecipeController, RecipePageState>(
-                  selector: (_, controller) => RecipePageState(
-                    recipes: controller.recipes,
-                    isLoading: controller.isLoading,
-                    error: controller.error,
-                    hasAttemptedGeneration: controller.hasAttemptedGeneration,
-                    isGeneratingRecipes: controller.isLoading ||
-                        _isGenerationInProgress(controller), // NEW
-                    userMedicalConditionsDisplay:
-                        controller.userMedicalConditionsDisplay,
+                child: Selector<RecipeController, (RecipePageState, String, bool)>(
+                  selector: (_, controller) => (
+                    RecipePageState(
+                      recipes: controller.recipes,
+                      isLoading: controller.isLoading,
+                      error: controller.error,
+                      hasAttemptedGeneration: controller.hasAttemptedGeneration,
+                      isGeneratingRecipes: controller.isLoading ||
+                          _isGenerationInProgress(controller), // NEW
+                      userMedicalConditionsDisplay:
+                          controller.userMedicalConditionsDisplay,
+                    ),
+                    _recipeSearchController.text,
+                    _recipeSearchMode,
                   ),
-                  builder: (context, state, child) {
+                  builder: (context, data, child) {
+                    final state = data.$1;
                     if (kDebugMode) {
                       AppLogger.d(
                           '🏗️ RecipePage Selector rebuild: ${state.recipes.length} recipes, loading: ${state.isLoading}, generating: ${state.isGeneratingRecipes}, error: ${state.error}, hasAttempted: ${state.hasAttemptedGeneration}');
@@ -246,7 +376,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                       if (kDebugMode) {
                         print('🚨 Showing error state: ${state.error}');
                       }
-                      return _buildErrorState(state.error!, context);
+                      return _buildErrorState(context);
                     }
 
                     // Only show empty state if generation has been attempted and no results and no error and no longer generating
@@ -409,14 +539,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateRecipeView(),
-                    ),
-                  );
-                },
+                onTap: _openCreateRecipe,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -448,42 +571,11 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 12),
-          // Prepared recipes button (matches FoodRx Items pill style)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PreparedRecipesPage(),
-                  ),
-                );
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6A00),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Prepared recipes',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  softWrap: false,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
         ],
+        _buildPreparedAndSearchRow(),
+        const SizedBox(height: 16),
         Text(
-          'Recommended for you (${state.recipes.length})',
+          'Recommended for you (${_visibleRecipesForSearch(state.recipes).length})',
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -572,13 +664,29 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               }
             },
             disposeOnTap: true,
-            child: Consumer<RecipeController>(
-              builder: (context, controller, child) {
+            child: Builder(
+              builder: (context) {
+                final visible = _visibleRecipesForSearch(state.recipes);
+                final q = _recipeSearchController.text.trim();
+                if (visible.isEmpty && q.isNotEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'No recipes match "$q"',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 return ListView.builder(
-                  itemCount: controller.recipes.length,
+                  itemCount: visible.length,
                   itemBuilder: (context, index) {
-                    final Recipe recipe = controller.recipes[index];
-                    return RecipeCard(recipe: recipe);
+                    return RecipeCard(recipe: visible[index]);
                   },
                 );
               },
@@ -687,30 +795,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             onTargetClick: () {
               // Don't complete step here - let them explore the recipe creation
               // The tour will end after this step
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreateRecipeView(),
-                ),
-              );
+              _openCreateRecipe();
             },
             onToolTipClick: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreateRecipeView(),
-                ),
-              );
+              _openCreateRecipe();
             },
             disposeOnTap: true,
-            child: _buildButton('Generate Recipes', () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreateRecipeView(),
-                ),
-              );
-            }),
+            child: _buildButton('Generate Recipes', _openCreateRecipe),
           ),
         ],
       ),
@@ -854,30 +945,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               overlayColor: Colors.black54,
               overlayOpacity: 0.8,
               onTargetClick: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreateRecipeView(),
-                  ),
-                );
+                _openCreateRecipe();
               },
               onToolTipClick: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreateRecipeView(),
-                  ),
-                );
+                _openCreateRecipe();
               },
               disposeOnTap: true,
-              child: _buildButton('Generate Recipes', () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreateRecipeView(),
-                  ),
-                );
-              }),
+              child: _buildButton('Generate Recipes', _openCreateRecipe),
             ),
 
             const SizedBox(height: 16),
@@ -915,81 +989,19 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildErrorState(String error, BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 80,
-              color: Colors.red[300],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Unable to Load Recipes',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.red[700],
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Please check your internet connection or try again later.\nOur recipe engine may be temporarily unavailable.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                final controller =
-                    Provider.of<RecipeController>(context, listen: false);
-                controller.clearError();
-                // Only initialize if not already initialized
-                if (!_hasInitialized) {
-                  _hasInitialized = true;
-                  controller.initialize();
-                }
-                // Also try to generate recipes again
-                controller.generateRecipes();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6A00),
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text('Retry'),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreateRecipeView(),
-                  ),
-                );
-              },
-              child: Text(
-                'Generate Custom Recipes',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+  Widget _buildErrorState(BuildContext context) {
+    return TabLoadErrorView(
+      title: 'Unable to load recipes',
+      onRetry: () {
+        final controller =
+            Provider.of<RecipeController>(context, listen: false);
+        controller.clearError();
+        if (!_hasInitialized) {
+          _hasInitialized = true;
+          controller.initialize();
+        }
+        controller.generateRecipes();
+      },
     );
   }
 
