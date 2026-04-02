@@ -15,6 +15,7 @@ import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/core/utils/app_logger.dart';
+import 'package:flutter_app/core/widgets/tab_load_error_view.dart';
 
 class EducationPage extends StatefulWidget {
   const EducationPage({Key? key}) : super(key: key);
@@ -205,7 +206,12 @@ class _EducationPageState extends State<EducationPage> {
     }
 
     if (controller.error != null) {
-      return Center(child: Text('Error: ${controller.error}'));
+      return TabLoadErrorView(
+        title: 'Unable to load articles',
+        onRetry: () {
+          controller.initialize();
+        },
+      );
     }
 
     return CustomScrollView(

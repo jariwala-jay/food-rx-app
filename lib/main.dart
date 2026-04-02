@@ -227,6 +227,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = NavigationService.navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          unawaited(ctx.read<AuthController>().resumeSessionIfNeeded());
+        }
+      });
+    }
+  }
+
   Future<void> _handleInitialLink() async {
     // Handle deep links when app is opened from email
     // This will be called when app is opened via foodrx://reset-password?token=...

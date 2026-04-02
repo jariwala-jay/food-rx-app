@@ -121,7 +121,7 @@ class ArticleController extends ChangeNotifier {
         bookmarksOnly: _bookmarksOnly,
         searchQuery: _searchQuery,
       );
-      
+
       // Apply client-side filtering by selected categories
       List<Article> filteredArticles = fetchedArticles;
       if (_selectedFilterCategories.isNotEmpty) {
@@ -129,7 +129,7 @@ class ArticleController extends ChangeNotifier {
           return _selectedFilterCategories.contains(article.category);
         }).toList();
       }
-      
+
       _articles = filteredArticles;
       _cachedArticles[cacheKey] = filteredArticles;
     } catch (e) {

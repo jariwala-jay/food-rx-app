@@ -39,6 +39,34 @@ class AuthController with ChangeNotifier {
   ReplanTrigger? get pendingReplanTrigger => _pendingReplanTrigger;
   NotificationManager? get notificationManager => _notificationManager;
 
+  bool _isTransientNetworkError(Object e) =>
+      e is SocketException ||
+      e is TimeoutException ||
+      e is ClientException ||
+      e is HandshakeException ||
+      e is TlsException;
+
+  /// [GET /auth/me] with short backoff — cellular/Wi‑Fi often lags right after boot.
+  Future<Map<String, dynamic>?> _fetchAuthMeWithRetries() async {
+    const maxAttempts = 5;
+    var attempt = 0;
+    while (true) {
+      try {
+        return await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+      } on ApiException {
+        rethrow;
+      } catch (e) {
+        final shouldRetry =
+            _isTransientNetworkError(e) && attempt < maxAttempts - 1;
+        if (!shouldRetry) {
+          rethrow;
+        }
+        attempt++;
+        await Future<void>.delayed(Duration(milliseconds: 200 * attempt));
+      }
+    }
+  }
+
   Future<void> initialize() async {
     _isLoading = true;
     notifyListeners();
@@ -62,7 +90,7 @@ class AuthController with ChangeNotifier {
             await ApiClient.clearSession();
             throw Exception('Invalid user ID format');
           }
-          final userData = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+          final userData = await _fetchAuthMeWithRetries();
           if (userData != null && userData['email'] == userEmail) {
             _currentUser = _createUserModel(userData);
             await _initializeNotificationServices(_currentUser!.id!);
@@ -77,7 +105,13 @@ class AuthController with ChangeNotifier {
             _error = 'Failed to restore session: ${e.message}';
           }
         } catch (e) {
-          await ApiClient.clearSession();
+          // Reboot / airplane mode: network often isn't ready yet. Do not wipe
+          // stored credentials — user can reopen when online (initialize runs again).
+          if (_isTransientNetworkError(e)) {
+            _error = userFacingErrorMessage(e);
+          } else {
+            await ApiClient.clearSession();
+          }
         }
       }
     } catch (e) {
@@ -85,6 +119,36 @@ class AuthController with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// When a token exists but [initialize] could not load the user (e.g. offline),
+  /// try again after the OS restores connectivity (app resume).
+  Future<void> resumeSessionIfNeeded() async {
+    if (_currentUser != null) return;
+    final token = await ApiClient.getToken();
+    if (token == null || token.isEmpty) return;
+
+    final userId = await ApiClient.userId;
+    final userEmail = await ApiClient.userEmail;
+    if (userId == null || userEmail == null || userId.length != 24) return;
+
+    try {
+      final userData = await _fetchAuthMeWithRetries();
+      if (userData != null && userData['email'] == userEmail) {
+        _currentUser = _createUserModel(userData);
+        await _initializeNotificationServices(_currentUser!.id!);
+        unawaited(_markUserActive());
+        _error = null;
+        notifyListeners();
+      }
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 404) {
+        await ApiClient.clearSession();
+        notifyListeners();
+      }
+    } catch (_) {
+      // Keep stored token for a later retry.
     }
   }
 

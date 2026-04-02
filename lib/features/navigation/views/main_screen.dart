@@ -252,6 +252,7 @@ class _MainScreenState extends State<MainScreen> {
           onWillPop: () async => false,
           child: Scaffold(
             body: Stack(
+              clipBehavior: Clip.none,
               children: [
                 IndexedStack(
                   index: _currentIndex,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/core/widgets/tab_load_error_view.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 import 'package:flutter_app/features/tracking/models/tracker_progress.dart';
 import 'package:flutter_app/features/tracking/services/tracker_api_service.dart';
@@ -793,33 +794,9 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                     ),
                   )
                 : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Could not load history',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _error!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _loadProgressForDate,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFFF6A00),
-                                ),
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
+                    ? TabLoadErrorView(
+                        title: 'Unable to load progress',
+                        onRetry: _loadProgressForDate,
                       )
                     : _buildBarList(),
           ),

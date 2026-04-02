@@ -1,4 +1,5 @@
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/widgets/tab_load_error_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
@@ -368,22 +369,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     }
 
     if (controller.error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Error: ${controller.error}',
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => controller.loadItems(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
+      return TabLoadErrorView(
+        title: 'Unable to load items',
+        onRetry: () => controller.loadItems(),
       );
     }
 
@@ -612,22 +600,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     }
 
     if (controller.error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Error: ${controller.error}',
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => controller.loadItems(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
+      return TabLoadErrorView(
+        title: 'Unable to load items',
+        onRetry: () => controller.loadItems(),
       );
     }
 

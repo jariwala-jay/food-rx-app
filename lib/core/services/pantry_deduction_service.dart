@@ -25,9 +25,10 @@ class PantryDeductionService {
     final deductionResults = <IngredientDeductionResult>[];
     final updatedPantryItems = <PantryItem>[];
     final itemsToRemove = <String>[];
-    
+
     if (kDebugMode) {
-      print('🗄️ Starting pantry deduction for ${scaledIngredients.length} ingredients');
+      print(
+          '🗄️ Starting pantry deduction for ${scaledIngredients.length} ingredients');
     }
 
     // Process each ingredient from the scaled recipe
@@ -37,7 +38,8 @@ class PantryDeductionService {
       final requiredUnit = ingredient['unit'] as String? ?? '';
 
       if (kDebugMode) {
-        print('📦 Processing: $requiredAmount $requiredUnit of $ingredientName');
+        print(
+            '📦 Processing: $requiredAmount $requiredUnit of $ingredientName');
       }
 
       final deductionResult = await _deductSingleIngredient(
@@ -82,8 +84,10 @@ class PantryDeductionService {
     );
 
     if (kDebugMode) {
-      print('✅ Deduction complete: ${overallResult.successfulDeductions}/${overallResult.totalIngredientsProcessed} successful');
-      print('📊 Average confidence: ${(overallResult.averageConfidence * 100).toStringAsFixed(1)}%');
+      print(
+          '✅ Deduction complete: ${overallResult.successfulDeductions}/${overallResult.totalIngredientsProcessed} successful');
+      print(
+          '📊 Average confidence: ${(overallResult.averageConfidence * 100).toStringAsFixed(1)}%');
     }
 
     return overallResult;
@@ -98,7 +102,7 @@ class PantryDeductionService {
   }) async {
     // Find all matching pantry items (including substitutes)
     final matchingItems = _findMatchingPantryItems(ingredientName, pantryItems);
-    
+
     if (matchingItems.isEmpty) {
       return IngredientDeductionResult(
         ingredientName: ingredientName,
@@ -169,13 +173,17 @@ class PantryDeductionService {
       ));
 
       if (kDebugMode) {
-        print('  📦 Deducted $amountToDeduct ${pantryItem.unitLabel} from ${pantryItem.name}');
-        print('     Remaining: $newQuantity ${pantryItem.unitLabel} (expires: ${pantryItem.expirationDate.toLocal().toString().split(' ')[0]})');
+        print(
+            '  📦 Deducted $amountToDeduct ${pantryItem.unitLabel} from ${pantryItem.name}');
+        print(
+            '     Remaining: $newQuantity ${pantryItem.unitLabel} (expires: ${pantryItem.expirationDate.toLocal().toString().split(' ')[0]})');
       }
     }
 
-    final averageConfidence = conversions > 0 ? totalConfidence / conversions : 0.0;
-    final wasFullyDeducted = remainingAmount <= 0.01; // Small tolerance for floating point
+    final averageConfidence =
+        conversions > 0 ? totalConfidence / conversions : 0.0;
+    final wasFullyDeducted =
+        remainingAmount <= 0.01; // Small tolerance for floating point
 
     return IngredientDeductionResult(
       ingredientName: ingredientName,
@@ -198,7 +206,8 @@ class PantryDeductionService {
   }
 
   /// Finds all pantry items that match the ingredient (including substitutes)
-  List<PantryItem> _findMatchingPantryItems(String ingredientName, List<PantryItem> pantryItems) {
+  List<PantryItem> _findMatchingPantryItems(
+      String ingredientName, List<PantryItem> pantryItems) {
     final matchingItems = <PantryItem>[];
 
     for (final pantryItem in pantryItems) {
@@ -230,7 +239,8 @@ class PantryDeductionService {
     if (requiredLower == availableLower) return true;
 
     // Contains match (for variations like "ground beef" vs "beef")
-    if (availableLower.contains(requiredLower) || requiredLower.contains(availableLower)) {
+    if (availableLower.contains(requiredLower) ||
+        requiredLower.contains(availableLower)) {
       return true;
     }
 
@@ -246,9 +256,12 @@ class PantryDeductionService {
 
     // Final loose check: singular/plural forms after cleaning
     String singularize(String s) {
-      if (s.endsWith('ses')) return s.substring(0, s.length - 2); // e.g. "dresses" → "dres" (best-effort)
+      if (s.endsWith('ses'))
+        return s.substring(
+            0, s.length - 2); // e.g. "dresses" → "dres" (best-effort)
       if (s.endsWith('ies')) return s.substring(0, s.length - 3) + 'y';
-      if (s.endsWith('s') && !s.endsWith('ss')) return s.substring(0, s.length - 1);
+      if (s.endsWith('s') && !s.endsWith('ss'))
+        return s.substring(0, s.length - 1);
       return s;
     }
 
@@ -279,12 +292,12 @@ class PantryDeductionService {
   /// Calculates average confidence across all deductions
   double _calculateAverageConfidence(List<IngredientDeductionResult> results) {
     if (results.isEmpty) return 0.0;
-    
+
     final totalConfidence = results.fold<double>(
       0.0,
       (sum, result) => sum + result.confidence,
     );
-    
+
     return totalConfidence / results.length;
   }
 
@@ -294,14 +307,15 @@ class PantryDeductionService {
     required List<PantryItem> pantryItems,
   }) async {
     final validationResults = <IngredientValidationResult>[];
-    
+
     for (final ingredient in scaledIngredients) {
       final ingredientName = ingredient['name'] as String? ?? '';
       final requiredAmount = (ingredient['amount'] as num?)?.toDouble() ?? 0.0;
       final requiredUnit = ingredient['unit'] as String? ?? '';
 
-      final matchingItems = _findMatchingPantryItems(ingredientName, pantryItems);
-      
+      final matchingItems =
+          _findMatchingPantryItems(ingredientName, pantryItems);
+
       if (matchingItems.isEmpty) {
         validationResults.add(IngredientValidationResult(
           ingredientName: ingredientName,
@@ -332,7 +346,8 @@ class PantryDeductionService {
         conversions++;
       }
 
-      final averageConfidence = conversions > 0 ? totalConfidence / conversions : 0.0;
+      final averageConfidence =
+          conversions > 0 ? totalConfidence / conversions : 0.0;
       final isAvailable = totalAvailable >= requiredAmount;
 
       validationResults.add(IngredientValidationResult(
@@ -348,19 +363,23 @@ class PantryDeductionService {
     return PantryValidationResult(
       ingredientValidations: validationResults,
       allIngredientsAvailable: validationResults.every((r) => r.isAvailable),
-      availabilityPercentage: validationResults.where((r) => r.isAvailable).length / validationResults.length,
-      averageConfidence: _calculateAverageValidationConfidence(validationResults),
+      availabilityPercentage:
+          validationResults.where((r) => r.isAvailable).length /
+              validationResults.length,
+      averageConfidence:
+          _calculateAverageValidationConfidence(validationResults),
     );
   }
 
-  double _calculateAverageValidationConfidence(List<IngredientValidationResult> results) {
+  double _calculateAverageValidationConfidence(
+      List<IngredientValidationResult> results) {
     if (results.isEmpty) return 0.0;
-    
+
     final totalConfidence = results.fold<double>(
       0.0,
       (sum, result) => sum + result.confidence,
     );
-    
+
     return totalConfidence / results.length;
   }
 }
@@ -386,7 +405,9 @@ class PantryDeductionResult {
   });
 
   bool get wasSuccessful => successfulDeductions == totalIngredientsProcessed;
-  double get successRate => totalIngredientsProcessed > 0 ? successfulDeductions / totalIngredientsProcessed : 0.0;
+  double get successRate => totalIngredientsProcessed > 0
+      ? successfulDeductions / totalIngredientsProcessed
+      : 0.0;
 }
 
 /// Result of deducting a single ingredient
@@ -470,4 +491,4 @@ class IngredientValidationResult {
 
   double get shortfallAmount => requiredAmount - availableAmount;
   bool get hasShortfall => shortfallAmount > 0;
-} 
+}

@@ -862,6 +862,7 @@ class AppSearchField extends StatelessWidget {
   final String hintText;
   final ValueChanged<String>? onChanged;
   final Widget? suffixIcon;
+  final FocusNode? focusNode;
 
   const AppSearchField({
     super.key,
@@ -869,6 +870,7 @@ class AppSearchField extends StatelessWidget {
     required this.hintText,
     this.onChanged,
     this.suffixIcon,
+    this.focusNode,
   });
 
   @override
@@ -881,6 +883,7 @@ class AppSearchField extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: hintText,

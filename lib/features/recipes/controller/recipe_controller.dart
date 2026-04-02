@@ -155,9 +155,18 @@ class RecipeController extends ChangeNotifier {
     if (userId == null) return;
     _isLoading = true;
     notifyListeners();
-    _savedRecipes = await recipeRepository.getSavedRecipes(userId);
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _savedRecipes = await recipeRepository.getSavedRecipes(userId);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Failed to load saved recipes: $e');
+      }
+      // Keep prior list on failure (e.g. offline after navigating back to home).
+      // Do not rethrow — avoids unhandled async exceptions from RecipePage.initialize().
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> saveRecipe(Recipe recipe) async {
