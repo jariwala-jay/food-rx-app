@@ -160,32 +160,36 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const PreparedRecipesPage(),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PreparedRecipesPage(),
+                ),
+              );
+            },
+            child: Container(
+              height: 50,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6A00),
+                borderRadius: BorderRadius.circular(12),
               ),
-            );
-          },
-          child: Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF6A00),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              'Prepared recipes',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+              child: const Text(
+                'Prepared recipes',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
               ),
-              maxLines: 1,
-              softWrap: false,
             ),
           ),
         ),
@@ -203,23 +207,28 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               },
               child: Container(
                 height: 50,
+                width: double.infinity,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF6A00),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.search, color: Colors.white, size: 22),
-                    SizedBox(width: 8),
-                    Text(
-                      'Search recipes',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
+                    const Icon(Icons.search, color: Colors.white, size: 22),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Search recipes',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
