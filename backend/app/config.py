@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     firebase_service_account_b64: str = ""
     firebase_service_account_json_base64: str = ""
 
+    # RAG chatbot (Gemini): used for embeddings and generation
+    gemini_api_key: str = ""
+
     class Config:
         env_file = "../.env"  # Read from project root .env (shared with Flutter)
         extra = "ignore"

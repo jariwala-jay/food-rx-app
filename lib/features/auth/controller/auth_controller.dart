@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
@@ -46,6 +47,11 @@ class AuthController with ChangeNotifier {
       e is HandshakeException ||
       e is TlsException;
 
+  Future<void> _clearAuthSession() async {
+    await ApiClient.clearSession();
+    RagChatbotService.resetConversation();
+  }
+
   /// [GET /auth/me] with short backoff — cellular/Wi‑Fi often lags right after boot.
   Future<Map<String, dynamic>?> _fetchAuthMeWithRetries() async {
     const maxAttempts = 5;
@@ -87,7 +93,7 @@ class AuthController with ChangeNotifier {
       if (token != null && token.isNotEmpty && userId != null && userEmail != null) {
         try {
           if (userId.length != 24) {
-            await ApiClient.clearSession();
+            await _clearAuthSession();
             throw Exception('Invalid user ID format');
           }
           final userData = await _fetchAuthMeWithRetries();
@@ -96,11 +102,11 @@ class AuthController with ChangeNotifier {
             await _initializeNotificationServices(_currentUser!.id!);
             unawaited(_markUserActive());
           } else {
-            await ApiClient.clearSession();
+            await _clearAuthSession();
           }
         } on ApiException catch (e) {
           if (e.statusCode == 401 || e.statusCode == 404) {
-            await ApiClient.clearSession();
+            await _clearAuthSession();
           } else {
             _error = 'Failed to restore session: ${e.message}';
           }
@@ -110,7 +116,7 @@ class AuthController with ChangeNotifier {
           if (_isTransientNetworkError(e)) {
             _error = userFacingErrorMessage(e);
           } else {
-            await ApiClient.clearSession();
+            await _clearAuthSession();
           }
         }
       }
@@ -144,7 +150,7 @@ class AuthController with ChangeNotifier {
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 404) {
-        await ApiClient.clearSession();
+        await _clearAuthSession();
         notifyListeners();
       }
     } catch (_) {
@@ -314,7 +320,7 @@ class AuthController with ChangeNotifier {
       } catch (_) {
         // Ignore; logout should proceed regardless.
       }
-      await ApiClient.clearSession();
+      await _clearAuthSession();
       _notificationManager?.dispose();
       _notificationManager = null;
       _currentUser = null;
@@ -548,7 +554,7 @@ class AuthController with ChangeNotifier {
       }
       await ApiClient.post('/auth/reset-password',
           body: {'token': token, 'newPassword': newPassword}, requireAuth: false);
-      await ApiClient.clearSession();
+      await _clearAuthSession();
       _currentUser = null;
       return true;
     } on ApiException catch (e) {

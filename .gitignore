@@ -55,6 +55,9 @@ app.*.map.json
 /gcloud/functions/tracker-reset/package-lock.json
 /gcloud/functions/tracker-reset/.gcloudignore
 
+# Python venv (local backend)
+backend/.venv/
+
 # Environment variables
 .env
 
