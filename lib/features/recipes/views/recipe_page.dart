@@ -135,9 +135,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
   List<Recipe> _visibleRecipesForSearch(List<Recipe> all) {
     final q = _recipeSearchController.text.trim().toLowerCase();
     if (q.isEmpty) return all;
-    return all
-        .where((r) => r.title.toLowerCase().contains(q))
-        .toList();
+    return all.where((r) => r.title.toLowerCase().contains(q)).toList();
   }
 
   void _closeRecipeSearch() {
@@ -243,6 +241,8 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               focusNode: _recipeSearchFocusNode,
               hintText: 'Search recipes',
               onChanged: (_) => setState(() {}),
+              autocorrect: false,
+              enableSuggestions: false,
               suffixIcon: IconButton(
                 icon: Icon(Icons.close, color: Colors.grey[600]),
                 onPressed: _closeRecipeSearch,
@@ -307,7 +307,8 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
               // Main content
               Expanded(
-                child: Selector<RecipeController, (RecipePageState, String, bool)>(
+                child:
+                    Selector<RecipeController, (RecipePageState, String, bool)>(
                   selector: (_, controller) => (
                     RecipePageState(
                       recipes: controller.recipes,

@@ -801,6 +801,7 @@ class AppSearchAnchor extends StatelessWidget {
   final FutureOr<Iterable<Widget>> Function(BuildContext, SearchController)
       suggestionsBuilder;
   final SearchController? controller;
+
   /// Optional padding to control search bar height (e.g. match header height with Recipe page).
   final EdgeInsetsGeometry? barPadding;
 
@@ -827,9 +828,8 @@ class AppSearchAnchor extends StatelessWidget {
           hintText: hintText,
           leading: leading ?? Icon(Icons.search, color: Colors.grey[400]),
           trailing: trailing,
-          padding: barPadding != null
-              ? WidgetStateProperty.all(barPadding!)
-              : null,
+          padding:
+              barPadding != null ? WidgetStateProperty.all(barPadding!) : null,
           backgroundColor: WidgetStateProperty.all(Colors.white),
           elevation: WidgetStateProperty.all(0.0),
           shape: WidgetStateProperty.all(
@@ -863,6 +863,8 @@ class AppSearchField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final Widget? suffixIcon;
   final FocusNode? focusNode;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   const AppSearchField({
     super.key,
@@ -871,6 +873,8 @@ class AppSearchField extends StatelessWidget {
     this.onChanged,
     this.suffixIcon,
     this.focusNode,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   @override
@@ -885,6 +889,8 @@ class AppSearchField extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         onChanged: onChanged,
+        autocorrect: autocorrect,
+        enableSuggestions: enableSuggestions,
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(
