@@ -7,13 +7,16 @@ Three-layer guard: keyword pre-filter → similarity threshold → hardened syst
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import re
+import unicodedata
 from typing import Any
 
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 
 from app.config import settings
 from app.knowledge.food_knowledge import KNOWLEDGE_DOCS
@@ -22,19 +25,36 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIM_FALLBACK = 3072
+# Retries when embed API returns 429 (free tier often rate-limits per minute/day).
+_EMBED_MAX_ATTEMPTS = 4
+# Space out document embedding calls to avoid hitting per-minute embed quotas at startup.
+_EMBED_CHUNK_INTERVAL_SEC = 0.55
+
+_EMBEDDING_FALLBACK_NOTE = (
+    "\n\nNOTE — KNOWLEDGE SEARCH UNAVAILABLE: There are NO retrieved knowledge excerpts this turn. "
+    "Say clearly that you could not search the program's reference materials. "
+    "Give only brief, non-specific lifestyle guidance (food, activity, sleep, hydration) aligned with the USER PROFILE if present. "
+    "Do NOT invent numbers, food lists, thresholds, medication or device details, or study claims. "
+    "Tell the user to ask again later or speak with their clinician for specifics."
+)
 
 GENERATION_MODELS = [
+    "models/gemini-2.5-flash",
+    "models/gemini-flash-latest",
+    "models/gemini-flash-lite-latest",
     "models/gemini-2.0-flash",
     "models/gemini-2.0-flash-lite",
-    "models/gemini-1.5-flash",
-    "models/gemini-flash-latest",
 ]
 
-TOP_K = 4
-MAX_HISTORY = 6
-MIN_RELEVANCE = 0.42
-CHUNK_MAX_CHARS = 1000
-CHUNK_OVERLAP_SENTENCES = 1
+TOP_K = 4 # knowledge chunks returned per query
+MAX_HISTORY = 6 # conversation turns kept in context (pairs)
+MIN_RELEVANCE = 0.42 # cosine-similarity floor (Layer 2)
+# When we restrict retrieval to inferred KB categories (sleep, exercise, hydration, etc.).
+MIN_RELEVANCE_TOPIC = 0.32
+# Sleep queries often embed weakly vs chunks; still require topic-focused retrieval.
+MIN_RELEVANCE_TOPIC_SLEEP = 0.28
+CHUNK_MAX_CHARS = 1000 # max chars per chunk (Layer 1)
+CHUNK_OVERLAP_SENTENCES = 1 # overlap between chunks (Layer 1)
 
 _EMERGENCY_PATTERNS = re.compile(
     r"\b("
@@ -157,13 +177,23 @@ STRICT SCOPE — you must ONLY answer questions about:
 - Food choices, meal planning, and diet plans (DASH, MyPlate, Diabetes Plate)
 - Nutrition concepts (calories, macronutrients, fiber, sodium, sugar, vitamins, minerals)
 - Healthy eating habits and cooking methods
-- Sleep, exercise, and hydration as they relate to nutrition and health management
-- Managing health conditions (diabetes, hypertension, obesity, pre-diabetes) THROUGH DIET ONLY
+- Hydration and healthy beverages (including how much water to aim for)
+- Sleep as it relates to energy, blood sugar patterns, and healthy routines alongside diet
+- Physical activity and exercise (aerobic, strength, walking, daily movement) as they support blood sugar, blood pressure, weight, heart health, and the same conditions below — this is IN SCOPE. Use RELEVANT KNOWLEDGE for exercise; do not refuse exercise questions that connect to these goals.
+- Managing diabetes, hypertension, obesity, and pre-diabetes through food and diet choices, plus the lifestyle topics above. You do NOT diagnose, prescribe medications, or replace a doctor; "diet only" here means you stay in your lane on clinical care, NOT that you ignore exercise when the knowledge base covers it.
 - Pantry management, grocery shopping, reading nutrition labels
 - Food allergies and dietary intolerances
-- Hydration and healthy beverages
 
-IF the user asks about ANYTHING outside this scope, respond with exactly:
+CONVERSATION MANAGEMENT (greetings, gratitude, and closing — keep these short):
+- Greetings: For "Hi" or "Hello," be warm in one line, then offer help with diet or meals.
+- "How are you?" / "How's it going?": You MUST answer the question first in one short, friendly sentence (e.g. "I'm doing well, thank you for asking!" or "I'm great — thanks for checking in!"). Do not skip this. Do not open with "I'm here to help" or "I'm ready to help" before you answer. Optional: add "How are things on your end?" Then add one sentence pivoting to food or nutrition (how you can help with meals or their plan).
+- Gratitude: If they say "Thank you" or "Thanks," respond warmly (e.g., "You're very welcome!") and ask if they have more nutrition or meal-plan questions. Example tone (vary wording): "You're welcome! Remember, every healthy food choice you make today is a win for your long-term health. Do you have more questions about your meal plan?"
+- Ending the chat: If they say they have no more questions, "Goodbye," "Bye," "That's all I needed" (with or without "thanks"), or similar, wish them well on their health journey and close warmly. Do not repeat the "I can only help with food..." disclaimer at the end of a successful session.
+- Do not engage in long conversations about feelings or personal life unrelated to food and nutrition.
+
+Exercise, sleep, and hydration that support healthy eating and chronic-condition management are IN SCOPE — never use the refusal line below for those; answer from RELEVANT KNOWLEDGE (or general scope rules if a NOTE says retrieval failed).
+
+IF the user asks about ANYTHING outside this scope — other than CONVERSATION MANAGEMENT above — respond with exactly:
 "I can only help with food and nutrition questions. Please ask me about your diet, meals, or healthy eating."
 
 ABSOLUTE RULES — never break these:
@@ -172,15 +202,26 @@ ABSOLUTE RULES — never break these:
 3. If a user mentions specific medications, respond: "I cannot advise on medications. Please speak with your doctor or pharmacist."
 4. If a user describes symptoms or asks about diagnoses, respond: "For symptoms or diagnoses, please consult your doctor. I can help with diet questions."
 5. If someone appears to be in a medical emergency, immediately say: "Please call 911 or go to the emergency room."
-6. NEVER discuss: weather, sports, movies, politics, technology, finance, relationships, or any topic unrelated to food and nutrition.
+6. NEVER discuss: weather, sports teams/scores, movies, politics, technology, finance, or relationships. Exercise and physical activity for health are allowed (see STRICT SCOPE); do not lump them with "sports" refusals. Small talk is limited to CONVERSATION MANAGEMENT (brief greetings, thanks, and goodbyes) only.
 
 LANGUAGE RULES:
 - Write at an 8th-grade reading level. Short sentences. No medical jargon.
 - Use bullet points for lists. Be warm and encouraging.
 - Keep answers to 3-6 sentences or a short list.
-- Always end with one positive, motivating sentence.
+- Always end with one positive, motivating sentence (except pure goodbyes, where a warm closing is enough).
 
-ONLY use information from the RELEVANT KNOWLEDGE section below. Do not make up facts."""
+ONLY use information from the RELEVANT KNOWLEDGE section below. Do not make up facts.
+
+KNOWLEDGE FAITHFULNESS (critical — reduces hallucination):
+- The RELEVANT KNOWLEDGE excerpts are your only source for specific facts (numbers, study results, thresholds, food lists, mechanisms, device or medication names). Ground your answer in that text.
+- If the excerpts do NOT contain enough detail to answer the question precisely, say so plainly (e.g. that this assistant's materials don't cover that specific point). Offer only what the excerpts DO support, or suggest discussing specifics with their doctor or care team.
+- Do NOT invent: statistics, percentages, dosages, lab cutoffs, brand names, or details about machines/devices (e.g. CPAP), therapies (e.g. CBT-I), or drugs unless they appear in the excerpts.
+- Do NOT cite fake studies, authors, or "research says" unless the excerpt names a source. You may describe general principles that appear in the excerpts in your own words.
+- If the question mixes several topics and only some are in the excerpts, answer the parts you can support and acknowledge what is not in the materials.
+- Short, honest answers are better than long confident guesses.
+
+If a NOTE says there is no knowledge excerpt for this turn (conversation management only), follow CONVERSATION MANAGEMENT instead — do not fabricate nutrition facts.
+If a NOTE says knowledge search was unavailable, give only high-level, non-specific guidance and tell the user your knowledge excerpts were not loaded for that turn — do not fill in precise numbers or lists."""
 
 
 class _QueryClass:
@@ -188,6 +229,255 @@ class _QueryClass:
     MEDICAL = "medical"
     OFF_TOPIC = "off_topic"
     DIET = "diet"
+
+
+def _normalize_chat_line(message: str) -> str:
+    """Normalize user text for matching short greetings/thanks/goodbyes (NBSP, smart quotes)."""
+    t = unicodedata.normalize("NFKC", message.strip())
+    t = (
+        t.replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\xa0", " ")
+    )
+    while len(t) >= 2 and t[0] == t[-1] and t[0] in "'\"":
+        t = t[1:-1].strip()
+    t = t.lower()
+    # Keep apostrophes for "that's", "i'm"; strip other punctuation to spaces.
+    t = re.sub(r'[\s!.,?"…:;–—\-]+', " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+# After [_normalize_chat_line], exact match only (no extra words).
+_POLITE_CHAT_EXACT = frozenset(
+    {
+        "hi",
+        "hello",
+        "hey",
+        "yo",
+        "hiya",
+        "howdy",
+        "hi there",
+        "hello there",
+        "hey there",
+        "thanks",
+        "thank you",
+        "thankyou",
+        "thx",
+        "ty",
+        "thnx",
+        "thank u",
+        "thank you so much",
+        "thanks so much",
+        "thank you very much",
+        "thanks very much",
+        "thanks a lot",
+        "many thanks",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "good day",
+        "greetings",
+        "morning",
+        "evening",
+        "goodbye",
+        "bye",
+        "good bye",
+        "see you",
+        "see you later",
+        "see you soon",
+        "no more questions",
+        "i have no more questions",
+        "thats all",
+        "that's all",
+        "nothing else",
+        "nothing else thanks",
+        "nothing else thank you",
+        "all set",
+        "im good",
+        "i'm good",
+        "no thanks",
+        "talk soon",
+        "talk later",
+        "how are you",
+        "how are you doing",
+        "how is it going",
+        "how's it going",
+        "hows it going",
+    }
+)
+
+_POLITE_CHAT_REGEX = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"^(thank you|thanks|thx|ty|thnx|thank u)(\s+(so|very)\s+much)?$",
+        r"^(no|nothing)\s+(more|else)(\s+thanks?|\s+thank you)?$",
+        r"^i\s*(have|'ve)\s+no\s+more\s+questions$",
+        # "that's all", "that's all thanks", "that's all i needed thanks", etc.
+        r"^that\s*'?s\s+all(\s+i\s+needed)?(\s+thanks?|\s+thank you|\s+thx|\s+ty)?$",
+        r"^how\s+are\s+you(\s+doing)?$",
+        r"^how'?s\s+it\s+going$",
+        r"^(good\s*)?bye[\s!.]*$",
+        r"^see\s+ya[\s!.]*$",
+        r"^have\s+a\s+good\s+(day|one)[\s!.]*$",
+    )
+)
+
+_POLITE_CHAT_NOTE = (
+    "\n\nNOTE — NO KNOWLEDGE EXCERPT THIS TURN: The user's message is only conversation "
+    "management (greeting, thanks, or closing — see CONVERSATION MANAGEMENT). "
+    "Do not invent nutrition facts. Follow CONVERSATION MANAGEMENT for tone and length."
+)
+
+_HOW_ARE_YOU_EXACT = frozenset(
+    {
+        "how are you",
+        "how are you doing",
+        "how is it going",
+        "how's it going",
+        "hows it going",
+    }
+)
+
+_HOW_ARE_YOU_NOTE = (
+    "\n\nTHIS TURN — USER ASKED HOW YOU ARE: Your first sentence must directly say how you are "
+    "(e.g. doing well / great / good) and thank them or acknowledge the question. "
+    "Forbidden as an opening: 'I'm here to help,' 'I'm ready to help,' or jumping straight to "
+    "nutrition before answering. After you answer, then pivot to how you can help with meals or diet."
+)
+
+
+def _is_how_are_you_turn(message: str) -> bool:
+    if _DIET_SIGNALS.search(message):
+        return False
+    return _normalize_chat_line(message) in _HOW_ARE_YOU_EXACT
+
+
+_EXERCISE_INTENT = re.compile(
+    r"\b("
+    r"exercise|exercises|exercising|workout|work\s*outs?|working\s*out|"
+    r"aerobic|cardio|cardiovascular|physical\s*activity|"
+    r"strength\s*train(?:ing)?|resistance\s*train(?:ing)?|weight\s*lift|lifting\b|"
+    r"\bgym\b|fitness|move\s*more|walking\s*program"
+    r")\b",
+    re.IGNORECASE,
+)
+
+def _is_exercise_intent(message: str) -> bool:
+    return bool(_EXERCISE_INTENT.search(message))
+
+
+def _infer_kb_categories(message: str) -> frozenset[str] | None:
+    """
+    Map user wording to food_knowledge chunk categories (lowercased).
+    Used to restrict retrieval when global cosine similarity is often too low for lifestyle questions.
+    """
+    lc = message.lower()
+    cats: set[str] = set()
+    if re.search(
+        r"\b("
+        r"sleep|sleeping|insomnia|bedtime|nap\b|lack of sleep|sleep deprivation|"
+        r"sleep-deprived|sleep deprived|poor sleep|sleep loss|not enough sleep|"
+        r"melatonin|tryptophan|circadian|"
+        r"can'?t sleep|restful|sleep quality"
+        r")\b",
+        lc,
+    ):
+        cats.add("sleep")
+    if _EXERCISE_INTENT.search(message):
+        cats.add("exercise")
+    if re.search(
+        r"\b("
+        r"water|hydrat|fluid|dehydrat|thirst|ounces|\bliters?\b|"
+        r"drink\s+when|when\s+exercising|while\s+exercising|during\s+exercise|"
+        r"how\s+much\s+.*\s+drink"
+        r")\b",
+        lc,
+    ):
+        cats.add("hydration")
+    if re.search(
+        r"\b("
+        r"blood\s*pressure|hypertension|\bhbp\b|\bsalt\b|sodium|"
+        r"dash\s+diet|dash\b"
+        r")\b",
+        lc,
+    ):
+        cats.add("hypertension")
+    if re.search(
+        r"\b(prediabetes|pre-diabetes|prediabetic|borderline\s+diabetes)\b",
+        lc,
+    ):
+        cats.add("pre-diabetes")
+    if re.search(
+        r"\b("
+        r"diabetes|type\s*1|type\s*2|blood\s*sugar|glucose|a1c|hba1c|"
+        r"insulin|carb(ohydrate)?|glycemic|plate method|diabetes plate"
+        r")\b",
+        lc,
+    ):
+        cats.add("diabetes")
+    if re.search(r"\b(obesity|overweight|weight\s+loss|lose\s+weight|\bbmi\b)\b", lc):
+        cats.add("obesity")
+    if not cats:
+        return None
+    return frozenset(cats)
+
+
+def _embedding_text_for_retrieval(message: str) -> str:
+    cats = _infer_kb_categories(message)
+    if not cats:
+        return message
+    hints: list[str] = []
+    if "sleep" in cats:
+        hints.append(
+            "sleep melatonin tryptophan appetite calories ghrelin leptin diet nutrition "
+            "sleep hygiene insomnia blood sugar blood pressure"
+        )
+    if "exercise" in cats:
+        hints.append("physical activity aerobic strength exercise safety blood pressure diabetes")
+    if "hydration" in cats:
+        hints.append("water fluid hydration dehydration exercise sweating")
+    if "hypertension" in cats:
+        hints.append("blood pressure hypertension DASH sodium exercise safety")
+    if "pre-diabetes" in cats:
+        hints.append("prediabetes blood sugar insulin resistance diet")
+    if "diabetes" in cats:
+        hints.append("diabetes blood glucose insulin carbohydrate glycemic")
+    if "obesity" in cats:
+        hints.append("obesity weight management calories diet exercise")
+    if not hints:
+        return message
+    return message + "\n\nTopic keywords: " + " ".join(hints)
+
+
+def _skip_rag_polite_chat(message: str) -> bool:
+    """True for short greetings/thanks/goodbyes — skip embedding (very short strings often fail)."""
+    if _DIET_SIGNALS.search(message):
+        return False
+    normalized = _normalize_chat_line(message)
+    if not normalized:
+        return False
+    if normalized in _POLITE_CHAT_EXACT:
+        return True
+    return any(rx.fullmatch(normalized) for rx in _POLITE_CHAT_REGEX)
+
+
+def _history_to_contents(history: list[dict[str, Any]]) -> list[types.Content]:
+    history_contents: list[types.Content] = []
+    for turn in history[-(MAX_HISTORY * 2) :]:
+        role = turn.get("role") or "user"
+        parts_raw = turn.get("parts") or []
+        texts = [p for p in parts_raw if isinstance(p, str) and p.strip()]
+        if not texts:
+            continue
+        history_contents.append(
+            types.Content(
+                role=role,
+                parts=[types.Part(text=p) for p in texts],
+            )
+        )
+    return history_contents
 
 
 def classify_query(message: str) -> str:
@@ -381,33 +671,54 @@ class RAGService:
         )
 
         embeddings: list[list[float]] = []
-        for chunk in self._chunks:
+        client = self._client
+        assert client is not None
+        for idx, chunk in enumerate(self._chunks):
             text = f"{chunk['title']}. {chunk['text']}"
-            try:
-                result = self._client.models.embed_content(
-                    model=EMBEDDING_MODEL,
-                    contents=text,
-                    config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-                )
-                emb_list = result.embeddings or []
-                values = emb_list[0].values if emb_list else None
-                if values:
-                    embeddings.append(list(values))
-                else:
+            vec: list[float] | None = None
+            for attempt in range(6):
+                try:
+                    if idx > 0 and attempt == 0:
+                        await asyncio.sleep(_EMBED_CHUNK_INTERVAL_SEC)
+                    result = client.models.embed_content(
+                        model=EMBEDDING_MODEL,
+                        contents=text,
+                        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                    )
+                    emb_list = result.embeddings or []
+                    values = emb_list[0].values if emb_list else None
+                    if values:
+                        vec = list(values)
+                    else:
+                        logger.error(
+                            "No embedding values for chunk '%s[%s]'",
+                            chunk.get("doc_id"),
+                            chunk.get("chunk_index"),
+                        )
+                    break
+                except Exception as exc:
+                    err_str = str(exc)
+                    is_429 = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                    if is_429 and attempt < 5:
+                        delay = min(12.0, 2.0 * (2**attempt))
+                        logger.warning(
+                            "Embedding chunk '%s[%s]' rate limited (attempt %s/6), "
+                            "retrying in %.1fs…",
+                            chunk.get("doc_id"),
+                            chunk.get("chunk_index"),
+                            attempt + 1,
+                            delay,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
                     logger.error(
-                        "No embedding values for chunk '%s[%s]'",
+                        "Failed to embed chunk '%s[%s]': %s",
                         chunk.get("doc_id"),
                         chunk.get("chunk_index"),
+                        exc,
                     )
-                    embeddings.append([0.0] * EMBEDDING_DIM_FALLBACK)
-            except Exception as exc:
-                logger.error(
-                    "Failed to embed chunk '%s[%s]': %s",
-                    chunk.get("doc_id"),
-                    chunk.get("chunk_index"),
-                    exc,
-                )
-                embeddings.append([0.0] * EMBEDDING_DIM_FALLBACK)
+                    break
+            embeddings.append(vec if vec else [0.0] * EMBEDDING_DIM_FALLBACK)
 
         self._chunk_embeddings = embeddings
         self._ready = True
@@ -430,6 +741,27 @@ class RAGService:
         best_score = scores[0][1] if scores else 0.0
         chunks = [self._chunks[i] for i, _ in scores[:TOP_K]]
         # Downcast chunk fields used in generation context.
+        return [dict(c) for c in chunks], best_score
+
+    def _retrieve_for_categories(
+        self,
+        query_embedding: list[float],
+        categories_lower: frozenset[str],
+    ) -> tuple[list[dict[str, str]], float]:
+        """Like _retrieve but only chunks whose category (lowercased) is in the set."""
+        if not self._chunk_embeddings or not self._chunks:
+            return [], 0.0
+        pairs: list[tuple[int, float]] = []
+        for i, emb in enumerate(self._chunk_embeddings):
+            cat = str(self._chunks[i].get("category", "")).lower()
+            if cat not in categories_lower:
+                continue
+            pairs.append((i, _cosine(query_embedding, emb)))
+        if not pairs:
+            return [], 0.0
+        pairs.sort(key=lambda x: x[1], reverse=True)
+        best_score = pairs[0][1]
+        chunks = [self._chunks[i] for i, _ in pairs[:TOP_K]]
         return [dict(c) for c in chunks], best_score
 
     @staticmethod
@@ -475,6 +807,51 @@ class RAGService:
 
         return "\n".join(lines)
 
+    def _generate_reply(
+        self,
+        message: str,
+        full_system: str,
+        history_contents: list[types.Content],
+    ) -> str:
+        client = self._client
+        assert client is not None
+        last_exc: Exception | None = None
+        for model_name in GENERATION_MODELS:
+            try:
+                chat_session = client.chats.create(
+                    model=model_name,
+                    config=types.GenerateContentConfig(
+                        system_instruction=full_system,
+                    ),
+                    history=history_contents,
+                )
+                response = chat_session.send_message(message)
+                out = (response.text or "").strip()
+                if not out:
+                    logger.error("Empty generation from %s", model_name)
+                    return "I ran into a technical issue. Please try again."
+                logger.debug("Generated with model: %s", model_name)
+                return out
+            except Exception as exc:
+                err_str = str(exc)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    logger.warning("Quota hit on %s, trying next model.", model_name)
+                    last_exc = exc
+                    continue
+                if isinstance(exc, ClientError) and exc.code == 404:
+                    logger.warning(
+                        "Model not available (%s): %s — trying next model.",
+                        model_name,
+                        exc,
+                    )
+                    last_exc = exc
+                    continue
+                logger.error("Generation error with %s: %s", model_name, exc)
+                return "I ran into a technical issue. Please try again."
+
+        logger.error("All generation models exhausted. Last error: %s", last_exc)
+        return "The AI service is currently at capacity. Please wait a moment and try again."
+
     async def chat(
         self,
         message: str,
@@ -496,26 +873,93 @@ class RAGService:
         if not self._ready or self._client is None:
             return "I am having trouble connecting right now. Please try again in a moment."
 
-        try:
-            q_result = self._client.models.embed_content(
-                model=EMBEDDING_MODEL,
-                contents=message,
-                config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
-            )
-            q_emb = q_result.embeddings or []
-            query_embedding = q_emb[0].values if q_emb else None
-            if not query_embedding:
-                logger.error("Query embedding returned no values")
-                return "I am having trouble processing your question. Please try again."
-            query_embedding = list(query_embedding)
-        except Exception as exc:
-            logger.error("Embedding error: %s", exc)
+        history_contents = _history_to_contents(history)
+        user_context = self._build_user_context(user_profile, pantry_items or [])
+
+        if _skip_rag_polite_chat(message):
+            logger.info("Polite chat turn — skipping query embedding")
+            full_system = SYSTEM_PROMPT
+            if user_context:
+                full_system += f"\n\nUSER PROFILE:\n{user_context}"
+            full_system += _POLITE_CHAT_NOTE
+            if _is_how_are_you_turn(message):
+                full_system += _HOW_ARE_YOU_NOTE
+            return self._generate_reply(message, full_system, history_contents)
+
+        client = self._client
+        text_for_embed = _embedding_text_for_retrieval(message)
+        query_embedding: list[float] | None = None
+        use_embedding_fallback = False
+        for attempt in range(_EMBED_MAX_ATTEMPTS):
+            try:
+                q_result = client.models.embed_content(
+                    model=EMBEDDING_MODEL,
+                    contents=text_for_embed,
+                    config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+                )
+                q_emb = q_result.embeddings or []
+                vec = q_emb[0].values if q_emb else None
+                if vec:
+                    query_embedding = list(vec)
+                else:
+                    logger.error("Query embedding returned no values")
+                    use_embedding_fallback = True
+                break
+            except Exception as exc:
+                err_str = str(exc)
+                is_429 = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+                if is_429 and attempt < _EMBED_MAX_ATTEMPTS - 1:
+                    delay = min(8.0, 2.0**attempt)
+                    logger.warning(
+                        "Embedding rate limited (attempt %s/%s), retrying in %.1fs…",
+                        attempt + 1,
+                        _EMBED_MAX_ATTEMPTS,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                if is_429:
+                    logger.error("Embedding quota exhausted after retries: %s", exc)
+                    use_embedding_fallback = True
+                else:
+                    logger.error("Embedding error: %s", exc)
+                break
+
+        if query_embedding is None:
+            if use_embedding_fallback:
+                logger.warning("Answering without RAG — embedding unavailable for this request.")
+                full_system = SYSTEM_PROMPT
+                if user_context:
+                    full_system += f"\n\nUSER PROFILE:\n{user_context}"
+                full_system += _EMBEDDING_FALLBACK_NOTE
+                return self._generate_reply(message, full_system, history_contents)
             return "I am having trouble processing your question. Please try again."
 
-        relevant_docs, best_score = self._retrieve(query_embedding)
-        logger.debug("Best similarity: %.3f (min=%.2f)", best_score, MIN_RELEVANCE)
-        if best_score < MIN_RELEVANCE:
-            logger.info("Query blocked: LOW_RELEVANCE (score=%.3f)", best_score)
+        topic_cats = _infer_kb_categories(message)
+        if topic_cats:
+            relevant_docs, best_score = self._retrieve_for_categories(
+                query_embedding, topic_cats
+            )
+            min_rel = MIN_RELEVANCE_TOPIC
+            if "sleep" in topic_cats:
+                min_rel = min(min_rel, MIN_RELEVANCE_TOPIC_SLEEP)
+            logger.debug(
+                "Topic-focused retrieval %s: best similarity=%.3f (min=%.2f)",
+                topic_cats,
+                best_score,
+                min_rel,
+            )
+        else:
+            relevant_docs, best_score = self._retrieve(query_embedding)
+            min_rel = MIN_RELEVANCE
+            logger.debug("Best similarity: %.3f (min=%.2f)", best_score, min_rel)
+
+        if best_score < min_rel:
+            logger.info(
+                "Query blocked: LOW_RELEVANCE (score=%.3f, min=%.2f)",
+                best_score,
+                min_rel,
+            )
             return _MSG_LOW_RELEVANCE
 
         knowledge_context = "\n\n".join(
@@ -524,55 +968,12 @@ class RAGService:
             for chunk in relevant_docs
         )
 
-        user_context = self._build_user_context(user_profile, pantry_items or [])
-
         full_system = SYSTEM_PROMPT
         if user_context:
             full_system += f"\n\nUSER PROFILE:\n{user_context}"
         full_system += f"\n\nRELEVANT KNOWLEDGE (use ONLY this):\n{knowledge_context}"
 
-        history_contents: list[types.Content] = []
-        for turn in history[-(MAX_HISTORY * 2) :]:
-            role = turn.get("role") or "user"
-            parts_raw = turn.get("parts") or []
-            texts = [p for p in parts_raw if isinstance(p, str) and p.strip()]
-            if not texts:
-                continue
-            history_contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part(text=p) for p in texts],
-                )
-            )
-
-        last_exc: Exception | None = None
-        for model_name in GENERATION_MODELS:
-            try:
-                chat_session = self._client.chats.create(
-                    model=model_name,
-                    config=types.GenerateContentConfig(
-                        system_instruction=full_system,
-                    ),
-                    history=history_contents,
-                )
-                response = chat_session.send_message(message)
-                out = (response.text or "").strip()
-                if not out:
-                    logger.error("Empty generation from %s", model_name)
-                    return "I ran into a technical issue. Please try again."
-                logger.debug("Generated with model: %s", model_name)
-                return out
-            except Exception as exc:
-                err_str = str(exc)
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    logger.warning("Quota hit on %s, trying next model.", model_name)
-                    last_exc = exc
-                    continue
-                logger.error("Generation error with %s: %s", model_name, exc)
-                return "I ran into a technical issue. Please try again."
-
-        logger.error("All generation models exhausted. Last error: %s", last_exc)
-        return "The AI service is currently at capacity. Please wait a moment and try again."
+        return self._generate_reply(message, full_system, history_contents)
 
 
 rag_service = RAGService()

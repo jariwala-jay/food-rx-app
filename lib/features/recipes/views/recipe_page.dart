@@ -282,14 +282,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
-                  // Chatbot icon temporarily disabled
-                  // IconButton(
-                  //   icon: const Icon(Icons.chat_bubble_outline),
-                  //   iconSize: 24,
-                  //   onPressed: () {
-                  //     Navigator.pushNamed(context, '/chatbot');
-                  //   },
-                  // ),
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    iconSize: 24,
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/chatbot');
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.star_border_rounded),
                     iconSize: 28,

@@ -755,14 +755,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             ),
                             Row(
                               children: [
-                                // Chatbot icon temporarily disabled
-                                // IconButton(
-                                //   icon: const Icon(Icons.chat_bubble_outline),
-                                //   onPressed: () {
-                                //     if (tourProvider.isTourActive) return;
-                                //     Navigator.pushNamed(context, '/chatbot');
-                                //   },
-                                // ),
+                                IconButton(
+                                  icon: const Icon(Icons.chat_bubble_outline),
+                                  onPressed: () {
+                                    if (tourProvider.isTourActive) return;
+                                    Navigator.pushNamed(context, '/chatbot');
+                                  },
+                                ),
                                 Consumer<NotificationManager>(
                                   builder:
                                       (context, notificationManager, child) {
