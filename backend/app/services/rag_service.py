@@ -3,17 +3,26 @@ RAG service — MyFoodRx chatbot.
 
 Uses the google-genai SDK for Gemini embeddings and generation.
 Three-layer guard: keyword pre-filter → similarity threshold → hardened system prompt.
+
+EMBEDDING CACHE: After the first successful embed run, vectors are saved under
+``backend/app/knowledge/`` as ``embeddings_cache.npy`` (float32 matrix) and
+``embeddings_cache_meta.json`` (fingerprint). Later startups load from disk and skip
+embedding API calls. Cache invalidates if chunk count, content hash, or model changes.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import math
 import re
 import unicodedata
+from pathlib import Path
 from typing import Any
 
+import numpy as np
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
@@ -30,6 +39,11 @@ _EMBED_MAX_ATTEMPTS = 4
 # Space out document embedding calls to avoid hitting per-minute embed quotas at startup.
 _EMBED_CHUNK_INTERVAL_SEC = 0.55
 
+# On-disk cache (alongside food_knowledge.py)
+_CACHE_DIR = Path(__file__).resolve().parent.parent / "knowledge"
+_CACHE_NPY = _CACHE_DIR / "embeddings_cache.npy"
+_CACHE_META = _CACHE_DIR / "embeddings_cache_meta.json"
+
 _EMBEDDING_FALLBACK_NOTE = (
     "\n\nNOTE — KNOWLEDGE SEARCH UNAVAILABLE: There are NO retrieved knowledge excerpts this turn. "
     "Say clearly that you could not search the program's reference materials. "
@@ -38,12 +52,13 @@ _EMBEDDING_FALLBACK_NOTE = (
     "Tell the user to ask again later or speak with their clinician for specifics."
 )
 
+# Pinned model IDs only (avoid *-latest aliases — behavior can change without notice).
 GENERATION_MODELS = [
     "models/gemini-2.5-flash",
-    "models/gemini-flash-latest",
-    "models/gemini-flash-lite-latest",
     "models/gemini-2.0-flash",
     "models/gemini-2.0-flash-lite",
+    "models/gemini-1.5-flash",
+    "models/gemini-1.5-flash-8b",
 ]
 
 TOP_K = 4 # knowledge chunks returned per query
@@ -170,6 +185,217 @@ _MSG_LOW_RELEVANCE = (
     '"What can I eat for breakfast on the Diabetes Plate plan?"'
 )
 
+# Suggested questions (starter / follow-up) when JSON generation fails or RAG is offline.
+# Order: condition → hydration → sleep → exercise → food (matches UI contract).
+_DEFAULT_SUGGESTED_QUESTIONS: list[str] = [
+    "What foods fit my diet plan best?",
+    "How much water should I drink daily?",
+    "Does poor sleep affect my health?",
+    "Is walking enough for my goals?",
+    "What breakfast fits my plan?",
+]
+
+_JSON_SUGGESTIONS_SYSTEM = (
+    "You are the MyFoodRx nutrition assistant. "
+    "Output ONLY valid JSON — a single array of exactly 5 strings in the order specified. "
+    "No markdown code fences, no commentary, no extra keys. "
+    "Each string must be a question the user would ask in first person (I, my, me) — not 'you/your'."
+)
+
+# Prompt block: five scaffolded questions tied to USER PROFILE (conditions, diet, goals).
+_STRUCTURED_SUGGESTION_RULES = """
+You MUST return exactly 5 questions in this FIXED ORDER. Each must match the PROFILE ANCHOR below
+(only conditions and diet plans that actually appear — do not invent hypertension or DASH for a
+Diabetes Plate user who has no blood pressure diagnosis).
+
+Use plain, friendly wording (4th–5th grade reading level).
+Each question MUST be short enough for a phone chip: at most 8 words AND at most 70 characters (including spaces).
+Prefer one short line; no long clauses.
+
+VOICING (required):
+- Write every question as if the USER is asking it (first person: I, my, me).
+- Do NOT use "you", "your", or "do you" (wrong: "How much water do you drink?" right: "How much water should I drink?").
+- Do NOT address the user as "you" in any chip.
+
+Order (one question each):
+1) CONDITION — Their real listed condition(s) or clearest need from profile/diet (no extra diseases).
+2) HYDRATION — Fluids/water tied to their condition or assigned diet plan only.
+3) SLEEP — Sleep tied to what their profile actually involves (e.g. blood sugar for diabetes; not BP unless allowed below).
+4) EXERCISE — Movement tied to their conditions/goals only.
+5) FOOD — Must reference ONLY their assigned diet plan from PROFILE ANCHOR (use a readable name like
+   "Diabetes Plate" or "DASH" exactly matching that assignment). Never name a different plan (no DASH if they are on Diabetes Plate).
+
+Do not repeat the same topic in two slots. Do not use identical wording in two questions.
+"""
+
+
+def _suggestion_profile_anchor(user_profile: dict[str, Any] | None) -> str:
+    """
+    Hard constraints so chips do not mention diseases/plans the user does not have
+    (e.g. no blood pressure prompts for Diabetes Plate-only users without hypertension).
+    """
+    if not user_profile:
+        return (
+            "PROFILE ANCHOR:\n"
+            "- No profile loaded. Use neutral healthy-eating questions only.\n"
+            "- Do not name hypertension, diabetes, DASH, or a specific plan unless USER PROFILE lists them.\n"
+        )
+
+    conds = [
+        str(c).strip()
+        for c in (user_profile.get("medicalConditions") or [])
+        if str(c).strip()
+    ]
+    diet_raw = user_profile.get("dietType") or user_profile.get("myPlanType") or ""
+    diet = str(diet_raw).strip()
+    blob = ", ".join(conds).lower()
+    diet_l = diet.lower()
+
+    has_htn = bool(
+        re.search(r"hypertension|high blood pressure|\bhbp\b", blob, re.I)
+    )
+    has_diabetes = bool(
+        re.search(
+            r"diabetes|diabetic|prediabetes|pre-diabetes|"
+            r"\btype\s*1\b|\btype\s*2\b|blood sugar|glucose",
+            blob,
+            re.I,
+        )
+    )
+    has_obesity = bool(re.search(r"obesity|overweight", blob, re.I))
+
+    is_dash_plan = "dash" in diet_l
+    is_diabetes_plan = "diabetes" in diet_l
+    # DASH is blood-pressure-oriented; Diabetes* plans are glucose-oriented.
+    if is_dash_plan:
+        has_htn = True
+    if is_diabetes_plan:
+        has_diabetes = True
+
+    lines = [
+        "PROFILE ANCHOR (obey before all other examples):",
+        f"- Listed health conditions (name ONLY these if any): {', '.join(conds) if conds else '(none listed)'}",
+        f"- Assigned diet plan from app (use this exact label in question 5): {diet or '(none listed)'}",
+    ]
+
+    may_use: list[str] = []
+    must_not: list[str] = []
+
+    if has_diabetes:
+        may_use.append("diabetes, blood sugar, carbs, Diabetes Plate wording if that is their plan")
+    if has_htn or is_dash_plan:
+        may_use.append("blood pressure, sodium, DASH-style eating when plan or conditions match")
+    if has_obesity:
+        may_use.append("weight or healthy weight habits")
+
+    if not has_htn and not is_dash_plan:
+        must_not.append(
+            "blood pressure, hypertension, DASH diet, or sodium-focused questions "
+            "(user has no BP diagnosis and no DASH plan)."
+        )
+    if not has_diabetes and not is_diabetes_plan:
+        must_not.append(
+            "diabetes or blood sugar as the main angle (not in conditions and not a diabetes-type plan)."
+        )
+
+    if may_use:
+        lines.append("- You MAY tie questions to: " + "; ".join(may_use) + ".")
+    else:
+        lines.append(
+            "- No specific chronic angle detected — use general healthy eating and any health goals in profile."
+        )
+    for rule in must_not:
+        lines.append(f"- MUST NOT: {rule}")
+
+    lines.append(
+        "- If the diet plan is Diabetes Plate (or similar), every question should still fit diabetes/blood "
+        "sugar or that plan — not heart/BP unless hypertension is also listed."
+    )
+    if diet:
+        lines.append(
+            f"- Question 5 must mention only this diet plan (or 'my plan' tied to it): {diet}. "
+            "Do not say DASH unless that label includes DASH."
+        )
+
+    return "\n".join(lines) + "\n"
+
+
+def _structured_suggestion_user_message(
+    *,
+    ctx: str,
+    intro: str,
+    extra_context: str = "",
+    user_profile: dict[str, Any] | None = None,
+) -> str:
+    anchor = _suggestion_profile_anchor(user_profile)
+    body = f"{intro.strip()}\n\n{anchor}\nUSER PROFILE:\n{ctx or '(not available)'}\n"
+    if extra_context.strip():
+        body += f"\n{extra_context.strip()}\n"
+    body += _STRUCTURED_SUGGESTION_RULES
+    body += (
+        '\nReturn ONLY a JSON array of 5 strings in that order, first person, e.g. '
+        '["How do I manage my diabetes daily?", "How much water should I drink?", '
+        '"Does poor sleep hurt my blood sugar?", "Is walking enough for me?", '
+        '"What foods fit my Diabetes Plate plan?"]\n'
+    )
+    return body
+
+
+def _clamp_suggestion_text(s: str, max_chars: int = 72) -> str:
+    """Keep chip text readable on narrow phones if the model ignores length limits."""
+    s = " ".join((s or "").split())
+    if len(s) <= max_chars:
+        return s
+    cut = s[: max_chars].rsplit(" ", 1)[0]
+    if len(cut) < 12:
+        cut = s[:max_chars]
+    return cut.rstrip(" ,;:") + "…"
+
+
+def _parse_json_string_array(raw: str) -> list[str]:
+    """Parse model output into a list of non-empty strings."""
+    clean = (raw or "").strip()
+    if clean.startswith("```"):
+        clean = clean.removeprefix("```json").removeprefix("```JSON").removeprefix("```")
+        clean = clean.strip()
+        if "```" in clean:
+            clean = clean.split("```", 1)[0].strip()
+    try:
+        data = json.loads(clean)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for item in data:
+        if isinstance(item, str):
+            s = _clamp_suggestion_text(item.strip())
+            if s:
+                out.append(s)
+    return out[:5]
+
+
+def should_suggest_follow_ups(answer: str) -> bool:
+    """
+    Skip follow-up question generation for canned guardrails, errors, and very short replies.
+    """
+    t = (answer or "").strip()
+    if len(t) < 24:
+        return False
+    prefixes = (
+        "This sounds like a medical emergency",
+        "That sounds like a medical question",
+        "I am the MyFoodRx nutrition assistant, so I can only help",
+        "I am not sure how to connect that question",
+        "I am having trouble connecting right now",
+        "I am having trouble processing your question",
+        "The AI service is currently at capacity",
+        "I ran into a technical issue",
+        "I cannot advise on medications",
+    )
+    return not any(t.startswith(p) for p in prefixes)
+
+
 SYSTEM_PROMPT = """You are the MyFoodRx nutrition assistant. Your ONLY job is to answer questions
 about food, diet, nutrition, and healthy eating related to the conditions in the user's profile.
 
@@ -187,7 +413,7 @@ STRICT SCOPE — you must ONLY answer questions about:
 CONVERSATION MANAGEMENT (greetings, gratitude, and closing — keep these short):
 - Greetings: For "Hi" or "Hello," be warm in one line, then offer help with diet or meals.
 - "How are you?" / "How's it going?": You MUST answer the question first in one short, friendly sentence (e.g. "I'm doing well, thank you for asking!" or "I'm great — thanks for checking in!"). Do not skip this. Do not open with "I'm here to help" or "I'm ready to help" before you answer. Optional: add "How are things on your end?" Then add one sentence pivoting to food or nutrition (how you can help with meals or their plan).
-- Gratitude: If they say "Thank you" or "Thanks," respond warmly (e.g., "You're very welcome!") and ask if they have more nutrition or meal-plan questions. Example tone (vary wording): "You're welcome! Remember, every healthy food choice you make today is a win for your long-term health. Do you have more questions about your meal plan?"
+- Gratitude ONLY (when the user's message is thanks and not a new question): Respond warmly. You MAY include one short encouraging line and invite more questions — this is the ONLY turn where that is allowed. Example tone (vary wording): "You're very welcome! Remember, every healthy food choice you make today is a win for your long-term health. Do you have more questions about your meal plan or healthy eating?" Use the user's name from the profile if it is provided. Do not use that encouraging line on factual answers to other questions.
 - Ending the chat: If they say they have no more questions, "Goodbye," "Bye," "That's all I needed" (with or without "thanks"), or similar, wish them well on their health journey and close warmly. Do not repeat the "I can only help with food..." disclaimer at the end of a successful session.
 - Do not engage in long conversations about feelings or personal life unrelated to food and nutrition.
 
@@ -204,11 +430,12 @@ ABSOLUTE RULES — never break these:
 5. If someone appears to be in a medical emergency, immediately say: "Please call 911 or go to the emergency room."
 6. NEVER discuss: weather, sports teams/scores, movies, politics, technology, finance, or relationships. Exercise and physical activity for health are allowed (see STRICT SCOPE); do not lump them with "sports" refusals. Small talk is limited to CONVERSATION MANAGEMENT (brief greetings, thanks, and goodbyes) only.
 
-LANGUAGE RULES:
-- Write at an 8th-grade reading level. Short sentences. No medical jargon.
-- Use bullet points for lists. Be warm and encouraging.
-- Keep answers to 3-6 sentences or a short list.
-- Always end with one positive, motivating sentence (except pure goodbyes, where a warm closing is enough).
+LANGUAGE RULES (many users have low reading literacy — keep everything very easy to read):
+- Write at about a 4th- to 5th-grade reading level. Use very short sentences (one idea each). Use common, everyday words.
+- Avoid medical jargon. If you must use a health term, say it in simple words right after (e.g. "blood pressure — the force of blood in your arteries").
+- Use short bullet points for lists (a few words per line when possible). Be clear and friendly, but stay factual.
+- Keep the main answer to about 2-4 short sentences, or a small bullet list, unless the user clearly needs more steps.
+- For food, nutrition, sleep, exercise, or health-education answers: STOP when you have answered the question. Do NOT add motivational closings, cheerleading, or invitations like "Keep up the great work," "Feel free to enjoy it often," "Do you have any other questions about…?" — those belong ONLY in Gratitude (thank-you) or Ending-the-chat in CONVERSATION MANAGEMENT, not after every reply.
 
 ONLY use information from the RELEVANT KNOWLEDGE section below. Do not make up facts.
 
@@ -463,6 +690,16 @@ def _skip_rag_polite_chat(message: str) -> bool:
     return any(rx.fullmatch(normalized) for rx in _POLITE_CHAT_REGEX)
 
 
+def is_session_closing(message: str) -> bool:
+    """
+    True when the user is ending small talk (thanks, bye, ok, etc.).
+
+    Same behavior as :func:`_skip_rag_polite_chat` — one implementation so
+    routers and clients stay aligned with the RAG fast path.
+    """
+    return _skip_rag_polite_chat(message)
+
+
 def _history_to_contents(history: list[dict[str, Any]]) -> list[types.Content]:
     history_contents: list[types.Content] = []
     for turn in history[-(MAX_HISTORY * 2) :]:
@@ -637,6 +874,97 @@ def _log_chunk_preview(
             )
 
 
+def _chunks_content_sha256(chunks: list[dict[str, str | int]]) -> str:
+    """Stable hash of all chunk identities + text — invalidates cache on any KB edit."""
+    h = hashlib.sha256()
+    for c in chunks:
+        h.update(str(c["doc_id"]).encode())
+        h.update(b"\0")
+        h.update(str(c.get("chunk_index", 0)).encode())
+        h.update(b"\0")
+        h.update(str(c.get("text", "")).encode())
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+def _cache_fingerprint(chunks: list[dict[str, str | int]]) -> dict[str, Any]:
+    return {
+        "count": len(chunks),
+        "chunks_sha256": _chunks_content_sha256(chunks),
+        "embedding_model": EMBEDDING_MODEL,
+    }
+
+
+def _load_embedding_cache(
+    chunks: list[dict[str, str | int]],
+) -> list[list[float]] | None:
+    if not _CACHE_NPY.exists() or not _CACHE_META.exists():
+        logger.info("Embedding cache: not found — will embed from scratch.")
+        return None
+    try:
+        meta = json.loads(_CACHE_META.read_text(encoding="utf-8"))
+        fp = _cache_fingerprint(chunks)
+        if meta.get("count") != fp["count"]:
+            logger.warning(
+                "Embedding cache invalid: chunk count changed (%s → %s). Re-embedding.",
+                meta.get("count"),
+                fp["count"],
+            )
+            return None
+        if meta.get("chunks_sha256") != fp["chunks_sha256"]:
+            logger.warning(
+                "Embedding cache invalid: knowledge chunks changed. Re-embedding.",
+            )
+            return None
+        if meta.get("embedding_model") != fp["embedding_model"]:
+            logger.warning(
+                "Embedding cache invalid: model changed (%s → %s). Re-embedding.",
+                meta.get("embedding_model"),
+                fp["embedding_model"],
+            )
+            return None
+        matrix = np.load(str(_CACHE_NPY))
+        if matrix.shape[0] != len(chunks):
+            logger.warning(
+                "Embedding cache invalid: row count mismatch (%s vs %s). Re-embedding.",
+                matrix.shape[0],
+                len(chunks),
+            )
+            return None
+        embeddings = [matrix[i].tolist() for i in range(matrix.shape[0])]
+        logger.info(
+            "Embedding cache loaded from disk — %d embeddings, shape %s. "
+            "No Gemini embedding API calls needed at startup.",
+            len(embeddings),
+            matrix.shape,
+        )
+        return embeddings
+    except Exception as exc:
+        logger.warning("Embedding cache load failed (%s). Will re-embed.", exc)
+        return None
+
+
+def _save_embedding_cache(
+    chunks: list[dict[str, str | int]],
+    embeddings: list[list[float]],
+) -> None:
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        matrix = np.array(embeddings, dtype=np.float32)
+        np.save(str(_CACHE_NPY), matrix)
+        _CACHE_META.write_text(
+            json.dumps(_cache_fingerprint(chunks), indent=2),
+            encoding="utf-8",
+        )
+        logger.info(
+            "Embedding cache saved → %s  shape=%s",
+            _CACHE_NPY,
+            matrix.shape,
+        )
+    except Exception as exc:
+        logger.error("Failed to save embedding cache: %s", exc)
+
+
 class RAGService:
     """Singleton RAG service. Call initialize() once at app startup via lifespan."""
 
@@ -663,6 +991,18 @@ class RAGService:
 
         self._chunks = build_chunks(KNOWLEDGE_DOCS)
         _log_chunk_preview(self._chunks, sample_per_doc=2)
+
+        cached = _load_embedding_cache(self._chunks)
+        if cached is not None:
+            self._chunk_embeddings = cached
+            self._ready = True
+            logger.info(
+                "RAG service ready (from cache) — %d chunks across %d documents.",
+                len(self._chunks),
+                len(KNOWLEDGE_DOCS),
+            )
+            return
+
         logger.info(
             "Embedding %d chunks from %d docs with %s …",
             len(self._chunks),
@@ -683,7 +1023,9 @@ class RAGService:
                     result = client.models.embed_content(
                         model=EMBEDDING_MODEL,
                         contents=text,
-                        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                        config=types.EmbedContentConfig(
+                            task_type="RETRIEVAL_DOCUMENT",
+                        ),
                     )
                     emb_list = result.embeddings or []
                     values = emb_list[0].values if emb_list else None
@@ -700,10 +1042,10 @@ class RAGService:
                     err_str = str(exc)
                     is_429 = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
                     if is_429 and attempt < 5:
-                        delay = min(12.0, 2.0 * (2**attempt))
+                        delay = min(120.0, 15.0 * (2**attempt))
                         logger.warning(
                             "Embedding chunk '%s[%s]' rate limited (attempt %s/6), "
-                            "retrying in %.1fs…",
+                            "retrying in %.0fs…",
                             chunk.get("doc_id"),
                             chunk.get("chunk_index"),
                             attempt + 1,
@@ -721,6 +1063,8 @@ class RAGService:
             embeddings.append(vec if vec else [0.0] * EMBEDDING_DIM_FALLBACK)
 
         self._chunk_embeddings = embeddings
+        _save_embedding_cache(self._chunks, embeddings)
+
         self._ready = True
         logger.info(
             "RAG service ready — %d chunks embedded across %d documents.",
@@ -838,9 +1182,23 @@ class RAGService:
                     logger.warning("Quota hit on %s, trying next model.", model_name)
                     last_exc = exc
                     continue
-                if isinstance(exc, ClientError) and exc.code == 404:
+                code = getattr(exc, "code", None)
+                if isinstance(exc, ClientError) and code == 404:
                     logger.warning(
                         "Model not available (%s): %s — trying next model.",
+                        model_name,
+                        exc,
+                    )
+                    last_exc = exc
+                    continue
+                # High demand / transient outage — same as "try another model in the list"
+                if (
+                    code == 503
+                    or "503" in err_str
+                    or "UNAVAILABLE" in err_str.upper()
+                ):
+                    logger.warning(
+                        "Model overloaded or unavailable (%s): %s — trying next model.",
                         model_name,
                         exc,
                     )
@@ -974,6 +1332,72 @@ class RAGService:
         full_system += f"\n\nRELEVANT KNOWLEDGE (use ONLY this):\n{knowledge_context}"
 
         return self._generate_reply(message, full_system, history_contents)
+
+    def generate_starter_questions(
+        self,
+        user_profile: dict[str, Any] | None,
+        pantry_items: list[dict],
+    ) -> list[str]:
+        """Profile-based starters: condition, hydration, sleep, exercise, food (fixed order)."""
+        if not self._ready or self._client is None:
+            return list(_DEFAULT_SUGGESTED_QUESTIONS)
+
+        ctx = self._build_user_context(user_profile, pantry_items)
+        user_msg = _structured_suggestion_user_message(
+            ctx=ctx,
+            intro=(
+                "Generate 5 starter questions for someone opening the MyFoodRx chat. "
+                "They want help with eating and lifestyle for their health."
+            ),
+            user_profile=user_profile,
+        )
+        try:
+            raw = self._generate_reply(
+                user_msg,
+                _JSON_SUGGESTIONS_SYSTEM,
+                [],
+            )
+            parsed = _parse_json_string_array(raw)
+            return parsed if len(parsed) >= 3 else list(_DEFAULT_SUGGESTED_QUESTIONS)
+        except Exception as exc:
+            logger.warning("Starter question generation failed: %s", exc)
+            return list(_DEFAULT_SUGGESTED_QUESTIONS)
+
+    def generate_follow_up_questions(
+        self,
+        original_question: str,
+        answer: str,
+        user_profile: dict[str, Any] | None,
+    ) -> list[str]:
+        """Follow-ups after a reply: same five-bucket scaffold, tied to profile + conversation."""
+        if not self._ready or self._client is None:
+            return list(_DEFAULT_SUGGESTED_QUESTIONS)
+
+        ctx = self._build_user_context(user_profile, [])
+        snippet = (answer or "")[:500]
+        extra = (
+            f'Recent user question: "{original_question.strip()}"\n'
+            f"Recent assistant answer (excerpt):\n{snippet}\n"
+            "Where it fits naturally, align questions with this topic — but still cover all five buckets "
+            "in order (condition, hydration, sleep, exercise, food) and stay anchored to the USER PROFILE."
+        )
+        user_msg = _structured_suggestion_user_message(
+            ctx=ctx,
+            intro="Generate the user's next 5 suggested questions after this exchange.",
+            extra_context=extra,
+            user_profile=user_profile,
+        )
+        try:
+            raw = self._generate_reply(
+                user_msg,
+                _JSON_SUGGESTIONS_SYSTEM,
+                [],
+            )
+            parsed = _parse_json_string_array(raw)
+            return parsed if len(parsed) >= 3 else list(_DEFAULT_SUGGESTED_QUESTIONS)
+        except Exception as exc:
+            logger.warning("Follow-up question generation failed: %s", exc)
+            return list(_DEFAULT_SUGGESTED_QUESTIONS)
 
 
 rag_service = RAGService()

@@ -120,7 +120,7 @@ class TipProvider with ChangeNotifier {
               userId: (tip.getViewCountForUser(userId) + 1),
             },
           );
-          await _tipService.updateTip(updatedTip);
+          await _tipService.updateTip(updatedTip, userId);
         } catch (e) {
           print('Failed to update tip ${tip.id}: $e');
           // Continue with other tips even if one fails
@@ -149,7 +149,7 @@ class TipProvider with ChangeNotifier {
             userId: (tip.getViewCountForUser(userId) + 1),
           },
         );
-        await _tipService.updateTip(updatedTip);
+        await _tipService.updateTip(updatedTip, userId);
         _shownTips[index] = updatedTip;
         _notifyListeners();
       }

@@ -58,6 +58,10 @@ app.*.map.json
 # Python venv (local backend)
 backend/.venv/
 
+# RAG embedding cache (local; regenerated on KB / model change)
+backend/app/knowledge/embeddings_cache.npy
+backend/app/knowledge/embeddings_cache_meta.json
+
 # Environment variables
 .env
 

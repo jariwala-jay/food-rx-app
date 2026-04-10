@@ -16,6 +16,8 @@ class _ChatbotPageState extends State<ChatbotPage>
   final _controller = TextEditingController();
   final List<dynamic> _messages = [];
   bool _isLoading = false;
+  /// Suggested questions (starters from GET /starter-questions or follow-ups from chat).
+  List<String> _suggestionChips = [];
   late AnimationController _typingAnimController;
   final ScrollController _scrollController = ScrollController();
 
@@ -32,6 +34,13 @@ class _ChatbotPageState extends State<ChatbotPage>
 
     // Initial scroll to bottom
     _scrollToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStarterQuestions());
+  }
+
+  Future<void> _loadStarterQuestions() async {
+    final qs = await RagChatbotService.fetchStarterQuestions();
+    if (!mounted || qs.isEmpty) return;
+    setState(() => _suggestionChips = qs);
   }
 
   @override
@@ -55,10 +64,11 @@ class _ChatbotPageState extends State<ChatbotPage>
   }
 
   void _addBotMessage(String message) {
+    final sanitized = _stripMarkdownTokens(message);
     if (!mounted) return;
     setState(() {
       _messages.add({
-        'text': message,
+        'text': sanitized,
         'isUser': false,
         'time': DateTime.now(),
       });
@@ -68,10 +78,111 @@ class _ChatbotPageState extends State<ChatbotPage>
     _scrollToBottom();
   }
 
-  void _sendMessage() async {
-    String message = _controller.text.trim();
-    if (message.isEmpty) return;
+  /// Remove common Markdown syntax so plain chat bubbles remain readable.
+  String _stripMarkdownTokens(String input) {
+    var text = input;
 
+    // Headers, blockquotes, and list markers.
+    text = text.replaceAllMapped(
+      RegExp(r'^\s{0,3}#{1,6}\s*', multiLine: true),
+      (_) => '',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'^\s*>+\s?', multiLine: true),
+      (_) => '',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'^\s*[-*+]\s+', multiLine: true),
+      (_) => '• ',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'^\s*\d+\.\s+', multiLine: true),
+      (_) => '• ',
+    );
+
+    // Links: [label](url) -> label
+    text = text.replaceAllMapped(
+      RegExp(r'\[([^\]]+)\]\(([^)]+)\)'),
+      (m) => m.group(1) ?? '',
+    );
+
+    // Emphasis and code markers.
+    text = text.replaceAll('**', '');
+    text = text.replaceAll('__', '');
+    text = text.replaceAll('`', '');
+    text = text.replaceAll('*', '');
+    text = text.replaceAll('_', '');
+
+    // Collapse repeated blank lines/spaces.
+    text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    text = text.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+    return text.trim();
+  }
+
+  /// Build readable bot text with lightweight formatting:
+  /// - keeps bullets
+  /// - bolds short "Subheading:" labels (e.g., "Warm up first:")
+  Widget _buildBotText(String text, TextStyle baseStyle) {
+    final spans = <InlineSpan>[];
+    final lines = text.split('\n');
+
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      String? linePrefix;
+      final bulletMatch = RegExp(r'^\s*•\s+(.*)$').firstMatch(line);
+      final numberMatch = RegExp(r'^\s*(\d+[\.\)])\s+(.*)$').firstMatch(line);
+      final content = bulletMatch != null
+          ? bulletMatch.group(1) ?? ''
+          : numberMatch != null
+              ? numberMatch.group(2) ?? ''
+              : line.trim();
+
+      if (bulletMatch != null) {
+        linePrefix = '• ';
+      } else if (numberMatch != null) {
+        linePrefix = '${numberMatch.group(1)} ';
+      }
+      if (linePrefix != null) {
+        spans.add(TextSpan(text: linePrefix, style: baseStyle));
+      }
+
+      final colonIndex = content.indexOf(':');
+      final canBoldLabel = colonIndex > 0 && colonIndex <= 30;
+      if (canBoldLabel) {
+        final label = content.substring(0, colonIndex + 1).trim();
+        final rest = content.substring(colonIndex + 1).trimLeft();
+        spans.add(
+          TextSpan(
+            text: label,
+            style: baseStyle.copyWith(fontWeight: FontWeight.w700),
+          ),
+        );
+        if (rest.isNotEmpty) {
+          spans.add(TextSpan(text: ' $rest', style: baseStyle));
+        }
+      } else {
+        spans.add(TextSpan(text: content, style: baseStyle));
+      }
+
+      if (i < lines.length - 1) {
+        spans.add(TextSpan(text: '\n', style: baseStyle));
+      }
+    }
+
+    return RichText(
+      text: TextSpan(children: spans, style: baseStyle),
+    );
+  }
+
+  void _sendMessage() {
+    final message = _controller.text.trim();
+    if (message.isEmpty) return;
+    _controller.clear();
+    _sendUserText(message);
+  }
+
+  Future<void> _sendUserText(String message) async {
+    if (message.isEmpty) return;
     if (!mounted) return;
     setState(() {
       _messages.add({
@@ -79,37 +190,76 @@ class _ChatbotPageState extends State<ChatbotPage>
         'isUser': true,
         'time': DateTime.now(),
       });
-      _controller.clear();
+      _suggestionChips = [];
       _isLoading = true;
     });
 
-    // Scroll to the bottom immediately after user message is added
     _scrollToBottom();
 
     try {
-      if (mounted) await Future.delayed(const Duration(milliseconds: 500));
-
+      if (mounted) await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
-      final response = await RagChatbotService.sendMessage(message);
-
+      final reply = await RagChatbotService.sendMessage(message);
       if (!mounted) return;
-      _addBotMessage(response);
+      _addBotMessage(reply.response);
+      setState(() {
+        _suggestionChips =
+            reply.sessionClosing ? <String>[] : reply.followUpQuestions;
+      });
     } catch (e) {
       if (mounted) {
         _addBotMessage(
             "Sorry, I'm having technical difficulties. Please try again later.");
-        print("Error sending message to Dialogflow: $e");
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
-
-    // Scroll to the bottom again after the bot responds
     _scrollToBottom();
+  }
+
+  /// Full-width tappable rows so long questions wrap instead of clipping (ActionChip truncates).
+  Widget _buildSuggestionChips() {
+    if (_suggestionChips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _suggestionChips.map((q) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Material(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade400),
+              ),
+              child: InkWell(
+                onTap: _isLoading ? null : () => _sendUserText(q),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Text(
+                    q,
+                    textAlign: TextAlign.left,
+                    softWrap: true,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.35,
+                      color: Color(0xFF333333),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   Widget _buildTypingIndicator() {
@@ -269,14 +419,23 @@ class _ChatbotPageState extends State<ChatbotPage>
                               ? Border.all(color: Colors.grey.withOpacity(0.2))
                               : null,
                         ),
-                        child: Text(
-                          message['text'],
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: isUser ? Colors.white : Colors.black87,
-                            height: 1.3,
-                          ),
-                        ),
+                        child: isUser
+                            ? Text(
+                                message['text'],
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                  height: 1.3,
+                                ),
+                              )
+                            : _buildBotText(
+                                message['text'],
+                                const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black87,
+                                  height: 1.3,
+                                ),
+                              ),
                       ),
                       if (isUser)
                         Positioned(
@@ -310,7 +469,8 @@ class _ChatbotPageState extends State<ChatbotPage>
               },
             ),
           ),
-          const SizedBox(height: 20),
+          _buildSuggestionChips(),
+          const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,

@@ -32,7 +32,18 @@ class TipService {
     }
   }
 
-  Future<void> updateTip(Tip tip) async {
-    throw UnimplementedError('Update tip via API not implemented');
+  /// Persists engagement for [userId] only (server merges; does not trust full maps).
+  Future<void> updateTip(Tip tip, String userId) async {
+    final last = tip.getLastShownForUser(userId);
+    final count = tip.getViewCountForUser(userId);
+    final body = <String, dynamic>{
+      if (last != null) 'lastShownAt': last.toIso8601String(),
+      'viewCount': count,
+    };
+    await ApiClient.patch(
+      '/tips/${Uri.encodeComponent(tip.id)}',
+      body: body,
+      requireAuth: true,
+    );
   }
 }
