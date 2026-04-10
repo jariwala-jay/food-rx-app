@@ -28,19 +28,28 @@ class _ChatbotPageState extends State<ChatbotPage>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat();
-
-    _addBotMessage(
-        "Hey! Let's talk about food, nutrition, and healthy eating. What do you need help with?");
-
-    // Initial scroll to bottom
-    _scrollToBottom();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStarterQuestions());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialMessage());
   }
 
-  Future<void> _loadStarterQuestions() async {
-    final qs = await RagChatbotService.fetchStarterQuestions();
-    if (!mounted || qs.isEmpty) return;
-    setState(() => _suggestionChips = qs);
+  Future<void> _loadInitialMessage() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final reply = await RagChatbotService.sendMessage('start');
+      if (!mounted) return;
+      _addBotMessage(reply.response);
+      setState(() {
+        _suggestionChips = reply.followUpQuestions;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _addBotMessage(
+          "Hey! Let's talk about food, nutrition, and healthy eating. What do you need help with?");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override

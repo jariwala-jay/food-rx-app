@@ -57,8 +57,6 @@ GENERATION_MODELS = [
     "models/gemini-2.5-flash",
     "models/gemini-2.0-flash",
     "models/gemini-2.0-flash-lite",
-    "models/gemini-1.5-flash",
-    "models/gemini-1.5-flash-8b",
 ]
 
 TOP_K = 4 # knowledge chunks returned per query
