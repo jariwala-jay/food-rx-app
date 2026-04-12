@@ -1,7 +1,7 @@
 """
 RAG service — MyFoodRx chatbot.
 
-Uses the google-genai SDK for Gemini embeddings and generation.
+Uses Ollama (local) for embeddings and generation via its REST API.
 Three-layer guard: keyword pre-filter → similarity threshold → hardened system prompt.
 
 EMBEDDING CACHE: After the first successful embed run, vectors are saved under
@@ -22,22 +22,17 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+import httpx
 import numpy as np
-from google import genai
-from google.genai import types
-from google.genai.errors import ClientError
 
 from app.config import settings
 from app.knowledge.food_knowledge import KNOWLEDGE_DOCS
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "models/gemini-embedding-001"
-EMBEDDING_DIM_FALLBACK = 3072
-# Retries when embed API returns 429 (free tier often rate-limits per minute/day).
-_EMBED_MAX_ATTEMPTS = 4
-# Space out document embedding calls to avoid hitting per-minute embed quotas at startup.
-_EMBED_CHUNK_INTERVAL_SEC = 0.55
+EMBEDDING_MODEL = settings.ollama_embed_model  # default: "nomic-embed-text" (768 dims)
+EMBEDDING_DIM_FALLBACK = 768
+_EMBED_MAX_ATTEMPTS = 3
 
 # On-disk cache (alongside food_knowledge.py)
 _CACHE_DIR = Path(__file__).resolve().parent.parent / "knowledge"
@@ -52,12 +47,6 @@ _EMBEDDING_FALLBACK_NOTE = (
     "Tell the user to ask again later or speak with their clinician for specifics."
 )
 
-# Pinned model IDs only (avoid *-latest aliases — behavior can change without notice).
-GENERATION_MODELS = [
-    "models/gemini-2.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.0-flash-lite",
-]
 
 TOP_K = 4 # knowledge chunks returned per query
 MAX_HISTORY = 6 # conversation turns kept in context (pairs)
@@ -698,21 +687,16 @@ def is_session_closing(message: str) -> bool:
     return _skip_rag_polite_chat(message)
 
 
-def _history_to_contents(history: list[dict[str, Any]]) -> list[types.Content]:
-    history_contents: list[types.Content] = []
+def _history_to_contents(history: list[dict[str, Any]]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
     for turn in history[-(MAX_HISTORY * 2) :]:
         role = turn.get("role") or "user"
         parts_raw = turn.get("parts") or []
         texts = [p for p in parts_raw if isinstance(p, str) and p.strip()]
         if not texts:
             continue
-        history_contents.append(
-            types.Content(
-                role=role,
-                parts=[types.Part(text=p) for p in texts],
-            )
-        )
-    return history_contents
+        result.append({"role": role, "content": " ".join(texts)})
+    return result
 
 
 def classify_query(message: str) -> str:
@@ -932,7 +916,7 @@ def _load_embedding_cache(
         embeddings = [matrix[i].tolist() for i in range(matrix.shape[0])]
         logger.info(
             "Embedding cache loaded from disk — %d embeddings, shape %s. "
-            "No Gemini embedding API calls needed at startup.",
+            "No Ollama embedding calls needed at startup.",
             len(embeddings),
             matrix.shape,
         )
@@ -963,29 +947,58 @@ def _save_embedding_cache(
         logger.error("Failed to save embedding cache: %s", exc)
 
 
+def _ollama_embed(text: str) -> list[float]:
+    """Call Ollama /api/embeddings synchronously (run via asyncio.to_thread)."""
+    resp = httpx.post(
+        f"{settings.ollama_base_url}/api/embeddings",
+        json={"model": settings.ollama_embed_model, "prompt": text},
+        timeout=60.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
+
+def _ollama_chat(messages: list[dict[str, str]], system: str) -> str:
+    """Call Ollama /api/chat synchronously. System prompt is prepended as a system message."""
+    full_messages = [{"role": "system", "content": system}] + messages
+    resp = httpx.post(
+        f"{settings.ollama_base_url}/api/chat",
+        json={
+            "model": settings.ollama_generation_model,
+            "messages": full_messages,
+            "stream": False,
+        },
+        timeout=120.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["message"]["content"]
+
+
 class RAGService:
     """Singleton RAG service. Call initialize() once at app startup via lifespan."""
 
     def __init__(self) -> None:
         self._ready = False
-        self._client: genai.Client | None = None
         self._chunks: list[dict[str, str | int]] = []
         self._chunk_embeddings: list[list[float]] = []
 
     async def initialize(self) -> None:
-        api_key = settings.gemini_api_key
-        if not api_key:
-            logger.warning(
-                "GEMINI_API_KEY not set — chatbot will use fallback responses."
-            )
-            return
         if not KNOWLEDGE_DOCS:
             logger.warning(
                 "KNOWLEDGE_DOCS is empty in food_knowledge.py — add documents before using RAG."
             )
             return
 
-        self._client = genai.Client(api_key=api_key)
+        # Verify Ollama is reachable before doing any work.
+        try:
+            httpx.get(f"{settings.ollama_base_url}/api/tags", timeout=5.0).raise_for_status()
+        except Exception as exc:
+            logger.warning(
+                "Ollama not reachable at %s: %s — chatbot will use fallback responses.",
+                settings.ollama_base_url,
+                exc,
+            )
+            return
 
         self._chunks = build_chunks(KNOWLEDGE_DOCS)
         _log_chunk_preview(self._chunks, sample_per_doc=2)
@@ -1009,45 +1022,25 @@ class RAGService:
         )
 
         embeddings: list[list[float]] = []
-        client = self._client
-        assert client is not None
         for idx, chunk in enumerate(self._chunks):
             text = f"{chunk['title']}. {chunk['text']}"
             vec: list[float] | None = None
-            for attempt in range(6):
+            for attempt in range(_EMBED_MAX_ATTEMPTS):
                 try:
-                    if idx > 0 and attempt == 0:
-                        await asyncio.sleep(_EMBED_CHUNK_INTERVAL_SEC)
-                    result = client.models.embed_content(
-                        model=EMBEDDING_MODEL,
-                        contents=text,
-                        config=types.EmbedContentConfig(
-                            task_type="RETRIEVAL_DOCUMENT",
-                        ),
-                    )
-                    emb_list = result.embeddings or []
-                    values = emb_list[0].values if emb_list else None
-                    if values:
-                        vec = list(values)
-                    else:
-                        logger.error(
-                            "No embedding values for chunk '%s[%s]'",
-                            chunk.get("doc_id"),
-                            chunk.get("chunk_index"),
-                        )
+                    vec = await asyncio.to_thread(_ollama_embed, text)
                     break
                 except Exception as exc:
-                    err_str = str(exc)
-                    is_429 = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                    if is_429 and attempt < 5:
-                        delay = min(120.0, 15.0 * (2**attempt))
+                    if attempt < _EMBED_MAX_ATTEMPTS - 1:
+                        delay = 2.0 ** attempt
                         logger.warning(
-                            "Embedding chunk '%s[%s]' rate limited (attempt %s/6), "
-                            "retrying in %.0fs…",
+                            "Embedding chunk '%s[%s]' failed (attempt %s/%s), "
+                            "retrying in %.1fs: %s",
                             chunk.get("doc_id"),
                             chunk.get("chunk_index"),
                             attempt + 1,
+                            _EMBED_MAX_ATTEMPTS,
                             delay,
+                            exc,
                         )
                         await asyncio.sleep(delay)
                         continue
@@ -1057,7 +1050,6 @@ class RAGService:
                         chunk.get("chunk_index"),
                         exc,
                     )
-                    break
             embeddings.append(vec if vec else [0.0] * EMBEDDING_DIM_FALLBACK)
 
         self._chunk_embeddings = embeddings
@@ -1153,60 +1145,19 @@ class RAGService:
         self,
         message: str,
         full_system: str,
-        history_contents: list[types.Content],
+        history_contents: list[dict[str, str]],
     ) -> str:
-        client = self._client
-        assert client is not None
-        last_exc: Exception | None = None
-        for model_name in GENERATION_MODELS:
-            try:
-                chat_session = client.chats.create(
-                    model=model_name,
-                    config=types.GenerateContentConfig(
-                        system_instruction=full_system,
-                    ),
-                    history=history_contents,
-                )
-                response = chat_session.send_message(message)
-                out = (response.text or "").strip()
-                if not out:
-                    logger.error("Empty generation from %s", model_name)
-                    return "I ran into a technical issue. Please try again."
-                logger.debug("Generated with model: %s", model_name)
-                return out
-            except Exception as exc:
-                err_str = str(exc)
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    logger.warning("Quota hit on %s, trying next model.", model_name)
-                    last_exc = exc
-                    continue
-                code = getattr(exc, "code", None)
-                if isinstance(exc, ClientError) and code == 404:
-                    logger.warning(
-                        "Model not available (%s): %s — trying next model.",
-                        model_name,
-                        exc,
-                    )
-                    last_exc = exc
-                    continue
-                # High demand / transient outage — same as "try another model in the list"
-                if (
-                    code == 503
-                    or "503" in err_str
-                    or "UNAVAILABLE" in err_str.upper()
-                ):
-                    logger.warning(
-                        "Model overloaded or unavailable (%s): %s — trying next model.",
-                        model_name,
-                        exc,
-                    )
-                    last_exc = exc
-                    continue
-                logger.error("Generation error with %s: %s", model_name, exc)
+        messages = list(history_contents) + [{"role": "user", "content": message}]
+        try:
+            out = _ollama_chat(messages, full_system).strip()
+            if not out:
+                logger.error("Empty generation from Ollama model %s", settings.ollama_generation_model)
                 return "I ran into a technical issue. Please try again."
-
-        logger.error("All generation models exhausted. Last error: %s", last_exc)
-        return "The AI service is currently at capacity. Please wait a moment and try again."
+            logger.debug("Generated with Ollama model: %s", settings.ollama_generation_model)
+            return out
+        except Exception as exc:
+            logger.error("Generation error with Ollama model %s: %s", settings.ollama_generation_model, exc)
+            return "I ran into a technical issue. Please try again."
 
     async def chat(
         self,
@@ -1226,7 +1177,7 @@ class RAGService:
             logger.info("Query blocked: OFF_TOPIC")
             return _MSG_OFFTOPIC
 
-        if not self._ready or self._client is None:
+        if not self._ready:
             return "I am having trouble connecting right now. Please try again in a moment."
 
         history_contents = _history_to_contents(history)
@@ -1242,43 +1193,27 @@ class RAGService:
                 full_system += _HOW_ARE_YOU_NOTE
             return self._generate_reply(message, full_system, history_contents)
 
-        client = self._client
         text_for_embed = _embedding_text_for_retrieval(message)
         query_embedding: list[float] | None = None
         use_embedding_fallback = False
         for attempt in range(_EMBED_MAX_ATTEMPTS):
             try:
-                q_result = client.models.embed_content(
-                    model=EMBEDDING_MODEL,
-                    contents=text_for_embed,
-                    config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
-                )
-                q_emb = q_result.embeddings or []
-                vec = q_emb[0].values if q_emb else None
-                if vec:
-                    query_embedding = list(vec)
-                else:
-                    logger.error("Query embedding returned no values")
-                    use_embedding_fallback = True
+                query_embedding = await asyncio.to_thread(_ollama_embed, text_for_embed)
                 break
             except Exception as exc:
-                err_str = str(exc)
-                is_429 = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
-                if is_429 and attempt < _EMBED_MAX_ATTEMPTS - 1:
-                    delay = min(8.0, 2.0**attempt)
+                if attempt < _EMBED_MAX_ATTEMPTS - 1:
+                    delay = 2.0 ** attempt
                     logger.warning(
-                        "Embedding rate limited (attempt %s/%s), retrying in %.1fs…",
+                        "Query embedding failed (attempt %s/%s), retrying in %.1fs: %s",
                         attempt + 1,
                         _EMBED_MAX_ATTEMPTS,
                         delay,
+                        exc,
                     )
                     await asyncio.sleep(delay)
                     continue
-                if is_429:
-                    logger.error("Embedding quota exhausted after retries: %s", exc)
-                    use_embedding_fallback = True
-                else:
-                    logger.error("Embedding error: %s", exc)
+                logger.error("Embedding error after retries: %s", exc)
+                use_embedding_fallback = True
                 break
 
         if query_embedding is None:
@@ -1337,7 +1272,7 @@ class RAGService:
         pantry_items: list[dict],
     ) -> list[str]:
         """Profile-based starters: condition, hydration, sleep, exercise, food (fixed order)."""
-        if not self._ready or self._client is None:
+        if not self._ready:
             return list(_DEFAULT_SUGGESTED_QUESTIONS)
 
         ctx = self._build_user_context(user_profile, pantry_items)
@@ -1368,7 +1303,7 @@ class RAGService:
         user_profile: dict[str, Any] | None,
     ) -> list[str]:
         """Follow-ups after a reply: same five-bucket scaffold, tied to profile + conversation."""
-        if not self._ready or self._client is None:
+        if not self._ready:
             return list(_DEFAULT_SUGGESTED_QUESTIONS)
 
         ctx = self._build_user_context(user_profile, [])

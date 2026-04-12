@@ -22,8 +22,10 @@ class Settings(BaseSettings):
     firebase_service_account_b64: str = ""
     firebase_service_account_json_base64: str = ""
 
-    # RAG chatbot (Gemini): used for embeddings and generation
-    gemini_api_key: str = ""
+    # RAG chatbot (Ollama): used for embeddings and generation
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_embed_model: str = "nomic-embed-text"
+    ollama_generation_model: str = "llama3.2"
 
     class Config:
         env_file = "../.env"  # Read from project root .env (shared with Flutter)
