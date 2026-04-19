@@ -865,6 +865,10 @@ class AppSearchField extends StatelessWidget {
   final FocusNode? focusNode;
   final bool autocorrect;
   final bool enableSuggestions;
+  final double? height;
+  final double? fontSize;
+  final bool tightPrefix;
+  final bool unfocusOnTapOutside;
 
   const AppSearchField({
     super.key,
@@ -875,12 +879,24 @@ class AppSearchField extends StatelessWidget {
     this.focusNode,
     this.autocorrect = true,
     this.enableSuggestions = true,
+    this.height,
+    this.fontSize,
+    this.tightPrefix = false,
+    this.unfocusOnTapOutside = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final h = height ?? 50;
+    final fs = fontSize ?? 16;
+    final iconSize = (fs + 4).clamp(18.0, 24.0);
+    // Tight prefix: icon left-aligned so typed text sits close to the glass.
+    final double prefixLeftInset = tightPrefix ? 8.0 : 0;
+    final double gapIconToText = tightPrefix ? 4.0 : 0;
+    final double prefixSlotWidth =
+        tightPrefix ? prefixLeftInset + iconSize + gapIconToText : 0;
     return Container(
-      height: 50,
+      height: h,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -891,26 +907,60 @@ class AppSearchField extends StatelessWidget {
         onChanged: onChanged,
         autocorrect: autocorrect,
         enableSuggestions: enableSuggestions,
+        textAlignVertical: TextAlignVertical.center,
+        strutStyle: tightPrefix
+            ? StrutStyle(
+                fontSize: fs,
+                height: 1.05,
+                leading: 0,
+                forceStrutHeight: true,
+              )
+            : null,
+        onTapOutside: unfocusOnTapOutside
+            ? (_) => FocusManager.instance.primaryFocus?.unfocus()
+            : null,
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(
             color: Colors.grey[400],
-            fontSize: 16,
+            fontSize: fs,
           ),
-          prefixIcon: Icon(
-            Icons.search,
-            color: Colors.grey[400],
-          ),
+          prefixIcon: tightPrefix
+              ? SizedBox(
+                  width: prefixSlotWidth,
+                  height: h,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: prefixLeftInset),
+                      child: Icon(
+                        Icons.search,
+                        color: Colors.grey[400],
+                        size: iconSize,
+                      ),
+                    ),
+                  ),
+                )
+              : Icon(
+                  Icons.search,
+                  color: Colors.grey[400],
+                ),
+          prefixIconConstraints: tightPrefix
+              ? BoxConstraints.tightFor(width: prefixSlotWidth, height: h)
+              : null,
           suffixIcon: suffixIcon,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 15, // Adjusted for vertical centering
+          isDense: tightPrefix,
+          contentPadding: EdgeInsets.fromLTRB(
+            tightPrefix ? 0 : 16,
+            tightPrefix ? 0 : 15,
+            tightPrefix ? 8 : 16,
+            tightPrefix ? 0 : 15,
           ),
         ),
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.black,
-          fontSize: 16,
+          fontSize: fs,
         ),
       ),
     );

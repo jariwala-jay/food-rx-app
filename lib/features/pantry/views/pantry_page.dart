@@ -140,6 +140,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final pantryController = Provider.of<PantryController>(context);
+    final hasItemsInSelectedTab = _selectedTabIndex == 0
+        ? pantryController.hasPantryItems
+        : pantryController.hasOtherItems;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
@@ -323,28 +326,69 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                 ),
               ),
 
-              // Search field
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: AppSearchField(
-                  controller: _searchController,
-                  hintText: 'Search ingredients...',
-                  onChanged: (value) {
-                    pantryController.updateSearchQuery(value);
-                  },
+              if (hasItemsInSelectedTab) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Builder(
+                    builder: (context) {
+                      final textScaleFactor =
+                          MediaQuery.textScaleFactorOf(context);
+                      final scale = textScaleFactor.clamp(0.8, 1.0);
+                      const double rowHeight = 48;
+                      final double searchFontSize = 14 * scale;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: SizedBox(
+                              height: rowHeight,
+                              width: double.infinity,
+                              child: AppSearchField(
+                                controller: _searchController,
+                                hintText: 'Search ingredients',
+                                height: rowHeight,
+                                fontSize: searchFontSize,
+                                tightPrefix: true,
+                                unfocusOnTapOutside: true,
+                                onChanged: (value) {
+                                  pantryController.updateSearchQuery(value);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: _buildAddButton(
+                              'Add Items',
+                              () => _showAddActionSheet(
+                                _selectedTabIndex == 0
+                                    ? AddActionSheetEntry.foodRxCategories
+                                    : AddActionSheetEntry.homeCategories,
+                              ),
+                              compact: true,
+                              fillParentWidth: true,
+                              fixedHeight: rowHeight,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
 
-              // Category filter chips
-              CategoryFilterChips(
-                categories: pantryController
-                    .getAvailableCategories(_selectedTabIndex == 0),
-                selectedCategory: pantryController.selectedCategory,
-                onCategorySelected: (category) {
-                  pantryController.updateSelectedCategory(category);
-                },
-                isLoading: pantryController.isLoading,
-              ),
+                // Category filter chips
+                CategoryFilterChips(
+                  categories: pantryController
+                      .getAvailableCategories(_selectedTabIndex == 0),
+                  selectedCategory: pantryController.selectedCategory,
+                  onCategorySelected: (category) {
+                    pantryController.updateSelectedCategory(category);
+                  },
+                  isLoading: pantryController.isLoading,
+                ),
+              ],
 
               // Content
               Expanded(
@@ -398,8 +442,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add FoodRx Items', () {
-              // Show action sheet to add pantry items
-              _showAddActionSheet();
+              _showAddActionSheet(AddActionSheetEntry.foodRxCategories);
             }),
           ],
         ),
@@ -629,8 +672,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             ),
             const SizedBox(height: 20),
             _buildAddButton('Add Home Items', () {
-              // Show action sheet to add home items
-              _showAddActionSheet();
+              _showAddActionSheet(AddActionSheetEntry.homeCategories);
             }),
           ],
         ),
@@ -857,58 +899,107 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
     return 'Expires in $days Day${days != 1 ? 's' : ''}';
   }
 
-  Widget _buildAddButton(String label, VoidCallback onTap) {
+  Widget _buildAddButton(
+    String label,
+    VoidCallback onTap, {
+    bool compact = false,
+    bool fillParentWidth = false,
+    double? fixedHeight,
+  }) {
     return Builder(
       builder: (context) {
         final textScaleFactor = MediaQuery.textScaleFactorOf(context);
         final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-        return GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: 24 * clampedScale,
-              vertical: 12 * clampedScale,
+        final horizontal = compact ? 10.0 * clampedScale : 24 * clampedScale;
+        final vertical = compact ? 8 * clampedScale : 12 * clampedScale;
+        final iconSize = compact
+            ? (fixedHeight != null ? 20 * clampedScale : 18 * clampedScale)
+            : 20 * clampedScale;
+        final gap = compact ? 4 * clampedScale : 8 * clampedScale;
+        final fontSize = compact
+            ? (fixedHeight != null ? 14 * clampedScale : 12 * clampedScale)
+            : 14 * clampedScale;
+        final row = Row(
+          mainAxisSize: fillParentWidth ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add,
+              color: const Color(0xFFFF6A00),
+              size: iconSize,
             ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFEEFE4),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.add,
+            SizedBox(width: gap),
+            Flexible(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
                   color: const Color(0xFFFF6A00),
-                  size: 20 * clampedScale,
+                  fontWeight: FontWeight.w500,
+                  fontSize: fontSize,
                 ),
-                SizedBox(width: 8 * clampedScale),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: const Color(0xFFFF6A00),
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14 * clampedScale,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+        final decoration = BoxDecoration(
+          color: const Color(0xFFFEEFE4),
+          borderRadius: BorderRadius.circular(24),
+        );
+
+        if (fixedHeight != null) {
+          return GestureDetector(
+            onTap: onTap,
+            child: SizedBox(
+              width: fillParentWidth ? double.infinity : null,
+              height: fixedHeight,
+              child: DecoratedBox(
+                decoration: decoration,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    child: row,
                   ),
                 ),
-              ],
+              ),
             ),
+          );
+        }
+
+        final box = Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontal,
+            vertical: vertical,
           ),
+          decoration: decoration,
+          child: row,
+        );
+        return GestureDetector(
+          onTap: onTap,
+          child: fillParentWidth
+              ? SizedBox(width: double.infinity, child: box)
+              : box,
         );
       },
     );
   }
 
-  void _showAddActionSheet() {
-    showModalBottomSheet(
+  Future<void> _showAddActionSheet([
+    AddActionSheetEntry entry = AddActionSheetEntry.menu,
+  ]) async {
+    final pantry = context.read<PantryController>();
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const AddActionSheet(),
+      builder: (context) => AddActionSheet(entry: entry),
     );
+    if (!mounted) return;
+    _searchController.clear();
+    pantry.updateSearchQuery('');
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   void _showEditItemDialog(PantryItem item) {

@@ -10,6 +10,7 @@ KNOWLEDGE_DOCS = [
         "id": "sleep_basics",
         "title": "Sleep: How Much You Need and Why It Matters",
         "category": "Sleep",
+        "tags": ["sleep", "sleep duration", "health", "chronic condition"],
         "source": "https://www.cdc.gov/sleep/about/index.html",
         "content": (
             "Adults aged 18 to 60 need at least 7 or more hours of sleep per night, according to the CDC. "
@@ -46,6 +47,7 @@ KNOWLEDGE_DOCS = [
         "id": "sleep_hygiene",
         "title": "Sleep Hygiene: Habits That Improve Sleep Quality",
         "category": "Sleep",
+        "tags": ["sleep", "sleep habits", "routine", "sleep quality"],
         "source": "https://www.cdc.gov/sleep/about/index.html",
         "content": (
             "Sleep hygiene refers to a set of behaviors and environmental conditions that support "
@@ -85,6 +87,7 @@ KNOWLEDGE_DOCS = [
         "id": "sleep_and_diet",
         "title": "Sleep and Nutrition: How They Affect Each Other",
         "category": "Sleep",
+        "tags": ["sleep", "nutrition", "blood sugar", "weight"],
         "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5015038/",
         "content": (
             "Sleep and diet have a two-way relationship. What you eat affects how well you sleep, and how "
@@ -120,6 +123,7 @@ KNOWLEDGE_DOCS = [
         "id": "sleep_conditions",
         "title": "Sleep Problems Linked to Chronic Health Conditions",
         "category": "Sleep",
+        "tags": ["sleep", "sleep disorders", "diabetes", "hypertension"],
         "source": "https://www.nhlbi.nih.gov/health/sleep-apnea, https://www.nhlbi.nih.gov/science/sleep-science-and-sleep-disorders",
         "content": (
             "Several common chronic health conditions are closely linked to sleep disorders, and the "
@@ -157,6 +161,7 @@ KNOWLEDGE_DOCS = [
         "id": "sleep_recommendations_conditions",
         "title": "Sleep Goals by Health Condition",
         "category": "Sleep",
+        "tags": ["sleep", "recommendations", "diabetes", "hypertension"],
         "source": "https://www.cdc.gov/heart-disease/about/sleep-and-heart-health.html",
         "content": (
             "Sleep recommendations are universal at 7 to 9 hours per night for adults, but certain health "
@@ -194,6 +199,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_guidelines_adults",
         "title": "Physical Activity Guidelines for Adults",
         "category": "Exercise",
+        "tags": ["exercise", "guidelines", "fitness", "health"],
         "source": "https://www.cdc.gov/physical-activity-basics/adding-adults/what-counts.html",
         "content": (
             "The U.S. Physical Activity Guidelines for Americans recommend that adults get at least "
@@ -231,6 +237,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_aerobic_types",
         "title": "Types of Aerobic Exercise and Their Benefits",
         "category": "Exercise",
+        "tags": ["exercise", "cardio", "heart health", "fitness"],
         "source": "https://www.cdc.gov/physical-activity/php/guidelines-recommendations/",
         "content": (
             "Aerobic exercise, also called cardio, uses large muscle groups in continuous rhythmic movements "
@@ -267,6 +274,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_strength_training",
         "title": "Strength Training: Why It Matters for Health",
         "category": "Exercise",
+        "tags": ["exercise", "strength training", "muscle", "metabolism"],
         "source": "https://www.cdc.gov/physical-activity-basics/guidelines/adults.html",
         "content": (
             "Strength training, also called resistance training or weight training, involves using resistance "
@@ -306,6 +314,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_for_hypertension",
         "title": "Exercise and High Blood Pressure Management",
         "category": "Exercise",
+        "tags": ["exercise", "hypertension", "blood pressure", "management"],
         "source": "https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure/getting-active-to-control-high-blood-pressure",
         "content": (
             "Regular physical activity is one of the most effective non-drug interventions for lowering blood "
@@ -340,6 +349,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_for_diabetes",
         "title": "Exercise and Blood Sugar Management",
         "category": "Exercise",
+        "tags": ["exercise", "diabetes", "blood sugar", "insulin"],
         "source": "https://diabetes.org/health-wellness/fitness/weekly-exercise-targets",
         "content": (
             "Exercise is one of the most powerful tools for managing blood sugar. During aerobic exercise, "
@@ -373,6 +383,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_for_weight_management",
         "title": "Exercise for Weight Management and Obesity",
         "category": "Exercise",
+        "tags": ["exercise", "weight loss", "obesity", "calories"],
         "source": "https://www.cdc.gov/physical-activity-basics/guidelines/adults.html, https://www.niddk.nih.gov/health-information/weight-management/adult-overweight-obesity/eating-physical-activity",
         "content": (
             "Physical activity plays multiple roles in weight management. It burns calories, builds metabolically "
@@ -409,6 +420,7 @@ KNOWLEDGE_DOCS = [
         "id": "exercise_safety_precautions",
         "title": "Exercising Safely: Precautions for Chronic Conditions",
         "category": "Exercise",
+        "tags": ["exercise", "safety", "chronic conditions", "injury prevention"],
         "source": "https://diabetes.org/health-wellness/fitness/getting-started-safely, https://diabetes.org/health-wellness/fitness",
         "content": (
             "Most people with chronic health conditions including hypertension, type 2 diabetes, pre-diabetes, "
@@ -447,6 +459,7 @@ KNOWLEDGE_DOCS = [
         "id": "hydration_basics",
         "title": "Hydration: How Much Water You Need and Why",
         "category": "Hydration",
+        "tags": ["hydration", "water", "daily intake", "health"],
         "source": "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/index.html",
         "content": (
             "Water makes up approximately 60 percent of the adult human body and is essential for virtually "
@@ -484,6 +497,7 @@ KNOWLEDGE_DOCS = [
         "id": "hydration_chronic_conditions",
         "title": "Hydration and Chronic Health Conditions",
         "category": "Hydration",
+        "tags": ["hydration", "diabetes", "hypertension"],
         "source": "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/index.html",
         "content": (
             "Adequate hydration is important for everyone, but it plays a particularly critical role in the "
@@ -520,6 +534,7 @@ KNOWLEDGE_DOCS = [
         "id": "hydration_beverages_guide",
         "title": "Choosing Healthy Beverages",
         "category": "Hydration",
+        "tags": ["hydration", "beverages", "sugar", "diet"],
         "source": "https://www.cdc.gov/healthy-weight-growth/rethink-your-drink/",
         "content": (
             "Not all beverages are equal in their effects on health. Making informed choices about what to "
@@ -554,6 +569,7 @@ KNOWLEDGE_DOCS = [
         "id": "hypertension_diet_overview",
         "title": "Dietary Management of High Blood Pressure: Overview",
         "category": "Hypertension",
+        "tags": ["hypertension", "diet", "dash", "blood pressure"],
         "source": "https://www.nhlbi.nih.gov/health/dash-eating-plan",
         "content": (
             "High blood pressure (hypertension) is defined as blood pressure consistently at or above "
@@ -594,6 +610,7 @@ KNOWLEDGE_DOCS = [
         "id": "hypertension_dash_meal_planning",
         "title": "DASH Diet: Meal Planning and Daily Targets",
         "category": "Hypertension",
+        "tags": ["hypertension", "dash diet", "servings"],
         "source": "https://www.nhlbi.nih.gov/health/dash/living-with-dash, https://www.nhlbi.nih.gov/health/dash-eating-plan",
         "content": (
             "The DASH diet is a complete dietary pattern designed to be sustainable as a permanent way of "
@@ -631,6 +648,7 @@ KNOWLEDGE_DOCS = [
         "id": "hypertension_sodium_reduction",
         "title": "Reducing Sodium: Practical Strategies",
         "category": "Hypertension",
+        "tags": ["hypertension", "sodium", "salt", "blood pressure"],
         "source": "https://www.nhlbi.nih.gov/health/dash/sodium",
         "content": (
             "Reducing sodium intake is the most impactful single dietary change for blood pressure "
@@ -667,6 +685,7 @@ KNOWLEDGE_DOCS = [
         "id": "hypertension_lifestyle_beyond_diet",
         "title": "Beyond Diet: Lifestyle Changes for Blood Pressure Management",
         "category": "Hypertension",
+        "tags": ["hypertension", "lifestyle", "stress", "weight"],
         "source": "https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure",
         "content": (
             "Blood pressure management is most effective when multiple lifestyle factors are addressed "
@@ -701,6 +720,7 @@ KNOWLEDGE_DOCS = [
         "id": "prediabetes_understanding",
         "title": "Understanding Pre-Diabetes and Why Diet Matters",
         "category": "Pre-Diabetes",
+        "tags": ["prediabetes", "blood sugar", "risk", "prevention"],
         "source": "https://www.cdc.gov/diabetes/prevention-type-2/prediabetes-prevent-type-2.html",
         "content": (
             "Pre-diabetes is a condition in which blood sugar levels are higher than normal but not yet high "
@@ -737,6 +757,7 @@ KNOWLEDGE_DOCS = [
         "id": "prediabetes_diet_strategies",
         "title": "Dietary Strategies for Pre-Diabetes Management",
         "category": "Pre-Diabetes",
+        "tags": ["prediabetes", "diet", "blood sugar"],
         "source": "https://www.cdc.gov/diabetes/prevention-type-2/type-2-diabetes-prevention-guide.html",
         "content": (
             "Managing blood sugar through diet when you have pre-diabetes does not require a medically "
@@ -773,6 +794,7 @@ KNOWLEDGE_DOCS = [
         "id": "prediabetes_foods_to_choose",
         "title": "Best Foods for Pre-Diabetes Management",
         "category": "Pre-Diabetes",
+        "tags": ["prediabetes", "foods", "low glycemic", "nutrition"],
         "source": "https://diabetes.org/food-nutrition/eating-healthy",
         "content": (
             "No single food reverses pre-diabetes, but a consistent pattern of choosing nutrient-dense, "
@@ -810,6 +832,7 @@ KNOWLEDGE_DOCS = [
         "id": "diabetes_carb_management",
         "title": "Managing Carbohydrates with Type 2 Diabetes",
         "category": "Diabetes",
+        "tags": ["diabetes", "carbohydrates", "blood sugar", "management"],
         "source": "https://diabetes.org/food-nutrition/eating-for-diabetes-management",
         "content": (
             "Carbohydrate management is the cornerstone of dietary management for type 2 diabetes. All "
@@ -847,6 +870,7 @@ KNOWLEDGE_DOCS = [
         "id": "diabetes_meal_patterns",
         "title": "Diabetes Plate Method and Meal Patterns",
         "category": "Diabetes",
+        "tags": ["diabetes", "plate method", "meals", "portion"],
         "source": "https://diabetes.org/food-nutrition/eating-healthy",
         "content": (
             "The Diabetes Plate Method is a simple, practical approach to building balanced meals without "
@@ -881,6 +905,7 @@ KNOWLEDGE_DOCS = [
         "id": "diabetes_foods_glycemic",
         "title": "Glycemic Index, Glycemic Load, and Smart Food Choices for Diabetes",
         "category": "Diabetes",
+        "tags": ["diabetes", "glycemic index", "carbs", "blood sugar"],
         "source": "https://diabetes.org/food-nutrition/eating-for-diabetes-management",
         "content": (
             "The glycemic index (GI) is a ranking system that measures how quickly a specific "
@@ -914,6 +939,7 @@ KNOWLEDGE_DOCS = [
         "id": "obesity_understanding",
         "title": "Understanding Obesity and Its Health Effects",
         "category": "Obesity",
+        "tags": ["obesity", "weight", "risk", "diabetes"],
         "source": "https://www.niddk.nih.gov/health-information/weight-management/adult-overweight-obesity",
         "content": (
             "Obesity is defined by the CDC as a body mass index (BMI) of 30 or above. BMI is calculated by "
@@ -952,6 +978,7 @@ KNOWLEDGE_DOCS = [
         "id": "obesity_dietary_approaches",
         "title": "Effective Dietary Approaches for Weight Management",
         "category": "Obesity",
+        "tags": ["obesity", "diet", "calorie deficit", "weight loss"],
         "source": "https://www.niddk.nih.gov/health-information/weight-management/adult-overweight-obesity/eating-physical-activity",
         "content": (
             "No single dietary approach is definitively superior for weight loss across all individuals. Multiple "
@@ -990,6 +1017,7 @@ KNOWLEDGE_DOCS = [
         "id": "obesity_behavior_strategies",
         "title": "Behavioral Strategies for Sustainable Weight Management",
         "category": "Obesity",
+        "tags": ["obesity", "behavior", "habits", "weight management"],
         "source": "https://www.niddk.nih.gov/health-information/weight-management/adult-overweight-obesity/treatment",
         "content": (
             "Dietary knowledge is necessary but not sufficient for successful weight management. Behavioral "
@@ -1029,6 +1057,7 @@ KNOWLEDGE_DOCS = [
         "id": "mindful_eating",
         "title": "Mindful Eating: Eating Well Without Strict Rules",
         "category": "General",
+        "tags": ["eating habits", "mindful eating", "hunger", "weight"],
         "source": "https://www.hsph.harvard.edu/nutritionsource/mindful-eating/",
         "content": (
             "Mindful eating is the practice of paying full attention to the experience of eating, including the "
@@ -1068,6 +1097,7 @@ KNOWLEDGE_DOCS = [
         "id": "food_environment_budgeting",
         "title": "Eating Well on a Budget and in Challenging Environments",
         "category": "General",
+        "tags": ["budget", "meal planning", "healthy eating", "weight"],
         "source": "https://www.myplate.gov/eat-healthy/healthy-eating-budget, https://cdn.realfood.gov/DGA.pdf",
         "content": (
             "Cost and food access are real barriers to healthy eating that affect millions of Americans. Health "
@@ -1105,6 +1135,7 @@ KNOWLEDGE_DOCS = [
         "id": "myplate_overview",
         "title": "What Is MyPlate? The USDA Guide to Healthy Eating",
         "category": "General",
+        "tags": ["myplate", "balanced diet", "portion", "nutrition"],
         "source": "https://www.myplate.gov/eat-healthy/what-is-myplate, https://www.myplate.gov/eat-healthy/fruits, https://www.myplate.gov/eat-healthy/vegetables, https://www.myplate.gov/eat-healthy/grains, https://www.myplate.gov/eat-healthy/protein-foods, https://www.myplate.gov/eat-healthy/dairy",
         "content": (
             "MyPlate is the United States Department of Agriculture's (USDA) visual guide to healthy eating, "
@@ -1148,6 +1179,7 @@ KNOWLEDGE_DOCS = [
         "id": "myplate_portion_sizes",
         "title": "Understanding Serving Sizes and Portions",
         "category": "General",
+        "tags": ["portion size", "servings", "myplate", "weight"],
         "source": "https://www.myplate.gov/eat-healthy/what-is-myplate, https://www.fda.gov/food/nutrition-facts-label/how-understand-and-use-nutrition-facts-label",
         "content": (
             "A serving size is a standardized amount of food used to measure nutrients, as shown on a Nutrition "
@@ -1190,6 +1222,7 @@ KNOWLEDGE_DOCS = [
         "id": "reading_nutrition_labels",
         "title": "How to Read a Nutrition Facts Label",
         "category": "General",
+        "tags": ["nutrition labels", "sodium", "sugar", "servings"],
         "source": "https://www.fda.gov/food/nutrition-facts-label/how-understand-and-use-nutrition-facts-label, https://www.fda.gov/food/nutrition-facts-label/daily-value-nutrition-and-supplement-facts-labels",
         "content": (
             "The Nutrition Facts label on packaged food is one of the most useful tools available for making "
@@ -1227,6 +1260,7 @@ KNOWLEDGE_DOCS = [
         "id": "heart_healthy_fats",
         "title": "Heart-Healthy Fats: What to Choose and What to Limit",
         "category": "General",
+        "tags": ["fats", "cholesterol", "heart health", "hypertension"],
         "source": "https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/fats/fats-in-foods, https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/fats/saturated-fats, https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/fats/fish-and-omega-3-fatty-acids",
         "content": (
             "Not all fats are the same. Dietary fat is a necessary nutrient: it supports cell function, absorbs "
@@ -1265,6 +1299,7 @@ KNOWLEDGE_DOCS = [
         "id": "sugar_and_sweeteners",
         "title": "Added Sugars, Sugar Limits, and Sweeteners",
         "category": "General",
+        "tags": ["sugar", "added sugar", "diabetes", "blood sugar"],
         "source": "https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/sugar/added-sugars, https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/sugar/how-much-sugar-is-too-much, https://www.heart.org/en/healthy-living/healthy-eating/eat-smart/sugar/sugar-101",
         "content": (
             "Added sugars are sugars and syrups that are added to foods or beverages during processing or "
@@ -1305,6 +1340,7 @@ KNOWLEDGE_DOCS = [
         "id": "food_allergies_overview",
         "title": "Common Food Allergies, Intolerances, and Dietary Restrictions",
         "category": "General",
+        "tags": ["food allergies", "diet restrictions", "labels", "nutrition"],
         "source": "https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies, https://www.fda.gov/food/buy-store-serve-safe-food/food-allergies-what-you-need-know",
         "content": (
             "Food allergies and intolerances are common reasons why people avoid certain foods or food groups. "
@@ -1350,6 +1386,7 @@ KNOWLEDGE_DOCS = [
         "id": "lactose_intolerance",
         "title": "Lactose Intolerance: Managing Dairy and Getting Enough Calcium",
         "category": "General",
+        "tags": ["lactose intolerance", "dairy", "calcium", "digestion"],
         "source": "https://www.niddk.nih.gov/health-information/digestive-diseases/lactose-intolerance, https://www.niddk.nih.gov/health-information/digestive-diseases/lactose-intolerance/definition-facts, https://www.niddk.nih.gov/health-information/digestive-diseases/lactose-intolerance/eating-diet-nutrition",
         "content": (
             "Lactose intolerance is a common digestive condition affecting approximately 36 percent of Americans "
@@ -1390,6 +1427,7 @@ KNOWLEDGE_DOCS = [
         "id": "healthy_cooking_methods",
         "title": "Healthy Cooking Methods and Kitchen Substitutions",
         "category": "General",
+        "tags": ["cooking", "low fat", "low sodium", "healthy eating"],
         "source": "https://www.heart.org/en/healthy-living/healthy-eating/cooking-skills/cooking/techniques/healthy-cooking-methods, https://www.heart.org/en/healthy-living/healthy-eating/cooking-skills/cooking/how-to-cook-healthier-at-home, https://www.myplate.gov/eat-healthy/healthy-eating-budget/prepare-healthy-meals",
         "content": (
             "How food is prepared has as much impact on its healthiness as what food is chosen. The same chicken "
@@ -1425,6 +1463,420 @@ KNOWLEDGE_DOCS = [
             "add warmth and complexity without sodium. Lemon or lime juice brightens flavor at the end of cooking and can "
             "reduce the perceived need for salt. Black pepper enhances other flavors. Building a pantry of these ingredients "
             "makes it much easier to cook flavorful, low-sodium meals at home."
+        ),
+    },
+    {
+        "id": "diabetes_plate_method",
+        "title": "Diabetes Plate Method for Blood Sugar Control",
+        "category": "Diabetes",
+        "tags": ["diabetes", "blood sugar", "nutrition", "diabetes plate"],
+        "source": "Diabetes Plate Plan",
+        "content": (
+            "The diabetes plate method is a simple and balanced way to build meals that help control blood sugar. "
+            "Half of the plate should be filled with non-starchy vegetables such as broccoli, carrots, leafy greens, tomatoes, cauliflower, and zucchini. "
+            "These foods are low in carbohydrates and high in fiber, which helps keep blood sugar stable.\n\n"
+            "One quarter of the plate should include lean protein such as chicken, turkey, fish, eggs, tofu, beans, or lentils. "
+            "Protein helps you feel full and supports muscle health. Some plant-based protein foods like beans also contain carbohydrates, so portion control is important.\n\n"
+            "The remaining quarter should include healthy carbohydrates such as whole grains like brown rice or oats, starchy vegetables like sweet potatoes or corn, "
+            "fruits, and low-fat dairy. These foods have the biggest impact on blood sugar, so choosing high-fiber options helps slow digestion and prevent spikes.\n\n"
+            "Water is the best drink choice because it has no calories and does not affect blood sugar. Other good options include unsweetened tea, coffee, or sparkling water. "
+            "Limiting sugary drinks and processed foods supports better blood sugar control and overall health."
+        ),
+    },
+    {
+        "id": "portion_control_hand_method",
+        "title": "Hand Portion Guide for Diabetes Plate Meal Planning",
+        "category": "Diabetes",
+        "tags": ["nutrition", "weight", "portion size", "diabetes plate"],
+        "source": "Diabetes Plate Plan",
+        "content": (
+            "Portion control is an important part of managing weight and supporting healthy eating habits. "
+            "A simple way to estimate portion sizes is by using your hands, which makes it easy to follow even without measuring tools.\n\n"
+            "The palm of your hand represents about three ounces of protein such as meat, poultry, or fish. "
+            "Your fist represents about one cup, which can be used for fruits, vegetables, or dairy. "
+            "A cupped hand represents about half a cup, which is useful for grains, beans, or snacks like nuts.\n\n"
+            "The tip of your thumb represents about one tablespoon, which can be used for foods like peanut butter or salad dressing. "
+            "The tip of your finger represents about one teaspoon. These simple measurements help control portions and prevent overeating.\n\n"
+            "Using hand-based portion control makes it easier to build balanced meals, manage calorie intake, and support weight control over time."
+        ),
+    },
+    {
+        "id": "dash_diet_plan",
+        "title": "DASH Diet for Blood Pressure Control",
+        "category": "Hypertension",
+        "tags": ["hypertension", "blood pressure", "nutrition"],
+        "source": "DASH Diet Plan",
+        "content": (
+            "The DASH diet, which stands for Dietary Approaches to Stop Hypertension, is a long-term eating plan designed to lower blood pressure and support overall health. "
+            "It focuses on eating whole, nutrient-rich foods such as fruits, vegetables, whole grains, lean proteins, and low-fat dairy.\n\n"
+            "This eating pattern encourages reducing sodium, added sugars, and unhealthy fats. Limiting processed and packaged foods is important because they are often high in salt, "
+            "which can raise blood pressure. Sodium intake should be limited to about 1,500 milligrams per day to help lower blood pressure. "
+            "At the same time, the diet promotes foods rich in potassium such as fruits, vegetables, beans, and dairy, which help balance sodium levels and support healthy blood pressure.\n\n"
+            "A typical daily plan includes grains, vegetables, fruits, low-fat dairy, and lean proteins such as poultry or fish. It also includes small amounts of healthy fats like olive oil, "
+            "along with nuts, seeds, and legumes throughout the week. Sweets and sugary drinks should be limited.\n\n"
+            "The DASH diet also supports weight management and can improve blood sugar control. By focusing on whole foods and balanced meals, it helps reduce the risk of chronic conditions "
+            "and supports long-term heart health."
+        ),
+    },
+    {
+        "id": "dash_diet_portions",
+        "title": "DASH Diet Serving Sizes and Portion Guide",
+        "category": "Hypertension",
+        "tags": ["hypertension", "nutrition", "weight", "dash diet", "portion size"],
+        "source": "DASH Diet Plan",
+        "content": (
+            "The DASH diet provides clear guidelines on how much to eat from each food group to help manage blood pressure and maintain a healthy weight. "
+            "For a typical 2,000 calorie plan, it is recommended to eat 6 to 8 servings of grains, 4 to 5 servings of vegetables, and 4 to 5 servings of fruits each day.\n\n"
+            "Low-fat or fat-free dairy should be consumed 2 to 3 times daily, while lean meats, poultry, or fish should be limited to 6 servings or less per day. "
+            "Healthy fats and oils should be used in small amounts, about 2 to 3 servings per day. Nuts, seeds, and legumes should be included about 4 to 5 servings per week, "
+            "while sweets should be limited to no more than 5 servings per week.\n\n"
+            "Serving sizes can be estimated using simple visual cues. A serving of grains or fruit is about the size of a fist. A cup of vegetables is about the size of two hands. "
+            "Three ounces of cooked meat is about the size of the palm of your hand. A cupped hand represents about half a cup, which can be used for grains, beans, or snacks.\n\n"
+            "Sodium intake should be limited to about 1,500 milligrams per day to help lower blood pressure. Choosing fresh foods and low-sodium options can help reduce salt intake. "
+            "Following these portion guidelines makes it easier to control blood pressure, support weight management, and maintain overall health."
+        ),
+    },
+    {
+        "id": "myplate_meal_planning",
+        "title": "MyPlate for Balanced Meal Planning",
+        "category": "Obesity",
+        "tags": ["nutrition", "balanced diet", "weight", "blood sugar", "MyPlate"],
+        "source": "MyPlate Plan",
+        "content": (
+            "MyPlate is a simple guide that helps you build balanced meals using the main food groups in the right proportions. "
+            "It includes fruits, vegetables, whole grains, protein foods, and low-fat dairy, and is designed to be flexible and easy to follow.\n\n"
+            "Fruits and vegetables should make up a large part of your plate. Fruits can be fresh, frozen, canned, or dried, but whole fruits are the best choice. "
+            "Vegetables can be added to meals such as casseroles, wraps, and sandwiches. These foods provide fiber and nutrients "
+            "that help control blood sugar, support weight management, and improve overall health.\n\n"
+            "Grains should mostly be whole grains such as whole wheat bread, brown rice, and oatmeal. Whole grains contain more fiber and help keep blood sugar stable. "
+            "Protein foods include beans, lentils, seafood, poultry, eggs, nuts, and seeds. Choosing lean and plant-based options more often supports heart health and weight control.\n\n"
+            "Low-fat or fat-free dairy foods such as milk, yogurt, or fortified plant-based alternatives provide calcium and important nutrients. "
+            "Limiting added sugars, saturated fat, and sodium is also important for maintaining healthy blood pressure and weight.\n\n"
+            "To support overall health, limit added sugars, saturated fat, and sodium, and aim for regular physical activity such as about 150 minutes per week.\n\n"
+            "MyPlate encourages balanced eating habits that support weight management, improve blood sugar control, and promote long-term health."
+        ),
+    },
+    {
+        "id": "myplate_portion_guide",
+        "title": "MyPlate Portion Size and Serving Guide",
+        "category": "Obesity",
+        "tags": ["portion control", "weight", "nutrition", "MyPlate", "portion size"],
+        "source": "MyPlate Plan",
+        "content": (
+            "Portion control is an important part of building balanced meals and managing weight. A simple way to estimate portion sizes is by using your hands, "
+            "which makes it easy to follow without measuring tools.\n\n"
+            "The palm of your hand represents about three ounces of protein such as meat, poultry, or fish. "
+            "Your fist represents about one cup, which can be used for fruits, vegetables, or dairy foods. "
+            "A cupped hand represents about half a cup, which works well for grains, beans, or snacks like nuts.\n\n"
+            "The tip of your thumb represents about one tablespoon, which can be used for foods like peanut butter or salad dressing. "
+            "The tip of your finger represents about one teaspoon. These simple estimates help control portion sizes and prevent overeating.\n\n"
+            "Using portion control along with balanced food choices helps manage calorie intake, supports weight control, and improves blood sugar and blood pressure over time."
+        ),
+    },
+    {
+        "id": "fiber_guide",
+        "title": "High Fiber Eating for Weight, Blood Sugar, and Blood Pressure Control",
+        "category": "General",
+        "tags": ["fiber", "weight", "diabetes"],
+        "source": "FPL Fiber Guide",
+        "content": (
+            "The Full Plate approach focuses on filling about 75 percent of each meal with whole, unprocessed foods "
+            "such as fruits, vegetables, beans, and whole grains. These foods are high in fiber and water, which help you feel "
+            "full without adding extra calories. This makes it easier to manage weight and prevent obesity. Many people eat far "
+            "less fiber than they need, so increasing fiber intake can support better digestion and improve overall health. "
+            "It can also help lower blood sugar levels and reduce the risk of high blood pressure.\n\n"
+            "Foods like beans, whole grains, fruits, and vegetables are especially helpful because they slow down digestion. "
+            "This helps prevent sudden increases in blood sugar, which is important for people with diabetes or prediabetes. "
+            "Fiber also supports heart health by helping lower unhealthy fat levels in the blood and improving blood pressure. "
+            "Drinking enough water is important when increasing fiber intake because it helps the body process fiber more easily "
+            "and prevents discomfort.\n\nTo get the most benefit, it is important to limit high-calorie additions such as butter, cheese, "
+            "and sugary sauces. These foods can reduce the positive effects of healthy meals and make it harder to control weight. "
+            "Some processed foods may contain fiber, but they are often higher in calories and should be eaten in smaller amounts. "
+            "Focusing on whole, plant-based foods most of the time helps build healthy eating habits that support weight control, better "
+            "blood sugar levels, and improved blood pressure over time."
+        ),
+    },
+    {
+        "id": "full_plate_living",
+        "title": "Full Plate Eating Approach for Healthy Weight and Blood Sugar Control",
+        "category": "Obesity",
+        "tags": ["fiber", "weight", "diabetes"],
+        "source": "Full Plate Living Program",
+        "content": (
+            "The Full Plate Living program encourages a simple way of eating that supports weight control and long-term health. "
+            "It recommends filling about 75 percent of each meal with whole foods such as fruits, vegetables, beans, and whole grains, while "
+            "keeping the remaining portion for other foods. These fiber-rich foods help you feel full while eating fewer calories, which makes it "
+            "easier to manage weight without feeling hungry. Many people do not eat enough fiber, so increasing fiber intake can improve digestion "
+            "and support better control of blood sugar and blood pressure.\n\n"
+            "Eating more fiber-rich foods can help lower blood sugar levels by slowing digestion and reducing sudden spikes. This is especially helpful "
+            "for people with diabetes or prediabetes. These foods can also help lower unhealthy fat levels in the blood and support better heart health. "
+            "Drinking enough water each day helps the body adjust to higher fiber intake and supports digestion. It is also helpful to increase fiber "
+            "slowly to avoid discomfort.\n\nThe program encourages simple habits such as adding more fiber foods to meals and eating them first to feel "
+            "full sooner. It also suggests limiting sugary drinks and highly processed foods, as these can lead to weight gain and poor blood sugar control. "
+            "Building small, realistic habits over time makes it easier to maintain healthy eating patterns. This approach supports steady weight loss, "
+            "better blood sugar control, and improved blood pressure in a way that is practical and sustainable."
+        ),
+    },
+    {
+        "id": "full_plate_diet",
+        "title": "Fiber-Based Diet for Weight Loss and Blood Sugar Control",
+        "category": "Obesity",
+        "tags": ["fiber", "weight", "diabetes"],
+        "source": "Full Plate Diet Book",
+        "content": (
+            "The Full Plate Diet is based on the idea that eating more fiber-rich foods can support weight loss and improve overall health. "
+            "Foods such as fruits, vegetables, beans, whole grains, nuts, and seeds are high in fiber and help you feel full for longer periods. This can "
+            "reduce how much you eat without needing strict portion control. Many people eat too little fiber, so increasing intake can help with weight "
+            "management and support better control of blood sugar and blood pressure.\n\n"
+            "Fiber plays an important role in slowing digestion. This helps prevent quick rises in blood sugar, which is important for people with diabetes "
+            "or prediabetes. It also helps lower unhealthy fat levels in the blood and supports heart health. Choosing whole foods instead of processed foods "
+            "is important because processed foods are often low in fiber and high in calories, which can lead to weight gain and poor health outcomes.\n\n"
+            "The diet also encourages limiting sugary drinks and refined foods such as white bread and packaged snacks. These foods do not keep you full and "
+            "can cause rapid increases in blood sugar. Instead, focusing on whole plant foods provides steady energy and important nutrients. Drinking enough "
+            "water and increasing fiber slowly can help the body adjust. This approach makes it easier to build healthy eating habits that support weight control, "
+            "stable blood sugar levels, and better blood pressure over time."
+        ),
+    },
+    {
+        "id": "grocery_shopping_guide",
+        "title": "Smart Grocery Shopping for Healthy Eating and Weight Control",
+        "category": "General",
+        "tags": ["nutrition", "weight", "diabetes"],
+        "source": "Finding Water-Fiber Foods at the Store",
+        "content": (
+            "Choosing the right foods at the grocery store can make a big difference in managing weight, blood sugar, and blood pressure. The best approach "
+            "is to focus on whole, plant-based foods that are high in fiber and water. These include fruits, vegetables, beans, and whole grains. These foods help you "
+            "feel full while providing important nutrients, which supports weight control and overall health.\n\n"
+            "The fresh produce section is a good place to start. Foods like apples, oranges, leafy greens, carrots, and broccoli are rich in fiber and help keep blood "
+            "sugar stable. Frozen fruits and vegetables are also a good option because they provide the same benefits and can be more convenient. In the canned food section, "
+            "beans and vegetables can be healthy choices if you select low-sodium options. Rinsing canned beans can help reduce salt content.\n\n"
+            "Whole grains such as oats and brown rice are better choices than refined grains because they contain more fiber and help control blood sugar. On the other hand, "
+            "foods like chips, cookies, sugary drinks, and refined snacks are low in fiber and high in calories. These foods can lead to weight gain and poor blood sugar control "
+            "and should be limited.\n\n"
+            "A simple way to make better choices is to ask whether a food is a fruit, vegetable, bean, or whole grain. If it is, it is likely a healthy option. Focusing on these "
+            "foods helps build meals that support weight management, stable blood sugar, and better blood pressure."
+        ),
+    },
+    {
+        "id": "natural_fiber_foods",
+        "title": "Types of Fiber Foods and Their Benefits for Health",
+        "category": "General",
+        "tags": ["fiber", "nutrition", "weight"],
+        "source": "Natural Fiber Food Inventory",
+        "content": (
+            "Natural fiber foods come from several groups, including fruits, vegetables, beans, whole grains, nuts, and seeds. These foods play an important "
+            "role in building a healthy diet that supports weight control and helps manage blood sugar and blood pressure. They are rich in nutrients and help the body "
+            "function properly while also helping you feel full with fewer calories.\n\n"
+            "Fruits provide natural sweetness along with fiber, water, and important nutrients. They can help satisfy cravings while supporting better blood sugar control "
+            "when eaten in whole form. Vegetables are especially helpful because they are low in calories but high in fiber and nutrients, making them a key part of meals "
+            "for weight management and overall health.\n\n"
+            "Beans and legumes are unique because they provide both fiber and plant-based protein. They help you feel full, support muscle health, and help keep blood sugar "
+            "stable. Whole grains such as oats and brown rice are better than refined grains because they contain more fiber and digest more slowly, which helps prevent sudden "
+            "increases in blood sugar.\n\n"
+            "Nuts and seeds also contain fiber but are higher in calories, so they should be eaten in smaller portions. Choosing whole, unprocessed foods from these groups helps "
+            "support digestion, control blood sugar, and improve blood pressure. Making these foods a regular part of meals can help prevent and manage conditions such as obesity, "
+            "diabetes, and high blood pressure."
+        ),
+    },
+    {
+        "id": "motivational_interviewing",
+        "title": "Building Healthy Habits for Weight and Blood Sugar Control",
+        "category": "General",
+        "tags": ["stress", "weight", "diabetes"],
+        "source": "Motivational Interviewing",
+        "content": (
+            "Motivational Interviewing is a simple and supportive way to help people make healthy changes in their eating and lifestyle habits. Instead of telling "
+            "people what to do, it focuses on helping them find their own reasons to change. This approach is useful for improving habits related to weight management, blood sugar "
+            "control, and blood pressure. It works by building confidence and helping people take small, realistic steps toward better health.\n\n"
+            "The first step is to create a safe and respectful environment where people feel comfortable sharing their thoughts and challenges. Many unhealthy eating habits are "
+            "linked to stress, convenience, or emotions, so it is important to understand the reasons behind these behaviors. The next step is to help the person see the gap between "
+            "their current habits and their health goals. For example, someone may want to control their blood sugar but struggle with sugary foods.\n\n"
+            "The approach then focuses on helping people discover their own motivation. When individuals understand why change matters to them, they are more likely to take action. "
+            "Simple questions about readiness and confidence can help identify what is holding them back. The final step is to create a clear and realistic plan. This includes setting "
+            "small goals such as adding more vegetables to meals or reducing sugary drinks.\n\n"
+            "This method supports long-term success because it focuses on progress rather than perfection. It helps people build healthy habits step by step, which can improve weight control, "
+            "support better blood sugar levels, and help manage blood pressure over time."
+        ),
+    },
+    {
+        "id": "type2_diabetes_management",
+        "title": "Meal Planning and Food Choices for Type 2 Diabetes",
+        "category": "Diabetes",
+        "tags": ["diabetes", "blood sugar", "weight"],
+        "source": "T2 Participants",
+        "content": (
+            "Managing prediabetes and type 2 diabetes requires making consistent food and lifestyle choices that support stable blood sugar levels and a healthy weight. "
+            "A simple and effective way to plan meals is to use a plate method. Half of the plate should include non-starchy vegetables such as leafy greens, broccoli, and peppers. "
+            "One quarter should include whole grains or starchy foods like brown rice or sweet potatoes. The remaining quarter should include lean protein such as fish, poultry, or beans. "
+            "This balance helps control portions and supports better blood sugar control.\n\n"
+            "Carbohydrates have the strongest effect on blood sugar, so choosing the right type is important. Foods high in fiber, such as whole grains, fruits, and vegetables, are digested "
+            "more slowly and help prevent sudden increases in blood sugar. Refined foods such as white bread and sugary snacks can cause quick spikes in blood sugar and should be limited. "
+            "Increasing fiber intake also helps improve digestion and supports weight management.\n\n"
+            "Healthy fats from foods such as nuts, seeds, and plant oils can support heart health, while unhealthy fats from processed foods and fatty meats should be limited. Reducing salt "
+            "intake can also help control blood pressure, which is important for people with diabetes.\n\n"
+            "In addition to healthy eating, regular physical activity and modest weight loss can greatly improve blood sugar control. Even small changes, such as walking regularly and choosing "
+            "whole foods, can reduce the risk of developing diabetes or help manage the condition more effectively over time."
+        ),
+    },
+    {
+        "id": "dash_blood_pressure",
+        "title": "DASH Eating Plan for High Blood Pressure Control",
+        "category": "Hypertension",
+        "tags": ["blood pressure", "hypertension", "nutrition"],
+        "source": "Lowering Blood Pressure with DASH",
+        "content": (
+            "The DASH eating plan is designed to help lower blood pressure and improve heart health through simple and balanced food choices. It focuses on eating more fruits, vegetables, "
+            "whole grains, lean proteins, and low-fat dairy while reducing salt, added sugars, and unhealthy fats. This combination of foods provides important nutrients that help the body control blood "
+            "pressure naturally.\n\n"
+            "One of the key parts of the DASH plan is reducing sodium intake. Most people consume too much salt from processed and packaged foods, which can raise blood pressure. By choosing fresh foods "
+            "and limiting processed items, it becomes easier to reduce sodium levels. At the same time, eating foods rich in potassium, such as fruits and vegetables, helps balance sodium in the body and "
+            "supports healthy blood pressure.\n\n"
+            "The DASH plan also encourages replacing high-fat and processed foods with healthier options. Choosing whole grains instead of refined grains and lean protein instead of fatty meats helps support "
+            "weight management and overall health. These changes can also improve blood sugar control, which is important for people with diabetes or prediabetes.\n\n"
+            "This eating pattern is flexible and easy to follow, making it suitable for long-term use. By focusing on simple changes such as eating more plant-based foods and reducing salt, individuals can "
+            "improve blood pressure, support weight control, and reduce the risk of chronic health problems."
+        ),
+    },
+    {
+        "id": "lifestyle_nutrition",
+        "title": "Healthy Eating Habits for Long-Term Weight and Blood Sugar Control",
+        "category": "Diabetes",
+        "tags": ["nutrition", "weight", "diabetes"],
+        "source": "Patient LM Nutrition",
+        "content": (
+            "Lifestyle nutrition focuses on using food as a tool to improve health and prevent disease. It encourages eating whole, plant-based foods such as fruits, vegetables, whole grains, beans, "
+            "nuts, and seeds. These foods are rich in nutrients and fiber, which help support weight management, control blood sugar, and improve blood pressure.\n\n"
+            "Whole foods provide important nutrients that help the body function properly. They support digestion, improve energy levels, and help reduce inflammation in the body. In contrast, processed foods "
+            "such as sugary drinks, packaged snacks, and high-fat foods can lead to weight gain and poor control of blood sugar and blood pressure. Limiting these foods is important for maintaining good health.\n\n"
+            "Making small and realistic changes is key to building lasting habits. Instead of trying to change everything at once, it is more effective to set simple goals, such as adding more fruits and vegetables "
+            "to meals or reducing sugary drinks. These small steps can lead to steady improvements over time.\n\n"
+            "This approach helps people take control of their health by focusing on daily habits. Eating more whole foods and reducing processed foods can support weight control, improve blood sugar levels, and help "
+            "manage blood pressure in a sustainable way."
+        ),
+    },
+    {
+        "id": "nutrition_myths",
+        "title": "Common Nutrition Myths and Healthy Food Choices",
+        "category": "General",
+        "tags": ["nutrition", "weight", "diabetes"],
+        "source": "Nutrition Myths",
+        "content": (
+            "Many common beliefs about nutrition can make it harder for people to make healthy choices. One common myth is that people need animal products to get enough protein. In reality, plant-based "
+            "foods such as beans, lentils, nuts, and whole grains provide enough protein along with fiber and other important nutrients. These foods can support weight management and help control blood sugar and blood pressure.\n\n"
+            "Another common belief is that dairy is the only way to get enough calcium. However, many plant foods such as leafy greens and fortified products also provide calcium and support bone health. Choosing a variety of whole foods "
+            "can help meet nutrient needs without relying on a single food group.\n\n"
+            "A third myth is that carbohydrates are always unhealthy. The truth is that the type of carbohydrate matters. Whole carbohydrates found in fruits, vegetables, and whole grains provide fiber and steady energy. These foods help "
+            "keep blood sugar stable and support overall health. Refined carbohydrates such as white bread and sugary snacks can cause quick increases in blood sugar and should be limited.\n\n"
+            "Understanding these differences helps people make better food choices. Focusing on whole, plant-based foods instead of processed foods can support weight control, improve blood sugar levels, and help manage blood pressure over time."
+        ),
+    },
+    {
+        "id": "diabetes_lifestyle_pillars",
+        "title": "Lifestyle Habits for Managing Type 2 Diabetes",
+        "category": "Diabetes",
+        "tags": ["diabetes", "weight", "exercise"],
+        "source": "Lifestyle Pillars for Type 2 Diabetes",
+        "content": (
+            "Managing and preventing type 2 diabetes requires a combination of healthy habits that work together to improve blood sugar control and support a healthy weight. One of the most important steps is following a balanced eating "
+            "pattern that focuses on whole foods such as vegetables, fruits, whole grains, beans, nuts, and seeds. These foods provide fiber and nutrients that help control blood sugar and reduce hunger. A simple way to build meals is to fill half "
+            "the plate with non-starchy vegetables, one quarter with whole grains or starchy foods, and one quarter with protein such as beans or lean sources.\n\n"
+            "Physical activity plays a key role in improving how the body uses sugar. Regular movement helps lower blood sugar levels and supports weight management. Even light activity after meals, such as walking, can reduce blood sugar spikes. "
+            "Getting enough sleep is also important, as poor sleep can make it harder to control blood sugar and increase hunger.\n\n"
+            "Stress can affect eating habits and blood sugar levels, so managing stress is important. Simple practices such as deep breathing, relaxation, and staying connected with others can help reduce stress. Building strong support systems with "
+            "family or community can also make it easier to maintain healthy habits.\n\nThese lifestyle changes work best when practiced together. Eating well, staying active, sleeping enough, and managing stress all support better blood sugar control "
+            "and long-term health. Small and consistent changes can lead to lasting improvements in managing diabetes and maintaining a healthy weight."
+        ),
+    },
+    {
+        "id": "sleep_health",
+        "title": "How Sleep Affects Weight, Blood Sugar, and Blood Pressure",
+        "category": "Sleep",
+        "tags": ["sleep", "diabetes", "weight"],
+        "source": "Sleep Guide",
+        "content": (
+            "Sleep plays an important role in maintaining good health, especially for managing weight, blood sugar, and blood pressure. Most adults need about seven to nine hours of sleep each night. When people do not get enough sleep, "
+            "they may feel tired, have trouble focusing, and make less healthy food choices. Poor sleep can also increase hunger and make it harder to feel full, which can lead to weight gain.\n\n"
+            "Lack of sleep can affect how the body controls blood sugar. It can make the body less sensitive to insulin, which can lead to higher blood sugar levels. This is especially important for people with diabetes or prediabetes. Poor sleep "
+            "can also raise blood pressure over time, increasing the risk of heart-related problems.\n\n"
+            "There are many ways to improve sleep quality. Going to bed and waking up at the same time each day helps the body follow a regular routine. Limiting screen time before bed and reducing caffeine intake can also improve sleep. Creating a "
+            "quiet and comfortable sleep environment can make it easier to fall and stay asleep.\n\nHealthy habits such as regular physical activity and balanced eating can also support better sleep. Making small changes, such as setting a regular "
+            "bedtime or avoiding late meals, can lead to better sleep over time. Good sleep supports better control of blood sugar, helps manage weight, and improves overall health."
+        ),
+    },
+    {
+        "id": "stress_management",
+        "title": "Managing Stress for Better Weight and Blood Pressure Control",
+        "category": "General",
+        "tags": ["stress", "blood pressure", "weight"],
+        "source": "Stress Management Guide",
+        "content": (
+            "Stress can have a strong impact on health, especially when it is ongoing. It can affect eating habits, increase cravings for unhealthy foods, and make it harder to maintain a healthy routine. Stress can also raise blood pressure "
+            "and affect blood sugar levels, which is important for people managing diabetes or trying to prevent it.\n\n"
+            "When people are stressed, the body releases hormones that can increase hunger and lead to overeating. This can make weight management more difficult. Stress can also reduce motivation to exercise or prepare healthy meals, leading to habits "
+            "that negatively affect health over time.\n\n"
+            "Managing stress is an important part of maintaining healthy habits. Simple activities such as deep breathing, meditation, listening to music, or spending time with others can help reduce stress. Physical activity is also helpful because it "
+            "improves mood and supports overall health.\n\nIt is important to recognize personal stress triggers and find ways to respond in a healthy way. Building small daily habits to manage stress can make a big difference over time. Reducing stress "
+            "helps improve eating habits, supports better blood sugar control, and helps maintain healthy blood pressure and weight."
+        ),
+    },
+    {
+        "id": "physical_activity",
+        "title": "Physical Activity for Weight, Blood Sugar, and Heart Health",
+        "category": "Exercise",
+        "tags": ["exercise", "weight", "diabetes"],
+        "source": "Physical Activity Guide",
+        "content": (
+            "Regular physical activity is one of the most effective ways to improve health and manage conditions such as diabetes, high blood pressure, and obesity. Being active helps the body use blood sugar more effectively, which can lower "
+            "blood sugar levels and improve insulin function. It also helps control weight by burning calories and improving metabolism.\n\n"
+            "Adults should aim for regular movement throughout the week. Activities such as walking, cycling, or light sports can improve heart health and support weight management. Strength exercises, such as lifting weights or using body weight, help build "
+            "muscle and improve overall strength. Muscle plays an important role in controlling blood sugar, so building and maintaining muscle is beneficial.\n\n"
+            "Even small amounts of activity can make a difference. Breaking up long periods of sitting with short walks or movement can help improve blood sugar levels. Choosing activities that are enjoyable makes it easier to stay consistent over time.\n\n"
+            "Physical activity also supports better sleep and helps reduce stress, which further improves overall health. Making activity a regular part of daily life can lead to better control of blood sugar, improved blood pressure, and healthier weight management over time."
+        ),
+    },
+    {
+        "id": "dash_diet_overview",
+        "title": "DASH Diet for Blood Pressure Control",
+        "category": "Hypertension",
+        "tags": ["hypertension", "blood pressure", "nutrition"],
+        "source": "Diet Plan Video",
+        "content": (
+            "The DASH diet is designed to help lower blood pressure by focusing on balanced and healthy eating habits. "
+            "It encourages eating more fruits, vegetables, whole grains, and low-fat dairy while reducing salt, processed foods, and unhealthy fats.\n\n"
+            "Reducing sodium intake is one of the most important steps in managing blood pressure. Many packaged and processed foods contain high amounts of salt, "
+            "so choosing fresh and whole foods can help lower daily sodium intake. Foods rich in potassium, such as fruits and vegetables, help balance sodium levels "
+            "and support healthy blood pressure.\n\n"
+            "This eating pattern also supports weight management and helps improve blood sugar control. By focusing on whole foods and limiting processed foods, "
+            "the DASH diet helps reduce the risk of chronic conditions and supports long-term heart health."
+        ),
+    },
+    {
+        "id": "diabetes_plate_method",
+        "title": "Diabetes Plate for Managing Blood Sugar",
+        "category": "Diabetes",
+        "tags": ["diabetes", "blood sugar", "nutrition"],
+        "source": "Diet Plan Video",
+        "content": (
+            "The plate method is a simple way to manage blood sugar levels by balancing food portions. Half of the plate should be filled with non-starchy vegetables "
+            "such as leafy greens, broccoli, and peppers. One quarter should include lean protein such as beans, fish, or chicken, and the remaining quarter should include "
+            "whole grains or starchy foods.\n\n"
+            "This method helps control portion sizes and prevents sudden increases in blood sugar. Foods high in fiber, such as vegetables and whole grains, are digested more slowly, "
+            "which helps maintain stable blood sugar levels.\n\n"
+            "Choosing whole foods and limiting sugary and processed foods is important for managing diabetes. This approach also supports weight control and can help reduce the risk of complications."
+        ),
+    },
+    {
+        "id": "myplate_balanced_eating",
+        "title": "MyPlate Approach for Balanced and Healthy Eating",
+        "category": "Obesity",
+        "tags": ["nutrition", "weight", "obesity"],
+        "source": "Diet Plan Video",
+        "content": (
+            "MyPlate is a simple guide to building balanced meals that support overall health and weight management. It encourages filling half the plate with fruits and vegetables, "
+            "one quarter with whole grains, and one quarter with protein foods.\n\n"
+            "This approach helps control portion sizes and ensures a balance of nutrients. Choosing whole grains instead of refined grains and including a variety of fruits and vegetables "
+            "can improve digestion and help maintain a healthy weight.\n\n"
+            "Limiting added sugars, unhealthy fats, and processed foods is important for preventing weight gain and supporting long-term health. Following MyPlate regularly can help build healthy eating habits."
         ),
     },
 ]

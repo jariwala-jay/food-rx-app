@@ -31,18 +31,6 @@ class TipProvider with ChangeNotifier {
     }
   }
 
-  String _getUpdateReason(
-      bool noTips, bool userChanged, bool conditionsChanged) {
-    final reasons = <String>[];
-    if (noTips) reasons.add('no tips shown');
-    if (userChanged) reasons.add('user changed');
-    if (conditionsChanged) reasons.add('medical conditions changed');
-    if (DateTime.now().difference(_lastUpdate).inDays >= 1) {
-      reasons.add('tips expired');
-    }
-    return reasons.join(', ');
-  }
-
   bool _areMedicalConditionsEqual(List<String>? a, List<String> b) {
     if (a == null) return false;
     if (a.length != b.length) return false;
@@ -62,20 +50,25 @@ class TipProvider with ChangeNotifier {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
 
-      // Filter out tips shown to the user today
-      final availableTips = allTips.where((tip) {
+      // Prefer tips not yet shown today; if that pool is empty but the catalog
+      // has tips (small DB or everything was already shown today), reuse the full
+      // list so Home never shows "No tips available" when tips exist.
+      var pool = allTips.where((tip) {
         final lastShown = tip.getLastShownForUser(userId);
         return lastShown == null ||
             DateTime(lastShown.year, lastShown.month, lastShown.day) != today;
       }).toList();
+      if (pool.isEmpty && allTips.isNotEmpty) {
+        pool = List<Tip>.from(allTips);
+      }
 
       // Separate tips by category
-      final conditionTips = availableTips
+      final conditionTips = pool
           .where((tip) => medicalConditions.contains(tip.category))
           .toList();
 
       final generalTips =
-          availableTips.where((tip) => tip.category == 'General').toList();
+          pool.where((tip) => tip.category == 'General').toList();
 
       // Select 2 condition-specific tips and 2 general tips
       final selectedTips = <Tip>[];
@@ -96,10 +89,10 @@ class TipProvider with ChangeNotifier {
         selectedTips.addAll(generalTipsToAdd);
       }
 
-      // If we don't have enough tips, fill with any available tips
-      while (selectedTips.length < 4 && availableTips.isNotEmpty) {
+      // If we don't have enough tips, fill from the pool
+      while (selectedTips.length < 4 && pool.isNotEmpty) {
         final remainingTips =
-            availableTips.where((tip) => !selectedTips.contains(tip)).toList();
+            pool.where((tip) => !selectedTips.contains(tip)).toList();
 
         if (remainingTips.isEmpty) break;
 

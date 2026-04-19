@@ -41,6 +41,7 @@ class Ingredient {
       'id': id,
       'name': name,
       'image': image,
+      if (localAssetPath != null) 'localAssetPath': localAssetPath,
     };
   }
 

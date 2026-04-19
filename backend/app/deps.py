@@ -22,3 +22,23 @@ async def get_current_user_id(
             detail="Invalid or expired token",
         )
     return user_id
+
+
+async def get_chatbot_user_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str:
+    """
+    Like get_current_user_id, but allows missing auth for anonymous chat (Swagger / demos).
+
+    Valid Bearer token → real user id. No header → ``anon`` (no profile/pantry in DB).
+    Malformed or expired token → 401.
+    """
+    if not credentials or not credentials.credentials:
+        return "anon"
+    user_id = decode_access_token(credentials.credentials)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    return user_id

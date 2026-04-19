@@ -10,8 +10,20 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/views/meal_goals_history_page.dart';
 
+/// Entry point for the add sheet. Pantry shortcuts skip the four-tile menu.
+enum AddActionSheetEntry {
+  menu,
+  foodRxCategories,
+  homeCategories,
+}
+
 class AddActionSheet extends StatefulWidget {
-  const AddActionSheet({Key? key}) : super(key: key);
+  final AddActionSheetEntry entry;
+
+  const AddActionSheet({
+    super.key,
+    this.entry = AddActionSheetEntry.menu,
+  });
 
   @override
   State<AddActionSheet> createState() => _AddActionSheetState();
@@ -20,6 +32,60 @@ class AddActionSheet extends StatefulWidget {
 class _AddActionSheetState extends State<AddActionSheet> {
   bool showPantryPicker = false;
   bool showOtherPantryPicker = false;
+
+  bool get _skipMenuOnBack =>
+      widget.entry == AddActionSheetEntry.foodRxCategories ||
+      widget.entry == AddActionSheetEntry.homeCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.entry == AddActionSheetEntry.foodRxCategories) {
+      showPantryPicker = true;
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _syncTourAfterDirectFoodRxOpen());
+    } else if (widget.entry == AddActionSheetEntry.homeCategories) {
+      showOtherPantryPicker = true;
+    }
+  }
+
+  void _syncTourAfterDirectFoodRxOpen() {
+    if (!mounted) return;
+    try {
+      final tourProvider =
+          Provider.of<ForcedTourProvider>(context, listen: false);
+      if (tourProvider.isOnStep(TourStep.addButton)) {
+        tourProvider.completeCurrentStep();
+      }
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        try {
+          final tp =
+              Provider.of<ForcedTourProvider>(context, listen: false);
+          if (tp.isOnStep(TourStep.selectCategory)) {
+            ShowcaseView.get()
+                .startShowCase([TourKeys.pantryCategoryListKey]);
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  void _onFoodPickerBack() {
+    if (_skipMenuOnBack) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => showPantryPicker = false);
+    }
+  }
+
+  void _onHomePickerBack() {
+    if (_skipMenuOnBack) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => showOtherPantryPicker = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +102,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
             key: const ValueKey('food-pantry-picker'),
             title: 'Add FoodRx Items',
             categories: foodPantryCategories,
-            onBack: () {
-              setState(() => showPantryPicker = false);
-            },
+            onBack: _onFoodPickerBack,
             isFoodPantryItem: true,
           );
         } else if (showOtherPantryPicker) {
@@ -46,7 +110,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
             key: const ValueKey('other-pantry-picker'),
             title: 'Add Home Items',
             categories: otherPantryItemCategories,
-            onBack: () => setState(() => showOtherPantryPicker = false),
+            onBack: _onHomePickerBack,
             isFoodPantryItem: false,
           );
         } else {

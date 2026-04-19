@@ -1,17 +1,25 @@
+import logging
 from contextlib import asynccontextmanager
 from bson import ObjectId
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 
-from app.database import get_database, close_database
+from app.database import ensure_database_indexes, get_database, close_database
 from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips
 from app.services.rag_service import rag_service
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s: %(message)s",
+)
+logging.getLogger("app").setLevel(logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await get_database()
+    await ensure_database_indexes()
     await rag_service.initialize()
     yield
     await close_database()

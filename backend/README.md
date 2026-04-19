@@ -28,6 +28,19 @@ Or without activating (using the venv’s Python directly):
 
 API will be available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 
+## Clear RAG cache (one command)
+
+From repo root:
+
+```bash
+python3 backend/clear_rag_cache.py
+```
+
+Notes:
+- Clears on-disk embedding cache files (`embeddings_cache.npy` + `embeddings_cache_meta.json`).
+- Clears MongoDB response cache collection (`rag_response_cache`) when `MONGODB_URL` is set.
+- Use `--skip-db` or `--skip-embeddings` if needed.
+
 ## Deploy to Google Cloud Run (real devices)
 
 See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for steps, runtime env vars, and Flutter `API_BASE_URL`.
