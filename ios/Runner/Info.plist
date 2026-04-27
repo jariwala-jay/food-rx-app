@@ -51,6 +51,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyFoodRx needs access to your photo library so you can choose a profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MyFoodRx needs access to your camera so you can take a profile picture.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

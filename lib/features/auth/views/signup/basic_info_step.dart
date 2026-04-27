@@ -50,7 +50,6 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _passwordController.text = signupData.password ?? '';
     _confirmPasswordController.text = signupData.password ?? '';
 
-    // Clear email error when user types
     _emailController.addListener(() {
       if (_emailExistsError != null) {
         setState(() {
@@ -89,6 +88,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
+        requestFullMetadata: false,
       );
 
       if (pickedFile != null) {
@@ -105,12 +105,10 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   }
 
   Future<void> _handleNext() async {
-    // Clear email error before validation
     setState(() {
       _emailExistsError = null;
     });
 
-    // Validate form fields first
     final isFormValid = _formKey.currentState!.validate();
 
     final hasMissingFields = _nameController.text.trim().isEmpty ||
@@ -118,9 +116,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         _passwordController.text.trim().isEmpty ||
         _confirmPasswordController.text.trim().isEmpty;
 
-    // If form validation failed or there are missing fields, move to first missing field.
     if (!isFormValid || hasMissingFields) {
-      // Move user to the first missing required field.
       if (_nameController.text.trim().isEmpty) {
         await _scrollToKey(_nameFieldKey);
         return;
@@ -147,8 +143,6 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     });
 
     try {
-      // Check if email already exists in database
-      // Clear any previous email error first
       setState(() {
         _emailExistsError = null;
       });
@@ -162,14 +156,11 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           _emailExistsError =
               'This email is already registered. Please use a different email or try logging in.';
         });
-        // Focus on email field and show error
         _emailFocusNode.requestFocus();
-        // Trigger form validation to show error
         _formKey.currentState?.validate();
         return;
       }
 
-      // Store the data in SignupProvider instead of registering
       context.read<SignupProvider>().updateBasicInfo(
             name: _nameController.text,
             email: _emailController.text,

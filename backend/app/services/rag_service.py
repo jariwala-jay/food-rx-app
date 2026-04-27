@@ -69,8 +69,8 @@ RAG_CONTEXT_DOC_COUNT = 4
 LLM_MAX_OUTPUT_TOKENS = 768
 LLM_TEMPERATURE = 0.5
 RAG_CACHE_COLLECTION = "rag_response_cache"
-# Bump when cache row shape changes (intent_key, etc.).
-RAG_CACHE_VERSION = 3
+# Bump when cache row shape changes (plan_key, intent_key, etc.).
+RAG_CACHE_VERSION = 4
 # Similar questions only; guarded by keyword overlap + intent match (see _rag_cache_get_similar_embedding).
 RAG_CACHE_EMBED_SIMILARITY_ENABLED = True
 RAG_CACHE_EMBED_THRESHOLD = 0.88
@@ -167,34 +167,89 @@ _DIET_SIGNALS = re.compile(
     re.IGNORECASE,
 )
 
-_MSG_EMERGENCY = (
-    "Please call 911 or go to the nearest emergency room right away.\n\n"
-    "Once you are safe, I am happy to help with food and nutrition questions."
-)
+_MSG_EMERGENCY = "This may be a medical emergency. Please call 911 or go to the nearest emergency room right away."
 
 _MSG_MEDICAL = (
-    "That sounds like a medical question, and I am not able to give medical advice.\n\n"
-    "Please speak with your doctor, pharmacist, or healthcare provider — "
-    "they are the right people to help with medications, test results, diagnoses, or symptoms.\n\n"
-    "I can help with questions about food, diet, and healthy eating. "
-    'Try asking: "What foods are good for my blood pressure?"'
+    "I'm sorry, I can't help with medical advice.\n\n"
+    "Please contact your doctor or pharmacist.\n\n"
+    "I can guide you on food and healthy eating to support your health."
 )
 
 _MSG_OFFTOPIC = (
-    "I am the MyFoodRx nutrition assistant, so I can only help with questions about "
-    "food, diet, and healthy eating.\n\n"
-    "I cannot help with that topic. Try asking:\n"
-    '- "What should I eat on the DASH diet?"\n'
-    '- "What are good low-sodium snacks?"\n'
-    '- "How do I manage blood sugar through food?"'
+    "I am the MyFoodRx nutrition assistant. I can only help with food and healthy eating.\n\n"
+    "You can ask about your meals or how to eat better for your health."
 )
 
 _MSG_LOW_RELEVANCE = (
-    "I am not sure how to connect that question to food or nutrition.\n\n"
-    "I am here to help with diet, healthy eating, and food choices. "
-    "Could you rephrase, or ask something more specific about food or your diet plan?\n\n"
-    'For example: "What foods help lower blood pressure?" or '
-    '"What can I eat for breakfast on the Diabetes Plate plan?"'
+    "I'm not sure how that relates to food or healthy eating.\n\n"
+    "Please ask something about your meals or eating habits."
+)
+
+
+def _first_nonempty_line(text: str) -> str:
+    for line in (text or "").splitlines():
+        s = line.strip()
+        if s:
+            return s
+    return ""
+
+
+# First lines of canned guardrail strings — stays in sync when _MSG_* wording changes.
+_CANNED_GUARDRAIL_PREFIXES: tuple[str, ...] = tuple(
+    _first_nonempty_line(m)
+    for m in (_MSG_EMERGENCY, _MSG_MEDICAL, _MSG_OFFTOPIC, _MSG_LOW_RELEVANCE)
+)
+
+# Other fixed replies from chat() / generators that should not attach follow-up chips.
+_EXTRA_NO_FOLLOWUP_PREFIXES: tuple[str, ...] = (
+    "I am having trouble connecting right now",
+    "I am having trouble processing your question",
+    "The AI service is currently at capacity",
+    "I ran into a technical issue",
+    "I cannot advise on medications",
+)
+
+_NO_FOLLOWUP_PREFIXES: tuple[str, ...] = (
+    _CANNED_GUARDRAIL_PREFIXES + _EXTRA_NO_FOLLOWUP_PREFIXES
+)
+
+PLAN_INFO: dict[str, dict[str, str]] = {
+    "DiabetesPlate": {
+        "definition": "The Diabetes Plate is a simple way to plan meals for blood sugar control.",
+        "portion": "Fill half your plate with vegetables, one quarter with protein, and one quarter with carbs.",
+        "why": "This helps keep your blood sugar steady.",
+    },
+    "DASH": {
+        "definition": "The DASH diet is a low-sodium eating plan that helps lower blood pressure.",
+        "portion": "Fill your meals with fruits, vegetables, whole grains, and lean protein.",
+        "why": "This helps keep your heart healthy.",
+    },
+    "MyPlate": {
+        "definition": "MyPlate is a simple guide for balanced meals.",
+        "portion": "Fill half your plate with fruits and vegetables, and the other half with grains and protein.",
+        "why": "This helps you eat healthy and balanced meals.",
+    },
+}
+
+_PLAN_QUERY_HINTS: tuple[str, ...] = (
+    "what is diabetes plate",
+    "what is the diabetes plate",
+    "diabetes plate info",
+    "how does diabetes plate work",
+    "explain diabetes plate",
+    "what is dash",
+    "what is the dash diet",
+    "dash diet info",
+    "tell me about dash",
+    "explain dash",
+    "what is myplate",
+    "what is my plate",
+    "myplate info",
+    "my plate info",
+    "tell me about myplate",
+    "tell me about my plate",
+    "explain myplate",
+    "explain my plate",
 )
 
 
@@ -205,37 +260,36 @@ def should_suggest_follow_ups(answer: str) -> bool:
     t = (answer or "").strip()
     if len(t) < 24:
         return False
-    prefixes = (
-        "This sounds like a medical emergency",
-        "That sounds like a medical question",
-        "I am the MyFoodRx nutrition assistant, so I can only help",
-        "I am not sure how to connect that question",
-        "I am having trouble connecting right now",
-        "I am having trouble processing your question",
-        "The AI service is currently at capacity",
-        "I ran into a technical issue",
-        "I cannot advise on medications",
-    )
-    return not any(t.startswith(p) for p in prefixes)
+    return not any(t.startswith(p) for p in _NO_FOLLOWUP_PREFIXES)
 
 
 def _clip_text_for_rag_prompt(text: str) -> str:
     return text[:200]
 
 
-def _build_rag_user_message(*, context_from_documents: str, question: str) -> str:
-    """
-    Runtime RAG payload: keep rules in system prompt, pass data as user message.
-    """
+def _build_rag_user_message(
+    *, context_from_documents: str, question: str, resolved_plan: str | None = None
+) -> str:
+    """Runtime RAG payload: document context plus question (see SYSTEM_PROMPT for role rules)."""
+    question_text = question.strip()
+    if "portion" in question_text.lower():
+        question_text += "\nFocus on portion sizes and plate structure."
+    if resolved_plan == "DiabetesPlate":
+        question_text += "\nUse Diabetes Plate structure and portions."
     return (
-        "Use only the context provided below to answer the question.\n"
-        "Do not use outside knowledge.\n"
-        "If the context is missing key details:\n"
-        'Say: "I don’t have that specific detail."\n'
-        "Give only simple, general guidance based on the assigned plan.\n"
-        "Do NOT provide specific numbers, limits, or medical facts unless they are present in the context.\n\n"
+        "Use the context provided below when it applies to the question.\n"
+        "Do not invent medical facts, study claims, exact numbers, or citations that are not in the context.\n\n"
+        "IMPORTANT RULE:\n"
+        "- If the question is about a general nutrition concept (such as fiber, glycemic index, nutrient-dense foods, blood sugar), "
+        "ALWAYS give a short, simple explanation in plain language.\n"
+        "- Do NOT say that the information is missing for these basic concepts.\n\n"
+        "LIMITATION RULE:\n"
+        "- Only say that details are missing when the user asks for specific numbers, clinical thresholds, or exact medical values.\n"
+        "- In those cases, briefly say you do not have that detail and give safe, general guidance.\n\n"
+        "If the question has multiple parts, answer each part you can.\n"
+        "Do not start your response by saying information is missing unless the entire answer depends on missing details.\n\n"
         f"Context from documents:\n{context_from_documents.strip()}\n\n"
-        f"Question:\n{question.strip()}"
+        f"Question:\n{question_text}"
     )
 
 
@@ -255,6 +309,23 @@ def _strip_llm_ui_phrases(text: str) -> str:
     t = (text or "").strip()
     t = _EXPLORE_MORE_BELOW_LINE.sub("", t)
     t = _EXPLORE_MORE_BELOW_INLINE.sub("", t)
+    # Normalize a few common model quirks before the user sees them.
+    t = re.sub(r"\bDiabetesPlate\b", "Diabetes Plate", t)
+    t = re.sub(
+        r"(?i)\byou want foods that help\b",
+        "These foods help",
+        t,
+    )
+    t = re.sub(
+        r"(?i)\bthe diabetes plate helps you do this\b",
+        "The Diabetes Plate is a simple way to plan this",
+        t,
+    )
+    t = re.sub(
+        r"(?i)\bdiabetes plate helps you do this\b",
+        "The Diabetes Plate is a simple way to plan this",
+        t,
+    )
     t = re.sub(r"\n{3,}", "\n\n", t)
     return t.strip()
 
@@ -297,76 +368,140 @@ ROLE
 
 SCOPE
 - Answer only about food, meals, nutrition, and healthy eating habits.
-- Support meal planning (DASH, MyPlate, DiabetesPlate), grocery choices, cooking, pantry use, food labels, allergies, and preferences.
+- Support meal planning (DASH, MyPlate, Diabetes Plate), grocery choices, cooking, pantry use, food labels, allergies, and preferences.
 - Discuss hydration, sleep, and exercise only when tied to blood sugar, blood pressure, weight, or heart health.
 
 SAFETY
 - Do not provide medical diagnosis, treatment, or medication advice.
-- If symptoms, diagnosis, medications, or emergencies are requested, give brief safety redirection:
-  - Symptoms/diagnosis: "Please consult your doctor. I can only help with diet questions." --> need to give a proper msg 
-  - Medications: "I cannot advise on medications. Please speak with your doctor or pharmacist."
-  - Emergency: "Please call 911 or go to the emergency room."
+- If symptoms or diagnosis are asked, direct the user to a healthcare professional and then continue with food-related guidance if appropriate.
+- If medications are asked: "I cannot advise on medications. Please speak with your doctor or pharmacist."
+- If emergency symptoms are mentioned, say it may be an emergency and advise calling local emergency services (911 in the U.S.) or going to the nearest emergency room.
 
 OFF-TOPIC
-- If not food/nutrition related, reply:
-  - "I can only help with food and nutrition questions. Please ask me about your diet, meals, or healthy eating."
-- Do not add any extra explanation beyond this sentence.
+- If the request is not related to food or nutrition, reply briefly that you can only help with food and healthy eating.
 
 PERSONALIZATION (STRICT)
 - Always prioritize the assigned plan from user context if present.
-- Never ask the user to choose a plan when an assigned plan exists.
-- Never contradict assigned plan fields.
-- Do not suggest switching plans if a plan is already assigned.
-- Follow exactly one plan per user response. Do not combine plan logic.
+- If an assigned plan is present, it overrides all condition-based inference.
+- Never ask the user to choose a plan when one is already assigned.
+- Never contradict the assigned plan.
+- Use exactly one plan per response. Do not combine plans.
 
 PLAN MAPPING (STRICT)
 - Use one plan only per response:
-  - DiabetesPlate
+  - Diabetes Plate (internal key: DiabetesPlate)
   - DASH
   - MyPlate
-- If assigned plan is present in user context, that plan is the source of truth.
 - If assigned plan is missing, infer using conditions:
-  - If diabetes or prediabetes is present -> DiabetesPlate
-  - Else if hypertension is present -> DASH
-  - Else -> MyPlate
+  - If diabetes or prediabetes is present → Diabetes Plate
+  - Else if hypertension is present → DASH
+  - Else → MyPlate
 
 PLAN RULES (STRICT)
-- DiabetesPlate:
-  - Use Diabetes Plate structure: half non-starchy vegetables, one-quarter protein, one-quarter carbohydrates.
-  - Include simple blood sugar guidance: portion balance, fiber, and lower-glycemic choices.
+- Diabetes Plate:
+  - Structure: half non-starchy vegetables, one-quarter protein, one-quarter carbohydrates.
+  - Focus on blood sugar balance using fiber and steady carbohydrate intake.
   - Default sodium target: 1500 mg/day.
+
 - DASH:
   - Focus on low sodium, fruits, vegetables, whole grains, and lean protein.
   - Default sodium target: 1500 mg/day.
+
 - MyPlate:
   - Focus on balanced meals, portion control, and healthy habits.
   - Default sodium target: 2300 mg/day.
 
 COMBINATION HANDLING (STRICT)
-- If diabetes or prediabetes is present, use DiabetesPlate only.
-- If only hypertension is present (no diabetes/prediabetes), use DASH only.
-- If only obesity is present, or no listed condition, use MyPlate only.
-- Do not mix or blend multiple plans in one answer.
+- If diabetes or prediabetes is present → use Diabetes Plate only.
+- NEVER mention DASH if diabetes or prediabetes is present.
+- If only hypertension is present (no diabetes/prediabetes) → use DASH only.
+- If only obesity is present, or no condition → use MyPlate only.
+- Do not mix or combine multiple plans in one response.
+- The selected plan MUST follow these rules and must not be overridden by general knowledge.
 
 KNOWLEDGE USE
-- Use only the provided knowledge context.
-- If context is missing, say so briefly and provide safe, general nutrition guidance.
+- Use the provided knowledge context as the primary source when it is relevant to the question.
+- For general nutrition concepts (such as fiber, glycemic index, nutrient-dense foods), always give a short, simple explanation in plain language.
+- Do NOT say information is missing for basic nutrition concepts.
+- Only say details are missing when the user asks for specific numbers, limits, or clinical values.
+- In that case, briefly state that the exact detail is not available and give safe, general guidance.
 - Do not invent facts, numbers, studies, or citations.
 
 RESPONSE STYLE
-- Write at about a 2nd to 3rd grade reading level
-- Usually keep replies concise (about 2-6 short sentences), unless the user asks for more detail.
-- Use clear, direct, active language at a simple reading level.
-- Explain technical terms in plain words when used.
+- Write at about a 2nd to 3rd grade reading level.
+- Use simple, common words only.
+- Use active voice and avoid passive voice.
+- Start sentences with the subject when possible.
+- Write one idea per sentence.
+- Do not combine multiple ideas in one sentence.
+- Avoid words like "rather than", "instead", "however", "impact".
+- Avoid phrases like "this can lead to", "helps with", "in order to".
+- Prefer direct statements over comparisons.
+- Break explanations into 2–4 short sentences.
+- Keep responses concise (about 2–6 short sentences unless more detail is needed).
+- Explain terms simply when used.
+- Vary sentence starters to avoid repetitive tone.
+- Avoid openings like "You want foods" or "You want food." Prefer direct guidance (for example, "These foods help ...").
+- In user-visible text, always write "Diabetes Plate" as two words. Never write "DiabetesPlate".
 - Do not repeat the user's name.
-- Do not mention app UI, internal rules, or system behavior.
-- Handle greetings/thanks briefly.
-- Do not over-explain. Give only what is needed to answer the question.
-- Ask a follow-up question only if necessary to answer correctly.
+- Do not mention internal rules, system behavior, or app UI.
+- Do not over-explain.
+
+CLOSING BEHAVIOR
+- If the user says thanks, okay, or goodbye:
+  - Respond in 1–2 short sentences only.
+  - Optionally include one short encouraging sentence.
+  - Do not introduce new information or suggestions.
+
+NUMBERS RULE
+- Avoid specific clinical numbers unless they come from provided context.
+- Common educational ranges (for example, glycemic index ranges) are allowed when clearly labeled educational.
 
 EXPLANATION STYLE EXAMPLE
-- Example: "Fiber helps slow sugar absorption. This means your blood sugar rises more slowly after eating."
+- "Fiber helps slow sugar absorption. This means your blood sugar rises more slowly after eating."
+
+STYLE EXAMPLES
+Bad:
+"Rather than focusing on glycemic index, it is better to choose balanced meals."
+
+Good:
+"GI shows how fast food raises blood sugar.
+Balanced meals help keep it steady."
 """
+
+
+def _resolve_plan_for_profile(user_profile: dict[str, Any] | None) -> str | None:
+    """Resolve chatbot plan key: diabetes override, then myPlanType, then condition inference."""
+    if not isinstance(user_profile, dict):
+        return None
+
+    conditions = (
+        user_profile.get("medicalConditions") or user_profile.get("conditions") or []
+    )
+    if isinstance(conditions, str):
+        conditions = [conditions]
+    normalized = [str(c).lower() for c in conditions]
+    if any("prediabetes" in c or "diabetes" in c for c in normalized):
+        return "DiabetesPlate"
+
+    raw_plan = user_profile.get("myPlanType")
+    if raw_plan:
+        plan_text = str(raw_plan).strip().lower().replace("-", " ")
+        compact = plan_text.replace(" ", "")
+        if compact in {"diabetesplate", "diabetes"} or "diabetes plate" in plan_text:
+            return "DiabetesPlate"
+        if compact in {"dash", "dashdiet"} or "dash" in plan_text:
+            return "DASH"
+        if (
+            compact in {"myplate", "plate"}
+            or "myplate" in plan_text
+            or "my plate" in plan_text
+        ):
+            return "MyPlate"
+
+    if any("hypertension" in c or "blood pressure" in c for c in normalized):
+        return "DASH"
+    return "MyPlate"
 
 
 class _QueryClass:
@@ -627,6 +762,10 @@ def is_polite_chat_turn(message: str) -> bool:
 # mis-fires session_closing and strips follow-up chips.
 _SESSION_CLOSING_EXACT = frozenset(
     {
+        "ok thanks",
+        "ok thank you",
+        "okay thanks",
+        "okay thank you",
         "thanks",
         "thank you",
         "thankyou",
@@ -665,6 +804,7 @@ _SESSION_CLOSING_EXACT = frozenset(
 _SESSION_CLOSING_REGEX = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
+        r"^(ok|okay)\s+(thanks?|thank you)(\s+(so|very)\s+much)?$",
         r"^(thank you|thanks|thx|ty|thnx|thank u)(\s+(so|very)\s+much)?$",
         r"^(no|nothing)\s+(more|else)(\s+thanks?|\s+thank you)?$",
         r"^i\s*(have|'ve)\s+no\s+more\s+questions$",
@@ -1072,6 +1212,22 @@ def _cache_user_key(user_id: str | None) -> str:
     return (user_id or "").strip() or "anon"
 
 
+def _cache_plan_key(user_profile: dict[str, Any] | None) -> str:
+    return _resolve_plan_for_profile(user_profile) or "MyPlate"
+
+
+def _is_plan_query(message: str) -> bool:
+    q = _normalize_query_for_cache(message)
+    return any(hint in q for hint in _PLAN_QUERY_HINTS)
+
+
+def _build_plan_response(plan: str | None) -> str:
+    info = PLAN_INFO.get(plan or "")
+    if not info:
+        return ""
+    return f"{info['definition']}\n\n{info['portion']}\n\n{info['why']}"
+
+
 def _is_truncation_finish_reason(finish_reason: Any) -> bool:
     """True when the model stopped because of an output length/token cap (unsafe to cache)."""
     fr = str(finish_reason) if finish_reason is not None else ""
@@ -1080,7 +1236,7 @@ def _is_truncation_finish_reason(finish_reason: Any) -> bool:
 
 
 async def _rag_cache_get_exact(
-    query_norm: str, condition_key: str, user_key: str
+    query_norm: str, condition_key: str, user_key: str, plan_key: str
 ) -> str | None:
     try:
         db = await get_database()
@@ -1092,6 +1248,7 @@ async def _rag_cache_get_exact(
                 "query_norm": query_norm,
                 "condition_key": condition_key,
                 "user_key": user_key,
+                "plan_key": plan_key,
                 "cache_version": RAG_CACHE_VERSION,
             }
         )
@@ -1152,6 +1309,7 @@ async def _rag_cache_get_similar_embedding(
     query_embedding: list[float],
     condition_key: str,
     user_key: str,
+    plan_key: str,
     query: str,
     intent_key: str,
 ) -> str | None:
@@ -1166,6 +1324,7 @@ async def _rag_cache_get_similar_embedding(
                 {
                     "condition_key": condition_key,
                     "user_key": user_key,
+                    "plan_key": plan_key,
                     "cache_version": RAG_CACHE_VERSION,
                 }
             )
@@ -1212,6 +1371,7 @@ async def _rag_cache_put(
     query_norm: str,
     condition_key: str,
     user_key: str,
+    plan_key: str,
     query_embedding: list[float],
     response: str,
     intent_key: str,
@@ -1226,6 +1386,7 @@ async def _rag_cache_put(
                 "query_norm": query_norm,
                 "condition_key": condition_key,
                 "user_key": user_key,
+                "plan_key": plan_key,
                 "cache_version": RAG_CACHE_VERSION,
                 "intent_key": intent_key,
                 "embedding": query_embedding,
@@ -1429,9 +1590,9 @@ class RAGService:
                 f"Food allergies/intolerances: {', '.join(str(a) for a in allergies)}"
             )
 
-        diet_type = user_profile.get("dietType") or user_profile.get("myPlanType")
-        if diet_type:
-            lines.append(f"Assigned diet plan: {diet_type}")
+        resolved_plan = _resolve_plan_for_profile(user_profile)
+        if resolved_plan:
+            lines.append(f"Resolved plan (must use exactly this): {resolved_plan}")
 
         goals = user_profile.get("healthGoals") or []
         if goals:
@@ -1575,6 +1736,7 @@ class RAGService:
         query_norm = _normalize_query_for_cache(message)
         condition_key = _cache_profile_condition_key(user_profile)
         user_key = _cache_user_key(user_id)
+        plan_key = _cache_plan_key(user_profile)
 
         if _skip_rag_polite_chat(message):
             logger.info("Polite chat turn — skipping query embedding")
@@ -1587,7 +1749,14 @@ class RAGService:
             reply, _, _ = self._generate_reply(message, full_system, history_contents)
             return reply
 
-        cached_exact = await _rag_cache_get_exact(query_norm, condition_key, user_key)
+        if _is_plan_query(message):
+            plan_response = _build_plan_response(plan_key)
+            if plan_response:
+                return plan_response
+
+        cached_exact = await _rag_cache_get_exact(
+            query_norm, condition_key, user_key, plan_key
+        )
         if cached_exact is not None:
             return cached_exact
 
@@ -1678,6 +1847,7 @@ class RAGService:
                 query_embedding,
                 condition_key,
                 user_key,
+                plan_key,
                 message,
                 _suggestion_intent_key(message),
             )
@@ -1700,6 +1870,7 @@ class RAGService:
         rag_user_message = _build_rag_user_message(
             context_from_documents=knowledge_context,
             question=message,
+            resolved_plan=plan_key,
         )
 
         reply, _, truncated = self._generate_reply(
@@ -1717,6 +1888,7 @@ class RAGService:
                 query_norm,
                 condition_key,
                 user_key,
+                plan_key,
                 query_embedding,
                 reply,
                 _suggestion_intent_key(message),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
@@ -22,6 +23,7 @@ class AuthController with ChangeNotifier {
   ReplanService? _replanService;
   ReplanTrigger? _pendingReplanTrigger;
   NotificationManager? _notificationManager;
+  Uint8List? _localProfilePhotoData;
 
   Future<void> _markUserActive() async {
     try {
@@ -39,6 +41,7 @@ class AuthController with ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   ReplanTrigger? get pendingReplanTrigger => _pendingReplanTrigger;
   NotificationManager? get notificationManager => _notificationManager;
+  Uint8List? get localProfilePhotoData => _localProfilePhotoData;
 
   bool _isTransientNetworkError(Object e) =>
       e is SocketException ||
@@ -50,6 +53,7 @@ class AuthController with ChangeNotifier {
   Future<void> _clearAuthSession() async {
     await ApiClient.clearSession();
     RagChatbotService.resetConversation();
+    _localProfilePhotoData = null;
   }
 
   /// [GET /auth/me] with short backoff — cellular/Wi‑Fi often lags right after boot.
@@ -196,6 +200,12 @@ class AuthController with ChangeNotifier {
         }
 
         if (profilePhoto != null) {
+          try {
+            _localProfilePhotoData = await profilePhoto.readAsBytes();
+            notifyListeners();
+          } catch (_) {
+            // Non-fatal preview miss; upload may still succeed.
+          }
           try {
             final photoRes = await ApiClient.uploadFile('/auth/profile-photo', profilePhoto)
                 as Map<String, dynamic>?;
@@ -397,9 +407,14 @@ class AuthController with ChangeNotifier {
 
   Future<void> updateProfilePhoto(File photo) async {
     if (_currentUser == null) return;
-    _isLoading = true;
-    notifyListeners();
+    // Do not toggle global _isLoading here: it replaces the app's root with a
+    // loading scaffold and conflicts with in-page upload UI on Profile.
     try {
+      try {
+        _localProfilePhotoData = await photo.readAsBytes();
+      } catch (_) {
+        // Keep network upload path even if local preview cannot be read.
+      }
       final photoRes = await ApiClient.uploadFile('/auth/profile-photo', photo)
           as Map<String, dynamic>?;
       final photoId = photoRes?['profilePhotoId'] as String?;
@@ -413,7 +428,6 @@ class AuthController with ChangeNotifier {
     } catch (e) {
       _error = userFacingErrorMessage(e);
     } finally {
-      _isLoading = false;
       notifyListeners();
     }
   }

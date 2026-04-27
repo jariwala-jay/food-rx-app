@@ -36,14 +36,84 @@ from app.services.rag_service import (
 
 logger = logging.getLogger(__name__)
 
-_last_suggestion_pair: dict[tuple[str, str], tuple[str, str]] = {}
-_last_suggestion_context: dict[tuple[str, str], dict[str, Any]] = {}
+# Follow-up chips shown this chat session — avoid repeating the same pair every turn.
+_seen_follow_up_questions: dict[tuple[str, str], set[str]] = {}
 
 
 def _clear_suggestion_memory(user_id: str, conversation_id: str) -> None:
     k = (user_id, conversation_id)
-    _last_suggestion_pair.pop(k, None)
-    _last_suggestion_context.pop(k, None)
+    _seen_follow_up_questions.pop(k, None)
+
+
+def _flatten_question_bucket(bucket: dict[str, list[str]]) -> list[str]:
+    """All questions in a bank bucket, deduped, stable order."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for lst in bucket.values():
+        for q in lst:
+            t = (q or "").strip()
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _ordered_condition_candidates(
+    bucket: dict[str, list[str]], question_type: str
+) -> list[str]:
+    """Prefer question_type sub-bucket, then others — more variety for rotation."""
+    order: list[str] = []
+    seen: set[str] = set()
+    preferred = bucket.get(question_type)
+    if preferred:
+        for q in preferred:
+            t = (q or "").strip()
+            if t and t not in seen:
+                seen.add(t)
+                order.append(t)
+    for key, lst in bucket.items():
+        if key == question_type:
+            continue
+        for q in lst:
+            t = (q or "").strip()
+            if t and t not in seen:
+                seen.add(t)
+                order.append(t)
+    return order
+
+
+def _pick_follow_ups_with_rotation(
+    session_key: tuple[str, str],
+    candidates: list[str],
+    k: int = 2,
+) -> list[str]:
+    """
+    Pick k follow-ups preferring questions not yet shown in this session.
+    When the pool is exhausted, reset session memory and cycle again.
+    """
+    if k <= 0:
+        return []
+    deduped: list[str] = []
+    dup: set[str] = set()
+    for q in candidates:
+        t = (q or "").strip()
+        if not t or t in dup:
+            continue
+        dup.add(t)
+        deduped.append(t)
+    if not deduped:
+        return []
+
+    seen = _seen_follow_up_questions.setdefault(session_key, set())
+    available = [q for q in deduped if q not in seen]
+    if len(available) < k:
+        seen.clear()
+        available = list(deduped)
+
+    out = available[:k]
+    seen.update(out)
+    return out
 
 
 def _apply_follow_up_prelude(response: str, follow_ups: list[str]) -> str:
@@ -97,39 +167,68 @@ def _user_first_name(user_profile: dict[str, Any] | None) -> str | None:
 
 def _greeting_for_profile(user_profile: dict[str, Any] | None) -> str:
     fn = _user_first_name(user_profile)
-
-    if fn:
-        base = f"Hi {fn}! 😊 I'm here to help you eat well, feel great, and make healthy choices easier."
-    else:
-        base = "Hi! 😊 I'm here to help you eat well, feel great, and make healthy choices easier."
-
     f = _profile_condition_flags(user_profile)
+    diabetes = f["diabetes"]
+    prediabetes = f["prediabetes"]
+    hypertension = f["hypertension"]
+    obesity = f["obesity"]
+
+    def _hey(message: str) -> str:
+        if fn:
+            return f"Hey {fn}! {message}"
+        return f"Hey! {message}"
 
     # Multi-condition
-    if f["diabetes"] and f["obesity"]:
-        return base + "\nLet's focus on meals that keep your blood sugar steady and help you stay full and energized. What would you like to start with?"
+    if diabetes and hypertension and obesity:
+        return _hey(
+            "I'm here to help you choose foods and build healthy habits that support your blood sugar, blood pressure and overall health. What would you like to start with?"
+        )
 
-    if f["prediabetes"] and f["obesity"]:
-        return base + "\nSmall food changes can make a big difference for your blood sugar and weight. Want to explore some easy wins?"
+    if diabetes and obesity:
+        return _hey(
+            "I'm here to help you with balanced nutrition and food choices that keep your blood sugar steady while supporting healthy habits and overall well-being. What would you like to start with?"
+        )
 
-    if f["hypertension"] and f["obesity"]:
-        return base + "\nWe can build heart-friendly meals that are both tasty and satisfying. What sounds good to you today?"
+    if prediabetes and obesity:
+        return _hey(
+            "I'm here to help you make small, sustainable food and nutrition changes that support your blood sugar and overall health while building healthy habits. Want to explore some easy wins?"
+        )
+
+    if hypertension and obesity:
+        return _hey(
+            "I'm here to help you build heart-healthy eating habits and make nutrition choices that support your blood pressure and overall health. What sounds good to you today?"
+        )
+
+    if hypertension and diabetes:
+        return _hey(
+            "I'm here to help you choose balanced foods and build healthy eating habits that support both your blood pressure and blood sugar. What would you like to start with?"
+        )
 
     # Single condition
-    if f["diabetes"]:
-        return base + "\nLet's make managing blood sugar simpler with the right food choices. What would you like help with?"
+    if diabetes:
+        return _hey(
+            "I'm here to support you with nutrition and food choices that help keep your blood sugar steady and support your overall health. What would you like help with today?"
+        )
 
-    if f["prediabetes"]:
-        return base + "\nYou can turn things around with a few smart food swaps. Want to see how?"
+    if prediabetes:
+        return _hey(
+            "I'm here to help you make simple food and nutrition changes that can keep your blood sugar steady and support your long-term health. What would you like to work on?"
+        )
 
-    if f["hypertension"]:
-        return base + "\nLet's create heart-healthy meals without sacrificing flavor. Where would you like to begin?"
+    if hypertension:
+        return _hey(
+            "I'm here to help you build heart-healthy eating habits and make nutrition choices that support your blood pressure. Where would you like to begin?"
+        )
 
-    if f["obesity"]:
-        return base + "\nWe can build simple, sustainable habits that actually stick. What would you like to focus on?"
+    if obesity:
+        return _hey(
+            "I'm here to help you build healthy eating habits and simple nutrition routines that fit your lifestyle and support your overall health. What would you like to focus on?"
+        )
 
     # Default
-    return base + "\nWhat would you like to start with today?"
+    return _hey(
+        "I'm here to help you eat well, build healthy habits, and feel your best. What would you like to start with today?"
+    )
 
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
@@ -164,7 +263,6 @@ GENERIC_STARTER_QUESTIONS: list[str] = [
     "How much water should I drink daily?",
     "How can I improve my sleep?",
 ]
-
 
 class HistoryTurn(BaseModel):
     role: str
@@ -229,7 +327,9 @@ def _extract_profile_conditions(user_profile: dict[str, Any] | None) -> list[str
 
 def format_conditions(conditions: list[str]) -> str:
     """Human-readable condition phrase for starter questions."""
-    clean = [_normalize_condition_text(c) for c in conditions if _normalize_condition_text(c)]
+    clean = [
+        _normalize_condition_text(c) for c in conditions if _normalize_condition_text(c)
+    ]
     if not clean:
         return "my condition"
     if len(clean) == 1:
@@ -246,7 +346,11 @@ def generate_starter_questions(conditions: list[str]) -> list[str]:
     condition_text = format_conditions(conditions)
     questions: list[str] = []
     for template in GENERIC_STARTER_QUESTIONS:
-        q = template.replace("{condition}", condition_text) if "{condition}" in template else template
+        q = (
+            template.replace("{condition}", condition_text)
+            if "{condition}" in template
+            else template
+        )
         q = " ".join(q.split())
         questions.append(q)
     return questions[:5]
@@ -282,7 +386,7 @@ def _normalize_user_query_for_rag(message: str) -> str:
     )
     for prefix in prefixes:
         if low.startswith(prefix):
-            text = text[len(prefix):].strip()
+            text = text[len(prefix) :].strip()
             break
     if text.endswith("?"):
         text = text[:-1].strip()
@@ -292,18 +396,38 @@ def _normalize_user_query_for_rag(message: str) -> str:
 QUESTION_BANK: dict[str, dict[str, list[str]]] = {
     "diabetes": {
         "food": [
-            "What foods help control my blood sugar?",
-            "Can you suggest a simple diabetes meal plan?",
+            "What foods help keep my blood sugar steady?",
+            "What meals are good for blood sugar control?",
+            "Can you suggest simple low-carb meal ideas?",
+            "What should I eat for breakfast with diabetes?",
+        ],
+        "snacks": [
+            "What snacks are good for managing my blood sugar?",
+            "What can I eat when I feel hungry between meals?",
+        ],
+        "grocery": [
+            "What foods should I buy for better blood sugar control?",
+            "What should I keep in my kitchen for diabetes-friendly meals?",
         ],
         "lifestyle": [
-            "How can I manage my blood sugar daily?",
-            "What habits improve blood sugar control?",
+            "How can I manage my blood sugar each day?",
+            "What habits help keep my blood sugar steady?",
         ],
     },
     "hypertension": {
         "food": [
             "What foods help lower my blood pressure?",
-            "Can you suggest a DASH-style meal plan?",
+            "What meals are low in salt?",
+            "Can you suggest simple DASH-style meals?",
+            "What should I eat for a heart-healthy diet?",
+        ],
+        "snacks": [
+            "What are low-sodium snack options?",
+            "What can I eat instead of salty snacks?",
+        ],
+        "grocery": [
+            "What foods should I buy to reduce salt?",
+            "What should I look for on food labels?",
         ],
         "lifestyle": [
             "How can I reduce salt in my meals?",
@@ -313,7 +437,17 @@ QUESTION_BANK: dict[str, dict[str, list[str]]] = {
     "obesity": {
         "food": [
             "What foods help with healthy weight loss?",
-            "Can you suggest a balanced meal plan for me?",
+            "What meals keep me full longer?",
+            "Can you suggest balanced, lower-calorie meals?",
+            "What should I eat for a filling breakfast?",
+        ],
+        "snacks": [
+            "What snacks help me stay full?",
+            "What can I eat without overeating?",
+        ],
+        "grocery": [
+            "What foods should I buy for weight loss?",
+            "What should I keep at home for healthy eating?",
         ],
         "lifestyle": [
             "How can I manage my portions better?",
@@ -324,85 +458,152 @@ QUESTION_BANK: dict[str, dict[str, list[str]]] = {
         "food": [
             "Can you show a Diabetes Plate meal example?",
             "What foods fit well in the Diabetes Plate?",
-        ]
+            "How do I divide my plate for blood sugar control?",
+            "What is a simple Diabetes Plate dinner?",
+        ],
+        "snacks": [
+            "What snacks fit the Diabetes Plate approach?",
+            "What can I eat without raising blood sugar quickly?",
+        ],
     },
     "DASH": {
         "food": [
             "Can you show a DASH-style daily meal plan?",
             "What foods are low in sodium?",
-        ]
+            "What is a simple DASH dinner idea?",
+            "What foods are good for heart health?",
+        ],
+        "snacks": [
+            "What snacks are low in salt?",
+            "What can I eat instead of chips?",
+        ],
     },
     "MyPlate": {
         "food": [
             "Can you show a balanced MyPlate meal?",
             "How do I build a healthy plate?",
-        ]
+            "What is a simple meal I can try today?",
+            "How do I balance grains, protein, and vegetables?",
+        ],
+        "snacks": [
+            "What are healthy snack options?",
+            "What can I eat between meals?",
+        ],
+        "grocery": [
+            "What foods should I buy for balanced meals?",
+            "What should I keep in my kitchen?",
+        ],
     },
-    "Sleep": {
+    "sleep": {
         "general": [
-            "How many hours should I sleep?",
+            "How many hours should I sleep each night?",
             "How can I improve my sleep quality?",
+            "What habits help me sleep better?",
         ]
     },
-    "Exercise": {
+    "exercise": {
         "general": [
             "What exercises are safe for me?",
             "Can you suggest a simple workout plan?",
+            "How can I stay active during the day?",
         ]
     },
-    "Hydration": {
+    "hydration": {
         "general": [
             "How much water should I drink daily?",
             "How can I stay hydrated during the day?",
+            "What drinks are better for my health?",
         ]
     },
     "general": {
         "general": [
             "What should I do next for my health?",
             "Can you give me simple tips to follow?",
+            "What is one small change I can start today?",
         ]
     },
 }
 
 COMBINATION_QUESTION_BANK: dict[tuple[str, str], list[str]] = {
-    (
-        "diabetes",
-        "hypertension",
-    ): [
-        "What foods fit the Diabetes Plate and are low in salt?",
-        "Can you show a low-salt Diabetes Plate meal plan?",
+    ("diabetes", "hypertension"): [
+        "What foods help control blood sugar and reduce salt?",
+        "Can you show a low-salt Diabetes Plate meal?",
+        "What snacks are good for managing my blood sugar and low sodium?",
+        "How can I reduce salt while keeping blood sugar steady?",
     ],
     ("diabetes", "obesity"): [
         "What meals help with blood sugar and weight loss?",
-        "Can you suggest filling, low-carb meals?",
+        "What foods keep me full and control sugar?",
+        "What are low-carb filling meals?",
+        "How can I eat less and still feel full?",
     ],
     ("hypertension", "obesity"): [
         "What foods are low in salt and help with weight loss?",
         "Can you suggest a heart-healthy meal plan?",
+        "What snacks are low salt and filling?",
+        "How can I cut salt and still enjoy food?",
     ],
 }
+
+# When a user has 3+ conditions, evaluate pairs in this order (not dict iteration).
+_COMBINATION_PAIR_PRIORITY: tuple[tuple[str, str], ...] = (
+    ("diabetes", "hypertension"),
+    ("diabetes", "obesity"),
+    ("hypertension", "obesity"),
+)
 
 
 def _rag_category_label(query: str) -> str | None:
     """
-    Single label for template refinement, aligned with RAG retrieval categories.
+    Single label for QUESTION_BANK lookup — keys must match QUESTION_BANK (lowercase).
     """
     cats = _infer_kb_categories(query)
     if not cats:
         return None
     if "exercise" in cats:
-        return "Exercise"
+        return "exercise"
     if "sleep" in cats:
-        return "Sleep"
+        return "sleep"
     if "hydration" in cats:
-        return "Hydration"
+        return "hydration"
     if "diabetes" in cats or "pre-diabetes" in cats:
-        return "Diabetes"
+        return "diabetes"
     if "hypertension" in cats:
-        return "Hypertension"
+        return "hypertension"
     if "obesity" in cats:
-        return "Obesity"
+        return "obesity"
     return None
+
+
+_GENERIC_MEAL_TOPIC_HINT = re.compile(
+    r"\b("
+    r"glycemic|glucose|insulin|blood\s*sugar|diabetes|prediabetes|a1c|hba1c|"
+    r"sodium|salt|blood\s*pressure|hypertension|\bdash\b|"
+    r"sleep|insomnia|hydrat|exercise|workout|activity|weight|calorie|\bbmi\b|"
+    r"heart|kidney|plate method|diabetes plate"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_generic_meal_scope_query(query: str) -> bool:
+    """
+    Short, everyday “what should I eat?” style prompts without a clear health topic.
+    When the user has an assigned plan, prefer plan chips over category unless the
+    question clearly names a topic (see _GENERIC_MEAL_TOPIC_HINT).
+    """
+    q = (query or "").strip()
+    if len(q) > 120:
+        return False
+    if _GENERIC_MEAL_TOPIC_HINT.search(q):
+        return False
+    return bool(
+        re.match(
+            r"^\s*(what|which|how)\s+(should|can|could|do|may)\s+(i|we)\s+(eat|have)\b",
+            q,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _all_conditions(user_profile: dict[str, Any] | None) -> list[str]:
@@ -443,19 +644,52 @@ def _normalized_plan_key(user_profile: dict[str, Any] | None) -> str | None:
         return None
 
     raw_plan = user_profile.get("dietType") or user_profile.get("myPlanType")
-    if not raw_plan:
-        return None
+    if raw_plan:
+        plan_text = str(raw_plan).strip().lower().replace("-", " ")
+        compact = plan_text.replace(" ", "")
 
-    plan_text = str(raw_plan).strip().lower().replace("-", " ")
-    compact = plan_text.replace(" ", "")
+        if compact in {"diabetesplate", "diabetes"} or "diabetes plate" in plan_text:
+            return "DiabetesPlate"
+        if compact in {"dash", "dashdiet"} or "dash" in plan_text:
+            return "DASH"
+        if (
+            compact in {"myplate", "plate"}
+            or "myplate" in plan_text
+            or "my plate" in plan_text
+        ):
+            return "MyPlate"
+        return str(raw_plan).strip()
 
-    if compact in {"diabetesplate", "diabetes"} or "diabetes plate" in plan_text:
+    # Enforce one fallback plan from conditions when no assigned plan exists.
+    conditions = _all_conditions(user_profile)
+    if "diabetes" in conditions:
         return "DiabetesPlate"
-    if compact in {"dash", "dashdiet"} or "dash" in plan_text:
+    if "hypertension" in conditions:
         return "DASH"
-    if compact in {"myplate", "plate"} or "myplate" in plan_text or "my plate" in plan_text:
-        return "MyPlate"
-    return str(raw_plan).strip()
+    return "MyPlate"
+
+
+def _normalize_followup_trigger_query(message: str) -> str:
+    """Lowercase single-spaced query without trailing punctuation (for chip / intent matching)."""
+    q = " ".join((message or "").strip().lower().split())
+    return q.rstrip("?.!")
+
+
+def _followups_after_steady_blood_sugar_foods_question(query: str) -> list[str] | None:
+    """
+    When the user taps the diabetes starter chip asking which foods steady blood sugar,
+    the next assistant turn should offer snacks plus one adjacent food-focused follow-up
+    (not generic lifestyle habits).
+    """
+    if (
+        _normalize_followup_trigger_query(query)
+        == "what foods help keep my blood sugar steady"
+    ):
+        return [
+            "What snacks are good for managing my blood sugar?",
+            "What meals are good for blood sugar control?",
+        ]
+    return None
 
 
 def _generate_suggestions(
@@ -468,10 +702,14 @@ def _generate_suggestions(
     """
     Clean, deterministic follow-up generator based on:
     1. Multi-condition combination
-    2. Assigned plan (source of truth)
-    3. Condition
-    4. RAG category
+    2. Query / response topic (RAG category label — reflects what the user asked about)
+    3. Assigned plan (follow-ups only; main answer still uses plan in RAG)
+    4. Condition
     5. Fallback
+
+    When the user has an assigned plan, short generic meal prompts (e.g. “What should I eat?”)
+    keep plan-aligned chips; clear topic words (glycemic, insulin, sleep, sodium, …) still promote the
+    matching topic bucket first.
 
     Always returns 2 relevant, natural follow-up questions.
     """
@@ -479,54 +717,80 @@ def _generate_suggestions(
     if not should_suggest_follow_ups(response):
         return []
 
-    _ = (user_id, conversation_id)
+    session_key = (user_id, conversation_id)
+
+    steady_pair = _followups_after_steady_blood_sugar_foods_question(query)
+    if steady_pair is not None:
+        seen = _seen_follow_up_questions.setdefault(session_key, set())
+        seen.update(steady_pair)
+        return steady_pair
 
     conditions = _all_conditions(user_profile)
     primary = _primary_condition_multi(conditions)
     category = _rag_category_label(query)
+    category_from_response = False
 
     plan = _normalized_plan_key(user_profile)
 
     response_lower = (response or "").lower()
 
-    # Combination-first path for multi-condition users.
+    # Combination-first path for multi-condition users (stable pair priority).
     if len(conditions) >= 2:
-        for combo_key, questions in COMBINATION_QUESTION_BANK.items():
-            if all(c in conditions for c in combo_key):
-                return questions[:2]
+        for combo_key in _COMBINATION_PAIR_PRIORITY:
+            questions = COMBINATION_QUESTION_BANK.get(combo_key)
+            if questions and all(c in conditions for c in combo_key):
+                return _pick_follow_ups_with_rotation(session_key, list(questions), 2)
 
-    # Lightweight response awareness for wellness categories.
+    # If the query already implies a topic bucket, keep it (do not let assistant wording override).
     question_type = "food"
-    if not primary:
+    if category is None:
+        # Infer topic from assistant reply when the user message was not already topic-specific.
         if any(k in response_lower for k in ["exercise", "walk", "activity"]):
             question_type = "general"
-            category = "Exercise"
+            category = "exercise"
+            category_from_response = True
         elif "sleep" in response_lower:
             question_type = "general"
-            category = "Sleep"
+            category = "sleep"
+            category_from_response = True
         elif any(k in response_lower for k in ["water", "hydration"]):
             question_type = "general"
-            category = "Hydration"
+            category = "hydration"
+            category_from_response = True
 
-    # Plan-based (source of truth).
+    # Category / query intent (before plan so chips match what the user just asked).
+    use_query_category = (
+        category is not None
+        and category in QUESTION_BANK
+        and (
+            category_from_response
+            or not plan
+            or not _is_generic_meal_scope_query(query)
+        )
+    )
+    if use_query_category:
+        bucket = QUESTION_BANK[category]
+        candidates = _ordered_condition_candidates(bucket, question_type)
+        return _pick_follow_ups_with_rotation(session_key, candidates, 2)
+
+    # Plan-based chips when the query did not imply a stronger topic bucket.
     if plan and plan in QUESTION_BANK:
         bucket = QUESTION_BANK[plan]
-        return list(bucket.values())[0][:2]
+        candidates = _ordered_condition_candidates(bucket, question_type)
+        return _pick_follow_ups_with_rotation(session_key, candidates, 2)
 
     # Condition-based fallback.
     if primary and primary in QUESTION_BANK:
         bucket = QUESTION_BANK[primary]
-        if question_type in bucket:
-            return bucket[question_type][:2]
-        return list(bucket.values())[0][:2]
-
-    # Category-based.
-    if category and category in QUESTION_BANK:
-        bucket = QUESTION_BANK[category]
-        return list(bucket.values())[0][:2]
+        candidates = _ordered_condition_candidates(bucket, question_type)
+        return _pick_follow_ups_with_rotation(session_key, candidates, 2)
 
     # Fallback.
-    return QUESTION_BANK["general"]["general"][:2]
+    return _pick_follow_ups_with_rotation(
+        session_key,
+        list(QUESTION_BANK["general"]["general"]),
+        2,
+    )
 
 
 async def _fetch_user_profile_and_pantry(
@@ -654,7 +918,9 @@ async def chat(
         selected_topic = str(state.get("selected_topic") or "")
         if selected_topic in _TOPIC_FOLLOWUPS:
             questions = _TOPIC_FOLLOWUPS[selected_topic]
-            answers = state.get("answers") if isinstance(state.get("answers"), dict) else {}
+            answers = (
+                state.get("answers") if isinstance(state.get("answers"), dict) else {}
+            )
             step = int(state.get("step") or 0)
             if step < len(questions):
                 answers[f"q{step + 1}"] = message
@@ -680,7 +946,9 @@ async def chat(
             summary = _build_followup_summary(selected_topic, answers)
             await reset_state(user_id, conversation_id)
             db = await get_database()
-            user_profile, pantry_items = await _fetch_user_profile_and_pantry(db, user_id)
+            user_profile, pantry_items = await _fetch_user_profile_and_pantry(
+                db, user_id
+            )
             response_text = await rag_service.chat(
                 message=summary,
                 history=history,
@@ -721,7 +989,9 @@ async def chat(
         ) from exc
 
     if is_polite_chat_turn(message):
-        follow_ups = generate_starter_questions(_extract_profile_conditions(user_profile))
+        follow_ups = generate_starter_questions(
+            _extract_profile_conditions(user_profile)
+        )
     else:
         follow_ups = _generate_suggestions(
             query=message,

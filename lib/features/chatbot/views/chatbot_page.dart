@@ -6,6 +6,38 @@ import 'dart:math';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
+/// One glossary match in the assistant message (global indices in full text).
+class _GlossaryHit {
+  final int start;
+  final int end;
+  final String matched;
+  final String canonical;
+  final double score;
+
+  const _GlossaryHit({
+    required this.start,
+    required this.end,
+    required this.matched,
+    required this.canonical,
+    required this.score,
+  });
+}
+
+/// Cached regex pass + prime highlight picks for one bot bubble.
+class _GlossaryLayoutCache {
+  final List<_GlossaryHit> hits;
+
+  /// Strongest glossary taps first (primary), then optional second (secondary).
+  final List<(int, int)> primeRangesOrdered;
+  final Set<String> primeCanonicals;
+
+  _GlossaryLayoutCache({
+    required this.hits,
+    required this.primeRangesOrdered,
+    required this.primeCanonicals,
+  });
+}
+
 class ChatbotPage extends StatefulWidget {
   const ChatbotPage({Key? key}) : super(key: key);
 
@@ -15,14 +47,29 @@ class ChatbotPage extends StatefulWidget {
 
 class _ChatbotPageState extends State<ChatbotPage>
     with TickerProviderStateMixin {
+  // Change this to preview different send-button styles in simulator.
+  static const _SendButtonStyle _sendButtonStyle = _SendButtonStyle.solid;
+
   final _controller = TextEditingController();
   final List<dynamic> _messages = [];
   late final RegExp _glossaryRegex;
   bool _isLoading = false;
+
   /// Suggested questions (starters from GET /starter-questions or follow-ups from chat).
   List<String> _suggestionChips = [];
   late AnimationController _typingAnimController;
   final ScrollController _scrollController = ScrollController();
+
+  /// Canonical terms that already received a **prime** (blue) highlight in this chat.
+  final Set<String> _glossaryPrimeCanonicalsShown = <String>{};
+
+  /// Optional profile condition strings for glossary priority boosts (wire when available).
+  final Set<String> _glossaryConditionHints = <String>{};
+  // Keep accent orange consistent across avatar, user bubble, and send button.
+  static const Color _accentOrangeColor = Color(0xFFFF6A00);
+  static const Color _userBubbleColor = _accentOrangeColor;
+  // Slightly warm light-grey to match the mockup-style assistant bubbles.
+  static const Color _botBubbleColor = Color(0xFFF1F3F5);
 
   @override
   void initState() {
@@ -101,15 +148,50 @@ class _ChatbotPageState extends State<ChatbotPage>
   void _addBotMessage(String message) {
     if (!mounted) return;
     var sanitized = _stripExploreBelowHint(_stripMarkdownTokens(message));
+    final isFirstBotMessage =
+        !_messages.any((m) => m is Map && m['isUser'] == false);
+    final sessionBefore = Set<String>.from(_glossaryPrimeCanonicalsShown);
+    final shouldSkipHighlights =
+        isFirstBotMessage || _shouldSkipGlossaryForMessage(sanitized);
+    final layout = shouldSkipHighlights
+        ? _GlossaryLayoutCache(
+            hits: const <_GlossaryHit>[],
+            primeRangesOrdered: const <(int, int)>[],
+            primeCanonicals: <String>{},
+          )
+        : _computeGlossaryLayout(
+            sanitized,
+            sessionBefore,
+            conditionHints: _glossaryConditionHints,
+          );
     setState(() {
       _messages.add({
         'text': sanitized,
         'isUser': false,
         'time': DateTime.now(),
+        '_glossary': layout,
       });
+      _glossaryPrimeCanonicalsShown.addAll(layout.primeCanonicals);
     });
 
     _scrollToBottom();
+  }
+
+  bool _shouldSkipGlossaryForMessage(String text) {
+    final normalized = text.trim().toLowerCase();
+    if (normalized.isEmpty || normalized.length < 55) return true;
+
+    final greetingPattern = RegExp(
+      r'^(hi|hello|hey|good (morning|afternoon|evening)|welcome)\b',
+      caseSensitive: false,
+    );
+    if (greetingPattern.hasMatch(normalized)) return true;
+
+    final closingPattern = RegExp(
+      r'(take care|let me know|anything else|have a (great|good) day|thanks for chatting|happy to help)',
+      caseSensitive: false,
+    );
+    return closingPattern.hasMatch(normalized);
   }
 
   /// Emoji hint per chip text (rule-based, no network).
@@ -119,8 +201,11 @@ class _ChatbotPageState extends State<ChatbotPage>
     if (t.contains('water') || t.contains('hydrat')) return '💧';
     if (t.contains('exercise') || t.contains('workout') || t.contains('walk'))
       return '🏃';
-    if (t.contains('meal') || t.contains('recipe') || t.contains('eat'))
-      return '🍽️';
+    if (t.contains('food') ||
+        t.contains('foods') ||
+        t.contains('meal') ||
+        t.contains('recipe') ||
+        t.contains('eat')) return '🍽️';
     if (t.contains('pantry') || t.contains('grocery')) return '🥫';
     if (t.contains('carb') || t.contains('sugar') || t.contains('blood'))
       return '📊';
@@ -174,9 +259,17 @@ class _ChatbotPageState extends State<ChatbotPage>
   /// Build readable bot text with lightweight formatting:
   /// - keeps bullets
   /// - bolds short "Subheading:" labels (e.g., "Warm up first:")
-  Widget _buildBotText(String text, TextStyle baseStyle) {
+  Widget _buildBotText(
+      String text, TextStyle baseStyle, _GlossaryLayoutCache? glossary) {
+    final cache = glossary ??
+        _computeGlossaryLayout(text, {},
+            conditionHints: _glossaryConditionHints);
     final spans = <InlineSpan>[];
+
+    /// First interactive (tap) per canonical in this bubble — avoids duplicate links (e.g. "blood sugar" twice).
+    final interactiveCanonicalUsed = <String>{};
     final lines = text.split('\n');
+    var lineStartOffset = 0;
 
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
@@ -188,6 +281,18 @@ class _ChatbotPageState extends State<ChatbotPage>
           : numberMatch != null
               ? numberMatch.group(2) ?? ''
               : line.trim();
+
+      final contentOffsetInLine = bulletMatch != null
+          ? bulletMatch.group(0)!.length - bulletMatch.group(1)!.length
+          : numberMatch != null
+              ? numberMatch.group(0)!.length - numberMatch.group(2)!.length
+              : () {
+                  final t = line.trim();
+                  if (t.isEmpty) return 0;
+                  final idx = line.indexOf(t);
+                  return idx >= 0 ? idx : 0;
+                }();
+      final contentStartInFullText = lineStartOffset + contentOffsetInLine;
 
       if (bulletMatch != null) {
         linePrefix = '• ';
@@ -202,7 +307,8 @@ class _ChatbotPageState extends State<ChatbotPage>
       final canBoldLabel = colonIndex > 0 && colonIndex <= 30;
       if (canBoldLabel) {
         final label = content.substring(0, colonIndex + 1).trim();
-        final rest = content.substring(colonIndex + 1).trimLeft();
+        final rawRest = content.substring(colonIndex + 1);
+        final rest = rawRest.trimLeft();
         spans.add(
           TextSpan(
             text: label,
@@ -210,30 +316,130 @@ class _ChatbotPageState extends State<ChatbotPage>
           ),
         );
         if (rest.isNotEmpty) {
+          final leadingSkip = rawRest.length - rest.length;
+          final globalRestStart =
+              contentStartInFullText + colonIndex + 1 + leadingSkip;
+          spans.add(TextSpan(text: ' ', style: baseStyle));
           spans.addAll(
-            _buildGlossarySpans(
-              text: ' $rest',
+            _buildGlossarySpansFromHits(
+              text: rest,
               baseStyle: baseStyle,
+              globalOffset: globalRestStart,
+              hits: cache.hits,
+              primeRangesOrdered: cache.primeRangesOrdered,
+              interactiveCanonicalUsed: interactiveCanonicalUsed,
             ),
           );
         }
       } else {
         spans.addAll(
-          _buildGlossarySpans(
+          _buildGlossarySpansFromHits(
             text: content,
             baseStyle: baseStyle,
+            globalOffset: contentStartInFullText,
+            hits: cache.hits,
+            primeRangesOrdered: cache.primeRangesOrdered,
+            interactiveCanonicalUsed: interactiveCanonicalUsed,
           ),
         );
       }
 
+      lineStartOffset += line.length;
       if (i < lines.length - 1) {
         spans.add(TextSpan(text: '\n', style: baseStyle));
+        lineStartOffset += 1;
       }
     }
 
     return RichText(
       text: TextSpan(children: spans, style: baseStyle),
     );
+  }
+
+  /// Single regex pass + prime selection (session skip, per-message canonical dedup, max 2).
+  _GlossaryLayoutCache _computeGlossaryLayout(
+    String fullText,
+    Set<String> sessionBefore, {
+    Set<String>? conditionHints,
+  }) {
+    final matches = _glossaryRegex.allMatches(fullText).toList();
+    final hits = <_GlossaryHit>[];
+    final hints = conditionHints ?? _glossaryConditionHints;
+
+    for (final m in matches) {
+      final matchedText = m.group(0)!;
+      final normalized = ChatbotGlossary.normalizeTerm(matchedText);
+      final canonical = ChatbotGlossary.aliases[normalized] ?? normalized;
+      final definition = ChatbotGlossary.definitions[canonical];
+      if (definition == null) continue;
+
+      final baseScore = ChatbotGlossary.highlightPriority[canonical] ??
+          ChatbotGlossary.highlightPriorityDefault;
+      final rawBoost = ChatbotGlossary.conditionPriorityBoost(canonical, hints);
+      final isNovel = !sessionBefore.contains(canonical);
+      final combined = ChatbotGlossary.combinedHighlightScore(
+        baseScore: baseScore,
+        conditionBoostRaw: rawBoost,
+        isNovel: isNovel,
+      );
+      hits.add(
+        _GlossaryHit(
+          start: m.start,
+          end: m.end,
+          matched: matchedText,
+          canonical: canonical,
+          score: combined,
+        ),
+      );
+    }
+
+    hits.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      if (byScore != 0) return byScore;
+      return a.start.compareTo(b.start);
+    });
+
+    final primeRangesOrdered = <(int, int)>[];
+    final primeCanonicals = <String>{};
+    final usedCanonicalThisMessage = <String>{};
+    final usedSemanticGroups = <String>{};
+
+    for (final h in hits) {
+      if (primeRangesOrdered.length >=
+          ChatbotGlossary.maxHighlightsPerMessage) {
+        break;
+      }
+      if (sessionBefore.contains(h.canonical)) continue;
+      if (usedCanonicalThisMessage.contains(h.canonical)) continue;
+
+      final semanticGroup =
+          ChatbotGlossary.semanticGroupForCanonical(h.canonical);
+      if (semanticGroup != null && usedSemanticGroups.contains(semanticGroup)) {
+        continue;
+      }
+
+      final overlaps = primeRangesOrdered.any(
+        (r) => _rangesOverlap(r.$1, r.$2, h.start, h.end),
+      );
+      if (overlaps) continue;
+
+      primeRangesOrdered.add((h.start, h.end));
+      primeCanonicals.add(h.canonical);
+      usedCanonicalThisMessage.add(h.canonical);
+      if (semanticGroup != null) {
+        usedSemanticGroups.add(semanticGroup);
+      }
+    }
+
+    return _GlossaryLayoutCache(
+      hits: hits,
+      primeRangesOrdered: primeRangesOrdered,
+      primeCanonicals: primeCanonicals,
+    );
+  }
+
+  bool _rangesOverlap(int a0, int a1, int b0, int b1) {
+    return a0 < b1 && b0 < a1;
   }
 
   RegExp _buildGlossaryRegex() {
@@ -250,64 +456,112 @@ class _ChatbotPageState extends State<ChatbotPage>
     );
   }
 
-  List<InlineSpan> _buildGlossarySpans({
+  static const Color _glossaryPrimeColor = Color(0xFF4A6FA5);
+
+  List<InlineSpan> _buildGlossarySpansFromHits({
     required String text,
     required TextStyle baseStyle,
+    required int globalOffset,
+    required List<_GlossaryHit> hits,
+    required List<(int, int)> primeRangesOrdered,
+    required Set<String> interactiveCanonicalUsed,
   }) {
     if (text.trim().isEmpty) {
       return [TextSpan(text: text, style: baseStyle)];
     }
 
-    final spans = <InlineSpan>[];
-    var lastMatchEnd = 0;
+    final endExclusive = globalOffset + text.length;
+    final segmentHits = hits
+        .where((h) => h.start >= globalOffset && h.end <= endExclusive)
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
 
-    for (final match in _glossaryRegex.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
+    final primeRank = <(int, int), int>{
+      for (var i = 0; i < primeRangesOrdered.length; i++)
+        primeRangesOrdered[i]: i,
+    };
+
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+
+    for (final h in segmentHits) {
+      final localStart = h.start - globalOffset;
+      final localEnd = h.end - globalOffset;
+      if (localStart < cursor || localEnd > text.length) continue;
+
+      if (localStart > cursor) {
         spans.add(
           TextSpan(
-            text: text.substring(lastMatchEnd, match.start),
+            text: text.substring(cursor, localStart),
             style: baseStyle,
           ),
         );
       }
 
-      final matchedText = match.group(0)!;
-      final normalized = ChatbotGlossary.normalizeTerm(matchedText);
-      final canonical = ChatbotGlossary.aliases[normalized] ?? normalized;
-      final definition = ChatbotGlossary.definitions[canonical];
+      final slice = text.substring(localStart, localEnd);
+      final definition = ChatbotGlossary.definitions[h.canonical];
+      final primeIdx = primeRank[(h.start, h.end)];
+      final isPrime = primeIdx != null;
 
-      if (definition == null) {
-        spans.add(TextSpan(text: matchedText, style: baseStyle));
+      if (definition == null || !isPrime) {
+        spans.add(TextSpan(text: slice, style: baseStyle));
+      } else if (interactiveCanonicalUsed.contains(h.canonical)) {
+        final isPrimary = primeIdx == 0;
+        final duplicateStyle = isPrimary
+            ? baseStyle.copyWith(
+                color: _glossaryPrimeColor.withValues(alpha: 0.95),
+                decoration: TextDecoration.underline,
+                decorationThickness: 1.15,
+                fontWeight: FontWeight.w700,
+              )
+            : baseStyle.copyWith(
+                color: _glossaryPrimeColor.withValues(alpha: 0.78),
+                decoration: TextDecoration.underline,
+                decorationThickness: 0.85,
+                fontWeight: FontWeight.w600,
+              );
+        spans.add(TextSpan(text: slice, style: duplicateStyle));
       } else {
+        interactiveCanonicalUsed.add(h.canonical);
+        final title = ChatbotGlossary.displayTitleForCanonical(h.canonical);
+        final isPrimary = primeIdx == 0;
         spans.add(
           WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
             baseline: TextBaseline.alphabetic,
-            child: GestureDetector(
+            child: _GlossaryTapTerm(
               onTap: () => _showGlossaryBottomSheet(
-                displayTerm: matchedText,
+                displayTitle: title,
                 definition: definition,
               ),
               child: Text(
-                matchedText,
-                style: baseStyle.copyWith(
-                  color: const Color(0xFF2B7CFF),
-                  decoration: TextDecoration.underline,
-                  fontWeight: FontWeight.w600,
-                ),
+                slice,
+                style: isPrimary
+                    ? baseStyle.copyWith(
+                        color: _glossaryPrimeColor.withValues(alpha: 0.98),
+                        decoration: TextDecoration.underline,
+                        decorationThickness: 1.15,
+                        fontWeight: FontWeight.w700,
+                      )
+                    : baseStyle.copyWith(
+                        color: _glossaryPrimeColor.withValues(alpha: 0.78),
+                        decoration: TextDecoration.underline,
+                        decorationThickness: 0.9,
+                        fontWeight: FontWeight.w600,
+                      ),
               ),
             ),
           ),
         );
       }
 
-      lastMatchEnd = match.end;
+      cursor = localEnd;
     }
 
-    if (lastMatchEnd < text.length) {
+    if (cursor < text.length) {
       spans.add(
         TextSpan(
-          text: text.substring(lastMatchEnd),
+          text: text.substring(cursor),
           style: baseStyle,
         ),
       );
@@ -320,9 +574,12 @@ class _ChatbotPageState extends State<ChatbotPage>
   }
 
   void _showGlossaryBottomSheet({
-    required String displayTerm,
+    required String displayTitle,
     required String definition,
   }) {
+    final primary = _condenseGlossaryDefinition(definition);
+    final supporting = _buildWhyItMattersLine(primary, definition);
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -348,7 +605,7 @@ class _ChatbotPageState extends State<ChatbotPage>
                   ),
                 ),
                 Text(
-                  displayTerm,
+                  displayTitle,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -357,19 +614,57 @@ class _ChatbotPageState extends State<ChatbotPage>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  definition,
+                  primary,
                   style: const TextStyle(
                     fontSize: 15,
                     color: Colors.black87,
                     height: 1.4,
                   ),
                 ),
+                if (supporting != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    supporting,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade700,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  String _condenseGlossaryDefinition(String definition) {
+    final cleaned = definition.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final sentenceMatches =
+        RegExp(r'[^.!?]+[.!?]?').allMatches(cleaned).toList();
+    if (sentenceMatches.isEmpty) return cleaned;
+    final first = sentenceMatches.first.group(0)?.trim() ?? cleaned;
+    if (first.length <= 120) {
+      return first;
+    }
+    return '${first.substring(0, 117).trimRight()}...';
+  }
+
+  String? _buildWhyItMattersLine(String primary, String fullDefinition) {
+    final cleaned = fullDefinition.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (cleaned == primary || cleaned.length < 45) return null;
+
+    if (cleaned.contains('blood sugar') ||
+        cleaned.contains('blood pressure') ||
+        cleaned.contains('heart')) {
+      return 'Why it matters: it can improve long-term health outcomes.';
+    }
+    if (cleaned.contains('full') || cleaned.contains('appetite')) {
+      return 'Why it matters: it can help you manage hunger and portions.';
+    }
+    return 'Why it matters: this can make healthy choices easier day to day.';
   }
 
   void _sendMessage() {
@@ -401,8 +696,9 @@ class _ChatbotPageState extends State<ChatbotPage>
       if (!mounted) return;
       _addBotMessage(reply.response);
       setState(() {
-        _suggestionChips =
-            reply.sessionClosing ? <String>[] : reply.followUpQuestions;
+        _suggestionChips = reply.sessionClosing
+            ? <String>[]
+            : reply.followUpQuestions;
       });
     } catch (e) {
       if (mounted) {
@@ -425,22 +721,27 @@ class _ChatbotPageState extends State<ChatbotPage>
           ? const SizedBox.shrink(key: ValueKey('sug_empty'))
           : Padding(
               key: ValueKey(_suggestionChips.join('|')),
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ..._suggestionChips.asMap().entries.map((entry) {
                     final q = entry.value;
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 14),
                       child: Material(
-                        color: Colors.white,
+                        color: const Color(0xFFFDFEFF),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.grey.shade400),
+                          side: BorderSide(
+                            color:
+                                const Color(0xFFC8D1DE).withValues(alpha: 0.5),
+                            width: 0.75,
+                          ),
                         ),
                         child: InkWell(
+                          splashColor: Colors.grey.withOpacity(0.1),
                           onTap: () {
                             if (_isLoading) return;
                             HapticFeedback.lightImpact();
@@ -450,12 +751,12 @@ class _ChatbotPageState extends State<ChatbotPage>
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 12),
+                                horizontal: 14, vertical: 11),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  entry.key == 0 ? '🍽️' : _getIcon(q),
+                                  _getIcon(q),
                                   style: const TextStyle(fontSize: 16),
                                 ),
                                 const SizedBox(width: 8),
@@ -465,10 +766,10 @@ class _ChatbotPageState extends State<ChatbotPage>
                                     textAlign: TextAlign.left,
                                     softWrap: true,
                                     style: const TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       height: 1.35,
-                                      color: Color(0xFF333333),
-                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF3D4652),
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                 ),
@@ -494,7 +795,7 @@ class _ChatbotPageState extends State<ChatbotPage>
             margin: const EdgeInsets.symmetric(vertical: 4),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0F1F5),
+              color: _botBubbleColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.withOpacity(0.2)),
             ),
@@ -518,7 +819,7 @@ class _ChatbotPageState extends State<ChatbotPage>
               child: Container(
                 width: 12,
                 height: 12,
-                color: const Color(0xFFF0F1F5),
+                color: _botBubbleColor,
               ),
             ),
           ),
@@ -550,7 +851,6 @@ class _ChatbotPageState extends State<ChatbotPage>
 
   @override
   Widget build(BuildContext context) {
-    const orangeColor = Color(0xFFFF6A00);
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
@@ -568,7 +868,7 @@ class _ChatbotPageState extends State<ChatbotPage>
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: orangeColor,
+              backgroundColor: _accentOrangeColor,
               child: Image.asset(
                 'assets/icons/chatbot.png',
                 width: 20,
@@ -636,7 +936,7 @@ class _ChatbotPageState extends State<ChatbotPage>
                         constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.75),
                         decoration: BoxDecoration(
-                          color: isUser ? orangeColor : const Color(0xFFF0F1F5),
+                          color: isUser ? _userBubbleColor : _botBubbleColor,
                           borderRadius: BorderRadius.circular(16),
                           border: !isUser
                               ? Border.all(color: Colors.grey.withOpacity(0.2))
@@ -648,7 +948,7 @@ class _ChatbotPageState extends State<ChatbotPage>
                                 style: const TextStyle(
                                   fontSize: 15,
                                   color: Colors.white,
-                                  height: 1.3,
+                                  height: 1.4,
                                 ),
                               )
                             : _buildBotText(
@@ -656,8 +956,9 @@ class _ChatbotPageState extends State<ChatbotPage>
                                 const TextStyle(
                                   fontSize: 15,
                                   color: Colors.black87,
-                                  height: 1.3,
+                                  height: 1.4,
                                 ),
+                                message['_glossary'] as _GlossaryLayoutCache?,
                               ),
                       ),
                       if (isUser)
@@ -669,7 +970,7 @@ class _ChatbotPageState extends State<ChatbotPage>
                             child: Container(
                               width: 12,
                               height: 12,
-                              color: orangeColor,
+                              color: _userBubbleColor,
                             ),
                           ),
                         ),
@@ -682,7 +983,7 @@ class _ChatbotPageState extends State<ChatbotPage>
                             child: Container(
                               width: 12,
                               height: 12,
-                              color: const Color(0xFFF0F1F5),
+                              color: _botBubbleColor,
                             ),
                           ),
                         ),
@@ -730,27 +1031,161 @@ class _ChatbotPageState extends State<ChatbotPage>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: orangeColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: SvgPicture.asset(
-                      'assets/icons/send.svg',
-                      color: Colors.white,
-                    ),
-                    onPressed: _sendMessage,
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
+                _buildSendButton(),
               ],
             ),
           ),
           SizedBox(height: MediaQuery.of(context).padding.bottom > 0 ? 20 : 30),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSendButton() {
+    switch (_sendButtonStyle) {
+      case _SendButtonStyle.solid:
+        return _buildSolidSendButton();
+      case _SendButtonStyle.gradient:
+        return _buildGradientSendButton();
+      case _SendButtonStyle.outline:
+        return _buildOutlineSendButton();
+    }
+  }
+
+  Widget _buildSendIcon({required Color color}) {
+    return SvgPicture.asset(
+      'assets/icons/send.svg',
+      width: 22,
+      height: 22,
+      fit: BoxFit.contain,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+
+  Widget _buildSolidSendButton() {
+    return Material(
+      color: _accentOrangeColor,
+      elevation: 3,
+      shadowColor: Colors.black26,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _sendMessage,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: _buildSendIcon(color: Colors.white)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGradientSendButton() {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF8A00), Color(0xFFFF5E00)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33FF6A00),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _sendMessage,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Center(child: _buildSendIcon(color: Colors.white)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOutlineSendButton() {
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      shadowColor: Colors.black12,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: _accentOrangeColor, width: 2),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _sendMessage,
+          child: Center(child: _buildSendIcon(color: _accentOrangeColor)),
+        ),
+      ),
+    );
+  }
+}
+
+enum _SendButtonStyle {
+  solid,
+  gradient,
+  outline,
+}
+
+class _GlossaryTapTerm extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _GlossaryTapTerm({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_GlossaryTapTerm> createState() => _GlossaryTapTermState();
+}
+
+class _GlossaryTapTermState extends State<_GlossaryTapTerm> {
+  bool _pressed = false;
+
+  Future<void> _handleTap() async {
+    if (!mounted) return;
+    HapticFeedback.selectionClick();
+    setState(() => _pressed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    if (!mounted) return;
+    setState(() => _pressed = false);
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _handleTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedOpacity(
+          opacity: _pressed ? 0.85 : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: widget.child,
+        ),
       ),
     );
   }

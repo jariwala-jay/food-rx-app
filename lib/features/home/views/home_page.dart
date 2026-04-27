@@ -27,6 +27,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Uint8List? _profilePhotoData;
+  /// `profilePhotoId` that `_profilePhotoData` was last loaded for (or synced as none).
+  String? _loadedProfilePhotoId;
+  bool _profilePhotoLoadInFlight = false;
+  bool _profilePhotoSyncScheduled = false;
   String? _lastDietType; // Track last diet type to detect changes
   bool _isDisposed = false;
 
@@ -185,7 +189,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ? Map<String, dynamic>.from(user!.selectedDietPlan!)
             : null;
         _loadDataForRefresh(); // Initial data load
-        _loadProfilePhoto(); // Profile photo loads once
+        _loadProfilePhoto(); // Initial avatar load (server photo or local signup fallback)
         _initializeNotificationManager(); // Initialize notification manager
         // If first load failed (e.g. connection), retry once after a short delay
         if (user != null && user.id != null) {
@@ -308,10 +312,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // Existing method for initial profile photo load (doesn't need frequent refresh)
+  /// Fetches bytes for [AuthController.currentUser.profilePhotoId] and updates state.
   Future<void> _loadProfilePhoto() async {
     final authProvider = Provider.of<AuthController>(context, listen: false);
     final photoId = authProvider.currentUser?.profilePhotoId;
+    final localPhotoData = authProvider.localProfilePhotoData;
 
     if (photoId != null) {
       try {
@@ -320,6 +325,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (photoData != null && mounted) {
           setState(() {
             _profilePhotoData = Uint8List.fromList(photoData);
+            _loadedProfilePhotoId = photoId;
+          });
+        } else if (mounted) {
+          setState(() {
+            _profilePhotoData = null;
+            _loadedProfilePhotoId = photoId;
           });
         }
       } catch (e) {
@@ -329,14 +340,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           // Optionally show a placeholder or error icon
           setState(() {
             _profilePhotoData = null; // Clear photo on error
+            _loadedProfilePhotoId = photoId;
           });
         }
       }
     } else {
       if (mounted) {
         setState(() {
-          _profilePhotoData = null; // Clear if no photo ID
+          // Fall back to locally selected signup/profile image when remote id
+          // is not available yet.
+          _profilePhotoData = localPhotoData;
+          _loadedProfilePhotoId = null;
         });
+      }
+    }
+  }
+
+  Future<void> _syncProfilePhotoIfNeeded() async {
+    if (!mounted || _isDisposed) return;
+    final authProvider = Provider.of<AuthController>(context, listen: false);
+    final want = authProvider.currentUser?.profilePhotoId;
+    final needsLocalFallbackLoad =
+        want == null &&
+        authProvider.localProfilePhotoData != null &&
+        _profilePhotoData == null;
+    if (want == _loadedProfilePhotoId && !needsLocalFallbackLoad) return;
+    if (_profilePhotoLoadInFlight) return;
+    _profilePhotoLoadInFlight = true;
+    try {
+      await _loadProfilePhoto();
+    } finally {
+      if (mounted) {
+        _profilePhotoLoadInFlight = false;
       }
     }
   }
@@ -603,6 +638,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Consumer<AuthController>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
+        final profilePhotoId = user?.profilePhotoId;
+        if (profilePhotoId != _loadedProfilePhotoId &&
+            !_profilePhotoSyncScheduled) {
+          _profilePhotoSyncScheduled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _profilePhotoSyncScheduled = false;
+            if (!mounted || _isDisposed) return;
+            _syncProfilePhotoIfNeeded();
+          });
+        }
         // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
         final dietType = _planKeyForTrackers(user?.myPlanType, user?.dietType);
 

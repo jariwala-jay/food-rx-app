@@ -908,7 +908,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
             // Prepared recipes button (matches FoodRx Items pill style)
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: GestureDetector(
                 onTap: () {
                   Navigator.push(
