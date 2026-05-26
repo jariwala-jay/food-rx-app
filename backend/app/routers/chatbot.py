@@ -28,6 +28,7 @@ from app.deps import get_chatbot_user_id
 from app.services.conversation_state_service import get_state, reset_state, update_state
 from app.services.rag_service import (
     _infer_kb_categories,
+    _resolve_plan_for_profile,
     is_polite_chat_turn,
     is_session_closing,
     rag_service,
@@ -263,6 +264,7 @@ GENERIC_STARTER_QUESTIONS: list[str] = [
     "How much water should I drink daily?",
     "How can I improve my sleep?",
 ]
+
 
 class HistoryTurn(BaseModel):
     role: str
@@ -643,30 +645,8 @@ def _normalized_plan_key(user_profile: dict[str, Any] | None) -> str | None:
     if not isinstance(user_profile, dict):
         return None
 
-    raw_plan = user_profile.get("dietType") or user_profile.get("myPlanType")
-    if raw_plan:
-        plan_text = str(raw_plan).strip().lower().replace("-", " ")
-        compact = plan_text.replace(" ", "")
-
-        if compact in {"diabetesplate", "diabetes"} or "diabetes plate" in plan_text:
-            return "DiabetesPlate"
-        if compact in {"dash", "dashdiet"} or "dash" in plan_text:
-            return "DASH"
-        if (
-            compact in {"myplate", "plate"}
-            or "myplate" in plan_text
-            or "my plate" in plan_text
-        ):
-            return "MyPlate"
-        return str(raw_plan).strip()
-
-    # Enforce one fallback plan from conditions when no assigned plan exists.
-    conditions = _all_conditions(user_profile)
-    if "diabetes" in conditions:
-        return "DiabetesPlate"
-    if "hypertension" in conditions:
-        return "DASH"
-    return "MyPlate"
+    # Keep follow-up plan selection in lockstep with RAG plan resolution.
+    return _resolve_plan_for_profile(user_profile)
 
 
 def _normalize_followup_trigger_query(message: str) -> str:
@@ -880,13 +860,6 @@ async def chat(
             pantry_items=pantry_items,
             user_id=user_id,
         )
-        fn = _user_first_name(user_profile)
-        if fn:
-            response_text = (
-                response_text.rstrip()
-                + f"\n\nThanks for chatting, {fn}. Take care, and come back anytime "
-                "if you have more food or nutrition questions."
-            )
         return ChatResponse(
             response=response_text,
             follow_up_questions=[],

@@ -73,7 +73,7 @@ RAG_CACHE_COLLECTION = "rag_response_cache"
 RAG_CACHE_VERSION = 4
 # Similar questions only; guarded by keyword overlap + intent match (see _rag_cache_get_similar_embedding).
 RAG_CACHE_EMBED_SIMILARITY_ENABLED = True
-RAG_CACHE_EMBED_THRESHOLD = 0.88
+RAG_CACHE_EMBED_THRESHOLD = 0.93
 RAG_CACHE_EMBED_SCAN_LIMIT = 80
 MAX_HISTORY = 6  # conversation turns kept in context (pairs)
 MIN_RELEVANCE = 0.42  # cosine-similarity floor (Layer 2)
@@ -130,6 +130,62 @@ _SOFT_MEDICAL_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+_UNSUPPORTED_CONDITION_PATTERNS = re.compile(
+    r"\b("
+    r"cancer|tumou?r|oncolog|"
+    r"kidney\s*disease|renal|ckd\b|"
+    r"liver\s*disease|cirrhosis|hepatitis|"
+    r"thyroid|hypothyroid|hyperthyroid|"
+    r"pcos|endometriosis|"
+    r"asthma|copd|emphysema|"
+    r"arthritis|lupus|fibromyalgia|"
+    r"alzheimers?|dementia|parkinsons?|"
+    r"epilepsy|seizure\s*disorder|"
+    r"hiv|aids|"
+    r"crohn'?s|ulcerative\s*colitis|ibs\b"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_MEDICATION_DECISION_CUES = re.compile(
+    r"\b("
+    r"is\s+it\s+safe|is\s+this\s+safe|"
+    r"is\s+it\s+okay|is\s+this\s+okay|"
+    r"can\s+i|should\s+i|"
+    r"do\s+i\s+need\s+to|"
+    r"am\s+i\s+allowed\s+to|"
+    r"any\s+side\s+effects?|"
+    r"interaction(s)?|contraindicat"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_MEDICATION_ACTION_TERMS = re.compile(
+    r"\b("
+    r"take|taking|start|starting|stop|stopping|continue|continuing|"
+    r"use|using|used|"
+    r"dose|dosage|mg|milligram|"
+    r"pill|tablet|capsule|medicine|medication|drug|injection|inject"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_medication_decision_query(message: str) -> bool:
+    """
+    Catch varied medication-advice phrasings that might miss _HARD_MEDICAL_PATTERNS.
+    """
+    text = (message or "").strip()
+    if not text:
+        return False
+    low = text.lower()
+    if _HARD_MEDICAL_PATTERNS.search(low):
+        return True
+    if _MEDICATION_DECISION_CUES.search(low) and _MEDICATION_ACTION_TERMS.search(low):
+        return True
+    return False
+
+
 _OFFTOPIC_PATTERNS = re.compile(
     r"\b("
     r"weather|forecast|temperature\s*outside|"
@@ -172,17 +228,17 @@ _MSG_EMERGENCY = "This may be a medical emergency. Please call 911 or go to the 
 _MSG_MEDICAL = (
     "I'm sorry, I can't help with medical advice.\n\n"
     "Please contact your doctor or pharmacist.\n\n"
-    "I can guide you on food and healthy eating to support your health."
+    "I can only guide you on food and healthy eating to support your health."
 )
 
 _MSG_OFFTOPIC = (
-    "I am the MyFoodRx nutrition assistant. I can only help with food and healthy eating.\n\n"
-    "You can ask about your meals or how to eat better for your health."
+    "I am the MyFoodRx wellness assistant. I can help with food, nutrition, hydration, sleep, and exercise habits.\n\n"
+    "Please ask a question about healthy habits or your health goals."
 )
 
 _MSG_LOW_RELEVANCE = (
-    "I'm not sure how that relates to food or healthy eating.\n\n"
-    "Please ask something about your meals or eating habits."
+    "I'm not sure how that relates to healthy habits.\n\n"
+    "Please ask about food, hydration, sleep, exercise, or daily routines."
 )
 
 
@@ -367,57 +423,47 @@ ROLE
 - Help users make practical food choices based on their profile and question.
 
 SCOPE
-- Answer only about food, meals, nutrition, and healthy eating habits.
+- Answer about food, meals, nutrition, hydration, sleep, exercise, and healthy daily habits.
 - Support meal planning (DASH, MyPlate, Diabetes Plate), grocery choices, cooking, pantry use, food labels, allergies, and preferences.
-- Discuss hydration, sleep, and exercise only when tied to blood sugar, blood pressure, weight, or heart health.
+- Condition-specific guidance is limited to diabetes, prediabetes, hypertension, and obesity.
+- For sleep and exercise questions, provide brief non-medical guidance and practical habits. You may connect guidance to blood sugar, blood pressure, weight, or heart health when helpful.
 
 SAFETY
 - Do not provide medical diagnosis, treatment, or medication advice.
+- If the user asks about medical conditions outside diabetes, prediabetes, hypertension, or obesity, briefly say this chatbot cannot provide condition-specific guidance for that condition and direct them to their clinician.
 - If symptoms or diagnosis are asked, direct the user to a healthcare professional and then continue with food-related guidance if appropriate.
 - If medications are asked: "I cannot advise on medications. Please speak with your doctor or pharmacist."
 - If emergency symptoms are mentioned, say it may be an emergency and advise calling local emergency services (911 in the U.S.) or going to the nearest emergency room.
 
 OFF-TOPIC
-- If the request is not related to food or nutrition, reply briefly that you can only help with food and healthy eating.
+- If the request is not related to nutrition, healthy habits, or wellness, reply briefly that you can only help with food, hydration, sleep, exercise, and healthy routines.
 
-PERSONALIZATION (STRICT)
-- Always prioritize the assigned plan from user context if present.
-- If an assigned plan is present, it overrides all condition-based inference.
-- Never ask the user to choose a plan when one is already assigned.
-- Never contradict the assigned plan.
-- Use exactly one plan per response. Do not combine plans.
-
-PLAN MAPPING (STRICT)
-- Use one plan only per response:
-  - Diabetes Plate (internal key: DiabetesPlate)
-  - DASH
-  - MyPlate
-- If assigned plan is missing, infer using conditions:
-  - If diabetes or prediabetes is present → Diabetes Plate
-  - Else if hypertension is present → DASH
-  - Else → MyPlate
+PLAN TYPE (STRICT)
+- The USER PROFILE block includes a line: "Resolved plan (must use exactly this): <key>".
+- That key is always one of: DiabetesPlate, DASH, or MyPlate. Obey it for this turn. Do not pick a different plan from memory or from conditions if that line is present.
+- Map keys to user-visible names: DiabetesPlate → "Diabetes Plate"; keep "DASH" and "MyPlate" as usual.
+- Use exactly one plan per response. Do not combine DASH and Diabetes Plate (or any two plans) in the same answer.
+- If the resolved-plan line is missing, infer in this order:
+  (1) diabetes or prediabetes present (with or without obesity, with or without hypertension) → Diabetes Plate
+  (2) hypertension present with or without obesity (no diabetes/prediabetes) → DASH
+  (3) obesity only or no condition → MyPlate
+- Never ask the user to pick a plan when USER PROFILE already gives the resolved plan.
 
 PLAN RULES (STRICT)
 - Diabetes Plate:
   - Structure: half non-starchy vegetables, one-quarter protein, one-quarter carbohydrates.
   - Focus on blood sugar balance using fiber and steady carbohydrate intake.
-  - Default sodium target: 1500 mg/day.
+  - Sodium target: 1500 mg/day unless USER PROFILE or retrieved context says otherwise.
+  - GI target: ≤ 69 (educational). Prefer lower-GI carb choices (e.g. oats, sweet potato, legumes).
+  - Only state a specific GI number for a food if USER PROFILE or retrieved context includes it.
 
 - DASH:
   - Focus on low sodium, fruits, vegetables, whole grains, and lean protein.
-  - Default sodium target: 1500 mg/day.
+  - Sodium target: 1500 mg/day unless USER PROFILE or retrieved context says otherwise.
 
 - MyPlate:
   - Focus on balanced meals, portion control, and healthy habits.
-  - Default sodium target: 2300 mg/day.
-
-COMBINATION HANDLING (STRICT)
-- If diabetes or prediabetes is present → use Diabetes Plate only.
-- NEVER mention DASH if diabetes or prediabetes is present.
-- If only hypertension is present (no diabetes/prediabetes) → use DASH only.
-- If only obesity is present, or no condition → use MyPlate only.
-- Do not mix or combine multiple plans in one response.
-- The selected plan MUST follow these rules and must not be overridden by general knowledge.
+  - Sodium target: 2300 mg/day unless USER PROFILE or retrieved context says otherwise.
 
 KNOWLEDGE USE
 - Use the provided knowledge context as the primary source when it is relevant to the question.
@@ -428,30 +474,33 @@ KNOWLEDGE USE
 - Do not invent facts, numbers, studies, or citations.
 
 RESPONSE STYLE
-- Write at about a 2nd to 3rd grade reading level.
-- Use simple, common words only.
-- Use active voice and avoid passive voice.
-- Start sentences with the subject when possible.
-- Write one idea per sentence.
-- Do not combine multiple ideas in one sentence.
-- Avoid words like "rather than", "instead", "however", "impact".
-- Avoid phrases like "this can lead to", "helps with", "in order to".
-- Prefer direct statements over comparisons.
-- Break explanations into 2–4 short sentences.
-- Keep responses concise (about 2–6 short sentences unless more detail is needed).
-- Explain terms simply when used.
-- Vary sentence starters to avoid repetitive tone.
-- Avoid openings like "You want foods" or "You want food." Prefer direct guidance (for example, "These foods help ...").
-- In user-visible text, always write "Diabetes Plate" as two words. Never write "DiabetesPlate".
-- Do not repeat the user's name.
-- Do not mention internal rules, system behavior, or app UI.
-- Do not over-explain.
+- Use simple, everyday words only.
+- Write at a 2nd to 3rd grade reading level.
+- Use active voice. Start sentences with the subject.
+- Write one idea per sentence. Keep sentences short.
+- Avoid: "rather than", "instead", "however", "impact", "this can lead to", "helps with", "in order to".
+- No comparisons. Use direct statements.
+- Never open with "You want food" or "You want foods." Prefer direct guidance (for example, "These foods help ...").
+- Always write "Diabetes Plate" (two words). Never write "DiabetesPlate".
+- Use the user's first name only in closing messages. Never use it in regular responses.
+- Never mention internal rules, system behavior, or app UI.
+
+FORMAT
+- Keep responses to 2–6 sentences for simple questions.
+- For multi-part answers (for example, meal plans, food lists, step-by-step tips):
+  - Open with 1–2 short sentences.
+  - Use a short bullet list (3–5 items max).
+  - Close with 1 short sentence.
+- Explain any term the first time you use it.
+- Vary sentence starters. Do not repeat the same opener twice in a row.
 
 CLOSING BEHAVIOR
 - If the user says thanks, okay, or goodbye:
-  - Respond in 1–2 short sentences only.
-  - Optionally include one short encouraging sentence.
-  - Do not introduce new information or suggestions.
+  - Start with a brief acknowledgment (for example: "You're welcome." or "Glad to help.").
+  - Include the user's first name only if it appears in USER PROFILE.
+  - Keep to 2–3 short sentences total.
+  - You may add one short encouraging sentence.
+  - Do not introduce new nutrition advice, new suggestions, or new factual content.
 
 NUMBERS RULE
 - Avoid specific clinical numbers unless they come from provided context.
@@ -656,6 +705,38 @@ def _is_exercise_intent(message: str) -> bool:
     return bool(_EXERCISE_INTENT.search(message))
 
 
+_OVER_RESTRICTIVE_SCOPE_REPLY = re.compile(
+    r"(only\s+help\s+with\s+food|cannot\s+give\s+advice\s+on\s+exercise|cannot\s+tell\s+you\s+how\s+much\s+sleep)",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_lifestyle_scope_refusal(message: str, reply: str) -> str:
+    """
+    Replace over-restrictive food-only refusals for allowed lifestyle topics.
+
+    This also fixes stale cached responses created before scope rules were widened.
+    """
+    text = (reply or "").strip()
+    if not text or not _OVER_RESTRICTIVE_SCOPE_REPLY.search(text):
+        return reply
+    cats = _infer_kb_categories(message) or frozenset()
+    if "exercise" in cats:
+        return (
+            "Safe exercise can start with low-impact options like walking, easy cycling, "
+            "or chair exercises.\n\n"
+            "Start with short sessions, go slow, and stop if you feel pain, dizziness, or chest symptoms.\n\n"
+            "If you have a medical condition, ask your doctor before starting a new workout plan."
+        )
+    if "sleep" in cats:
+        return (
+            "Most adults need about 7 to 9 hours of sleep each night.\n\n"
+            "Try a regular sleep schedule, avoid caffeine late in the day, and keep your room dark and quiet.\n\n"
+            "If sleep problems continue for weeks, talk with your doctor."
+        )
+    return reply
+
+
 def _infer_kb_categories(message: str) -> frozenset[str] | None:
     """
     Map user wording to food_knowledge chunk categories (lowercased).
@@ -850,9 +931,15 @@ def _history_to_contents(history: list[dict[str, Any]]) -> list[types.Content]:
 
 
 def classify_query(message: str) -> str:
+    if _looks_like_medication_decision_query(message):
+        return _QueryClass.MEDICAL
+
     if _EMERGENCY_PATTERNS.search(message):
         return _QueryClass.EMERGENCY
     if _HARD_MEDICAL_PATTERNS.search(message):
+        return _QueryClass.MEDICAL
+    if _UNSUPPORTED_CONDITION_PATTERNS.search(message):
+        # Scope guard: only diabetes/prediabetes/hypertension/obesity are supported.
         return _QueryClass.MEDICAL
 
     has_diet = bool(_DIET_SIGNALS.search(message))
@@ -1261,15 +1348,64 @@ async def _rag_cache_get_exact(
 
 
 def _is_cache_safe(query: str, cached_query_norm: str) -> bool:
-    """Require at least one query token to appear in the cached normalized query."""
-    c = (cached_query_norm or "").lower()
-    if not c.strip():
+    """
+    Guard semantic cache hits to avoid repeating the same answer on loosely-related queries.
+
+    Requires stronger lexical overlap than a single token:
+    - exact normalized query always allowed
+    - otherwise require at least 2 meaningful shared tokens
+    """
+    qn = _normalize_query_for_cache(query)
+    cn = _normalize_query_for_cache(cached_query_norm)
+    if not cn:
         return False
-    for raw in (query or "").lower().split():
-        w = re.sub(r"[^a-z0-9]", "", raw)
-        if len(w) >= 2 and w in c:
-            return True
-    return False
+    if qn and qn == cn:
+        return True
+
+    stop = {
+        "what",
+        "which",
+        "when",
+        "where",
+        "why",
+        "how",
+        "can",
+        "could",
+        "should",
+        "would",
+        "please",
+        "tell",
+        "about",
+        "for",
+        "with",
+        "my",
+        "me",
+        "i",
+        "to",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "of",
+        "in",
+        "on",
+    }
+
+    def _tokens(text: str) -> set[str]:
+        out: set[str] = set()
+        for raw in text.split():
+            w = re.sub(r"[^a-z0-9]", "", raw.lower())
+            if len(w) < 3 or w in stop:
+                continue
+            out.add(w)
+        return out
+
+    q_tokens = _tokens(qn or query or "")
+    c_tokens = _tokens(cn)
+    if not q_tokens or not c_tokens:
+        return False
+    return len(q_tokens & c_tokens) >= 2
 
 
 def _suggestion_intent_key(message: str) -> str:
@@ -1578,7 +1714,15 @@ class RAGService:
 
         lines: list[str] = []
 
-        # Name omitted from prompt to avoid "Jim," in every reply; conditions still personalize.
+        # Optional first name for greeting/closing tone only.
+        raw_name = user_profile.get("name")
+        if raw_name and str(raw_name).strip():
+            first_name = str(raw_name).strip().split()[0]
+            first_name = re.sub(r"^[^\w]+|[^\w]+$", "", first_name, flags=re.UNICODE)
+            if first_name and len(first_name) <= 48:
+                lines.append(
+                    f"User first name (optional; use mainly for greeting/closing): {first_name}"
+                )
 
         conditions = user_profile.get("medicalConditions") or []
         if conditions:
@@ -1758,7 +1902,7 @@ class RAGService:
             query_norm, condition_key, user_key, plan_key
         )
         if cached_exact is not None:
-            return cached_exact
+            return _rewrite_lifestyle_scope_refusal(message, cached_exact)
 
         client = self._client
         text_for_embed = _embedding_text_for_retrieval(message)
@@ -1811,7 +1955,7 @@ class RAGService:
                 reply, _, _ = self._generate_reply(
                     message, full_system, history_contents
                 )
-                return reply
+                return _rewrite_lifestyle_scope_refusal(message, reply)
             return "I am having trouble processing your question. Please try again."
 
         topic_cats = _infer_kb_categories(message)
@@ -1852,7 +1996,7 @@ class RAGService:
                 _suggestion_intent_key(message),
             )
         if cached_vec is not None:
-            return cached_vec
+            return _rewrite_lifestyle_scope_refusal(message, cached_vec)
 
         prioritized = _prioritize_chunks_for_profile(relevant_docs, user_profile)
         top_docs = prioritized[:RAG_CONTEXT_DOC_COUNT]
@@ -1895,7 +2039,7 @@ class RAGService:
             )
         elif truncated:
             logger.info("Skipping RAG cache write (truncated LLM output).")
-        return reply
+        return _rewrite_lifestyle_scope_refusal(message, reply)
 
 
 rag_service = RAGService()

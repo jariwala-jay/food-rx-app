@@ -544,12 +544,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Health Goals',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Health Goals',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -611,12 +613,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Chronic Condition',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Chronic Condition',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -671,12 +675,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Food Allergies & Intolerances',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Food Allergies & Intolerances',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -756,6 +762,40 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       _buildDivider(),
+                      FutureBuilder<bool>(
+                        future: context.read<AuthController>().hasSavedLogin(),
+                        builder: (context, snapshot) {
+                          if (snapshot.data != true) {
+                            return const SizedBox.shrink();
+                          }
+                          return Column(
+                            children: [
+                              _buildInfoRow(
+                                context: context,
+                                label: 'Remove Saved Login',
+                                value: '',
+                                textColor: Colors.red,
+                                onTap: () async {
+                                  await context
+                                      .read<AuthController>()
+                                      .clearSavedLogin();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Saved login removed from this device',
+                                        ),
+                                      ),
+                                    );
+                                    setState(() {});
+                                  }
+                                },
+                              ),
+                              _buildDivider(),
+                            ],
+                          );
+                        },
+                      ),
                       _buildInfoRow(
                         context: context,
                         label: 'Log Out',

@@ -1,15 +1,25 @@
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 import base64
 import hashlib
+import json
 import secrets
+from html import escape
+from urllib.parse import quote
+
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 
 from app.database import get_database
 from app.auth_password import hash_password, verify_password
-from app.auth_jwt import create_access_token
+from app.auth_jwt import ACCESS_TOKEN_EXPIRE_HOURS, create_access_token
 from app.deps import get_current_user_id
+from app.refresh_tokens import (
+    issue_refresh_token,
+    revoke_all_refresh_tokens_for_user,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -19,6 +29,7 @@ PROFILE_PHOTOS_FILES = "profile_photos.files"
 PROFILE_PHOTOS_CHUNKS = "profile_photos.chunks"
 LOCK_THRESHOLD = 5
 LOCK_MINUTES = 30
+MINIMUM_AGE_YEARS = 18
 
 
 def _serialize_user(doc: dict) -> dict:
@@ -30,6 +41,60 @@ def _serialize_user(doc: dict) -> dict:
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _auth_token_response(db, user_id: ObjectId, email: str, user: dict) -> dict:
+    """Access + refresh token pair for login/register/refresh."""
+    uid = str(user_id)
+    access = create_access_token(uid)
+    refresh = await issue_refresh_token(db, uid)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        "user_id": uid,
+        "email": email,
+        "user": _serialize_user(user),
+    }
+
+
+def _password_reset_bridge_html(token: str) -> str:
+    """Minimal HTTPS page: tries to open the app via custom scheme; fallback button for mail clients."""
+    token_js = json.dumps(token)
+    deep = f"foodrx://reset-password?token={quote(token, safe='')}"
+    href_escaped = escape(deep, quote=True)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset password — MyFoodRx</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f7f7f8; color: #2c2c2c; }}
+    .card {{ max-width: 420px; margin: 40px auto; background: #fff; border-radius: 12px;
+      padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }}
+    a.btn {{ display: inline-block; background: #FF6A00; color: #fff !important;
+      text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: 600; margin-top: 16px; }}
+    p.note {{ color: #90909a; font-size: 14px; line-height: 1.5; margin-top: 20px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 style="font-size: 22px; margin: 0 0 12px;">Open MyFoodRx</h1>
+    <p>We’re opening the app so you can finish resetting your password.</p>
+    <p>If nothing happens, tap the button below. MyFoodRx must be installed on this phone.</p>
+    <p><a class="btn" href="{href_escaped}">Open MyFoodRx</a></p>
+    <p class="note">You can close this tab after the app opens or after you’ve set a new password.</p>
+  </div>
+  <script>
+    (function() {{
+      var token = {token_js};
+      window.location.replace('foodrx://reset-password?token=' + encodeURIComponent(token));
+    }})();
+  </script>
+</body>
+</html>"""
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -45,6 +110,32 @@ def _parse_iso_datetime(value: str | None) -> datetime | None:
         return dt.astimezone(timezone.utc)
     except Exception:
         return None
+
+
+def _parse_date_of_birth(value) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        v = value.strip()
+        if not v:
+            return None
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(v).date()
+        except Exception:
+            return None
+    return None
+
+
+def _is_at_least_minimum_age(dob: date, minimum_years: int = MINIMUM_AGE_YEARS) -> bool:
+    today = datetime.now(timezone.utc).date()
+    age = today.year - dob.year
+    if (today.month, today.day) < (dob.month, dob.day):
+        age -= 1
+    return age >= minimum_years
 
 
 @router.post("/check-email")
@@ -74,6 +165,13 @@ async def register(body: dict):
     password = body.get("password")
     if not email or not password:
         raise HTTPException(status_code=400, detail="email and password required")
+
+    if "dateOfBirth" in body:
+        dob = _parse_date_of_birth(body.get("dateOfBirth"))
+        if dob is None:
+            raise HTTPException(status_code=400, detail="Invalid dateOfBirth format")
+        if not _is_at_least_minimum_age(dob):
+            raise HTTPException(status_code=400, detail="You must be at least 18 years old")
 
     existing = await users.find_one({"email": email})
     if existing:
@@ -122,14 +220,7 @@ async def register(body: dict):
         "createdAt": now,
     })
 
-    token = create_access_token(str(user_id))
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user_id": str(user_id),
-        "email": email,
-        "user": _serialize_user(user_doc),
-    }
+    return await _auth_token_response(db, user_id, email, user_doc)
 
 
 @router.post("/login")
@@ -164,14 +255,54 @@ async def login(body: dict):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     await _handle_successful_login(users, user["_id"])
-    token = create_access_token(str(user["_id"]))
+    return await _auth_token_response(db, user["_id"], user["email"], user)
+
+
+@router.post("/refresh")
+async def refresh_session(body: dict):
+    """Exchange a valid refresh token for a new access + refresh pair (rotation)."""
+    raw = (body.get("refresh_token") or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="refresh_token required")
+
+    db = await get_database()
+    rotated = await rotate_refresh_token(db, raw)
+    if not rotated:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    user_id, new_refresh = rotated
+    users = db[USERS]
+    if len(user_id) != 24:
+        raise HTTPException(status_code=401, detail="Invalid user")
+    user = await users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"lastActiveAt": now, "updatedAt": now}},
+    )
+
+    access = create_access_token(user_id)
     return {
-        "access_token": token,
+        "access_token": access,
+        "refresh_token": new_refresh,
         "token_type": "bearer",
-        "user_id": str(user["_id"]),
+        "expires_in": ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        "user_id": user_id,
         "email": user["email"],
-        "user": _serialize_user(user),
     }
+
+
+@router.post("/logout")
+async def logout_session(body: dict):
+    """Revoke the refresh token for this device. Body: { \"refresh_token\": \"...\" }."""
+    raw = (body.get("refresh_token") or "").strip()
+    if raw:
+        db = await get_database()
+        await revoke_refresh_token(db, raw)
+    return {"success": True}
 
 
 async def _handle_failed_login(users, user_id: ObjectId):
@@ -241,6 +372,12 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         return {"ok": True}
+    if "dateOfBirth" in updates:
+        dob = _parse_date_of_birth(updates.get("dateOfBirth"))
+        if dob is None:
+            raise HTTPException(status_code=400, detail="Invalid dateOfBirth format")
+        if not _is_at_least_minimum_age(dob):
+            raise HTTPException(status_code=400, detail="You must be at least 18 years old")
     # Enforce one-device-token-per-user to avoid cross-account push delivery
     # on shared devices. If this token exists on other users, remove it there.
     if "fcmToken" in updates and updates.get("fcmToken"):
@@ -343,6 +480,18 @@ async def get_profile_photo(photo_id: str):
     return Response(content=bytes(data), media_type="image/jpeg")
 
 
+@router.get("/reset-password/open")
+async def reset_password_open(token: str = ""):
+    """Email-friendly HTTPS link: opens MyFoodRx via foodrx:// (see Flutter deep link handler)."""
+    token = (token or "").strip()
+    if not token:
+        return HTMLResponse(
+            content="<html><body><p>Missing reset token. Request a new reset link from the app.</p></body></html>",
+            status_code=400,
+        )
+    return HTMLResponse(content=_password_reset_bridge_html(token), media_type="text/html")
+
+
 # Password reset (no auth required for request; token in body for reset)
 @router.post("/forgot-password")
 async def forgot_password(body: dict):
@@ -390,7 +539,8 @@ async def validate_reset_token(body: dict):
     doc = await tokens_coll.find_one({"token": hashed, "used": False})
     if not doc:
         return {"valid": False}
-    if datetime.now(timezone.utc) > datetime.fromisoformat(doc["expiresAt"].replace("Z", "+00:00")):
+    expires = _parse_iso_datetime(doc.get("expiresAt"))
+    if expires is None or datetime.now(timezone.utc) > expires:
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         return {"valid": False}
     return {"valid": True, "userId": str(doc["userId"])}
@@ -410,7 +560,8 @@ async def reset_password(body: dict):
     doc = await tokens_coll.find_one({"token": hashed, "used": False})
     if not doc:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    if datetime.now(timezone.utc) > datetime.fromisoformat(doc["expiresAt"].replace("Z", "+00:00")):
+    expires = _parse_iso_datetime(doc.get("expiresAt"))
+    if expires is None or datetime.now(timezone.utc) > expires:
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     user_id = doc["userId"]
@@ -419,4 +570,5 @@ async def reset_password(body: dict):
         {"$set": {"password": hash_password(new_password), "updatedAt": datetime.now(timezone.utc).isoformat()}},
     )
     await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
+    await revoke_all_refresh_tokens_for_user(db, str(user_id))
     return {"success": True}

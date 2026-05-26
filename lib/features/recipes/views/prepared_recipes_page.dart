@@ -355,6 +355,7 @@ class _PreparedRecipeCard extends StatelessWidget {
                     height: 100,
                     child: RecipeImage(
                       imageUrl: item.recipe.image,
+                      imageUrlCandidates: item.recipe.imageUrlCandidates,
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,

@@ -200,16 +200,10 @@ class _TrackerGridState extends State<TrackerGrid>
         AppLogger.d(
             '🎯 TrackerGrid: Showing main tracker display with ${dailyTrackers.length} daily trackers');
 
-        // Get text scale factor and clamp it for UI elements that must fit
         final textScaleFactor = MediaQuery.textScaleFactorOf(context);
         final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-
-        // Calculate responsive aspect ratio based on text scaling
-        // Base: 152 width / 68 height = 2.235
-        // When height scales, aspect ratio decreases
-        final baseHeight = 68.0;
-        final scaledHeight = baseHeight * clampedScale;
-        final childAspectRatio = 152 / scaledHeight;
+        final cardHeight = TrackerCard.preferredHeight(context);
+        final childAspectRatio = 152 / cardHeight;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -465,14 +459,10 @@ class _TrackerGridState extends State<TrackerGrid>
   }
 
   Widget _buildSkeletonLoading() {
-    // Get text scale factor and clamp it for UI elements that must fit
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-
-    // Calculate responsive aspect ratio based on text scaling
-    final baseHeight = 68.0;
-    final scaledHeight = baseHeight * clampedScale;
-    final childAspectRatio = 152 / scaledHeight;
+    final cardHeight = TrackerCard.preferredHeight(context);
+    final childAspectRatio = 152 / cardHeight;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),

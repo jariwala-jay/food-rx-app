@@ -1,4 +1,5 @@
 import 'package:flutter_app/features/recipes/models/nutrition.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_image_urls.dart';
 
 class Recipe {
   final int id;
@@ -93,11 +94,31 @@ class Recipe {
     this.isSaved = false,
   });
 
+  /// Builds a usable image URL from Spoonacular search/detail payloads.
+  static String resolveImageUrl(Map<String, dynamic> json) =>
+      RecipeImageUrls.resolveFromJson(json);
+
+  /// Whether we can attempt to load a recipe photo (Spoonacular CDN fallbacks).
+  bool get hasRecipeImage =>
+      RecipeImageUrls.hasResolvableImage(id: id, image: image);
+
+  /// True when the recipe has at least one real written cooking step.
+  bool get hasCookingInstructions => analyzedInstructions
+      .any((block) => block.cookingSteps.isNotEmpty);
+
+  /// URLs to try when the primary [image] fails to load (jpg/png, CDN + legacy).
+  List<String> get imageUrlCandidates => RecipeImageUrls.candidatesFor(
+        id: id,
+        image: image,
+        ingredientImageUrls:
+            extendedIngredients.map((e) => e.image).where((u) => u.isNotEmpty),
+      );
+
   factory Recipe.fromJson(Map<String, dynamic> json) {
     return Recipe(
       id: json['id'] ?? 0,
       title: json['title'] ?? '',
-      image: json['image'] ?? '',
+      image: resolveImageUrl(json),
       readyInMinutes: json['readyInMinutes'] ?? 0,
       servings: json['servings'] ?? 1,
       sourceUrl: json['sourceUrl'] ?? '',
@@ -158,7 +179,7 @@ class Recipe {
     return Recipe(
       id: json['id'] ?? 0,
       title: json['title'] ?? '',
-      image: json['image'] ?? '',
+      image: resolveImageUrl(json),
       readyInMinutes: json['readyInMinutes'] ?? 0,
       servings: json['servings'] ?? 1,
       sourceUrl: json['sourceUrl'] ?? '',
@@ -355,6 +376,15 @@ class Recipe {
     );
   }
 
+  /// Required ingredient lines (excludes optional — matches green/orange badges).
+  int get requiredIngredientLineCount => extendedIngredients
+      .where((i) => !i.isOptionalIngredient)
+      .length;
+
+  int get optionalIngredientLineCount => extendedIngredients
+      .where((i) => i.isOptionalIngredient)
+      .length;
+
   /// Shopping-cart style count: missed items excluding optional lines (see [RecipeIngredient.isOptionalIngredient]).
   int get requiredMissedIngredientCount {
     if (missedIngredients.isNotEmpty) {
@@ -400,23 +430,63 @@ class RecipeIngredient {
   static bool _textSuggestsOptional(String s) =>
       s.toLowerCase().contains('optional');
 
-  /// True when the ingredient line is marked optional in text (Spoonacular does not exclude these from [Recipe.missedIngredientCount]).
+  /// True when Spoonacular marks this line optional (see [original] / [meta]).
   bool get isOptionalIngredient =>
       _textSuggestsOptional(original) ||
       _textSuggestsOptional(originalName) ||
-      _textSuggestsOptional(name);
+      _textSuggestsOptional(name) ||
+      meta.any(_textSuggestsOptional);
+
+  /// Appends a visible `optional` suffix for the ingredients list (from API text).
+  String formatDisplayLine(String scaledLine) {
+    final built = scaledLine.trim();
+    if (!isOptionalIngredient) return built;
+
+    final withoutTag = built
+        .replaceAll(RegExp(r',?\s*optional\.?$', caseSensitive: false), '')
+        .trim();
+    if (withoutTag.toLowerCase().endsWith(' optional')) {
+      return withoutTag;
+    }
+    return '$withoutTag optional';
+  }
+
+  /// Best label for display / pantry matching (non-empty [nameClean], else [name]).
+  static String resolveDisplayName(String nameClean, String name) {
+    final clean = nameClean.trim();
+    if (clean.isNotEmpty) return dedupeConsecutiveWords(clean);
+    return dedupeConsecutiveWords(name.trim());
+  }
+
+  /// Collapses repeated words (e.g. Spoonacular `nameClean`: "celery celery").
+  static String dedupeConsecutiveWords(String text) {
+    final words = text.trim().split(RegExp(r'\s+'));
+    if (words.length <= 1) return text.trim();
+
+    final out = <String>[];
+    for (final word in words) {
+      if (out.isNotEmpty &&
+          out.last.toLowerCase() == word.toLowerCase()) {
+        continue;
+      }
+      out.add(word);
+    }
+    return out.join(' ');
+  }
 
   factory RecipeIngredient.fromJson(Map<String, dynamic> json) {
     final rawUnit = json['unit'] ?? '';
-    final ingredientName = json['nameClean'] ?? json['name'] ?? '';
-    
+    final name = (json['name'] ?? '').toString();
+    final nameCleanRaw = (json['nameClean'] ?? '').toString();
+    final ingredientName = resolveDisplayName(nameCleanRaw, name);
+
     return RecipeIngredient(
       id: json['id'] ?? 0,
       aisle: json['aisle'] ?? '',
       image: json['image'] ?? '',
       consistency: json['consistency'] ?? '',
-      name: json['name'] ?? '',
-      nameClean: json['nameClean'] ?? '',
+      name: name,
+      nameClean: ingredientName,
       original: json['original'] ?? '',
       originalName: json['originalName'] ?? '',
       amount: (json['amount'] ?? 0).toDouble(),
@@ -426,6 +496,32 @@ class RecipeIngredient {
       isAvailableInPantry: json['isAvailableInPantry'] ?? false,
       isExpiring: json['isExpiring'] ?? false,
     );
+  }
+
+  /// Strips ingredient name accidentally embedded in Spoonacular [unit] (e.g. "cups celery").
+  static String sanitizeUnit(String unit, String ingredientName) {
+    var u = unit.trim();
+    final name = ingredientName.trim();
+    if (u.isEmpty || name.isEmpty) return u;
+
+    final uLower = u.toLowerCase();
+    final nameLower = name.toLowerCase();
+    if (uLower == nameLower) return '';
+
+    if (uLower.endsWith(' $nameLower')) {
+      return u.substring(0, u.length - name.length).trim();
+    }
+    if (uLower.startsWith('$nameLower ')) {
+      return u.substring(name.length).trim();
+    }
+
+    return u
+        .replaceAll(
+          RegExp('\\b${RegExp.escape(name)}\\b', caseSensitive: false),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   /// Fixes malformed units from Spoonacular API at the source
@@ -453,8 +549,8 @@ class RecipeIngredient {
         return 'piece'; // default to piece for count-based items
       }
     }
-    
-    return unit; // return original unit if no fix needed
+
+    return sanitizeUnit(unit, ingredientName);
   }
 
   Map<String, dynamic> toJson() {
@@ -582,6 +678,10 @@ class RecipeInstruction {
     );
   }
 
+  /// Written cooking steps only (no "Serves 6", "Watch video", etc.).
+  List<InstructionStep> get cookingSteps =>
+      steps.where((s) => InstructionStep.isCookingStep(s.step)).toList();
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -604,6 +704,49 @@ class InstructionStep {
     required this.equipment,
     this.length,
   });
+
+  /// True when [text] is a real cooking step (not serving/video placeholders).
+  static bool isCookingStep(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return false;
+    if (isServingMetadata(t) || isVideoPlaceholder(t)) return false;
+    // Drop very short lines with no amounts/temps (usually junk metadata).
+    if (t.length < 12 && !RegExp(r'\d').hasMatch(t)) return false;
+    return true;
+  }
+
+  /// True when [text] is yield/serving metadata, not a cooking step.
+  static bool isServingMetadata(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return false;
+
+    final patterns = [
+      RegExp(r'^serves?\s*:?\s*\d+', caseSensitive: false),
+      RegExp(r'^serve\s+\d+', caseSensitive: false),
+      RegExp(r'^yield\s*:?\s*\d+', caseSensitive: false),
+      RegExp(r'^makes?\s+\d+\s+servings?', caseSensitive: false),
+      RegExp(r'^\d+\s+servings?\s*\.?$', caseSensitive: false),
+      RegExp(r'^servings?\s*:?\s*\d+', caseSensitive: false),
+    ];
+    return patterns.any((p) => p.hasMatch(t));
+  }
+
+  /// Spoonacular sometimes returns only "Watch video" / "Whatch video" as instructions.
+  static bool isVideoPlaceholder(String text) {
+    final t =
+        text.trim().toLowerCase().replaceAll(RegExp(r'<[^>]*>'), '').trim();
+    if (t.isEmpty) return false;
+
+    final patterns = [
+      RegExp(r'^(whatch|watch|see|view)\s+(the\s+)?video'),
+      RegExp(r'^(whatch|watch)\s+(the\s+)?recipe'),
+      RegExp(r'^video\s+(only|instructions?)?\.?$'),
+      RegExp(r'^click\s+.*\bvideo\b'),
+      RegExp(r'^for\s+(the\s+)?(full\s+)?instructions.*\bvideo\b'),
+      RegExp(r'^instructions?\s+(in\s+)?(the\s+)?video'),
+    ];
+    return patterns.any((p) => p.hasMatch(t));
+  }
 
   factory InstructionStep.fromJson(Map<String, dynamic> json) {
     return InstructionStep(

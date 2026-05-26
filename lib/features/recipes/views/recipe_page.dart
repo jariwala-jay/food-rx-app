@@ -692,10 +692,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   );
                 }
+                final servings = Provider.of<RecipeController>(context,
+                        listen: false)
+                    .currentFilter
+                    .servings;
                 return ListView.builder(
                   itemCount: visible.length,
                   itemBuilder: (context, index) {
-                    return RecipeCard(recipe: visible[index]);
+                    return RecipeCard(
+                      recipe: visible[index],
+                      targetServings: servings,
+                    );
                   },
                 );
               },

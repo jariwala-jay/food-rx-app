@@ -1,4 +1,5 @@
 """Shared dependencies (e.g. current user from JWT)."""
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -27,12 +28,6 @@ async def get_current_user_id(
 async def get_chatbot_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> str:
-    """
-    Like get_current_user_id, but allows missing auth for anonymous chat (Swagger / demos).
-
-    Valid Bearer token → real user id. No header → ``anon`` (no profile/pantry in DB).
-    Malformed or expired token → 401.
-    """
     if not credentials or not credentials.credentials:
         return "anon"
     user_id = decode_access_token(credentials.credentials)

@@ -47,7 +47,6 @@ class ChatbotPage extends StatefulWidget {
 
 class _ChatbotPageState extends State<ChatbotPage>
     with TickerProviderStateMixin {
-  // Change this to preview different send-button styles in simulator.
   static const _SendButtonStyle _sendButtonStyle = _SendButtonStyle.solid;
 
   final _controller = TextEditingController();
@@ -55,20 +54,14 @@ class _ChatbotPageState extends State<ChatbotPage>
   late final RegExp _glossaryRegex;
   bool _isLoading = false;
 
-  /// Suggested questions (starters from GET /starter-questions or follow-ups from chat).
   List<String> _suggestionChips = [];
   late AnimationController _typingAnimController;
   final ScrollController _scrollController = ScrollController();
 
-  /// Canonical terms that already received a **prime** (blue) highlight in this chat.
   final Set<String> _glossaryPrimeCanonicalsShown = <String>{};
-
-  /// Optional profile condition strings for glossary priority boosts (wire when available).
   final Set<String> _glossaryConditionHints = <String>{};
-  // Keep accent orange consistent across avatar, user bubble, and send button.
   static const Color _accentOrangeColor = Color(0xFFFF6A00);
   static const Color _userBubbleColor = _accentOrangeColor;
-  // Slightly warm light-grey to match the mockup-style assistant bubbles.
   static const Color _botBubbleColor = Color(0xFFF1F3F5);
 
   @override
@@ -148,11 +141,8 @@ class _ChatbotPageState extends State<ChatbotPage>
   void _addBotMessage(String message) {
     if (!mounted) return;
     var sanitized = _stripExploreBelowHint(_stripMarkdownTokens(message));
-    final isFirstBotMessage =
-        !_messages.any((m) => m is Map && m['isUser'] == false);
     final sessionBefore = Set<String>.from(_glossaryPrimeCanonicalsShown);
-    final shouldSkipHighlights =
-        isFirstBotMessage || _shouldSkipGlossaryForMessage(sanitized);
+    final shouldSkipHighlights = _shouldSkipGlossaryForMessage(sanitized);
     final layout = shouldSkipHighlights
         ? _GlossaryLayoutCache(
             hits: const <_GlossaryHit>[],
@@ -181,11 +171,17 @@ class _ChatbotPageState extends State<ChatbotPage>
     final normalized = text.trim().toLowerCase();
     if (normalized.isEmpty || normalized.length < 55) return true;
 
-    final greetingPattern = RegExp(
-      r'^(hi|hello|hey|good (morning|afternoon|evening)|welcome)\b',
+    // Skip intro handshake/greeting bubbles (welcome tone, not content answer).
+    final startsLikeGreeting = RegExp(
+      r'^(hi|hello|hey)\b',
       caseSensitive: false,
-    );
-    if (greetingPattern.hasMatch(normalized)) return true;
+    ).hasMatch(normalized);
+    final hasIntroFraming = normalized.contains("i'm here to") ||
+        normalized.contains("i’m here to");
+    final hasGuidedPrompt = normalized.contains('what would you like') ||
+        normalized.contains('where would you like') ||
+        normalized.contains('want to explore');
+    if (startsLikeGreeting && hasIntroFraming && hasGuidedPrompt) return true;
 
     final closingPattern = RegExp(
       r'(take care|let me know|anything else|have a (great|good) day|thanks for chatting|happy to help)',
@@ -696,9 +692,8 @@ class _ChatbotPageState extends State<ChatbotPage>
       if (!mounted) return;
       _addBotMessage(reply.response);
       setState(() {
-        _suggestionChips = reply.sessionClosing
-            ? <String>[]
-            : reply.followUpQuestions;
+        _suggestionChips =
+            reply.sessionClosing ? <String>[] : reply.followUpQuestions;
       });
     } catch (e) {
       if (mounted) {

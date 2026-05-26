@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/core/services/credential_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
@@ -17,6 +19,7 @@ import 'package:http/http.dart' show ClientException;
 
 class AuthController with ChangeNotifier {
   final EmailService _emailService = GmailSMTPEmailService();
+  final LocalAuthentication _localAuth = LocalAuthentication();
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -51,9 +54,139 @@ class AuthController with ChangeNotifier {
       e is TlsException;
 
   Future<void> _clearAuthSession() async {
+    await ApiClient.revokeRefreshTokenOnLogout();
     await ApiClient.clearSession();
     RagChatbotService.resetConversation();
     _localProfilePhotoData = null;
+  }
+
+  Future<bool> hasSavedLogin() => CredentialStorage.hasSavedCredentials();
+
+  Future<void> clearSavedLogin() => CredentialStorage.clearCredentials();
+
+  Future<bool> _completeAuthFromResponse(
+    Map<String, dynamic> res, {
+    bool saveLogin = false,
+    String? loginEmail,
+    String? loginPassword,
+  }) async {
+    final token = res['access_token'] as String?;
+    final refresh = res['refresh_token'] as String?;
+    final userId = res['user_id'] as String?;
+    final emailRes = res['email'] as String?;
+    final user = res['user'] as Map<String, dynamic>?;
+
+    if (token == null ||
+        refresh == null ||
+        userId == null ||
+        emailRes == null) {
+      return false;
+    }
+
+    await ApiClient.setSession(
+      accessToken: token,
+      refreshToken: refresh,
+      userId: userId,
+      email: emailRes,
+    );
+
+    if (saveLogin && loginEmail != null && loginPassword != null) {
+      await CredentialStorage.saveCredentials(
+        email: loginEmail,
+        password: loginPassword,
+      );
+    }
+
+    if (user != null) {
+      _currentUser = _createUserModel(user);
+    } else {
+      final me = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+      if (me != null) _currentUser = _createUserModel(me);
+    }
+
+    if (_currentUser?.id != null) {
+      try {
+        await _initializeNotificationServices(_currentUser!.id!);
+      } catch (e) {
+        debugPrint('Warning: Failed to initialize notification services: $e');
+      }
+      unawaited(_markUserActive());
+    }
+    return _currentUser != null;
+  }
+
+  Future<bool> authenticateWithBiometrics() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      if (!canCheck && !isSupported) return false;
+
+      return _localAuth.authenticate(
+        localizedReason: 'Sign in to MyFoodRx',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Biometric auth error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> loginWithSavedCredentials() async {
+    final creds = await CredentialStorage.readCredentials();
+    if (creds == null) {
+      _error = 'No saved login on this device';
+      return false;
+    }
+
+    final ok = await authenticateWithBiometrics();
+    if (!ok) {
+      _error = 'Authentication cancelled';
+      return false;
+    }
+
+    return login(creds.email, creds.password, saveLogin: true);
+  }
+
+  Future<bool> _restoreSessionFromStorage() async {
+    final userId = await ApiClient.userId;
+    final userEmail = await ApiClient.userEmail;
+    final hasRefresh = await ApiClient.hasRefreshToken();
+
+    if (userId == null || userEmail == null) {
+      if (!hasRefresh) return false;
+    }
+
+    if (userId != null && userId.length != 24) {
+      await _clearAuthSession();
+      return false;
+    }
+
+    final access = await ApiClient.getToken();
+    if ((access == null || access.isEmpty) && hasRefresh) {
+      final refreshed = await ApiClient.refreshSession();
+      if (!refreshed) {
+        await _clearAuthSession();
+        return false;
+      }
+    }
+
+    if (!hasRefresh && (access == null || access.isEmpty)) {
+      return false;
+    }
+
+    final userData = await _fetchAuthMeWithRetries();
+    final email = await ApiClient.userEmail;
+    if (userData != null && email != null && userData['email'] == email) {
+      _currentUser = _createUserModel(userData);
+      await _initializeNotificationServices(_currentUser!.id!);
+      unawaited(_markUserActive());
+      return true;
+    }
+    await _clearAuthSession();
+    return false;
   }
 
   /// [GET /auth/me] with short backoff — cellular/Wi‑Fi often lags right after boot.
@@ -90,33 +223,30 @@ class AuthController with ChangeNotifier {
         debugPrint('Warning: Failed to initialize re-plan service: $e');
       }
 
+      final hasRefresh = await ApiClient.hasRefreshToken();
       final token = await ApiClient.getToken();
-      final userId = await ApiClient.userId;
-      final userEmail = await ApiClient.userEmail;
-
-      if (token != null && token.isNotEmpty && userId != null && userEmail != null) {
+      if (hasRefresh || (token != null && token.isNotEmpty)) {
         try {
-          if (userId.length != 24) {
-            await _clearAuthSession();
-            throw Exception('Invalid user ID format');
-          }
-          final userData = await _fetchAuthMeWithRetries();
-          if (userData != null && userData['email'] == userEmail) {
-            _currentUser = _createUserModel(userData);
-            await _initializeNotificationServices(_currentUser!.id!);
-            unawaited(_markUserActive());
-          } else {
+          final restored = await _restoreSessionFromStorage();
+          if (!restored && !hasRefresh && token != null && token.isNotEmpty) {
             await _clearAuthSession();
           }
         } on ApiException catch (e) {
           if (e.statusCode == 401 || e.statusCode == 404) {
-            await _clearAuthSession();
+            final refreshed = await ApiClient.refreshSession();
+            if (refreshed) {
+              try {
+                await _restoreSessionFromStorage();
+              } catch (_) {
+                await _clearAuthSession();
+              }
+            } else {
+              await _clearAuthSession();
+            }
           } else {
             _error = 'Failed to restore session: ${e.message}';
           }
         } catch (e) {
-          // Reboot / airplane mode: network often isn't ready yet. Do not wipe
-          // stored credentials — user can reopen when online (initialize runs again).
           if (_isTransientNetworkError(e)) {
             _error = userFacingErrorMessage(e);
           } else {
@@ -136,29 +266,32 @@ class AuthController with ChangeNotifier {
   /// try again after the OS restores connectivity (app resume).
   Future<void> resumeSessionIfNeeded() async {
     if (_currentUser != null) return;
+    final hasRefresh = await ApiClient.hasRefreshToken();
     final token = await ApiClient.getToken();
-    if (token == null || token.isEmpty) return;
-
-    final userId = await ApiClient.userId;
-    final userEmail = await ApiClient.userEmail;
-    if (userId == null || userEmail == null || userId.length != 24) return;
+    if (!hasRefresh && (token == null || token.isEmpty)) return;
 
     try {
-      final userData = await _fetchAuthMeWithRetries();
-      if (userData != null && userData['email'] == userEmail) {
-        _currentUser = _createUserModel(userData);
-        await _initializeNotificationServices(_currentUser!.id!);
-        unawaited(_markUserActive());
+      final restored = await _restoreSessionFromStorage();
+      if (restored) {
         _error = null;
         notifyListeners();
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 404) {
+        if (await ApiClient.refreshSession()) {
+          try {
+            if (await _restoreSessionFromStorage()) {
+              _error = null;
+              notifyListeners();
+              return;
+            }
+          } catch (_) {}
+        }
         await _clearAuthSession();
         notifyListeners();
       }
     } catch (_) {
-      // Keep stored token for a later retry.
+      // Keep stored tokens for a later retry.
     }
   }
 
@@ -185,20 +318,7 @@ class AuthController with ChangeNotifier {
 
       final res = await ApiClient.post('/auth/register', body: cleanUserData, requireAuth: false)
           as Map<String, dynamic>;
-      final token = res['access_token'] as String?;
-      final userId = res['user_id'] as String?;
-      final emailRes = res['email'] as String?;
-      final user = res['user'] as Map<String, dynamic>?;
-
-      if (token != null && userId != null && emailRes != null) {
-        await ApiClient.setSession(accessToken: token, userId: userId, email: emailRes);
-        if (user != null) {
-          _currentUser = _createUserModel(user);
-        } else {
-          final me = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
-          if (me != null) _currentUser = _createUserModel(me);
-        }
-
+      if (await _completeAuthFromResponse(res)) {
         if (profilePhoto != null) {
           try {
             _localProfilePhotoData = await profilePhoto.readAsBytes();
@@ -220,12 +340,6 @@ class AuthController with ChangeNotifier {
           }
         }
 
-        // Kick off notification initialization without blocking
-        try {
-          unawaited(_initializeNotificationServices(_currentUser!.id!));
-        } catch (e) {
-          debugPrint('Warning: Failed to initialize notification services: $e');
-        }
         return true;
       }
       _error = 'Registration failed';
@@ -265,7 +379,11 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(
+    String email,
+    String password, {
+    bool saveLogin = false,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -274,32 +392,33 @@ class AuthController with ChangeNotifier {
       final res = await ApiClient.post('/auth/login', body: {'email': email, 'password': password},
               requireAuth: false)
           as Map<String, dynamic>?;
-      final token = res?['access_token'] as String?;
-      final userId = res?['user_id'] as String?;
-      final emailRes = res?['email'] as String?;
-      final user = res?['user'] as Map<String, dynamic>?;
+      if (res == null) {
+        _error = 'Invalid email or password';
+        return false;
+      }
 
-      if (token != null && userId != null && emailRes != null) {
-        await ApiClient.setSession(accessToken: token, userId: userId, email: emailRes);
-        if (user != null) {
-          _currentUser = _createUserModel(user);
-        } else {
-          final me = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
-          if (me != null) _currentUser = _createUserModel(me);
-        }
-        try {
-          await _initializeNotificationServices(_currentUser!.id!);
-        } catch (e) {
-          debugPrint('Warning: Failed to initialize notification services: $e');
-        }
-        unawaited(_markUserActive());
+      if (await _completeAuthFromResponse(
+        res,
+        saveLogin: saveLogin,
+        loginEmail: email,
+        loginPassword: password,
+      )) {
         return true;
+      }
+      if (!saveLogin) {
+        await CredentialStorage.clearCredentials();
       }
       _error = 'Invalid email or password';
       return false;
     } on ApiException catch (e) {
-      if (e.statusCode == 401) _error = 'Invalid email or password';
-      else _error = e.message;
+      if (e.statusCode == 401) {
+        _error = 'Invalid email or password';
+        await CredentialStorage.clearCredentials();
+      } else if (e.statusCode == 403) {
+        _error = e.message;
+      } else {
+        _error = e.message;
+      }
       return false;
     } on SocketException catch (e) {
       _error = userFacingErrorMessage(e);
@@ -568,6 +687,7 @@ class AuthController with ChangeNotifier {
       }
       await ApiClient.post('/auth/reset-password',
           body: {'token': token, 'newPassword': newPassword}, requireAuth: false);
+      await CredentialStorage.clearCredentials();
       await _clearAuthSession();
       _currentUser = null;
       return true;

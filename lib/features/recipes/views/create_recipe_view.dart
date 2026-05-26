@@ -114,27 +114,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
 
   /// Maps user's favorite cuisines (strings) to CuisineType enums
   List<CuisineType> _mapUserCuisinesToCuisineTypes(List<String> userCuisines) {
-    final Map<String, CuisineType> cuisineMap = {
-      'American': CuisineType.american,
-      'Mexican': CuisineType.mexican,
-      'Italian': CuisineType.italian,
-      'Chinese': CuisineType.chinese,
-      'Indian': CuisineType.indian,
-      'French': CuisineType.french,
-      'Thai': CuisineType.thai,
-      'Japanese': CuisineType.japanese,
-      'Mediterranean': CuisineType.mediterranean,
-      'Korean': CuisineType.korean,
-      'Vietnamese': CuisineType.vietnamese,
-      'Greek': CuisineType.greek,
-      'Spanish': CuisineType.spanish,
-      'Middle Eastern': CuisineType.middleEastern,
-    };
-
-    return userCuisines
-        .where((cuisine) => cuisineMap.containsKey(cuisine))
-        .map((cuisine) => cuisineMap[cuisine]!)
-        .toList();
+    return CuisineTypeExtension.fromUserFavoriteNames(userCuisines);
   }
 
   /// Prepopulates cooking time based on user's preferred meal prep time
@@ -247,6 +227,18 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     );
   }
 
+  bool get _isNoCuisinePreference =>
+      _selectedCuisines.isEmpty ||
+      (_selectedCuisines.length == 1 &&
+          _selectedCuisines.single == CuisineType.noPreference);
+
+  String get _cuisineSelectorLabel {
+    if (_isNoCuisinePreference) {
+      return CuisineType.noPreference.displayName;
+    }
+    return _selectedCuisines.map((c) => c.displayName).join(', ');
+  }
+
   Widget _buildCuisineSelector() {
     return GestureDetector(
       onTap: _showCuisineSelector,
@@ -261,19 +253,10 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
           children: [
             Expanded(
               child: Text(
-                _selectedCuisines.isEmpty
-                    ? 'Select Cuisines'
-                    : (_selectedCuisines.length == 1 &&
-                            _selectedCuisines.single == CuisineType.noPreference)
-                        ? CuisineType.noPreference.displayName
-                        : _selectedCuisines
-                            .map((c) => c.displayName)
-                            .join(', '),
+                _cuisineSelectorLabel,
                 style: TextStyle(
                   fontSize: 16,
-                  color: _selectedCuisines.isEmpty
-                      ? Colors.grey[600]
-                      : Colors.black87,
+                  color: Colors.black87,
                 ),
               ),
             ),
@@ -763,13 +746,34 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
     }
   }
 
-  void _generateRecipe() async {
-    // Calculate total cooking time in minutes
-    int? totalMinutes;
-    if (_cookingTimeHours != null || _cookingTimeMinutes != null) {
-      totalMinutes =
-          ((_cookingTimeHours ?? 0) * 60) + (_cookingTimeMinutes ?? 0);
+  /// Resolves cooking time from preset selection or HH/MM fields (reads controllers
+  /// so values are not lost if Generate is tapped before onChanged runs).
+  int? _resolveTotalCookingMinutes() {
+    if (!_useCustomCookingTime && _selectedPresetMinutes != null) {
+      return _selectedPresetMinutes;
     }
+
+    final hoursText = _cookingTimeHoursController.text.trim();
+    final minutesText = _cookingTimeMinutesController.text.trim();
+    final hours = hoursText.isEmpty ? null : int.tryParse(hoursText);
+    final minutes = minutesText.isEmpty ? null : int.tryParse(minutesText);
+
+    if (hours != null || minutes != null) {
+      final total = ((hours ?? 0) * 60) + (minutes ?? 0);
+      return total > 0 ? total : null;
+    }
+
+    if (_cookingTimeHours != null || _cookingTimeMinutes != null) {
+      final total =
+          ((_cookingTimeHours ?? 0) * 60) + (_cookingTimeMinutes ?? 0);
+      return total > 0 ? total : null;
+    }
+
+    return null;
+  }
+
+  void _generateRecipe() async {
+    final totalMinutes = _resolveTotalCookingMinutes();
 
     // Get user profile for intelligent filtering
     final authController = Provider.of<AuthController>(context, listen: false);
@@ -799,7 +803,9 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
         _getSpoonacularMealTypes(_selectedMealTypeName);
 
     final filter = RecipeFilter(
-      cuisines: _selectedCuisines,
+      cuisines: _isNoCuisinePreference
+          ? [CuisineType.noPreference]
+          : _selectedCuisines,
       mealType: _selectedMealType, // This will be used internally
       spoonacularMealTypes:
           spoonacularMealTypes, // This will be used for Spoonacular API
@@ -817,6 +823,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
       print('  User Selection: $_selectedMealTypeName');
       print('  Spoonacular Types: $spoonacularMealTypes');
       print('  Internal MealType: $_selectedMealType');
+      print('  maxReadyTime (minutes): ${totalMinutes ?? '(none)'}');
     }
 
     if (kDebugMode) {}

@@ -1,14 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_app/core/services/session_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// HTTP client for Food Rx backend API. Uses JWT from SharedPreferences.
+/// HTTP client for Food Rx backend API. Session tokens live in secure storage.
 class ApiClient {
-  static const _keyToken = 'access_token';
-  static const _keyUserId = 'user_id';
-  static const _keyUserEmail = 'user_email';
+  static bool _refreshInFlight = false;
 
   static String get _baseUrl {
     final url = dotenv.env['API_BASE_URL'] ?? '';
@@ -18,38 +16,30 @@ class ApiClient {
     return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
   }
 
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken);
-  }
+  static Future<String?> getToken() => SessionStorage.getAccessToken();
+
+  static Future<String?> getRefreshToken() => SessionStorage.getRefreshToken();
+
+  static Future<bool> hasRefreshToken() => SessionStorage.hasRefreshToken();
 
   static Future<void> setSession({
     required String accessToken,
+    required String refreshToken,
     required String userId,
     required String email,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyToken, accessToken);
-    await prefs.setString(_keyUserId, userId);
-    await prefs.setString(_keyUserEmail, email);
-  }
+  }) =>
+      SessionStorage.setSession(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        userId: userId,
+        email: email,
+      );
 
-  static Future<void> clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyToken);
-    await prefs.remove(_keyUserId);
-    await prefs.remove(_keyUserEmail);
-  }
+  static Future<void> clearSession() => SessionStorage.clearSession();
 
-  static Future<String?> get userId async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserId);
-  }
+  static Future<String?> get userId => SessionStorage.getUserId();
 
-  static Future<String?> get userEmail async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserEmail);
-  }
+  static Future<String?> get userEmail => SessionStorage.getUserEmail();
 
   static Future<Map<String, String>> _headers({bool includeAuth = true}) async {
     final headers = <String, String>{
@@ -80,7 +70,85 @@ class ApiClient {
     throw ApiException(response.statusCode, message);
   }
 
-  /// GET request. Returns decoded JSON map or list.
+  /// Exchange refresh token for a new access + refresh pair. Returns true on success.
+  static Future<bool> refreshSession() async {
+    if (_refreshInFlight) return false;
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    _refreshInFlight = true;
+    try {
+      final uri = Uri.parse('$_baseUrl/auth/refresh');
+      final response = await http.post(
+        uri,
+        headers: await _headers(includeAuth: false),
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+      if (response.statusCode >= 400) return false;
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final access = body?['access_token'] as String?;
+      final refresh = body?['refresh_token'] as String?;
+      if (access == null ||
+          access.isEmpty ||
+          refresh == null ||
+          refresh.isEmpty) {
+        return false;
+      }
+
+      await SessionStorage.updateTokens(
+        accessToken: access,
+        refreshToken: refresh,
+      );
+
+      final userId = body?['user_id'] as String?;
+      final email = body?['email'] as String?;
+      if (userId != null && email != null) {
+        await SessionStorage.setSession(
+          accessToken: access,
+          refreshToken: refresh,
+          userId: userId,
+          email: email,
+        );
+      }
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _refreshInFlight = false;
+    }
+  }
+
+  static Future<void> revokeRefreshTokenOnLogout() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return;
+    try {
+      final uri = Uri.parse('$_baseUrl/auth/logout');
+      await http.post(
+        uri,
+        headers: await _headers(includeAuth: false),
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+    } catch (_) {
+      // Best effort; local session is cleared regardless.
+    }
+  }
+
+  static Future<http.Response> _send(
+    Future<http.Response> Function() request, {
+    required bool requireAuth,
+    bool retried = false,
+  }) async {
+    final response = await request();
+    if (requireAuth && response.statusCode == 401 && !retried) {
+      final refreshed = await refreshSession();
+      if (refreshed) {
+        return _send(request, requireAuth: requireAuth, retried: true);
+      }
+    }
+    return response;
+  }
+
   static Future<dynamic> get(
     String path, {
     Map<String, String>? queryParameters,
@@ -90,98 +158,115 @@ class ApiClient {
     if (queryParameters != null && queryParameters.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParameters);
     }
-    final response = await http.get(
-      uri,
-      headers: await _headers(includeAuth: requireAuth),
+    final response = await _send(
+      () async => http.get(uri, headers: await _headers(includeAuth: requireAuth)),
+      requireAuth: requireAuth,
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (response.body.isEmpty) return null;
     return jsonDecode(response.body);
   }
 
-  /// POST request. [body] can be Map or List; will be JSON-encoded.
   static Future<dynamic> post(
     String path, {
     dynamic body,
     bool requireAuth = true,
   }) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.post(
-      uri,
-      headers: await _headers(includeAuth: requireAuth),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _send(
+      () async => http.post(
+        uri,
+        headers: await _headers(includeAuth: requireAuth),
+        body: body != null ? jsonEncode(body) : null,
+      ),
+      requireAuth: requireAuth,
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (response.body.isEmpty) return null;
     return jsonDecode(response.body);
   }
 
-  /// PUT request.
   static Future<dynamic> put(
     String path, {
     dynamic body,
     bool requireAuth = true,
   }) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.put(
-      uri,
-      headers: await _headers(includeAuth: requireAuth),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _send(
+      () async => http.put(
+        uri,
+        headers: await _headers(includeAuth: requireAuth),
+        body: body != null ? jsonEncode(body) : null,
+      ),
+      requireAuth: requireAuth,
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (response.body.isEmpty) return null;
     return jsonDecode(response.body);
   }
 
-  /// PATCH request.
   static Future<dynamic> patch(
     String path, {
     dynamic body,
     bool requireAuth = true,
   }) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.patch(
-      uri,
-      headers: await _headers(includeAuth: requireAuth),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _send(
+      () async => http.patch(
+        uri,
+        headers: await _headers(includeAuth: requireAuth),
+        body: body != null ? jsonEncode(body) : null,
+      ),
+      requireAuth: requireAuth,
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (response.body.isEmpty) return null;
     return jsonDecode(response.body);
   }
 
-  /// DELETE request.
   static Future<void> delete(String path, {bool requireAuth = true}) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.delete(
-      uri,
-      headers: await _headers(includeAuth: requireAuth),
+    final response = await _send(
+      () async =>
+          http.delete(uri, headers: await _headers(includeAuth: requireAuth)),
+      requireAuth: requireAuth,
     );
     if (response.statusCode >= 400) _throwFromResponse(response);
   }
 
-  /// GET request returning response bytes (e.g. profile photo).
   static Future<List<int>?> getBytes(String path) async {
     var uri = Uri.parse('$_baseUrl$path');
-    final response = await http.get(
-      uri,
-      headers: await _headers(includeAuth: false),
+    final response = await _send(
+      () async => http.get(uri, headers: await _headers(includeAuth: true)),
+      requireAuth: true,
     );
     if (response.statusCode == 404) return null;
     if (response.statusCode >= 400) _throwFromResponse(response);
     return response.bodyBytes;
   }
 
-  /// Multipart file upload (e.g. profile photo). Returns decoded JSON.
   static Future<dynamic> uploadFile(String path, File file,
       {String fieldName = 'file'}) async {
-    final uri = Uri.parse('$_baseUrl$path');
-    final token = await getToken();
-    final request = http.MultipartRequest('POST', uri);
-    request.headers['Authorization'] = 'Bearer $token';
-    request.files.add(await http.MultipartFile.fromPath(fieldName, file.path));
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    Future<http.Response> sendRequest() async {
+      final uri = Uri.parse('$_baseUrl$path');
+      final token = await getToken();
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.files
+          .add(await http.MultipartFile.fromPath(fieldName, file.path));
+      final streamed = await request.send();
+      return http.Response.fromStream(streamed);
+    }
+
+    var response = await sendRequest();
+    if (response.statusCode == 401) {
+      final refreshed = await refreshSession();
+      if (refreshed) {
+        response = await sendRequest();
+      }
+    }
     if (response.statusCode >= 400) _throwFromResponse(response);
     if (response.body.isEmpty) return null;
     return jsonDecode(response.body);

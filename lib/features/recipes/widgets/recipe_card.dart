@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/services/pantry_deduction_service.dart';
+import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
 import 'package:flutter_app/features/recipes/models/recipe.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_ingredient_pantry_counts.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_servings_display.dart';
 import 'package:flutter_app/features/recipes/views/recipe_detail_page.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -8,11 +12,14 @@ import 'package:provider/provider.dart';
 class RecipeCard extends StatelessWidget {
   final Recipe recipe;
   final bool fromSaved;
+  /// Servings used for badge counts; should match [RecipeDetailPage.targetServings].
+  final int? targetServings;
 
   const RecipeCard({
     Key? key,
     required this.recipe,
     this.fromSaved = false,
+    this.targetServings,
   }) : super(key: key);
 
   @override
@@ -34,8 +41,9 @@ class RecipeCard extends StatelessWidget {
               recipe: recipe,
               // When coming from saved recipes, show original servings
               // When coming from generated recipes, use user's preferred servings
-              targetServings:
-                  fromSaved ? null : controller.currentFilter.servings,
+              targetServings: fromSaved
+                  ? null
+                  : (targetServings ?? controller.currentFilter.servings),
             ),
           ),
         );
@@ -56,40 +64,57 @@ class RecipeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                RecipeImage(
-                  imageUrl: recipe.image,
-                  height: 200,
-                  width: double.infinity,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                Positioned(
-                  bottom: 10,
-                  right: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${recipe.readyInMinutes} Min',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ],
+            if (recipe.hasRecipeImage)
+              Stack(
+                children: [
+                  RecipeImage(
+                    imageUrl: recipe.image,
+                    imageUrlCandidates: recipe.imageUrlCandidates,
+                    height: 200,
+                    width: double.infinity,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  Positioned(
+                    bottom: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${recipe.readyInMinutes} Min',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                ],
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time,
+                        size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${recipe.readyInMinutes} Min',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -135,20 +160,36 @@ class RecipeCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildTag(
-                        icon: Icons.kitchen, // Placeholder for carrot
-                        label: '+${recipe.usedIngredientCount ?? 0}',
-                        color: Colors.green,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildTag(
-                        icon: Icons.shopping_cart, // Placeholder for pantry box
-                        label: '+${recipe.requiredMissedIngredientCount}',
-                        color: Colors.orange,
-                      ),
-                    ],
+                  Consumer2<PantryController, PantryDeductionService>(
+                    builder: (context, pantryController, pantryService, _) {
+                      final pantry = [
+                        ...pantryController.pantryItems,
+                        ...pantryController.otherItems,
+                      ];
+                      final recipeForCounts = RecipeServingsDisplay.forCounts(
+                        recipe,
+                        targetServings: fromSaved ? null : targetServings,
+                      );
+                      final counts =
+                          RecipeIngredientPantryCounts(pantryService);
+                      return Row(
+                        children: [
+                          _buildTag(
+                            icon: Icons.kitchen,
+                            label:
+                                '+${counts.inPantryCount(recipeForCounts, pantry)}',
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildTag(
+                            icon: Icons.shopping_cart,
+                            label:
+                                '+${counts.requiredMissingCount(recipeForCounts, pantry)}',
+                            color: Colors.orange,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

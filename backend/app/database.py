@@ -3,6 +3,7 @@ import logging
 import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.config import settings
+from app.refresh_tokens import ensure_refresh_token_indexes
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,10 @@ async def ensure_database_indexes() -> None:
         )
     except Exception as exc:
         logger.warning("ensure_database_indexes: rag_response_cache index: %s", exc)
+    try:
+        await ensure_refresh_token_indexes(db)
+    except Exception as exc:
+        logger.warning("ensure_database_indexes: refreshTokens index: %s", exc)
 
 
 async def close_database():

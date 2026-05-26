@@ -14,12 +14,33 @@ class TrackerCard extends StatelessWidget {
   final VoidCallback? onTap;
   final GlobalKey? infoShowcaseKey;
 
+  /// When system text scale exceeds this, cards use a stacked layout so the
+  /// info icon does not overlap category labels (e.g. "Veggies").
+  static const double largeTextLayoutThreshold = 1.1;
+
   const TrackerCard({
     Key? key,
     required this.tracker,
     this.onTap,
     this.infoShowcaseKey,
   }) : super(key: key);
+
+  static bool usesLargeTextLayout(BuildContext context) {
+    return MediaQuery.textScaleFactorOf(context) > largeTextLayoutThreshold;
+  }
+
+  /// Progress fraction size — slightly larger than labels; scales down only when long.
+  static const double progressFractionMaxFontSize = 15;
+  static const double progressUnitFontSize = 11;
+
+  /// Height used by [TrackerGrid] for grid aspect ratio.
+  static double preferredHeight(BuildContext context) {
+    final textScale = MediaQuery.textScaleFactorOf(context);
+    if (usesLargeTextLayout(context)) {
+      return 88 + (textScale - 1.0) * 36;
+    }
+    return 68.0 * textScale.clamp(1.0, 1.3);
+  }
 
   // Get progress color based on percentage and goal value
   // goalValue is needed to calculate the "0.5 below goal" threshold
@@ -63,9 +84,9 @@ class TrackerCard extends StatelessWidget {
     } else if (progress <= 1.0 || alwaysGreenAboveGoal) {
       return const Color(
           0xFF2CCC87); // Green for near goal to 100% (or above for special categories)
-      } else {
-        return const Color(0xFFFF3B30); // Red for > 100% (for regular trackers)
-      }
+    } else {
+      return const Color(0xFFFF3B30); // Red for > 100% (for regular trackers)
+    }
   }
 
   // Helper to check if a category should stay green above goal
@@ -77,7 +98,6 @@ class TrackerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate progress and determine color
     final progress = tracker.progress;
     final progressColor = getProgressColor(
       progress,
@@ -86,23 +106,15 @@ class TrackerCard extends StatelessWidget {
     );
     final iconPath = getTrackerIconAsset(tracker.category);
     final isSvg = iconPath.endsWith('.svg');
+    final cardHeight = preferredHeight(context);
+    final useLargeLayout = usesLargeTextLayout(context);
 
-    // Get text scale factor and clamp it for UI elements that must fit
-    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-
-    // Calculate responsive card height based on text scaling
-    final baseHeight = 68.0;
-    final cardHeight = baseHeight * clampedScale;
-
-    // Check if tour is active to block interactions
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
     final isTourActive = tourProvider.isTourActive;
 
     return GestureDetector(
       onTap: () {
-        // Block taps during tour (except via showcase handlers)
         if (isTourActive) {
           return;
         }
@@ -123,105 +135,253 @@ class TrackerCard extends StatelessWidget {
           ],
         ),
         padding: const EdgeInsets.all(8),
-        child: Stack(
+        child: useLargeLayout
+            ? _buildLargeTextLayout(
+                context,
+                progress: progress,
+                progressColor: progressColor,
+                iconPath: iconPath,
+                isSvg: isSvg,
+                cardHeight: cardHeight,
+              )
+            : _buildCompactLayout(
+                context,
+                progress: progress,
+                progressColor: progressColor,
+                iconPath: iconPath,
+                isSvg: isSvg,
+                cardHeight: cardHeight,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildCompactLayout(
+    BuildContext context, {
+    required double progress,
+    required Color progressColor,
+    required String iconPath,
+    required bool isSvg,
+    required double cardHeight,
+  }) {
+    final clampedScale =
+        MediaQuery.textScaleFactorOf(context).clamp(1.0, 1.3);
+
+    return Stack(
+      children: [
+        Row(
           children: [
-            // Main content row
-            Row(
-              children: [
-                // Left - Progress circle with icon
-                SizedBox(
-                  width: 68,
-                  height: cardHeight - 16, // Account for padding
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Background for icon - light circle
-                      Container(
-                        width: 62,
-                        height: 62,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.grey.shade100,
-                        ),
-                      ),
-
-                      // Progress indicator - full circle
-                      CustomPaint(
-                        size: const Size(62, 62),
-                        painter: ProgressCirclePainter(
-                          progress: progress,
-                          progressColor: progressColor,
-                          backgroundColor: Colors.grey.shade200,
-                          category: tracker.category,
-                        ),
-                      ),
-
-                      // Icon in the center
-                      SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: isSvg
-                            ? SvgPicture.asset(
-                                iconPath,
-                              )
-                            : Image.asset(
-                                iconPath,
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                // Right - Text content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          tracker.name,
-                          style: TextStyle(
-                            fontSize: 14 * clampedScale,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textTertiary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          tracker.formattedProgress,
-                          style: TextStyle(
-                            fontSize: 12 * clampedScale,
-                            fontWeight: FontWeight.bold,
-                            color: progressColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: 68,
+              height: cardHeight - 16,
+              child: _buildProgressIcon(
+                progress: progress,
+                progressColor: progressColor,
+                iconPath: iconPath,
+                isSvg: isSvg,
+                diameter: 62,
+                iconSize: 30,
+              ),
             ),
-
-            // Info icon positioned in top-right
-            Positioned(
-              top: 4,
-              right: 4,
-              child: _buildInfoIcon(context),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      tracker.name,
+                      style: TextStyle(
+                        fontSize: 14 * clampedScale,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textTertiary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  _buildScaledProgressFraction(
+                    fraction: tracker.formattedProgressFraction,
+                    color: progressColor,
+                    maxFontSize: progressFractionMaxFontSize * clampedScale,
+                  ),
+                  if (tracker.unitString.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      tracker.unitString,
+                      style: TextStyle(
+                        fontSize: progressUnitFontSize * clampedScale,
+                        fontWeight: FontWeight.w600,
+                        color: progressColor,
+                        height: 1.1,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: _buildInfoIcon(context),
+        ),
+      ],
+    );
+  }
+
+  /// Stacked text: category, then counts, then unit — aligned under the label.
+  Widget _buildLargeTextLayout(
+    BuildContext context, {
+    required double progress,
+    required Color progressColor,
+    required String iconPath,
+    required bool isSvg,
+    required double cardHeight,
+  }) {
+    const infoReserveWidth = 26.0;
+    final unit = tracker.unitString;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: infoReserveWidth),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 56,
+                height: cardHeight - 16,
+                child: _buildProgressIcon(
+                  progress: progress,
+                  progressColor: progressColor,
+                  iconPath: iconPath,
+                  isSvg: isSvg,
+                  diameter: 52,
+                  iconSize: 26,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        tracker.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textTertiary,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        softWrap: false,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    _buildScaledProgressFraction(
+                      fraction: tracker.formattedProgressFraction,
+                      color: progressColor,
+                      maxFontSize: progressFractionMaxFontSize,
+                    ),
+                    if (unit.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        unit,
+                        style: TextStyle(
+                          fontSize: progressUnitFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: progressColor,
+                          height: 1.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: _buildInfoIcon(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScaledProgressFraction({
+    required String fraction,
+    required Color color,
+    required double maxFontSize,
+  }) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        fraction,
+        style: TextStyle(
+          fontSize: maxFontSize,
+          fontWeight: FontWeight.bold,
+          color: color,
+          height: 1.1,
+        ),
+        maxLines: 1,
       ),
+    );
+  }
+
+  Widget _buildProgressIcon({
+    required double progress,
+    required Color progressColor,
+    required String iconPath,
+    required bool isSvg,
+    required double diameter,
+    required double iconSize,
+  }) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: diameter,
+          height: diameter,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.grey.shade100,
+          ),
+        ),
+        CustomPaint(
+          size: Size(diameter, diameter),
+          painter: ProgressCirclePainter(
+            progress: progress,
+            progressColor: progressColor,
+            backgroundColor: Colors.grey.shade200,
+            category: tracker.category,
+          ),
+        ),
+        SizedBox(
+          width: iconSize,
+          height: iconSize,
+          child: isSvg
+              ? SvgPicture.asset(iconPath)
+              : Image.asset(iconPath),
+        ),
+      ],
     );
   }
 

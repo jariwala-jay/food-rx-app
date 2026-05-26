@@ -20,19 +20,23 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordFocusNode = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _saveLoginOnDevice = false;
+  bool _hasSavedLogin = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Listen to auth provider errors
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authController = context.read<AuthController>();
-      if (authController.error != null) {
-        setState(() {
+      final saved = await authController.hasSavedLogin();
+      if (!mounted) return;
+      setState(() {
+        _hasSavedLogin = saved;
+        if (authController.error != null) {
           _errorMessage = authController.error;
-        });
-      }
+        }
+      });
     });
   }
 
@@ -68,6 +72,7 @@ class _LoginPageState extends State<LoginPage> {
       final success = await authController.login(
         email,
         password,
+        saveLogin: _saveLoginOnDevice,
       );
 
       if (!mounted) return;
@@ -118,6 +123,52 @@ class _LoginPageState extends State<LoginPage> {
           duration: const Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    FocusScope.of(context).unfocus();
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authController = context.read<AuthController>();
+      final success = await authController.loginWithSavedCredentials();
+
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        if (!success) {
+          _errorMessage =
+              authController.error ?? 'Could not sign in with saved login';
+        }
+      });
+
+      if (success && mounted) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/home',
+            (route) => false,
+          );
+        }
+      } else if (mounted && _errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_errorMessage!),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = userFacingErrorMessage(e);
+      });
     }
   }
 
@@ -228,6 +279,42 @@ class _LoginPageState extends State<LoginPage> {
                             },
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
+                                value: _saveLoginOnDevice,
+                                activeColor: const Color(0xFFFF6A00),
+                                onChanged: _isLoading
+                                    ? null
+                                    : (v) => setState(
+                                          () => _saveLoginOnDevice = v ?? false,
+                                        ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _isLoading
+                                    ? null
+                                    : () => setState(
+                                          () => _saveLoginOnDevice =
+                                              !_saveLoginOnDevice,
+                                        ),
+                                child: Text(
+                                  'Save login on this device (use Face ID or fingerprint next time)',
+                                  style: AppTypography.bg_14_r.copyWith(
+                                    color: const Color(0xFF545454),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 8),
                           Container(
@@ -267,6 +354,28 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                   ),
+                  if (_hasSavedLogin) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFF6A00),
+                          side: const BorderSide(color: Color(0xFFFF6A00)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        onPressed: _isLoading ? null : _handleBiometricLogin,
+                        icon: const Icon(Icons.fingerprint),
+                        label: const Text(
+                          'Continue with Face ID',
+                          style: AppTypography.bg_16_sb,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     height: 48,

@@ -1,7 +1,7 @@
 """
 Food & Nutrition Knowledge Base for MyFoodRx RAG Chatbot.
 Sources: CDC, AHA, ADA, USDA/MyPlate, NIH/NHLBI.
-38 documents covering: Sleep, Exercise, Hydration, Hypertension,
+61 documents covering: Sleep, Exercise, Hydration, Hypertension,
 Pre-Diabetes, Diabetes, Obesity, and General Nutrition.
 """
 

@@ -30,11 +30,9 @@ class GmailSMTPEmailService implements EmailService {
             'See EMAIL_SETUP.md for instructions.');
       }
 
-      // Get the app URL from environment or use default deep link scheme
-      final appUrl = dotenv.env['APP_URL'] ?? 'foodrx://reset-password';
-      // URL encode the token to ensure it works in email links
+      // Prefer HTTPS bridge on the API (email clients and mobile browsers handle http(s) reliably).
       final encodedToken = Uri.encodeComponent(resetToken);
-      final resetLink = '$appUrl?token=$encodedToken';
+      final resetLink = _passwordResetEmailLink(encodedToken);
 
       // Get sender name from environment
       final fromName = dotenv.env['EMAIL_FROM_NAME'] ?? 'MyFoodRx';
@@ -68,6 +66,26 @@ class GmailSMTPEmailService implements EmailService {
     } catch (e) {
       throw Exception('Failed to send password reset email: $e');
     }
+  }
+
+  /// Public HTTPS URL from the API (GET opens a small page that launches `foodrx://`), or legacy `APP_URL`.
+  String _passwordResetEmailLink(String encodedToken) {
+    final override = dotenv.env['PASSWORD_RESET_BRIDGE_URL']?.trim();
+    if (override != null &&
+        override.isNotEmpty &&
+        (override.startsWith('http://') || override.startsWith('https://'))) {
+      final base = override.replaceAll(RegExp(r'/+$'), '');
+      return '$base?token=$encodedToken';
+    }
+    final apiBase = dotenv.env['API_BASE_URL']?.trim();
+    if (apiBase != null && apiBase.isNotEmpty) {
+      final normalized = apiBase.replaceAll(RegExp(r'/+$'), '');
+      if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+        return '$normalized/auth/reset-password/open?token=$encodedToken';
+      }
+    }
+    final appUrl = dotenv.env['APP_URL'] ?? 'foodrx://reset-password';
+    return '$appUrl?token=$encodedToken';
   }
 
   String _buildPasswordResetEmailBody(String userName, String resetLink) {
@@ -114,7 +132,7 @@ class GmailSMTPEmailService implements EmailService {
           <tr>
             <td style="padding-bottom: 20px;">
               <p style="color: #90909A; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
-                <strong>Note:</strong> If the button above doesn't work, copy the link below and paste it into your mobile browser (Chrome, Safari, etc.):
+                <strong>Note:</strong> If the button above doesn’t work, copy the link below, open it on the <strong>same phone</strong> where MyFoodRx is installed (Safari or Chrome):
               </p>
               <div style="background-color: #F7F7F8; padding: 12px; border-radius: 8px; margin: 10px 0;">
                 <p style="color: #2C2C2C; font-size: 13px; line-height: 1.6; margin: 0; word-break: break-all; font-family: monospace;">
@@ -122,7 +140,7 @@ class GmailSMTPEmailService implements EmailService {
                 </p>
               </div>
               <p style="color: #90909A; font-size: 12px; line-height: 1.6; margin: 10px 0 0 0;">
-                After pasting in your browser, tap the link and your MyFoodRx app will open automatically.
+                That page will try to open the app. If it doesn’t, use the “Open MyFoodRx” button on that page.
               </p>
             </td>
           </tr>
