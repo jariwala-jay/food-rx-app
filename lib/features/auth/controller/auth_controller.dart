@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/credential_storage.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
 import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
@@ -56,7 +54,6 @@ class AuthController with ChangeNotifier {
   Future<void> _clearAuthSession() async {
     await ApiClient.revokeRefreshTokenOnLogout();
     await ApiClient.clearSession();
-    RagChatbotService.resetConversation();
     _localProfilePhotoData = null;
   }
 
@@ -636,8 +633,11 @@ class AuthController with ChangeNotifier {
       }
       return true;
     } on ApiException catch (e) {
-      if (e.statusCode == 429) _error = 'Too many reset requests. Please try again later.';
-      else _error = e.message;
+      if (e.statusCode == 429) {
+        _error = 'Too many reset requests. Please try again later.';
+      } else {
+        _error = e.message;
+      }
       return false;
     } catch (e) {
       _error = userFacingErrorMessage(e);
