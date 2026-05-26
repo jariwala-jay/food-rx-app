@@ -71,11 +71,28 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
   }
 
   Future<void> _selectDate(BuildContext context) async {
+    final now = DateTime.now();
+    final fallbackInitialDate = DateTime(now.year - 40, 1, 1);
+    DateTime initialDate = fallbackInitialDate;
+
+    final existingDobText = _dobController.text.trim();
+    if (existingDobText.isNotEmpty) {
+      try {
+        final parsedDob = DateFormat('MM/dd/yyyy').parseStrict(existingDobText);
+        if (!parsedDob.isAfter(now)) {
+          initialDate = parsedDob;
+        }
+      } catch (_) {
+        // Keep fallback initial date if DOB text is invalid.
+      }
+    }
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 25)),
+      initialDate: initialDate,
       firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
+      lastDate: now,
+      initialDatePickerMode: DatePickerMode.year,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -95,6 +112,31 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
         _dobController.text = DateFormat('MM/dd/yyyy').format(picked);
       });
     }
+  }
+
+  bool _isAtLeast18(DateTime birthDate) {
+    final now = DateTime.now();
+    var age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    return age >= 18;
+  }
+
+  String? _validateDob(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your date of birth';
+    }
+    try {
+      final dob = DateFormat('MM/dd/yyyy').parseStrict(value);
+      if (!_isAtLeast18(dob)) {
+        return 'You must be at least 18 years old';
+      }
+    } catch (_) {
+      return 'Please enter a valid date of birth';
+    }
+    return null;
   }
 
   void _dismissKeyboard() {
@@ -139,12 +181,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           Icons.calendar_today_outlined,
                           color: Color(0xFF90909A),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your date of birth';
-                          }
-                          return null;
-                        },
+                        validator: _validateDob,
                       ),
                     ),
                     Container(
@@ -452,7 +489,8 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
 
                               // Instead of showing a bottom snackbar, take user to
                               // the first missing required field.
-                              if (_dobController.text.trim().isEmpty) {
+                              if (_validateDob(_dobController.text.trim()) !=
+                                  null) {
                                 await _scrollToKey(_dobSectionKey);
                                 return;
                               }

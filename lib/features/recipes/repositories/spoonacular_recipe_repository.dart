@@ -23,7 +23,6 @@ class SpoonacularRecipeRepository {
 
     final Map<String, String> queryParams = {
       ...filter.toSpoonacularParams(),
-      'includeIngredients': pantryIngredients.join(','),
       'number': number.toString(),
       'offset': offset.toString(),
       'addRecipeInformation': 'true',
@@ -33,6 +32,10 @@ class SpoonacularRecipeRepository {
           'min-missing-ingredients', // Prioritize recipes with less missing ingredients
       'sortDirection': 'asc',
     };
+
+    if (pantryIngredients.isNotEmpty) {
+      queryParams['includeIngredients'] = pantryIngredients.join(',');
+    }
 
     final uri = Uri.parse('$_baseUrl/recipes/complexSearch')
         .replace(queryParameters: queryParams);

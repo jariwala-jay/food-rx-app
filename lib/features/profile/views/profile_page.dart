@@ -38,12 +38,15 @@ class _ProfilePageState extends State<ProfilePage> {
           _profilePhotoData = Uint8List.fromList(photoData);
         });
       }
+    } else if (mounted) {
+      setState(() {
+        _profilePhotoData = authProvider.localProfilePhotoData;
+      });
     }
   }
 
   Future<void> _pickAndUpdateProfilePhoto() async {
     try {
-      // Show picker options
       final ImageSource? source = await showModalBottomSheet<ImageSource>(
         context: context,
         builder: (context) => Container(
@@ -73,11 +76,17 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (source == null) return;
 
+      // Wait for the bottom sheet route to finish closing before presenting the
+      // system picker; opening PHPicker immediately after pop can hang on iOS.
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      if (!mounted) return;
+
       final pickedFile = await _imagePicker.pickImage(
         source: source,
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
+        requestFullMetadata: false,
       );
 
       if (pickedFile != null && mounted) {
@@ -91,7 +100,6 @@ class _ProfilePageState extends State<ProfilePage> {
         await authController.updateProfilePhoto(photoFile);
 
         if (mounted) {
-          // Reload photo to show the new one
           await _loadProfilePhoto();
 
           setState(() {
@@ -139,10 +147,6 @@ class _ProfilePageState extends State<ProfilePage> {
       default:
         planName = myPlan;
     }
-    // Note: We don't show the target calories in the profile page
-    // if (user.targetCalories != null) {
-    //   return '$planName - ${user.targetCalories} Calorie Plan';
-    // }
     return planName;
   }
 
@@ -313,7 +317,6 @@ class _ProfilePageState extends State<ProfilePage> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
-                  // Profile Header Section
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 32),
@@ -391,7 +394,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Diet Plan Card
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Container(
@@ -423,7 +425,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Personal Information Section
                   _buildSection(
                     context: context,
                     title: 'Personal Information',
@@ -478,7 +479,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 12),
 
-                  // Physical Information Section
                   _buildSection(
                     context: context,
                     title: 'Physical Information',
@@ -528,7 +528,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 12),
 
-                  // Health Goals Section
                   _buildSection(
                     context: context,
                     title: 'Diet-related Health Goals',
@@ -545,12 +544,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Health Goals',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Health Goals',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -596,7 +597,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 12),
 
-                  // Medical Information Section
                   _buildSection(
                     context: context,
                     title: 'Medical Information',
@@ -613,12 +613,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Chronic Condition',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Chronic Condition',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -673,12 +675,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Food Allergies & Intolerances',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Food Allergies & Intolerances',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -725,7 +729,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 12),
 
-                  // Settings Section
                   _buildSection(
                     context: context,
                     title: 'Settings',
@@ -759,6 +762,40 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       _buildDivider(),
+                      FutureBuilder<bool>(
+                        future: context.read<AuthController>().hasSavedLogin(),
+                        builder: (context, snapshot) {
+                          if (snapshot.data != true) {
+                            return const SizedBox.shrink();
+                          }
+                          return Column(
+                            children: [
+                              _buildInfoRow(
+                                context: context,
+                                label: 'Remove Saved Login',
+                                value: '',
+                                textColor: Colors.red,
+                                onTap: () async {
+                                  await context
+                                      .read<AuthController>()
+                                      .clearSavedLogin();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Saved login removed from this device',
+                                        ),
+                                      ),
+                                    );
+                                    setState(() {});
+                                  }
+                                },
+                              ),
+                              _buildDivider(),
+                            ],
+                          );
+                        },
+                      ),
                       _buildInfoRow(
                         context: context,
                         label: 'Log Out',

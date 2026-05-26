@@ -109,6 +109,30 @@ class RecipeFilter {
   final bool veryHealthy;
   final String? query; // Search query
 
+  /// True when the user chose at least one cuisine (not [CuisineType.noPreference] only).
+  bool get hasExplicitCuisinePreference =>
+      cuisines.any((c) => c != CuisineType.noPreference);
+
+  /// No cuisine chosen, or only [CuisineType.noPreference] — search favorites first, then all cuisines.
+  bool get isNoPreferenceOnly {
+    if (cuisines.isEmpty) return true;
+    return cuisines.every((c) => c == CuisineType.noPreference);
+  }
+
+  /// Cuisines explicitly chosen on the generate screen (excludes [CuisineType.noPreference]).
+  List<CuisineType> get explicitCuisines =>
+      cuisines.where((c) => c != CuisineType.noPreference).toList();
+
+  /// Spoonacular `type` query value (e.g. `main course` for Dinner).
+  String? get spoonacularTypeParam {
+    if (spoonacularMealTypes != null && spoonacularMealTypes!.isNotEmpty) {
+      return spoonacularMealTypes!.first;
+    }
+    if (spoonacularMealType != null) return spoonacularMealType;
+    if (mealType != null) return mealType!.spoonacularType;
+    return null;
+  }
+
   const RecipeFilter({
     this.cuisines = const [],
     this.mealType,
@@ -136,57 +160,70 @@ class RecipeFilter {
     this.query,
   });
 
+  static const Object _unset = Object();
+
   RecipeFilter copyWith({
     List<CuisineType>? cuisines,
-    MealType? mealType,
-    String? spoonacularMealType,
-    List<String>? spoonacularMealTypes,
+    Object? mealType = _unset,
+    Object? spoonacularMealType = _unset,
+    Object? spoonacularMealTypes = _unset,
     List<DietType>? diets,
     List<Intolerances>? intolerances,
     List<MedicalCondition>? medicalConditions,
-    int? maxReadyTime,
+    Object? maxReadyTime = _unset,
     int? servings,
     bool? includeIngredients,
     bool? excludeIngredients,
     bool? prioritizeExpiring,
     bool? dashCompliant,
     bool? myPlateCompliant,
-    int? maxCalories,
-    int? minProtein,
-    int? maxSodium,
-    int? maxSugar,
+    Object? maxCalories = _unset,
+    Object? minProtein = _unset,
+    Object? maxSodium = _unset,
+    Object? maxSugar = _unset,
     bool? vegetarian,
     bool? vegan,
     bool? glutenFree,
     bool? dairyFree,
     bool? veryHealthy,
-    String? query,
+    Object? query = _unset,
   }) {
     return RecipeFilter(
       cuisines: cuisines ?? this.cuisines,
-      mealType: mealType ?? this.mealType,
-      spoonacularMealType: spoonacularMealType ?? this.spoonacularMealType,
-      spoonacularMealTypes: spoonacularMealTypes ?? this.spoonacularMealTypes,
+      mealType: identical(mealType, _unset) ? this.mealType : mealType as MealType?,
+      spoonacularMealType: identical(spoonacularMealType, _unset)
+          ? this.spoonacularMealType
+          : spoonacularMealType as String?,
+      spoonacularMealTypes: identical(spoonacularMealTypes, _unset)
+          ? this.spoonacularMealTypes
+          : spoonacularMealTypes as List<String>?,
       diets: diets ?? this.diets,
       intolerances: intolerances ?? this.intolerances,
       medicalConditions: medicalConditions ?? this.medicalConditions,
-      maxReadyTime: maxReadyTime ?? this.maxReadyTime,
+      maxReadyTime: identical(maxReadyTime, _unset)
+          ? this.maxReadyTime
+          : maxReadyTime as int?,
       servings: servings ?? this.servings,
       includeIngredients: includeIngredients ?? this.includeIngredients,
       excludeIngredients: excludeIngredients ?? this.excludeIngredients,
       prioritizeExpiring: prioritizeExpiring ?? this.prioritizeExpiring,
       dashCompliant: dashCompliant ?? this.dashCompliant,
       myPlateCompliant: myPlateCompliant ?? this.myPlateCompliant,
-      maxCalories: maxCalories ?? this.maxCalories,
-      minProtein: minProtein ?? this.minProtein,
-      maxSodium: maxSodium ?? this.maxSodium,
-      maxSugar: maxSugar ?? this.maxSugar,
+      maxCalories: identical(maxCalories, _unset)
+          ? this.maxCalories
+          : maxCalories as int?,
+      minProtein: identical(minProtein, _unset)
+          ? this.minProtein
+          : minProtein as int?,
+      maxSodium: identical(maxSodium, _unset) ? this.maxSodium : maxSodium as int?,
+      maxSugar:
+          identical(maxSugar, _unset) ? this.maxSugar : maxSugar as int?,
       vegetarian: vegetarian ?? this.vegetarian,
       vegan: vegan ?? this.vegan,
       glutenFree: glutenFree ?? this.glutenFree,
       dairyFree: dairyFree ?? this.dairyFree,
       veryHealthy: veryHealthy ?? this.veryHealthy,
-      query: query ?? this.query,
+      query: identical(query, _unset) ? this.query : query as String?,
     );
   }
 
@@ -360,14 +397,9 @@ class RecipeFilter {
       params['cuisine'] = apiCuisines.map((e) => e.name).join(',');
     }
 
-    if (spoonacularMealTypes != null && spoonacularMealTypes!.isNotEmpty) {
-      // Use the first meal type as primary, others can be handled in separate calls
-      params['type'] = spoonacularMealTypes!.first;
-    } else if (spoonacularMealType != null) {
-      params['type'] = spoonacularMealType!;
-    } else if (mealType != null) {
-      // Fallback to enum name if spoonacularMealType is not set
-      params['type'] = mealType!.name;
+    final typeParam = spoonacularTypeParam;
+    if (typeParam != null) {
+      params['type'] = typeParam;
     }
 
     if (diets.isNotEmpty) {
@@ -378,7 +410,7 @@ class RecipeFilter {
       params['intolerances'] = intolerances.map((e) => e.apiName).join(',');
     }
 
-    if (maxReadyTime != null) {
+    if (maxReadyTime != null && maxReadyTime! > 0) {
       params['maxReadyTime'] = maxReadyTime.toString();
     }
 
@@ -458,6 +490,34 @@ class RecipeFilter {
 
 // Extension methods for enum display names
 extension CuisineTypeExtension on CuisineType {
+  /// Maps account favorite cuisine labels (signup profile) to [CuisineType].
+  static List<CuisineType> fromUserFavoriteNames(List<String> names) {
+    const cuisineMap = {
+      'American': CuisineType.american,
+      'Mexican': CuisineType.mexican,
+      'Italian': CuisineType.italian,
+      'Chinese': CuisineType.chinese,
+      'Indian': CuisineType.indian,
+      'French': CuisineType.french,
+      'Thai': CuisineType.thai,
+      'Japanese': CuisineType.japanese,
+      'Mediterranean': CuisineType.mediterranean,
+      'Korean': CuisineType.korean,
+      'Vietnamese': CuisineType.vietnamese,
+      'Greek': CuisineType.greek,
+      'Spanish': CuisineType.spanish,
+      'Middle Eastern': CuisineType.middleEastern,
+    };
+
+    return names
+        .where((name) =>
+            name.trim().isNotEmpty &&
+            name.toLowerCase() != 'no preference')
+        .map((name) => cuisineMap[name])
+        .whereType<CuisineType>()
+        .toList();
+  }
+
   String get displayName {
     switch (this) {
       case CuisineType.american:
@@ -519,6 +579,18 @@ extension CuisineTypeExtension on CuisineType {
 }
 
 extension MealTypeExtension on MealType {
+  /// Value for Spoonacular complexSearch `type` parameter.
+  String get spoonacularType {
+    switch (this) {
+      case MealType.mainCourse:
+        return 'main course';
+      case MealType.sideDish:
+        return 'side dish';
+      default:
+        return name;
+    }
+  }
+
   String get displayName {
     switch (this) {
       case MealType.mainCourse:

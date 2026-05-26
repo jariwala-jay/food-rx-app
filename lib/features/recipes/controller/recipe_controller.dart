@@ -103,6 +103,7 @@ class RecipeController extends ChangeNotifier {
         'allergies': user.allergies ?? [],
         'foodRestrictions': user.foodRestrictions ?? [],
         'excludedIngredients': user.excludedIngredients ?? [],
+        'favoriteCuisines': user.favoriteCuisines ?? [],
         'activityLevel': user.activityLevel,
         'age': user.age,
         'sex': user.sex,

@@ -282,14 +282,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
-                  // Chatbot icon temporarily disabled
-                  // IconButton(
-                  //   icon: const Icon(Icons.chat_bubble_outline),
-                  //   iconSize: 24,
-                  //   onPressed: () {
-                  //     Navigator.pushNamed(context, '/chatbot');
-                  //   },
-                  // ),
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    iconSize: 24,
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/chatbot');
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.star_border_rounded),
                     iconSize: 28,
@@ -693,10 +692,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   );
                 }
+                final servings = Provider.of<RecipeController>(context,
+                        listen: false)
+                    .currentFilter
+                    .servings;
                 return ListView.builder(
                   itemCount: visible.length,
                   itemBuilder: (context, index) {
-                    return RecipeCard(recipe: visible[index]);
+                    return RecipeCard(
+                      recipe: visible[index],
+                      targetServings: servings,
+                    );
                   },
                 );
               },
@@ -909,7 +915,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
             // Prepared recipes button (matches FoodRx Items pill style)
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: GestureDetector(
                 onTap: () {
                   Navigator.push(

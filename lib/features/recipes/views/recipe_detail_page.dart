@@ -12,6 +12,7 @@ import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_ingredient_pantry_counts.dart';
 import 'package:flutter_app/features/recipes/widgets/servings_consumed_modal.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -429,6 +430,18 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           const SizedBox(height: 24),
                           _buildSectionTitle(
                               'Ingredients for ${_adjustedRecipe.servings} servings'),
+                          if (_adjustedRecipe.optionalIngredientLineCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '${_adjustedRecipe.requiredIngredientLineCount} required · '
+                                '${_adjustedRecipe.optionalIngredientLineCount} optional',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
                           const SizedBox(height: 8),
                           if (_scalingResult != null &&
                               widget.targetServings != widget.recipe.servings &&
@@ -506,6 +519,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       children: [
         RecipeImage(
           imageUrl: _adjustedRecipe.image,
+          imageUrlCandidates: _adjustedRecipe.imageUrlCandidates,
           width: double.infinity,
           height: 250,
         ),
@@ -587,31 +601,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
-  String _ingredientMatchName(RecipeIngredient ingredient) {
-    final n = ingredient.nameClean.trim();
-    return n.isNotEmpty ? n : ingredient.name;
-  }
+  RecipeIngredientPantryCounts get _pantryCounts =>
+      RecipeIngredientPantryCounts(_pantryService);
 
   bool _ingredientInPantry(RecipeIngredient ingredient, List<PantryItem> pantry) {
-    return _pantryService.hasPantryMatchForIngredient(
-      _ingredientMatchName(ingredient),
-      pantry,
-    );
-  }
-
-  /// In-pantry vs still-to-buy, aligned with [extendedIngredients] and optional lines.
-  int _liveInPantryCount(List<PantryItem> pantry) {
-    return _adjustedRecipe.extendedIngredients
-        .where((i) => _ingredientInPantry(i, pantry))
-        .length;
-  }
-
-  int _liveRequiredMissingCount(List<PantryItem> pantry) {
-    return _adjustedRecipe.extendedIngredients
-        .where(
-          (i) => !i.isOptionalIngredient && !_ingredientInPantry(i, pantry),
-        )
-        .length;
+    return _pantryCounts.isInPantry(ingredient, pantry);
   }
 
   Widget _buildIngredientTags(List<PantryItem> pantry) {
@@ -619,13 +613,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       children: [
         _buildTag(
           icon: Icons.kitchen,
-          label: '+${_liveInPantryCount(pantry)}',
+          label: '+${_pantryCounts.inPantryCount(_adjustedRecipe, pantry)}',
           color: Colors.green,
         ),
         const SizedBox(width: 12),
         _buildTag(
           icon: Icons.shopping_cart,
-          label: '+${_liveRequiredMissingCount(pantry)}',
+          label:
+              '+${_pantryCounts.requiredMissingCount(_adjustedRecipe, pantry)}',
           color: Colors.orange,
         ),
       ],
@@ -919,8 +914,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       children: _adjustedRecipe.extendedIngredients.map((ingredient) {
         final bool isAvailable = _ingredientInPantry(ingredient, pantry);
 
-        // Build the display text with scaled amounts
-        String displayText = _buildScaledIngredientText(ingredient);
+        final isOptional = ingredient.isOptionalIngredient;
+        final displayText = ingredient.formatDisplayLine(
+          _buildScaledIngredientText(ingredient),
+        );
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -930,10 +927,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 2.0),
                 child: Icon(
-                  isAvailable
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: isAvailable ? Colors.green : Colors.grey[400],
+                  isOptional
+                      ? Icons.remove_circle_outline
+                      : (isAvailable
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked),
+                  color: isOptional
+                      ? Colors.grey[400]
+                      : (isAvailable ? Colors.green : Colors.grey[400]),
                   size: 18,
                 ),
               ),
@@ -943,8 +944,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   displayText,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[800],
+                    color: isOptional ? Colors.grey[600] : Colors.grey[800],
                     height: 1.4,
+                    fontStyle:
+                        isOptional ? FontStyle.italic : FontStyle.normal,
                   ),
                 ),
               ),
@@ -1103,8 +1106,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
   String _buildScaledIngredientText(dynamic ingredient) {
     var amount = ingredient.amount;
-    var unit = ingredient.unit ?? '';
-    final nameClean = ingredient.nameClean ?? ingredient.name ?? '';
+    final nameClean = RecipeIngredient.resolveDisplayName(
+      ingredient.nameClean ?? '',
+      ingredient.name ?? '',
+    );
+    var unit = RecipeIngredient.sanitizeUnit(
+      ingredient.unit ?? '',
+      nameClean,
+    );
 
     // Apply intelligent unit optimization for better readability
     final optimizedMeasurement = _optimizeUnits(amount, unit);
@@ -1156,7 +1165,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     String formattedAmount = _formatDisplayAmount(amount);
 
     if (unit.isEmpty) {
-      return '$formattedAmount $nameClean$descriptors';
+      return RecipeIngredient.dedupeConsecutiveWords(
+        '$formattedAmount $nameClean$descriptors'.trim(),
+      );
     } else {
       // Handle unit pluralization
       String displayUnit = unit;
@@ -1210,19 +1221,56 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         else if (unit == 'l' && amount != 1.0) displayUnit = 'l';
       }
 
-      return '$formattedAmount $displayUnit $nameClean$descriptors';
+      return RecipeIngredient.dedupeConsecutiveWords(
+        '$formattedAmount $displayUnit $nameClean$descriptors'.trim(),
+      );
     }
   }
 
+  Widget _buildInstructionsUnavailable() {
+    final source = _adjustedRecipe.sourceUrl.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Step-by-step instructions are not available in the app for this recipe.',
+          style: TextStyle(fontSize: 15, height: 1.5, color: Colors.grey[800]),
+        ),
+        if (source.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'View the original recipe:',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            source,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFFFF6A00),
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildInstructionsList() {
-    if (_adjustedRecipe.analyzedInstructions.isEmpty ||
-        _adjustedRecipe.analyzedInstructions.first.steps.isEmpty) {
-      return const Text('No instructions available.');
+    if (_adjustedRecipe.analyzedInstructions.isEmpty) {
+      return _buildInstructionsUnavailable();
+    }
+
+    final steps = _adjustedRecipe.analyzedInstructions.first.cookingSteps;
+    if (steps.isEmpty) {
+      return _buildInstructionsUnavailable();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: _adjustedRecipe.analyzedInstructions.first.steps.map((step) {
+      children: steps.asMap().entries.map((entry) {
+        final displayNumber = entry.key + 1;
+        final step = entry.value;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Row(
@@ -1237,7 +1285,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                 ),
                 child: Center(
                   child: Text(
-                    '${step.number}',
+                    '$displayNumber',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

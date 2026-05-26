@@ -3,7 +3,7 @@ from jose import JWTError, jwt
 from app.config import settings
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_HOURS = 1
 
 
 def create_access_token(sub: str) -> str:

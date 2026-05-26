@@ -5,8 +5,11 @@ import 'package:flutter_app/features/recipes/models/recipe_filter.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart';
 import 'package:flutter_app/core/services/food_category_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
+import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/unit_conversion_service.dart';
 import 'package:flutter_app/core/services/diet_constraints_service.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_ingredient_pantry_counts.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_pantry_sort.dart';
 import 'package:flutter/foundation.dart';
 
 class RecipeGenerationService {
@@ -38,69 +41,33 @@ class RecipeGenerationService {
     // 1. Enhance filter with user-specific dietary constraints
     final enhancedFilter = _enhanceFilterWithUserProfile(filter, userProfile);
 
-    // 2. Try fetching and validating recipes with progressive fallback:
-    //    a) original filter, b) without meal type, c) without cuisines, d) without time
-    List<Recipe> validatedRecipes = await _tryFetchAndValidateRecipes(
-        enhancedFilter, pantryIngredientNames, pantryItems, userProfile);
-
-    // If still empty after all fallbacks, try without meal type
-    if (validatedRecipes.isEmpty &&
-        (enhancedFilter.mealType != null ||
-            enhancedFilter.spoonacularMealType != null ||
-            enhancedFilter.spoonacularMealTypes != null)) {
-      if (kDebugMode) {
-        print('🔁 No validated recipes found. Retrying without meal type...');
-      }
-      final withoutMealType = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
+    // 2. Generate with cuisine strategy
+    final List<Recipe> validatedRecipes;
+    if (enhancedFilter.isNoPreferenceOnly) {
+      validatedRecipes = await _generateNoPreferenceRecipes(
+        enhancedFilter,
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
       );
-      validatedRecipes = await _tryFetchAndValidateRecipes(
-          withoutMealType, pantryIngredientNames, pantryItems, userProfile);
+    } else if (enhancedFilter.hasExplicitCuisinePreference) {
+      validatedRecipes = await _generateExplicitCuisineRecipes(
+        enhancedFilter,
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
+      );
+    } else {
+      validatedRecipes = await _generateWithFallbacks(
+        enhancedFilter.copyWith(cuisines: const []),
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
+        keepCuisine: false,
+      );
     }
 
-    // If still empty, try without cuisines
-    if (validatedRecipes.isEmpty && enhancedFilter.cuisines.isNotEmpty) {
-      if (kDebugMode) {
-        print('🔁 Still none. Retrying without cuisines...');
-      }
-      final withoutCuisines = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
-        cuisines: const [],
-      );
-      validatedRecipes = await _tryFetchAndValidateRecipes(
-          withoutCuisines, pantryIngredientNames, pantryItems, userProfile);
-    }
-
-    // If still empty, try without time limit
-    if (validatedRecipes.isEmpty && enhancedFilter.maxReadyTime != null) {
-      if (kDebugMode) {
-        print('🔁 Still none. Retrying without time limit...');
-      }
-      final withoutTime = enhancedFilter.copyWith(
-        mealType: null,
-        spoonacularMealType: null,
-        spoonacularMealTypes: null,
-        cuisines: const [],
-        maxReadyTime: null,
-      );
-      validatedRecipes = await _tryFetchAndValidateRecipes(
-          withoutTime, pantryIngredientNames, pantryItems, userProfile);
-    }
-
-    // 3. Sort recipes by health score and ingredient availability
-    validatedRecipes.sort((a, b) {
-      // Primary sort: by used ingredient count (more available ingredients first)
-      final usedIngredientComparison =
-          (b.usedIngredientCount ?? 0).compareTo(a.usedIngredientCount ?? 0);
-      if (usedIngredientComparison != 0) return usedIngredientComparison;
-
-      // Secondary sort: by health score (healthier recipes first)
-      return b.healthScore.compareTo(a.healthScore);
-    });
+    _sortRecipesByPantryEase(validatedRecipes, pantryItems, enhancedFilter);
 
     if (kDebugMode) {
       print('\n📊 FINAL RESULTS:');
@@ -113,13 +80,188 @@ class RecipeGenerationService {
     return validatedRecipes;
   }
 
+  List<CuisineType> _favoriteCuisinesFromProfile(Map<String, dynamic> userProfile) {
+    final raw = userProfile['favoriteCuisines'];
+    if (raw is! List) return [];
+    return CuisineTypeExtension.fromUserFavoriteNames(
+      raw.map((e) => e.toString()).toList(),
+    );
+  }
+
+  /// No preference: favorites from account first, then all other cuisines.
+  Future<List<Recipe>> _generateNoPreferenceRecipes(
+    RecipeFilter enhancedFilter,
+    List<String> pantryIngredientNames,
+    List<PantryItem> pantryItems,
+    Map<String, dynamic> userProfile,
+  ) async {
+    final favoriteCuisines = _favoriteCuisinesFromProfile(userProfile);
+
+    if (favoriteCuisines.isEmpty) {
+      if (kDebugMode) {
+        print('🍽️ No preference: no account favorites — searching all cuisines');
+      }
+      return _generateWithFallbacks(
+        enhancedFilter.copyWith(cuisines: const []),
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
+        keepCuisine: false,
+      );
+    }
+
+    if (kDebugMode) {
+      print(
+          '🍽️ No preference: favorites first (${favoriteCuisines.map((c) => c.displayName).join(', ')}), then other cuisines');
+    }
+
+    final favoriteBatch = await _generateWithFallbacks(
+      enhancedFilter.copyWith(cuisines: favoriteCuisines),
+      pantryIngredientNames,
+      pantryItems,
+      userProfile,
+      keepCuisine: true,
+    );
+
+    final allCuisinesBatch = await _generateWithFallbacks(
+      enhancedFilter.copyWith(cuisines: const []),
+      pantryIngredientNames,
+      pantryItems,
+      userProfile,
+      keepCuisine: false,
+    );
+
+    return _mergePrimaryFirst(favoriteBatch, allCuisinesBatch);
+  }
+
+  /// User picked specific cuisine(s) — search only those (e.g. Korean → Korean only).
+  Future<List<Recipe>> _generateExplicitCuisineRecipes(
+    RecipeFilter enhancedFilter,
+    List<String> pantryIngredientNames,
+    List<PantryItem> pantryItems,
+    Map<String, dynamic> userProfile,
+  ) async {
+    if (kDebugMode) {
+      final selected = enhancedFilter.explicitCuisines;
+      print(
+          '🍽️ Selected cuisines only (${selected.map((c) => c.displayName).join(', ')})');
+    }
+
+    return _generateWithFallbacks(
+      enhancedFilter,
+      pantryIngredientNames,
+      pantryItems,
+      userProfile,
+      keepCuisine: true,
+    );
+  }
+
+  List<Recipe> _mergePrimaryFirst(
+    List<Recipe> primaryBatch,
+    List<Recipe> secondaryBatch,
+  ) {
+    final seen = primaryBatch.map((r) => r.id).toSet();
+    final remainder =
+        secondaryBatch.where((r) => !seen.contains(r.id)).toList();
+    return [...primaryBatch, ...remainder];
+  }
+
+  Future<List<Recipe>> _generateWithFallbacks(
+    RecipeFilter enhancedFilter,
+    List<String> pantryIngredientNames,
+    List<PantryItem> pantryItems,
+    Map<String, dynamic> userProfile, {
+    required bool keepCuisine,
+  }) async {
+    List<Recipe> validatedRecipes = await _tryFetchAndValidateRecipes(
+      enhancedFilter,
+      pantryIngredientNames,
+      pantryItems,
+      userProfile,
+      enforceCuisine: keepCuisine,
+    );
+
+    if (validatedRecipes.isEmpty && enhancedFilter.maxReadyTime != null) {
+      if (kDebugMode) {
+        print(
+            '🔁 No validated recipes found. Retrying without maxReadyTime '
+            '(was ${enhancedFilter.maxReadyTime} min)...');
+      }
+      validatedRecipes = await _tryFetchAndValidateRecipes(
+        enhancedFilter.copyWith(maxReadyTime: null),
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
+        enforceCuisine: keepCuisine,
+      );
+    }
+
+    if (validatedRecipes.isEmpty) {
+      if (kDebugMode) {
+        print('🔁 Still none. Retrying with relaxed health constraints...');
+      }
+      validatedRecipes = await _tryFetchAndValidateRecipes(
+        enhancedFilter.copyWith(
+          maxReadyTime: null,
+          veryHealthy: false,
+          dashCompliant: false,
+          myPlateCompliant: false,
+          maxSodium: null,
+        ),
+        pantryIngredientNames,
+        pantryItems,
+        userProfile,
+        enforceCuisine: keepCuisine,
+      );
+    }
+
+    // Only drop cuisine when the user picked specific cuisines and still got nothing.
+    if (validatedRecipes.isEmpty &&
+        keepCuisine &&
+        enhancedFilter.hasExplicitCuisinePreference) {
+      if (kDebugMode) {
+        print(
+            '⚠️ No recipes matched selected cuisine(s); not broadening to other cuisines.');
+      }
+    }
+
+    return validatedRecipes;
+  }
+
+  void _sortRecipesByPantryEase(
+    List<Recipe> recipes,
+    List<PantryItem> pantryItems,
+    RecipeFilter filter,
+  ) {
+    final counts = RecipeIngredientPantryCounts(
+      PantryDeductionService(
+        conversionService: _unitConversionService,
+        substitutionService: _ingredientSubstitutionService,
+      ),
+    );
+
+    RecipePantrySort.sortByEasiestToMake(
+      recipes,
+      pantry: pantryItems,
+      counts: counts,
+      targetServings: filter.servings,
+      tiebreaker: (a, b) {
+        final usedCmp = (b.usedIngredientCount ?? 0)
+            .compareTo(a.usedIngredientCount ?? 0);
+        if (usedCmp != 0) return usedCmp;
+        return b.healthScore.compareTo(a.healthScore);
+      },
+    );
+  }
+
   /// Fetch recipes from repository and validate them
   Future<List<Recipe>> _tryFetchAndValidateRecipes(
     RecipeFilter filter,
     List<String> pantryIngredientNames,
     List<PantryItem> pantryItems,
-    Map<String, dynamic> userProfile,
-  ) async {
+    Map<String, dynamic> userProfile, {
+    bool enforceCuisine = false,
+  }) async {
     // Fetch recipes from the repository
     final recipes =
         await _recipeRepository.getRecipes(filter, pantryIngredientNames);
@@ -127,6 +269,11 @@ class RecipeGenerationService {
     if (kDebugMode) {
       print('\n🔍 RECIPE GENERATION DEBUG:');
       print('Recipes from API: ${recipes.length}');
+      print('Filter meal types: ${filter.spoonacularMealTypes}');
+      final params = filter.toSpoonacularParams();
+      print('Spoonacular type param: ${params['type']}');
+      print('Spoonacular cuisine param: ${params['cuisine'] ?? '(none)'}');
+      print('Spoonacular maxReadyTime: ${params['maxReadyTime'] ?? '(none)'}');
       print('User Profile: $userProfile');
     }
 
@@ -163,22 +310,65 @@ class RecipeGenerationService {
         continue;
       }
 
+      // d. Snacks: drop full meals Spoonacular mis-tags as snack (e.g. fried rice).
+      if (!_matchesMealTypeIntent(recipe, filter)) {
+        if (kDebugMode) {
+          print('  ❌ Does not match meal type intent (${filter.mealType?.displayName})');
+        }
+        continue;
+      }
+
+      // e. Require written cooking steps (exclude video-only Spoonacular entries).
+      if (!recipe.hasCookingInstructions) {
+        if (kDebugMode) {
+          print('  ❌ No written cooking instructions (video-only or empty)');
+        }
+        continue;
+      }
+
       if (kDebugMode) {
         print('  ✅ Recipe passed all validations');
       }
 
-      // d. Enhance recipe with pantry data
+      // f. Enhance recipe with pantry data
       final enhancedRecipe = _enhanceRecipeWithPantryData(recipe, pantryItems);
 
       validatedRecipes.add(enhancedRecipe);
     }
 
-    if (kDebugMode) {
-      print('Validated recipes: ${validatedRecipes.length}');
-      print('Filtered out: ${recipes.length - validatedRecipes.length}');
+    var results = validatedRecipes;
+    if (enforceCuisine && filter.hasExplicitCuisinePreference) {
+      final before = results.length;
+      results = results
+          .where((r) => _matchesSelectedCuisines(r, filter.cuisines))
+          .toList();
+      if (kDebugMode && before != results.length) {
+        print('  🍛 Cuisine post-filter: $before → ${results.length} recipes');
+      }
     }
 
-    return validatedRecipes;
+    if (kDebugMode) {
+      print('Validated recipes: ${results.length}');
+      print('Filtered out: ${recipes.length - results.length}');
+    }
+
+    return results;
+  }
+
+  bool _matchesSelectedCuisines(Recipe recipe, List<CuisineType> selected) {
+    final wanted = selected
+        .where((c) => c != CuisineType.noPreference)
+        .map((c) => c.name.toLowerCase())
+        .toSet();
+    if (wanted.isEmpty) return true;
+
+    final recipeCuisines =
+        recipe.cuisines.map((c) => c.toLowerCase()).toSet();
+    if (recipeCuisines.isEmpty) {
+      // Spoonacular sometimes omits cuisine tags; trust the API cuisine param.
+      return true;
+    }
+    return recipeCuisines.any(wanted.contains);
   }
 
   /// Enhance filter with user-specific dietary constraints based on diet assignment matrix
@@ -278,6 +468,42 @@ class RecipeGenerationService {
       maxSodium: maxSodium,
       veryHealthy: true, // Always prefer healthier options
     );
+  }
+
+  /// When user picks Snacks, exclude obvious full meals Spoonacular still tags as snack.
+  bool _matchesMealTypeIntent(Recipe recipe, RecipeFilter filter) {
+    if (filter.mealType != MealType.snack) return true;
+
+    final types =
+        recipe.dishTypes.map((t) => t.toLowerCase().trim()).toSet();
+    if (types.contains('main course')) return false;
+
+    final title = recipe.title.toLowerCase();
+    const notSnackPhrases = [
+      'fried rice',
+      'brown rice and',
+      'vegetable fried',
+      'stir fry',
+      'stir-fry',
+      'curry',
+      'casserole',
+      'lasagna',
+      'enchilada',
+      'burrito bowl',
+      'pasta',
+      'pizza',
+      'burger',
+      'meatloaf',
+      'pot roast',
+      'soup',
+    ];
+    if (notSnackPhrases.any(title.contains)) return false;
+
+    return types.contains('snack') ||
+        types.contains('fingerfood') ||
+        types.contains('appetizer') ||
+        types.contains('hor d\'oeuvre') ||
+        types.contains("hor d'oeuvre");
   }
 
   bool _hasEnoughIngredients(Recipe recipe, List<PantryItem> pantryItems) {

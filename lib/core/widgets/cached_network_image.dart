@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class CachedNetworkImageWidget extends StatelessWidget {
@@ -10,6 +11,7 @@ class CachedNetworkImageWidget extends StatelessWidget {
   final IconData? fallbackIcon;
   final Color? fallbackIconColor;
   final Color? fallbackBackgroundColor;
+  final VoidCallback? onLoadError;
 
   const CachedNetworkImageWidget({
     Key? key,
@@ -22,6 +24,7 @@ class CachedNetworkImageWidget extends StatelessWidget {
     this.fallbackIcon,
     this.fallbackIconColor,
     this.fallbackBackgroundColor,
+    this.onLoadError,
   }) : super(key: key);
 
   @override
@@ -49,35 +52,35 @@ class CachedNetworkImageWidget extends StatelessWidget {
       return _buildFallbackImage();
     }
 
-    Widget imageWidget = Image.network(
-      imageUrl,
+    Widget imageWidget = CachedNetworkImage(
+      imageUrl: imageUrl,
       width: width,
       height: height,
       fit: fit,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
+      fadeInDuration: const Duration(milliseconds: 200),
+      placeholder: (context, url) => Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: borderRadius,
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6A00),
+            strokeWidth: 2,
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        if (onLoadError != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => onLoadError!());
+          return Container(
+            width: width,
+            height: height,
+            color: fallbackBackgroundColor ?? Colors.grey[100],
+          );
         }
-        
-        return Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: borderRadius,
-          ),
-          child: Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                  : null,
-              color: const Color(0xFFFF6A00),
-              strokeWidth: 2,
-            ),
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
         return _buildFallbackImage();
       },
     );
@@ -165,9 +168,10 @@ class CachedNetworkImageWidget extends StatelessWidget {
   }
 }
 
-// Specialized widget for recipe images
-class RecipeImage extends StatelessWidget {
+// Specialized widget for recipe images (tries alternate Spoonacular CDN URLs on failure).
+class RecipeImage extends StatefulWidget {
   final String imageUrl;
+  final List<String>? imageUrlCandidates;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -176,6 +180,7 @@ class RecipeImage extends StatelessWidget {
   const RecipeImage({
     Key? key,
     required this.imageUrl,
+    this.imageUrlCandidates,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -183,16 +188,161 @@ class RecipeImage extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<RecipeImage> createState() => _RecipeImageState();
+}
+
+class _RecipeImageState extends State<RecipeImage> {
+  static const _bgColor = Color(0xFFFEF7F0);
+  static const _accentColor = Color(0xFFFF6A00);
+
+  late List<String> _candidates;
+  int _candidateIndex = 0;
+  bool _exhausted = false;
+  String? _pendingRetryUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _candidates = _buildCandidates();
+  }
+
+  @override
+  void didUpdateWidget(covariant RecipeImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.imageUrlCandidates != widget.imageUrlCandidates) {
+      _candidates = _buildCandidates();
+      _candidateIndex = 0;
+      _exhausted = false;
+      _pendingRetryUrl = null;
+    }
+  }
+
+  List<String> _buildCandidates() {
+    final urls = <String>[
+      if (widget.imageUrlCandidates != null) ...widget.imageUrlCandidates!,
+      if (widget.imageUrl.isNotEmpty) widget.imageUrl,
+    ];
+    return urls
+        .where((u) => u.isNotEmpty && _isValidUrl(u))
+        .toSet()
+        .toList();
+  }
+
+  bool _isValidUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  String? get _currentUrl =>
+      _candidates.isNotEmpty && _candidateIndex < _candidates.length
+          ? _candidates[_candidateIndex]
+          : null;
+
+  void _advanceToNextUrl() {
+    final failed = _currentUrl;
+    if (failed == null) {
+      setState(() => _exhausted = true);
+      return;
+    }
+    if (_pendingRetryUrl == failed) return;
+    _pendingRetryUrl = failed;
+
+    if (_candidateIndex + 1 < _candidates.length) {
+      setState(() {
+        _candidateIndex++;
+        _pendingRetryUrl = null;
+      });
+    } else {
+      setState(() {
+        _exhausted = true;
+        _pendingRetryUrl = null;
+      });
+    }
+  }
+
+  Widget _loadingBox() {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      color: _bgColor,
+      child: const Center(
+        child: CircularProgressIndicator(
+          color: _accentColor,
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+
+  Widget _iconFallback() {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: _bgColor,
+        borderRadius: widget.borderRadius,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.restaurant_menu,
+              size: (widget.height != null && widget.height! > 100) ? 48 : 32,
+              color: _accentColor,
+            ),
+            if (widget.height != null && widget.height! > 100) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Recipe Image',
+                style: TextStyle(
+                  color: _accentColor.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return CachedNetworkImageWidget(
-      imageUrl: imageUrl,
-      width: width,
-      height: height,
-      fit: fit,
-      borderRadius: borderRadius,
-      fallbackIcon: Icons.restaurant_menu,
-      fallbackIconColor: const Color(0xFFFF6A00),
-      fallbackBackgroundColor: const Color(0xFFFEF7F0),
+    if (_exhausted || _currentUrl == null) {
+      return _clipIfNeeded(_iconFallback());
+    }
+
+    Widget image = Image.network(
+      _currentUrl!,
+      key: ValueKey(_currentUrl),
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return _loadingBox();
+      },
+      errorBuilder: (context, error, stackTrace) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _advanceToNextUrl();
+        });
+        return _loadingBox();
+      },
+    );
+
+    return _clipIfNeeded(image);
+  }
+
+  Widget _clipIfNeeded(Widget child) {
+    if (widget.borderRadius == null) return child;
+    return ClipRRect(
+      borderRadius: widget.borderRadius!,
+      child: child,
     );
   }
 }
