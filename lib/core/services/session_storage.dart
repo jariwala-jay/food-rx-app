@@ -1,7 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Secure storage for auth session tokens and profile identifiers.
 class SessionStorage {
   SessionStorage._();
 

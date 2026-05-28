@@ -99,7 +99,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   }
 
   Future<void> _handleSubmit() async {
-    // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
     final hasMissingFields = _selectedHealthGoals.isEmpty ||
         _preferredMealPrepTime == null ||
@@ -107,15 +106,12 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
         _cookingSkill == null;
 
     if (!isFormValid || hasMissingFields) {
-      // Show errors on fields
       setState(() {
         _showErrors = true;
       });
 
-      // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Move user to the first missing required field.
       if (_selectedHealthGoals.isEmpty) {
         await _scrollToKey(_healthGoalsSectionKey);
         return;
@@ -142,7 +138,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     });
 
     try {
-      // Update other details in SignupProvider
       context.read<SignupProvider>().updateOtherDetails(
             healthGoals: _selectedHealthGoals,
             preferredMealPrepTime: _preferredMealPrepTime,
@@ -150,12 +145,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
             cookingSkill: _cookingSkill,
           );
 
-      // Generate personalized diet plan
       final signupProvider = context.read<SignupProvider>();
       final signupData = signupProvider.data;
 
       try {
-        // Load nutrition content and create personalization service
         final nutritionContent = await NutritionContentLoader.load();
         final personalizationService = PersonalizationService(nutritionContent);
 
@@ -170,7 +163,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
           healthGoals: signupData.healthGoals,
         );
 
-        // Set the personalized diet plan
         signupProvider.setPersonalizedDietPlan(
           dietType: personalizationResult.dietType,
           myPlanType: personalizationResult.myPlanType,
@@ -185,7 +177,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
               'Generated personalized plan: ${personalizationResult.dietType} with ${personalizationResult.targetCalories} calories');
         }
       } catch (e) {
-        // Fallback to simple diet type selection if personalization fails
         final bool isDashDiet =
             signupData.medicalConditions.contains('Hypertension') ||
                 signupData.healthGoals.contains('Lower blood pressure');
@@ -196,12 +187,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
         }
       }
 
-      // Reset loading state before navigating to next step
       setState(() {
         _isLoading = false;
       });
 
-      // Advance to next step (Diet Plan)
       widget.onSubmit();
     } catch (e) {
       if (mounted) {

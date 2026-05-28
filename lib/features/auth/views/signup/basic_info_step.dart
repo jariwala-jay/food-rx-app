@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -35,6 +36,8 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  bool _biometricLoginAvailable = false;
+  BiometricSignInLabels? _biometricLabels;
   String? _error;
   File? _profilePhoto;
   String? _profilePhotoPath;
@@ -56,6 +59,20 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           _emailExistsError = null;
         });
       }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authController = context.read<AuthController>();
+      final available = await authController.canUseBiometricLogin();
+      BiometricSignInLabels? labels;
+      if (available) {
+        labels = await authController.getBiometricSignInLabels();
+      }
+      if (!mounted) return;
+      setState(() {
+        _biometricLoginAvailable = available;
+        _biometricLabels = labels;
+      });
     });
   }
 
@@ -161,12 +178,13 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         return;
       }
 
-      context.read<SignupProvider>().updateBasicInfo(
-            name: _nameController.text,
-            email: _emailController.text,
-            password: _passwordController.text,
-            profilePhoto: _profilePhoto,
-          );
+      final signupProvider = context.read<SignupProvider>();
+      signupProvider.updateBasicInfo(
+        name: _nameController.text,
+        email: _emailController.text,
+        password: _passwordController.text,
+        profilePhoto: _profilePhoto,
+      );
 
       widget.onNext();
     } catch (e) {
@@ -311,6 +329,10 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Email',
                           hintText: 'Enter your email',
                           controller: _emailController,
+                          autofillHints: const [
+                            AutofillHints.username,
+                            AutofillHints.email,
+                          ],
                           keyboardType: TextInputType.emailAddress,
                           focusNode: _emailFocusNode,
                           enableSuggestions: false,
@@ -337,6 +359,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Password',
                           hintText: 'Enter your password',
                           controller: _passwordController,
+                          autofillHints: const [AutofillHints.newPassword],
                           obscureText: _obscurePassword,
                           enableSuggestions: false,
                           autocorrect: false,
@@ -392,6 +415,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Confirm Password',
                           hintText: 'Re-Enter your password',
                           controller: _confirmPasswordController,
+                          autofillHints: const [AutofillHints.newPassword],
                           obscureText: _obscureConfirmPassword,
                           enableSuggestions: false,
                           autocorrect: false,
@@ -421,6 +445,50 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           ),
                         ),
                         ),
+                        if (_biometricLoginAvailable &&
+                            _biometricLabels != null) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: context
+                                      .watch<SignupProvider>()
+                                      .saveBiometricLogin,
+                                  activeColor: const Color(0xFFFF6A00),
+                                  onChanged: _isLoading
+                                      ? null
+                                      : (v) => context
+                                          .read<SignupProvider>()
+                                          .setSaveBiometricLogin(v ?? false),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: _isLoading
+                                      ? null
+                                      : () {
+                                          final provider = context
+                                              .read<SignupProvider>();
+                                          provider.setSaveBiometricLogin(
+                                            !provider.saveBiometricLogin,
+                                          );
+                                        },
+                                  child: Text(
+                                    _biometricLabels!.saveLoginCheckbox,
+                                    style: AppTypography.bg_14_r.copyWith(
+                                      color: const Color(0xFF545454),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -82,9 +82,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
         if (!parsedDob.isAfter(now)) {
           initialDate = parsedDob;
         }
-      } catch (_) {
-        // Keep fallback initial date if DOB text is invalid.
-      }
+      } catch (_) {}
     }
 
     final DateTime? picked = await showDatePicker(
@@ -466,7 +464,6 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             elevation: 0,
                           ),
                           onPressed: () async {
-                            // Validate form fields (date of birth, weight)
                             final isFormValid =
                                 _formKey.currentState!.validate();
                             final hasMissingFields =
@@ -477,18 +474,13 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                     _weightController.text.trim().isEmpty ||
                                     _selectedMedicalConditions.isEmpty;
 
-                            // If there are any missing fields or form validation failed, show all errors
                             if (!isFormValid || hasMissingFields) {
-                              // Show errors on fields
                               setState(() {
                                 _showErrors = true;
                               });
 
-                              // Trigger form validation to show field errors
                               _formKey.currentState?.validate();
 
-                              // Instead of showing a bottom snackbar, take user to
-                              // the first missing required field.
                               if (_validateDob(_dobController.text.trim()) !=
                                   null) {
                                 await _scrollToKey(_dobSectionKey);
@@ -515,7 +507,6 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             }
 
                             try {
-                              // Clear error state
                               setState(() {
                                 _showErrors = false;
                               });

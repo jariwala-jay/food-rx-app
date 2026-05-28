@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/core/services/credential_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
@@ -18,6 +19,7 @@ import 'package:http/http.dart' show ClientException;
 class AuthController with ChangeNotifier {
   final EmailService _emailService = GmailSMTPEmailService();
   final LocalAuthentication _localAuth = LocalAuthentication();
+  BiometricSignInLabels? _cachedBiometricLabels;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -31,9 +33,7 @@ class AuthController with ChangeNotifier {
       await ApiClient.patch('/auth/profile', body: {
         'lastActiveAt': DateTime.now().toUtc().toIso8601String(),
       });
-    } catch (_) {
-      // Non-blocking heartbeat; ignore failures.
-    }
+    } catch (_) {}
   }
 
   UserModel? get currentUser => _currentUser;
@@ -59,7 +59,10 @@ class AuthController with ChangeNotifier {
 
   Future<bool> hasSavedLogin() => CredentialStorage.hasSavedCredentials();
 
-  Future<void> clearSavedLogin() => CredentialStorage.clearCredentials();
+  Future<void> clearSavedLogin() async {
+    await CredentialStorage.clearCredentials();
+    invalidateBiometricSignInLabelsCache();
+  }
 
   Future<bool> _completeAuthFromResponse(
     Map<String, dynamic> res, {
@@ -110,6 +113,32 @@ class AuthController with ChangeNotifier {
       unawaited(_markUserActive());
     }
     return _currentUser != null;
+  }
+
+  Future<BiometricSignInLabels> getBiometricSignInLabels({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _cachedBiometricLabels != null) {
+      return _cachedBiometricLabels!;
+    }
+    final labels = await resolveBiometricSignInLabels(_localAuth);
+    _cachedBiometricLabels = labels;
+    return labels;
+  }
+
+  void invalidateBiometricSignInLabelsCache() {
+    _cachedBiometricLabels = null;
+  }
+
+  Future<bool> canUseBiometricLogin() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      return canCheck || isSupported;
+    } catch (e) {
+      debugPrint('Biometric availability check error: $e');
+      return false;
+    }
   }
 
   Future<bool> authenticateWithBiometrics() async {
@@ -186,7 +215,6 @@ class AuthController with ChangeNotifier {
     return false;
   }
 
-  /// [GET /auth/me] with short backoff — cellular/Wi‑Fi often lags right after boot.
   Future<Map<String, dynamic>?> _fetchAuthMeWithRetries() async {
     const maxAttempts = 5;
     var attempt = 0;
@@ -259,8 +287,6 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// When a token exists but [initialize] could not load the user (e.g. offline),
-  /// try again after the OS restores connectivity (app resume).
   Future<void> resumeSessionIfNeeded() async {
     if (_currentUser != null) return;
     final hasRefresh = await ApiClient.hasRefreshToken();
@@ -287,9 +313,7 @@ class AuthController with ChangeNotifier {
         await _clearAuthSession();
         notifyListeners();
       }
-    } catch (_) {
-      // Keep stored tokens for a later retry.
-    }
+    } catch (_) {}
   }
 
   UserModel _createUserModel(Map<String, dynamic> userData) {
@@ -302,6 +326,7 @@ class AuthController with ChangeNotifier {
     required String password,
     required Map<String, dynamic> userData,
     File? profilePhoto,
+    bool saveLogin = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -315,14 +340,17 @@ class AuthController with ChangeNotifier {
 
       final res = await ApiClient.post('/auth/register', body: cleanUserData, requireAuth: false)
           as Map<String, dynamic>;
-      if (await _completeAuthFromResponse(res)) {
+      if (await _completeAuthFromResponse(
+        res,
+        saveLogin: saveLogin,
+        loginEmail: email.trim().toLowerCase(),
+        loginPassword: password,
+      )) {
         if (profilePhoto != null) {
           try {
             _localProfilePhotoData = await profilePhoto.readAsBytes();
             notifyListeners();
-          } catch (_) {
-            // Non-fatal preview miss; upload may still succeed.
-          }
+          } catch (_) {}
           try {
             final photoRes = await ApiClient.uploadFile('/auth/profile-photo', profilePhoto)
                 as Map<String, dynamic>?;
@@ -372,7 +400,7 @@ class AuthController with ChangeNotifier {
       ) as Map<String, dynamic>?;
       return res?['exists'] == true;
     } catch (_) {
-      return false; // On error, allow user to proceed; register will fail if duplicate
+      return false;
     }
   }
 
@@ -439,13 +467,9 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // Best effort: detach this device token from current user to avoid
-      // receiving pushes for an account after switching users on same device.
       try {
         await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
-      } catch (_) {
-        // Ignore; logout should proceed regardless.
-      }
+      } catch (_) {}
       await _clearAuthSession();
       _notificationManager?.dispose();
       _notificationManager = null;
@@ -523,14 +547,10 @@ class AuthController with ChangeNotifier {
 
   Future<void> updateProfilePhoto(File photo) async {
     if (_currentUser == null) return;
-    // Do not toggle global _isLoading here: it replaces the app's root with a
-    // loading scaffold and conflicts with in-page upload UI on Profile.
     try {
       try {
         _localProfilePhotoData = await photo.readAsBytes();
-      } catch (_) {
-        // Keep network upload path even if local preview cannot be read.
-      }
+      } catch (_) {}
       final photoRes = await ApiClient.uploadFile('/auth/profile-photo', photo)
           as Map<String, dynamic>?;
       final photoId = photoRes?['profilePhotoId'] as String?;

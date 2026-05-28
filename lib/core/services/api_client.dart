@@ -4,7 +4,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_app/core/services/session_storage.dart';
 import 'package:http/http.dart' as http;
 
-/// HTTP client for Food Rx backend API. Session tokens live in secure storage.
 class ApiClient {
   static bool _refreshInFlight = false;
 
@@ -70,7 +69,6 @@ class ApiClient {
     throw ApiException(response.statusCode, message);
   }
 
-  /// Exchange refresh token for a new access + refresh pair. Returns true on success.
   static Future<bool> refreshSession() async {
     if (_refreshInFlight) return false;
     final refreshToken = await getRefreshToken();
@@ -129,9 +127,7 @@ class ApiClient {
         headers: await _headers(includeAuth: false),
         body: jsonEncode({'refresh_token': refreshToken}),
       );
-    } catch (_) {
-      // Best effort; local session is cleared regardless.
-    }
+    } catch (_) {}
   }
 
   static Future<http.Response> _send(

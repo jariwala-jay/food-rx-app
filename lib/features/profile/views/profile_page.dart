@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -281,13 +282,110 @@ class _ProfilePageState extends State<ProfilePage> {
       final authController = context.read<AuthController>();
       await authController.logout();
       if (context.mounted) {
-        // Clear navigation stack and go to login
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/login',
           (route) => false,
         );
       }
     }
+  }
+
+  Future<void> _showDisableBiometricConfirmation(
+    BuildContext context,
+    BiometricSignInLabels labels,
+  ) async {
+    const brand = Color(0xFFFF6A00);
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  labels.disableDialogTitle,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  labels.disableDialogBody,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF444444),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF5F5F6E),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: brand,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Turn off'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (result != true || !context.mounted) return;
+
+    await context.read<AuthController>().clearSavedLogin();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(labels.disabledSnackbar)),
+    );
+    setState(() {});
+  }
+
+  Future<({bool hasSaved, BiometricSignInLabels labels})?> _loadSavedLoginSection(
+    AuthController auth,
+  ) async {
+    final hasSaved = await auth.hasSavedLogin();
+    if (!hasSaved) return null;
+    final labels = await auth.getBiometricSignInLabels();
+    return (hasSaved: true, labels: labels);
   }
 
   @override
@@ -762,40 +860,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       _buildDivider(),
-                      FutureBuilder<bool>(
-                        future: context.read<AuthController>().hasSavedLogin(),
-                        builder: (context, snapshot) {
-                          if (snapshot.data != true) {
-                            return const SizedBox.shrink();
-                          }
-                          return Column(
-                            children: [
-                              _buildInfoRow(
-                                context: context,
-                                label: 'Remove Saved Login',
-                                value: '',
-                                textColor: Colors.red,
-                                onTap: () async {
-                                  await context
-                                      .read<AuthController>()
-                                      .clearSavedLogin();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Saved login removed from this device',
-                                        ),
-                                      ),
-                                    );
-                                    setState(() {});
-                                  }
-                                },
-                              ),
-                              _buildDivider(),
-                            ],
-                          );
-                        },
-                      ),
                       _buildInfoRow(
                         context: context,
                         label: 'Log Out',
@@ -804,6 +868,40 @@ class _ProfilePageState extends State<ProfilePage> {
                         onTap: () => _showLogoutConfirmation(context),
                       ),
                     ],
+                  ),
+
+                  FutureBuilder<({bool hasSaved, BiometricSignInLabels labels})?>(
+                    future: _loadSavedLoginSection(
+                      context.read<AuthController>(),
+                    ),
+                    builder: (context, snapshot) {
+                      final section = snapshot.data;
+                      if (section == null) {
+                        return const SizedBox.shrink();
+                      }
+                      final labels = section.labels;
+                      return Column(
+                        children: [
+                          const SizedBox(height: 12),
+                          _buildSection(
+                            context: context,
+                            title: 'Security',
+                            children: [
+                              _buildInfoRow(
+                                context: context,
+                                label: labels.disableRow,
+                                value: '',
+                                textColor: Colors.red,
+                                onTap: () => _showDisableBiometricConfirmation(
+                                  context,
+                                  labels,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 32),

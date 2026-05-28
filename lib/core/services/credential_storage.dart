@@ -1,6 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Optional saved login (email + password) for biometric re-auth on this device.
 class CredentialStorage {
   CredentialStorage._();
 

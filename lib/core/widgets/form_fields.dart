@@ -20,6 +20,7 @@ class AppFormField extends StatelessWidget {
   final bool enableSuggestions;
   final bool autocorrect;
   final TextCapitalization textCapitalization;
+  final Iterable<String>? autofillHints;
 
   const AppFormField({
     super.key,
@@ -39,6 +40,7 @@ class AppFormField extends StatelessWidget {
     this.enableSuggestions = true,
     this.autocorrect = true,
     this.textCapitalization = TextCapitalization.sentences,
+    this.autofillHints,
   });
 
   @override
@@ -70,6 +72,7 @@ class AppFormField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           onFieldSubmitted: onFieldSubmitted,
+          autofillHints: autofillHints,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: AppTypography.bg_14_r.copyWith(

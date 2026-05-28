@@ -172,7 +172,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
   }
 
   Future<void> _handleSubmit() async {
-    // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
     final hasMissingFields = _favoriteCuisines.isEmpty ||
         _selectedFoodAllergies.isEmpty ||
@@ -181,17 +180,13 @@ class _PreferencesStepState extends State<PreferencesStep> {
         _dailyWaterIntake == null ||
         _activityLevel == null;
 
-    // If there are any missing fields or form validation failed, show inline errors.
     if (!isFormValid || hasMissingFields) {
-      // Show errors on fields
       setState(() {
         _showErrors = true;
       });
 
-      // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Move user to first missing required field instead of showing snackbar.
       if (_favoriteCuisines.isEmpty) {
         await _scrollToKey(_favoriteCuisinesKey);
         return;
