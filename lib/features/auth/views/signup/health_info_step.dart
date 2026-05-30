@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/features/auth/utils/signup_field_errors.dart';
+import 'package:flutter_app/features/auth/widgets/signup_date_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -35,14 +37,17 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
   double? _heightFeet;
   double? _heightInches;
   List<String> _selectedMedicalConditions = [];
-  bool _showErrors = false;
+  final _fieldErrors = SignupFieldErrors();
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
+
+  static final _dobDisplayFormat = DateFormat('MM/dd/yyyy');
+  static final _dobIsoFormat = DateFormat('yyyy-MM-dd');
 
   @override
   void initState() {
     super.initState();
     final signupData = context.read<SignupProvider>().data;
-    _dobController.text =
-        signupData.dateOfBirth?.toString().split(' ')[0] ?? '';
+    _dobController.text = _formatDobForDisplay(signupData.dateOfBirth);
     _selectedSex = signupData.sex;
     _heightFeet = signupData.heightFeet;
     _heightInches = signupData.heightInches;
@@ -70,45 +75,48 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
     );
   }
 
+  String _formatDobForDisplay(DateTime? date) {
+    if (date == null) return '';
+    return _dobDisplayFormat.format(date);
+  }
+
+  DateTime? _parseDobText(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    for (final format in [_dobDisplayFormat, _dobIsoFormat]) {
+      try {
+        return format.parseStrict(trimmed);
+      } catch (_) {}
+    }
+    return null;
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final now = DateTime.now();
     final fallbackInitialDate = DateTime(now.year - 40, 1, 1);
     DateTime initialDate = fallbackInitialDate;
 
-    final existingDobText = _dobController.text.trim();
-    if (existingDobText.isNotEmpty) {
-      try {
-        final parsedDob = DateFormat('MM/dd/yyyy').parseStrict(existingDobText);
-        if (!parsedDob.isAfter(now)) {
-          initialDate = parsedDob;
-        }
-      } catch (_) {}
+    final parsedDob = _parseDobText(_dobController.text);
+    if (parsedDob != null && !parsedDob.isAfter(now)) {
+      initialDate = parsedDob;
     }
 
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showSignupDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: DateTime(1900),
       lastDate: now,
       initialDatePickerMode: DatePickerMode.year,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFFFF6A00),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xFF2C2C2C),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() {
-        _dobController.text = DateFormat('MM/dd/yyyy').format(picked);
+        _dobController.text = _formatDobForDisplay(picked);
+        _fieldErrors.clear('dob');
       });
+      if (_autovalidateMode == AutovalidateMode.onUserInteraction) {
+        _formKey.currentState?.validate();
+      }
     }
   }
 
@@ -126,13 +134,12 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
     if (value == null || value.isEmpty) {
       return 'Please enter your date of birth';
     }
-    try {
-      final dob = DateFormat('MM/dd/yyyy').parseStrict(value);
-      if (!_isAtLeast18(dob)) {
-        return 'You must be at least 18 years old';
-      }
-    } catch (_) {
+    final dob = _parseDobText(value);
+    if (dob == null) {
       return 'Please enter a valid date of birth';
+    }
+    if (!_isAtLeast18(dob)) {
+      return 'You must be at least 18 years old';
     }
     return null;
   }
@@ -146,14 +153,15 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
     return GestureDetector(
       onTap: _dismissKeyboard,
       behavior: HitTestBehavior.opaque,
-      child: Stack(
+      child: Column(
         children: [
-          SingleChildScrollView(
-            controller: _scrollController,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
               child: Form(
                 key: _formKey,
+                autovalidateMode: _autovalidateMode,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -207,11 +215,12 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                             onChanged: (value) {
                               setState(() {
                                 _selectedSex = value;
-                                _showErrors = false;
+                                if (value != null) _fieldErrors.clear('sex');
                               });
                             },
                           ),
-                          if (_showErrors && _selectedSex == null) ...[
+                          if (_fieldErrors.show('sex') &&
+                              _selectedSex == null) ...[
                             const SizedBox(height: 8),
                             Text(
                               'Please select your sex',
@@ -253,7 +262,10 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                     setState(() {
                                       _heightFeet =
                                           double.tryParse(value ?? '');
-                                      _showErrors = false;
+                                      if (_heightFeet != null &&
+                                          _heightInches != null) {
+                                        _fieldErrors.clear('height');
+                                      }
                                     });
                                   },
                                   hintText: 'FT',
@@ -270,7 +282,10 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                     setState(() {
                                       _heightInches =
                                           double.tryParse(value ?? '');
-                                      _showErrors = false;
+                                      if (_heightFeet != null &&
+                                          _heightInches != null) {
+                                        _fieldErrors.clear('height');
+                                      }
                                     });
                                   },
                                   hintText: 'INCH',
@@ -278,7 +293,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               ),
                             ],
                           ),
-                          if (_showErrors &&
+                          if (_fieldErrors.show('height') &&
                               (_heightFeet == null ||
                                   _heightInches == null)) ...[
                             const SizedBox(height: 8),
@@ -376,7 +391,9 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                 } else {
                                   _selectedMedicalConditions = values;
                                 }
-                                _showErrors = false;
+                                if (_selectedMedicalConditions.isNotEmpty) {
+                                  _fieldErrors.clear('conditions');
+                                }
                               });
                             },
                             onChanged: (_) {},
@@ -395,12 +412,14 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                                   } else {
                                     _selectedMedicalConditions = values;
                                   }
-                                  _showErrors = false;
+                                  if (_selectedMedicalConditions.isNotEmpty) {
+                                    _fieldErrors.clear('conditions');
+                                  }
                                 });
                               },
                             ),
                           ],
-                          if (_showErrors &&
+                          if (_fieldErrors.show('conditions') &&
                               _selectedMedicalConditions.isEmpty) ...[
                             const SizedBox(height: 8),
                             Text(
@@ -420,16 +439,12 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
               ),
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(
-              top: false,
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(16),
-                child: Row(
+          SafeArea(
+            top: false,
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Row(
                   children: [
                     Expanded(
                       child: SizedBox(
@@ -476,7 +491,21 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
 
                             if (!isFormValid || hasMissingFields) {
                               setState(() {
-                                _showErrors = true;
+                                _fieldErrors.mark([
+                                  if (_dobController.text.trim().isEmpty ||
+                                      _validateDob(
+                                              _dobController.text.trim()) !=
+                                          null)
+                                    'dob',
+                                  if (_selectedSex == null) 'sex',
+                                  if (_heightFeet == null ||
+                                      _heightInches == null)
+                                    'height',
+                                  if (_selectedMedicalConditions.isEmpty)
+                                    'conditions',
+                                ]);
+                                _autovalidateMode =
+                                    AutovalidateMode.onUserInteraction;
                               });
 
                               _formKey.currentState?.validate();
@@ -508,13 +537,11 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
 
                             try {
                               setState(() {
-                                _showErrors = false;
+                                _fieldErrors.clearAll();
                               });
 
-                              final dateOfBirth = _dobController.text.isNotEmpty
-                                  ? DateFormat('MM/dd/yyyy')
-                                      .parse(_dobController.text)
-                                  : null;
+                              final dateOfBirth =
+                                  _parseDobText(_dobController.text);
 
                               context.read<SignupProvider>().updateHealthInfo(
                                     dateOfBirth: dateOfBirth,
@@ -544,7 +571,6 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                       ),
                     ),
                   ],
-                ),
               ),
             ),
           ),

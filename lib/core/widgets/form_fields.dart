@@ -21,6 +21,8 @@ class AppFormField extends StatelessWidget {
   final bool autocorrect;
   final TextCapitalization textCapitalization;
   final Iterable<String>? autofillHints;
+  final GlobalKey<FormFieldState<String>>? formFieldKey;
+  final EdgeInsets scrollPadding;
 
   const AppFormField({
     super.key,
@@ -41,6 +43,8 @@ class AppFormField extends StatelessWidget {
     this.autocorrect = true,
     this.textCapitalization = TextCapitalization.sentences,
     this.autofillHints,
+    this.formFieldKey,
+    this.scrollPadding = const EdgeInsets.all(20),
   });
 
   @override
@@ -56,6 +60,7 @@ class AppFormField extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         TextFormField(
+          key: formFieldKey,
           controller: controller,
           validator: validator,
           keyboardType: keyboardType,
@@ -72,6 +77,7 @@ class AppFormField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           onFieldSubmitted: onFieldSubmitted,
+          scrollPadding: scrollPadding,
           autofillHints: autofillHints,
           decoration: InputDecoration(
             hintText: hintText,
@@ -91,8 +97,10 @@ class AppFormField extends StatelessWidget {
             suffixIcon: suffixIcon,
             errorMaxLines: 3,
             errorStyle: const TextStyle(
+              color: Colors.red,
               fontSize: 12,
               height: 1.3,
+              fontFamily: 'BricolageGrotesque',
             ),
           ),
         ),

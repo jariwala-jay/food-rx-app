@@ -58,6 +58,16 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     super.dispose();
   }
 
+  /// Fixed list viewport height for Quick Log / From Pantry tabs (220 or 260).
+  double get _pantryListHeight {
+    // 260 for empty list or more than two items; 220 for one–two items.
+    if (_filteredItems.isEmpty) return 260.0;
+    return _filteredItems.length <= 2 ? 220.0 : 260.0;
+  }
+
+  /// [_pantryListHeight] plus 64px search bar row.
+  double get _tabContentHeight => 64.0 + _pantryListHeight;
+
   // ==================== MANUAL ENTRY METHODS ====================
 
   void _incrementManualValue() {
@@ -765,12 +775,15 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
 
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-
+    return SizedBox(
+      height: _tabContentHeight,
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _tabContentHeight),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
                 // Description
                 Text(
                   'How many servings did you have?',
@@ -945,8 +958,9 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
                     );
                   }).toList(),
                 ),
-          const SizedBox(height: 0),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -954,9 +968,9 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
   // ==================== PANTRY TAB ====================
 
   Widget _buildPantryContent() {
-    final pantryListHeight = _filteredItems.length <= 2 ? 220.0 : 260.0;
-
-    return Column(
+    return SizedBox(
+      height: _tabContentHeight,
+      child: Column(
       children: [
         // Search bar
         Container(
@@ -1043,21 +1057,21 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
             ),
           ),
 
-        // Items list (bounded when populated; empty state sizes to content)
-        if (_filteredItems.isEmpty)
-          _buildEmptyPantryState()
-        else
-          SizedBox(
-            height: pantryListHeight,
-            child: ListView.builder(
-              itemCount: _filteredItems.length,
-              itemBuilder: (context, index) {
-                final item = _filteredItems[index];
-                return _buildPantryItemCard(item);
-              },
-            ),
-          ),
+        Expanded(
+          child: _filteredItems.isEmpty
+              ? SingleChildScrollView(
+                  child: _buildEmptyPantryState(),
+                )
+              : ListView.builder(
+                  itemCount: _filteredItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _filteredItems[index];
+                    return _buildPantryItemCard(item);
+                  },
+                ),
+        ),
       ],
+      ),
     );
   }
 
@@ -1066,9 +1080,10 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             width: 72,

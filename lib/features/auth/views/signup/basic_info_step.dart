@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/utils/email_validation.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
@@ -37,12 +38,15 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   bool _biometricLoginAvailable = false;
+  bool _biometricCheckPending = true;
   BiometricSignInLabels? _biometricLabels;
   String? _error;
   File? _profilePhoto;
   String? _profilePhotoPath;
   final FocusNode _emailFocusNode = FocusNode();
+  final _emailFormFieldKey = GlobalKey<FormFieldState<String>>();
   String? _emailExistsError;
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
   @override
   void initState() {
@@ -61,6 +65,8 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       }
     });
 
+    _emailFocusNode.addListener(_validateEmailOnBlur);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authController = context.read<AuthController>();
       final available = await authController.canUseBiometricLogin();
@@ -72,6 +78,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       setState(() {
         _biometricLoginAvailable = available;
         _biometricLabels = labels;
+        _biometricCheckPending = false;
       });
     });
   }
@@ -85,6 +92,12 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _confirmPasswordController.dispose();
     _emailFocusNode.dispose();
     super.dispose();
+  }
+
+  void _validateEmailOnBlur() {
+    if (_emailFocusNode.hasFocus) return;
+    if (_emailController.text.trim().isEmpty) return;
+    _emailFormFieldKey.currentState?.validate();
   }
 
   Future<void> _scrollToKey(GlobalKey key) async {
@@ -134,11 +147,16 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         _confirmPasswordController.text.trim().isEmpty;
 
     if (!isFormValid || hasMissingFields) {
+      setState(() {
+        _autovalidateMode = AutovalidateMode.onUserInteraction;
+      });
+
       if (_nameController.text.trim().isEmpty) {
         await _scrollToKey(_nameFieldKey);
         return;
       }
-      if (_emailController.text.trim().isEmpty) {
+      if (_emailController.text.trim().isEmpty ||
+          !isAcceptableEmail(_emailController.text)) {
         await _scrollToKey(_emailFieldKey);
         _emailFocusNode.requestFocus();
         return;
@@ -181,7 +199,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       final signupProvider = context.read<SignupProvider>();
       signupProvider.updateBasicInfo(
         name: _nameController.text,
-        email: _emailController.text,
+        email: _emailController.text.trim(),
         password: _passwordController.text,
         profilePhoto: _profilePhoto,
       );
@@ -213,9 +231,10 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
-            padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+            padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
             child: Form(
               key: _formKey,
+              autovalidateMode: _autovalidateMode,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -314,6 +333,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Name',
                           hintText: 'Enter your name',
                           controller: _nameController,
+                          scrollPadding: const EdgeInsets.only(bottom: 120),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your name';
@@ -326,9 +346,11 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                         Container(
                           key: _emailFieldKey,
                           child: AppFormField(
+                          formFieldKey: _emailFormFieldKey,
                           label: 'Email',
                           hintText: 'Enter your email',
                           controller: _emailController,
+                          scrollPadding: const EdgeInsets.only(bottom: 120),
                           autofillHints: const [
                             AutofillHints.username,
                             AutofillHints.email,
@@ -339,12 +361,8 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           autocorrect: false,
                           textCapitalization: TextCapitalization.none,
                           validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your email';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Please enter a valid email';
-                            }
+                            final formatError = emailFormatValidator(value);
+                            if (formatError != null) return formatError;
                             if (_emailExistsError != null) {
                               return _emailExistsError;
                             }
@@ -359,6 +377,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Password',
                           hintText: 'Enter your password',
                           controller: _passwordController,
+                          scrollPadding: const EdgeInsets.only(bottom: 120),
                           autofillHints: const [AutofillHints.newPassword],
                           obscureText: _obscurePassword,
                           enableSuggestions: false,
@@ -415,6 +434,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           label: 'Confirm Password',
                           hintText: 'Re-Enter your password',
                           controller: _confirmPasswordController,
+                          scrollPadding: const EdgeInsets.only(bottom: 120),
                           autofillHints: const [AutofillHints.newPassword],
                           obscureText: _obscureConfirmPassword,
                           enableSuggestions: false,
@@ -445,7 +465,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                           ),
                         ),
                         ),
-                        if (_biometricLoginAvailable &&
+                        if (_biometricCheckPending)
+                          const SizedBox(height: 56)
+                        else if (_biometricLoginAvailable &&
                             _biometricLabels != null) ...[
                           const SizedBox(height: 16),
                           Row(
@@ -497,37 +519,39 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
             ),
           ),
         ),
-        SafeArea(
-          top: false,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6A00),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+        ColoredBox(
+          color: Colors.white,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6A00),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
-                ),
-                onPressed: _isLoading ? null : _handleNext,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+                  onPressed: _isLoading ? null : _handleNext,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Next',
+                          style: AppTypography.bg_16_sb,
                         ),
-                      )
-                    : const Text(
-                        'Next',
-                        style: AppTypography.bg_16_sb,
-                      ),
+                ),
               ),
             ),
           ),

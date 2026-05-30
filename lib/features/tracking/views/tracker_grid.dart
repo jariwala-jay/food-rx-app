@@ -204,6 +204,8 @@ class _TrackerGridState extends State<TrackerGrid>
         final clampedScale = textScaleFactor.clamp(1.0, 1.3);
         final cardHeight = TrackerCard.preferredHeight(context);
         final childAspectRatio = 152 / cardHeight;
+        final gridSpacing =
+            TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -349,8 +351,8 @@ class _TrackerGridState extends State<TrackerGrid>
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     childAspectRatio: childAspectRatio,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: gridSpacing,
+                    mainAxisSpacing: gridSpacing,
                   ),
                   itemCount: dailyTrackers.length,
                   itemBuilder: (context, index) {
@@ -384,8 +386,8 @@ class _TrackerGridState extends State<TrackerGrid>
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     childAspectRatio: childAspectRatio,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: gridSpacing,
+                    mainAxisSpacing: gridSpacing,
                   ),
                   itemCount: weeklyTrackers.length,
                   itemBuilder: (context, index) {
@@ -463,6 +465,7 @@ class _TrackerGridState extends State<TrackerGrid>
     final clampedScale = textScaleFactor.clamp(1.0, 1.3);
     final cardHeight = TrackerCard.preferredHeight(context);
     final childAspectRatio = 152 / cardHeight;
+    final gridSpacing = TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -598,8 +601,8 @@ class _TrackerGridState extends State<TrackerGrid>
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: childAspectRatio,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: gridSpacing,
+              mainAxisSpacing: gridSpacing,
             ),
             itemCount: 8, // Show 4 daily skeleton cards
             itemBuilder: (context, index) {
@@ -622,8 +625,8 @@ class _TrackerGridState extends State<TrackerGrid>
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: childAspectRatio,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: gridSpacing,
+              mainAxisSpacing: gridSpacing,
             ),
             itemCount: 2, // Show 4 weekly skeleton cards
             itemBuilder: (context, index) {
@@ -639,11 +642,12 @@ class _TrackerGridState extends State<TrackerGrid>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
+        final cardHeight = TrackerCard.preferredHeight(context);
         return Opacity(
           opacity: _animation.value,
           child: Container(
             width: 152,
-            height: 68,
+            height: cardHeight,
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
