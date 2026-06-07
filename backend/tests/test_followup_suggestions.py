@@ -1,4 +1,5 @@
 from pathlib import Path
+import profile
 import sys
 import unittest
 import uuid
@@ -21,7 +22,8 @@ def _run(
     cid = conversation_id if conversation_id is not None else uuid.uuid4().hex
     return _generate_suggestions(
         query=query,
-        response=response or "Here are practical food and nutrition suggestions for your goals.",
+        response=response
+        or "Here are practical food and nutrition suggestions for your goals.",
         user_profile=profile,
         user_id="test_user",
         conversation_id=cid,
@@ -59,7 +61,6 @@ class TestFollowupSuggestions(unittest.TestCase):
             ],
         )
 
-
     def test_plan_first_for_single_condition(self) -> None:
         profile = {"medicalConditions": ["diabetes"], "myPlanType": "Diabetes Plate"}
         result = _run("What should I eat?", profile)
@@ -70,7 +71,6 @@ class TestFollowupSuggestions(unittest.TestCase):
                 "What foods fit well in the Diabetes Plate?",
             ],
         )
-
 
     def test_hypertension_plan_normalization_dash_diet(self) -> None:
         profile = {"medicalConditions": ["hypertension"], "myPlanType": "Dash diet"}
@@ -83,7 +83,6 @@ class TestFollowupSuggestions(unittest.TestCase):
             ],
         )
 
-
     def test_obesity_or_none_uses_myplate_when_plan_set(self) -> None:
         profile = {"medicalConditions": [], "myPlanType": "MyPlate"}
         result = _run("What should I eat?", profile)
@@ -95,18 +94,16 @@ class TestFollowupSuggestions(unittest.TestCase):
             ],
         )
 
-
-    def test_unknown_plan_falls_back_to_condition(self) -> None:
+    def test_unknown_plan_resolves_to_condition_based_plan(self) -> None:
         profile = {"medicalConditions": ["diabetes"], "myPlanType": "CustomPlan123"}
         result = _run("What should I eat?", profile)
         self.assertEqual(
             result,
             [
-                "What foods help keep my blood sugar steady?",
-                "What meals are good for blood sugar control?",
+                "Can you show a Diabetes Plate meal example?",
+                "What foods fit well in the Diabetes Plate?",
             ],
         )
-
 
     def test_category_applies_when_no_condition_or_plan(self) -> None:
         profile = {"medicalConditions": []}
@@ -163,7 +160,6 @@ class TestFollowupSuggestions(unittest.TestCase):
         self.assertEqual(len(r1), 2)
         self.assertEqual(len(r2), 2)
         self.assertNotEqual(r1, r2)
-
 
     def test_short_response_disables_suggestions(self) -> None:
         profile = {"medicalConditions": ["diabetes"], "myPlanType": "Diabetes Plate"}
