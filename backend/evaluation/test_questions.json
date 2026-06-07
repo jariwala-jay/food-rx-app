@@ -1,0 +1,204 @@
+{
+    "questions": [
+        {
+            "category": "Diabetes",
+            "question": "What foods should I eat to manage my blood sugar?",
+            "reference": "Foods that help manage blood sugar include non-starchy vegetables, lean protein, and whole grains. The Diabetes Plate method recommends filling half your plate with non-starchy vegetables, one quarter with protein, and one quarter with carbohydrates."
+        },
+        {
+            "category": "Diabetes",
+            "question": "What is the Diabetes Plate method?",
+            "reference": "The Diabetes Plate method is a simple way to plan meals. Fill half your plate with non-starchy vegetables like broccoli or spinach, one quarter with lean protein like chicken or fish, and one quarter with carbohydrates like brown rice or whole wheat bread."
+        },
+        {
+            "category": "Diabetes",
+            "question": "What are low glycemic index foods good for diabetes?",
+            "reference": "Low glycemic index foods cause a slower rise in blood sugar. Examples include oats, sweet potatoes, legumes, and most non-starchy vegetables. Choosing lower GI foods helps keep blood sugar steady throughout the day."
+        },
+        {
+            "category": "Diabetes",
+            "question": "How many carbohydrates should a diabetic eat per meal?",
+            "reference": "Carbohydrate needs vary by person. The Diabetes Plate method guides portion size by filling one quarter of the plate with carbohydrates. Consistent carbohydrate intake at each meal helps keep blood sugar levels stable."
+        },
+        {
+            "category": "Diabetes",
+            "question": "What snacks are good for managing blood sugar?",
+            "reference": "Good snacks for blood sugar management combine protein and fiber. Examples include an apple with a small handful of nuts, raw carrots with hummus, or Greek yogurt. These combinations slow sugar absorption and keep energy levels steady."
+        },
+        {
+            "category": "Hypertension",
+            "question": "What is the DASH diet?",
+            "reference": "The DASH diet stands for Dietary Approaches to Stop Hypertension. It focuses on fruits, vegetables, whole grains, and lean protein while limiting sodium, saturated fat, and added sugars. The sodium target is 1500 mg per day."
+        },
+        {
+            "category": "Hypertension",
+            "question": "What foods should I avoid if I have high blood pressure?",
+            "reference": "People with high blood pressure should limit sodium, processed foods, canned soups, deli meats, and fast food. Reducing sodium intake to 1500 mg per day can help lower blood pressure."
+        },
+        {
+            "category": "Hypertension",
+            "question": "How does sodium affect blood pressure?",
+            "reference": "High sodium intake causes the body to retain water, which increases blood volume and raises blood pressure. Reducing sodium helps lower blood pressure. The DASH diet recommends limiting sodium to 1500 mg per day."
+        },
+        {
+            "category": "Hypertension",
+            "question": "What fruits and vegetables help lower blood pressure?",
+            "reference": "Fruits and vegetables rich in potassium help lower blood pressure. Good choices include bananas, oranges, leafy greens, sweet potatoes, and tomatoes. The DASH diet recommends 4 to 5 servings of fruits and vegetables daily."
+        },
+        {
+            "category": "Hypertension",
+            "question": "Can exercise help lower blood pressure?",
+            "reference": "Regular physical activity helps lower blood pressure. Aerobic exercise like walking, cycling, or swimming for at least 150 minutes per week is recommended. Exercise also helps with weight management which further supports healthy blood pressure."
+        },
+        {
+            "category": "Pre-Diabetes",
+            "question": "What diet changes can help prevent diabetes?",
+            "reference": "Eating more fiber, reducing refined carbohydrates, and choosing whole grains can help prevent diabetes. Losing 5 to 7 percent of body weight through diet and exercise can significantly reduce the risk of developing type 2 diabetes."
+        },
+        {
+            "category": "Pre-Diabetes",
+            "question": "What foods should I avoid if I have prediabetes?",
+            "reference": "People with prediabetes should limit sugary drinks, white bread, white rice, processed snacks, and foods high in saturated fat. These foods cause rapid blood sugar spikes. Choosing whole grain alternatives and non-starchy vegetables helps manage blood sugar."
+        },
+        {
+            "category": "Pre-Diabetes",
+            "question": "How much weight loss helps with prediabetes?",
+            "reference": "Losing 5 to 7 percent of body weight can reduce the risk of developing type 2 diabetes by more than 50 percent. For a person weighing 200 pounds, this means losing 10 to 14 pounds through a combination of healthy eating and physical activity."
+        },
+        {
+            "category": "Pre-Diabetes",
+            "question": "What is a good meal plan for prediabetes?",
+            "reference": "A good meal plan for prediabetes includes non-starchy vegetables, lean protein, and whole grains at each meal. Limiting portion sizes of carbohydrates and avoiding sugary drinks helps keep blood sugar in a healthy range."
+        },
+        {
+            "category": "Pre-Diabetes",
+            "question": "Can prediabetes be reversed with diet?",
+            "reference": "Prediabetes can often be reversed through lifestyle changes including healthy eating and regular physical activity. Choosing fiber-rich foods, reducing refined carbohydrates, and maintaining a healthy weight can bring blood sugar levels back to normal."
+        },
+        {
+            "category": "Obesity",
+            "question": "What eating habits help with weight management?",
+            "reference": "Healthy eating habits for weight management include eating regular meals, controlling portion sizes, choosing nutrient-dense foods, and limiting processed foods and sugary drinks. Mindful eating and paying attention to hunger cues also support weight management."
+        },
+        {
+            "category": "Obesity",
+            "question": "What foods support healthy weight loss?",
+            "reference": "Foods that support healthy weight loss include vegetables, fruits, lean protein, whole grains, and legumes. These foods are high in fiber and protein which promote fullness. Limiting calorie-dense processed foods and sugary beverages is also important."
+        },
+        {
+            "category": "Obesity",
+            "question": "How does portion control help with obesity?",
+            "reference": "Portion control helps manage calorie intake without eliminating food groups. Using smaller plates, measuring servings, and following MyPlate guidelines can help. The hand method is a simple tool where your palm represents protein, your fist represents vegetables, and your cupped hand represents carbohydrates."
+        },
+        {
+            "category": "Obesity",
+            "question": "What is mindful eating and how does it help?",
+            "reference": "Mindful eating means paying full attention to the experience of eating. It involves eating slowly, recognizing hunger and fullness cues, and avoiding distractions like screens during meals. Mindful eating helps prevent overeating and supports healthy weight management."
+        },
+        {
+            "category": "Obesity",
+            "question": "How many calories should I eat to lose weight?",
+            "reference": "Calorie needs vary by person based on age, sex, height, weight, and activity level. A general approach is to create a modest calorie deficit through a combination of eating less and moving more. Consulting a healthcare provider helps determine a safe calorie target."
+        },
+        {
+            "category": "Sleep",
+            "question": "How does sleep affect my health?",
+            "reference": "Poor sleep is linked to increased risk of obesity, diabetes, and heart disease. During sleep the body repairs itself and regulates hormones that control hunger and blood sugar. Adults need 7 to 9 hours of sleep per night for good health."
+        },
+        {
+            "category": "Sleep",
+            "question": "What foods help improve sleep?",
+            "reference": "Foods that may support better sleep include those rich in tryptophan such as turkey, nuts, and dairy. Avoiding caffeine after noon and limiting alcohol helps improve sleep quality. Eating a light snack rather than a heavy meal before bed is also recommended."
+        },
+        {
+            "category": "Sleep",
+            "question": "How many hours of sleep do adults need?",
+            "reference": "Adults need 7 to 9 hours of sleep per night. Getting less than 7 hours regularly is associated with increased risk of obesity, diabetes, high blood pressure, and heart disease. Consistent sleep and wake times help maintain a healthy sleep schedule."
+        },
+        {
+            "category": "Sleep",
+            "question": "How does poor sleep affect blood sugar?",
+            "reference": "Poor sleep affects hormones that regulate blood sugar including insulin and cortisol. Sleep deprivation can cause insulin resistance and increase appetite for high calorie foods. Getting enough sleep supports better blood sugar control for people with diabetes or prediabetes."
+        },
+        {
+            "category": "Sleep",
+            "question": "What habits improve sleep quality?",
+            "reference": "Good sleep habits include keeping a consistent sleep schedule, avoiding screens before bed, keeping the bedroom cool and dark, limiting caffeine and alcohol, and avoiding heavy meals close to bedtime. Regular physical activity during the day also promotes better sleep."
+        },
+        {
+            "category": "Exercise",
+            "question": "How much exercise is recommended for adults?",
+            "reference": "Adults should get at least 150 minutes of moderate aerobic activity per week, such as brisk walking or cycling. Muscle-strengthening activities on 2 or more days per week are also recommended. Breaking exercise into shorter sessions throughout the day also counts."
+        },
+        {
+            "category": "Exercise",
+            "question": "What exercises are safe for people with diabetes?",
+            "reference": "Safe exercises for people with diabetes include walking, swimming, cycling, and light strength training. Exercise helps lower blood sugar by increasing insulin sensitivity. It is important to check blood sugar before and after exercise and stay hydrated."
+        },
+        {
+            "category": "Exercise",
+            "question": "Can exercise lower blood pressure?",
+            "reference": "Regular aerobic exercise can lower blood pressure by 5 to 8 mmHg. Activities like brisk walking, cycling, and swimming are effective. Aim for at least 150 minutes of moderate activity per week. Exercise also helps with weight management which further reduces blood pressure."
+        },
+        {
+            "category": "Exercise",
+            "question": "What is strength training and why is it important?",
+            "reference": "Strength training uses resistance to build muscle. It includes activities like lifting weights, using resistance bands, or bodyweight exercises like push-ups. Strength training improves metabolism, helps manage blood sugar, supports bone health, and aids weight management."
+        },
+        {
+            "category": "Exercise",
+            "question": "How does exercise help with weight management?",
+            "reference": "Exercise burns calories and builds muscle which increases metabolism. Combining aerobic exercise with strength training is most effective for weight management. Regular physical activity also helps regulate hunger hormones and supports long term healthy weight maintenance."
+        },
+        {
+            "category": "Hydration",
+            "question": "How much water should I drink each day?",
+            "reference": "Most adults need about 8 cups or 64 ounces of water per day. Needs vary based on body size, activity level, and climate. Drinking water before meals can also help with portion control and weight management."
+        },
+        {
+            "category": "Hydration",
+            "question": "What drinks are best for people with diabetes?",
+            "reference": "Water is the best drink for people with diabetes. Unsweetened tea and coffee are also good choices. Sugary drinks like soda, juice, and sports drinks should be avoided because they cause rapid blood sugar spikes. Flavoring water with lemon or cucumber is a good alternative."
+        },
+        {
+            "category": "Hydration",
+            "question": "How does hydration affect blood pressure?",
+            "reference": "Staying well hydrated helps the heart pump blood more easily and supports healthy blood pressure. Dehydration can cause blood pressure to drop or spike. Drinking enough water and limiting sodium intake together support healthy blood pressure levels."
+        },
+        {
+            "category": "Hydration",
+            "question": "What are signs of dehydration?",
+            "reference": "Signs of dehydration include dark yellow urine, dry mouth, headache, fatigue, and dizziness. Mild dehydration can affect concentration and energy levels. Drinking water regularly throughout the day rather than only when thirsty helps prevent dehydration."
+        },
+        {
+            "category": "Hydration",
+            "question": "Are sports drinks healthy?",
+            "reference": "Sports drinks contain electrolytes but are also high in sugar and calories. They are designed for intense exercise lasting more than an hour. For most people water is a better choice. People with diabetes or hypertension should avoid sports drinks due to their high sugar and sodium content."
+        },
+        {
+            "category": "General",
+            "question": "What is a balanced diet?",
+            "reference": "A balanced diet includes a variety of foods from all food groups. MyPlate recommends filling half your plate with fruits and vegetables, one quarter with whole grains, and one quarter with lean protein. Including low-fat dairy and healthy fats completes a balanced meal."
+        },
+        {
+            "category": "General",
+            "question": "How do I read a nutrition label?",
+            "reference": "Start with the serving size at the top of the nutrition label. Check calories per serving, then look at nutrients to limit like sodium, saturated fat, and added sugars. Look for nutrients to get enough of like fiber, vitamins, and minerals. The percent daily value shows how much a nutrient contributes to a daily diet."
+        },
+        {
+            "category": "General",
+            "question": "What is fiber and why is it important?",
+            "reference": "Fiber is a type of carbohydrate that the body cannot digest. It helps slow sugar absorption, lowers cholesterol, supports healthy digestion, and promotes fullness. Good sources of fiber include vegetables, fruits, whole grains, and legumes. Adults need 25 to 38 grams of fiber per day."
+        },
+        {
+            "category": "General",
+            "question": "What are healthy cooking methods?",
+            "reference": "Healthy cooking methods include baking, steaming, grilling, and roasting. These methods use less added fat than frying. Using herbs and spices instead of salt adds flavor without sodium. Cooking at home allows better control over ingredients and portion sizes."
+        },
+        {
+            "category": "General",
+            "question": "How do I grocery shop on a budget?",
+            "reference": "Budget-friendly grocery shopping tips include planning meals ahead, making a list, buying seasonal produce, choosing frozen or canned vegetables without added salt or sugar, and buying whole grains in bulk. Store brands often cost less and have similar nutritional value to name brands."
+        }
+    ]
+}

@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Application code (package is `app`)
 COPY app ./app
 
+# Create ChromaDB directory so volume mount has a target
+RUN mkdir -p app/knowledge/chroma_db
+
 # Cloud Run sets PORT; default 8080 for local docker run
 ENV PORT=8080
 EXPOSE 8080

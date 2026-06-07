@@ -1,71 +1,141 @@
-# Food Rx: Your Personal Nutrition & Recipe Companion
+# MyFoodRx — Personalized Food-as-Medicine Mobile Application
 
 <p align="center">
-  <img src="https://placehold.co/600x300/FFF3EB/FF6A00?text=My+Food+Rx" alt="My Food Rx Banner">
+  <img src="https://placehold.co/600x300/FFF3EB/FF6A00?text=MyFoodRx" alt="MyFoodRx Banner">
 </p>
 
-**My Food Rx** is a comprehensive mobile application built with Flutter that provides personalized nutritional guidance to help you take control of your health. It combines smart recipe generation, pantry management, personalized diet plans, and daily health tracking into one seamless experience.
+**MyFoodRx** is a mobile food-as-medicine application built with Flutter and FastAPI, designed for food-insecure adults living with chronic conditions such as diabetes, hypertension, and obesity. It combines personalized diet planning, smart recipe generation, pantry management, daily health tracking, and a RAG-powered nutrition chatbot into one seamless experience.
 
 ---
 
 ## ✨ Features
 
-- **🍎 Personalized Diet Plans**: Get a tailored diet plan (DASH or MyPlate) based on a detailed onboarding process that captures your health goals, medical conditions, and dietary preferences.
-- **🧑‍🍳 Smart Recipe Generation**: Discover recipes that you can make right now. The app analyzes your pantry, prioritizes expiring ingredients, and filters recipes based on your specific health needs (e.g., low-sodium, low-sugar).
+- **🍎 Personalized Diet Plans**: Get a tailored diet plan (Diabetes Plate, DASH, or MyPlate) based on a detailed onboarding process that captures your health goals, medical conditions, and dietary preferences.
+- **🧑‍🍳 Smart Recipe Generation**: Discover recipes you can make right now. The app analyzes your pantry, prioritizes expiring ingredients, and filters recipes based on your specific health needs (e.g., low-sodium, low-sugar).
 - **📝 Pantry Management**: Easily track your food inventory. Add items to your virtual pantry, categorize them, and get reminders for expiring goods.
 - **🎯 Daily & Weekly Health Tracking**: Stay on top of your goals with a dashboard that tracks your daily intake of water, vegetables, protein, and other essential nutrients.
 - **📚 Educational Content**: Browse and bookmark articles on nutrition, healthy eating, and managing health conditions.
-- **🤖 AI-Powered Chatbot**: Have a question about a food item or nutrition? Our Dialogflow-powered chatbot is here to help 24/7.
-- **🔐 Secure Authentication**: Your data is protected with secure user authentication and password hashing.
+- **🤖 RAG Nutrition Chatbot**: An AI-powered chatbot grounded in a curated 61-document, 8-category nutrition knowledge base. Built with Gemini embeddings, ChromaDB vector storage, and a three-layer safety guard (emergency redirection, relevance gating, and a hardened plan-aware system prompt). Delivers personalized, plan-consistent nutrition guidance written at a 2nd–3rd grade reading level.
+- **🔐 Secure Authentication**: Your data is protected with secure user authentication and JWT-based authorization.
 
 ---
 
 ## 🛠️ Tech Stack & Architecture
 
-Food Rx is built with a modern stack, designed for scalability and a smooth user experience.
+MyFoodRx is built with a modern stack designed for scalability and a smooth user experience.
 
-- **Frontend**: Flutter
-- **State Management**: Provider
-- **Database**: MongoDB
-- **Backend API**: FastAPI (Python 3.10+) – sits between the Flutter app and MongoDB
-- **Food Data & Recipes**: Spoonacular API
-- **Chatbot**: Google Cloud Dialogflow
-- **Backend Automation**: Google Cloud Functions (for scheduled tasks like resetting trackers)
-- **Xcode Cloud**: Flutter iOS archives use [`ios/ci_scripts/ci_post_clone.sh`](ios/ci_scripts/ci_post_clone.sh) — see [docs/XCODE_CLOUD.md](docs/XCODE_CLOUD.md)
+| Layer | Technology |
+|---|---|
+| Frontend | Flutter |
+| State Management | Provider |
+| Backend API | FastAPI (Python 3.10+) |
+| Database | MongoDB Atlas |
+| RAG Embeddings | Google Gemini (`gemini-embedding-001`) |
+| RAG Generation | Google Gemini (`gemini-2.5-flash` with fallbacks) |
+| Vector Store | ChromaDB (persistent, local) |
+| Food Data & Recipes | Spoonacular API |
+| RAG Evaluation | RAGAS (faithfulness, answer relevancy, context precision) |
+| iOS CI | Xcode Cloud |
 
-The project follows a **feature-first architecture**, where code is organized by feature (e.g., `auth`, `recipes`, `pantry`). This makes the codebase modular, easier to navigate, and simpler to maintain.
+The project follows a **feature-first architecture** where code is organized by feature (e.g., `auth`, `recipes`, `pantry`, `chatbot`). The RAG service is fully encapsulated in `backend/app/services/rag_service.py` and is the only component permitted to call Gemini APIs.
+
+---
+
+## 🤖 RAG Chatbot Architecture
+
+The chatbot is implemented as a four-layer system:
+
+```
+Flutter UI (ChatbotPage)
+    → POST /chatbot/chat (FastAPI)
+        → rag_service.py
+            Layer 1: Regex/rule-based safety classification
+            Layer 2: ChromaDB retrieval + cosine similarity gating
+            Layer 3: Gemini generation under hardened system prompt
+        → MongoDB (conversation state + response cache)
+```
+
+**Knowledge base:** 61 curated nutrition documents across 8 categories — Sleep, Exercise, Hydration, Hypertension, Pre-Diabetes, Diabetes, Obesity, and General — sourced from CDC, NIH, AHA, ADA, USDA, FDA, and Harvard T.H. Chan School of Public Health.
+
+**Personalization:** Every response is conditioned on the user's resolved diet plan (Diabetes Plate, DASH, or MyPlate), conditions, pantry inventory, and bounded conversation history.
+
+---
+
+## 📊 RAG Evaluation (RAGAS)
+
+The chatbot retrieval pipeline was evaluated using a 40-question held-out test set (5 questions per category) scored across three metrics: faithfulness, answer relevancy, and context precision.
+
+| Metric | Score |
+|---|---|
+| Faithfulness | 0.870 |
+| Answer Relevancy | 0.886 |
+| Context Precision | 0.775 |
+
+**Per-category breakdown:**
+
+| Category | Faithfulness | Relevancy | Precision |
+|---|---|---|---|
+| Sleep | 0.920 | 0.970 | 0.870 |
+| General | 0.880 | 0.980 | 0.840 |
+| Pre-Diabetes | 0.880 | 0.850 | 0.804 |
+| Exercise | 0.880 | 0.880 | 0.814 |
+| Obesity | 0.880 | 0.840 | 0.648 |
+| Diabetes | 0.860 | 0.900 | 0.780 |
+| Hypertension | 0.860 | 0.870 | 0.724 |
+| Hydration | 0.800 | 0.800 | 0.720 |
+
+> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Scores reflect the current knowledge base (61 documents, 177 chunks) and should be re-run after knowledge base updates.
+
+To run the evaluation yourself:
+
+```bash
+cd backend
+python3 evaluation/run_ragas.py                        # all 40 questions
+python3 evaluation/run_ragas.py --category Sleep       # single category
+```
+
+Reports are saved to `backend/evaluation/reports/`.
+
+```bash
+cd backend
+python3 evaluation/run_ragas.py                        # all 40 questions
+python3 evaluation/run_ragas.py --category Sleep       # single category
+```
+
+Reports are saved to `backend/evaluation/reports/`.
 
 ---
 
 ## 🚀 Getting Started
 
-Follow these steps to get the Food Rx project up and running on your local machine.
-
 ### 1. Prerequisites
 
 - Flutter SDK (version >=3.35.3 <4.0.0)
-- An IDE (like VS Code or Android Studio) with the Flutter plugin.
-- Python 3.10+ and pip (for the backend API in `backend/`).
+- An IDE (VS Code or Android Studio) with the Flutter plugin
+- Python 3.10+ and pip3
 - Install Ruby using Homebrew:
-  - `brew install ruby`
-  - `echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/.zshrc`
-  - `echo 'export PATH="/opt/homebrew/lib/ruby/gems/3.4.0/bin:$PATH"' >> ~/.zshrc`
-  - `source ~/.zshrc`  
+  ```bash
+  brew install ruby
+  echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/.zshrc
+  source ~/.zshrc
+  ```
 - Install CocoaPods:
-  - `gem install cocoapods`
+  ```bash
+  gem install cocoapods
+  ```
 - Access to:
-  - A MongoDB database.
-  - A Spoonacular API key.
-  - A Google Cloud Platform project with Dialogflow CX enabled.
+  - A MongoDB Atlas database
+  - A Spoonacular API key
+  - A Google Gemini API key
 
 ### 2. Clone the Repository
 
 ```bash
-git clone [https://github.com/jariwala-jay/food-rx-app.git](https://github.com/jariwala-jay/food-rx-app.git)
+git clone https://github.com/jariwala-jay/food-rx-app.git
 cd food-rx-app
 ```
 
-### 3. Install Dependencies
+### 3. Install Flutter Dependencies
 
 ```bash
 flutter pub get
@@ -73,73 +143,64 @@ flutter pub get
 
 ### 4. Configure Environment Variables
 
-The application uses a `.env` file to manage sensitive API keys and configuration.
+Create a `.env` file in the root of the project:
 
-1.  Create a file named `.env` in the root of the project.
-2.  Add the following configuration details. You will need to replace the placeholder values with your own keys.
+```env
+# Backend API
+API_BASE_URL=http://127.0.0.1:8000        # local dev
+# API_BASE_URL=http://10.0.2.2:8000       # Android emulator
+# API_BASE_URL=http://localhost:8000       # iOS simulator
 
-    ```env
-    # MongoDB Connection String
-    MONGODB_URL="mongodb+srv://<user>:<password>@<cluster-uri>/<database-name>?retryWrites=true&w=majority"
+# Backend server config
+MONGODB_URL="mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority"
+SECRET_KEY=<your-secret-key-at-least-32-characters>
+API_HOST=0.0.0.0
+API_PORT=8000
 
-    # Backend API (used by Flutter app)
-    API_BASE_URL=http://10.0.2.2:8000   # Android emulator; use http://localhost:8000 for iOS simulator
-    SECRET_KEY=<your-secret-key-32-chars>   # Backend JWT signing
+# API Keys
+GEMINI_API_KEY="your-gemini-api-key"
+GROQ_API_KEY="your-groq-api-key"
+RAPID_API_KEY="your-spoonacular-rapid-api-key"
 
-    # Dialogflow Configuration
-    DIALOGFLOW_PROJECT_ID="your-gcp-project-id"
-    DIALOGFLOW_AGENT_ID="your-dialogflow-agent-id"
-    DIALOGFLOW_LOCATION="global"
-    DIALOGFLOW_LANGUAGE_CODE="en"
+# Email service
+GMAIL_USER="your-gmail@gmail.com"
+GMAIL_APP_PASSWORD="your-16-char-app-password"
+APP_URL=foodrx://reset-password
+EMAIL_FROM_NAME=MyFoodRx
 
-    # API KEYS
-    GEMINI_API_KEY="gemini-key"
-    RAPID_API_KEY="spoonacular-rapid-api-key"
+# Feature flags
+SHOW_SCALING_CONVERSION=false
+MANDATORY_PLAN_VIDEO=false
+DEBUG=false
 
-    # FLAGS
-    SHOW_SCALING_CONVERSION=false
-    MANDATORY_PLAN_VIDEO=false
+# Video URLs (hosted in Firebase Storage)
+DASH_VIDEO_URL="https://firebasestorage.googleapis.com/..."
+MYPLATE_VIDEO_URL="https://firebasestorage.googleapis.com/..."
+DIABETES_PLATE_VIDEO_URL="https://firebasestorage.googleapis.com/..."
+DASH_VIDEO_URL_FULL="https://firebasestorage.googleapis.com/..."
+MYPLATE_VIDEO_URL_FULL="https://firebasestorage.googleapis.com/..."
+DIABETES_PLATE_VIDEO_URL_FULL="https://firebasestorage.googleapis.com/..."
 
-    # VIDEO URLs (Required - videos are hosted in cloud storage)
-    # Get these URLs from Firebase Storage
-    DASH_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fdash.mp4?alt=media&token=..."
-    MYPLATE_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fmyplate.mp4?alt=media&token=..."
-    DIABETES_PLATE_VIDEO_URL="https://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/videos%2Fdiabetes_plate.mp4?alt=media&token=..."
-    ```
+# Misc
+TRACKER_RESET_SECRET=<your-long-random-secret>
+ADMIN_PASSWORD=<your-admin-password>
+```
 
-3.  **Dialogflow Service Account**: Place your Google Cloud service account JSON key file in `assets/dialogflow_auth.json`. This is required for the chatbot to authenticate with Google's services.
+> **Note**: The `.env` file is listed in `.gitignore` and should never be committed to your repository.
 
-> **Note**: The `.env` file and `dialogflow_auth.json` are listed in `.gitignore` and should **never** be committed to your repository.
-
-### 5. Backend API (required for full app functionality)
-
-The app talks to a FastAPI backend instead of MongoDB directly. Set up and run it as follows:
+### 5. Backend Setup
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-The backend reads from the **root `.env`** (shared with Flutter). Ensure your root `.env` includes:
-- `MONGODB_URL` – MongoDB Atlas connection string
-- `SECRET_KEY` – Long random string (32+ chars) for JWT signing
-- `API_HOST` – Backend host (default: 0.0.0.0)
-- `API_PORT` – Backend port (default: 8000)
-
-Run the backend:
-
-```bash
+pip3 install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Docs: http://localhost:8000/docs  
-API spec: [backend/API.md](backend/API.md)
+On first startup, the RAG service will embed all 177 knowledge chunks and store them in ChromaDB (`backend/app/knowledge/chroma_db/`). Subsequent restarts load from ChromaDB instantly with no API calls.
+
+API docs: http://localhost:8000/docs
 
 ### 6. Run the Application
-
-With the backend running (see step 5), run the app on a connected device or simulator:
 
 ```bash
 flutter run
@@ -147,20 +208,48 @@ flutter run
 
 ---
 
+## 📁 Project Structure
+
+```
+food-rx-app/
+├── lib/
+│   └── features/
+│       ├── auth/
+│       ├── chatbot/
+│       ├── recipes/
+│       ├── pantry/
+│       └── ...
+├── backend/
+│   ├── app/
+│   │   ├── services/
+│   │   │   └── rag_service.py
+│   │   ├── routers/
+│   │   │   └── chatbot.py
+│   │   └── knowledge/
+│   │       ├── food_knowledge.py
+│   │       └── chroma_db/
+│   ├── evaluation/
+│   │   ├── run_ragas.py
+│   │   ├── test_questions.json
+│   │   └── reports/
+│   └── requirements.txt
+└── .env
+```
+
+---
+
 ## 📖 Wiki & Documentation
 
-For a deeper dive into the app's architecture, feature implementation, and backend services, please visit our **[Project Wiki](https://github.com/jariwala-jay/food-rx-app/wiki)**.
+For a deeper dive into the app's architecture, feature implementation, and backend services, visit our **[Project Wiki](https://github.com/jariwala-jay/food-rx-app/wiki)**.
 
 ---
 
 ## 🙌 Contributing
 
-We welcome contributions to Food Rx! If you'd like to contribute, please follow these steps:
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/your-feature-name`)
+3. Make your changes and commit (`git commit -m 'Add some feature'`)
+4. Push to the branch (`git push origin feature/your-feature-name`)
+5. Open a Pull Request
 
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/your-feature-name`).
-3.  Make your changes and commit them (`git commit -m 'Add some feature'`).
-4.  Push to the branch (`git push origin feature/your-feature-name`).
-5.  Open a Pull Request.
-
-Please make sure to write clean code, add comments where necessary, and follow the existing project structure.
+Please write clean code, add comments where necessary, and follow the existing project structure.
