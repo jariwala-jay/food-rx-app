@@ -76,15 +76,16 @@ The chatbot retrieval pipeline was evaluated using a 40-question held-out test s
 | Category | Faithfulness | Relevancy | Precision |
 |---|---|---|---|
 | Sleep | 0.920 | 0.970 | 0.870 |
-| General | 0.880 | 0.980 | 0.840 |
-| Pre-Diabetes | 0.880 | 0.850 | 0.804 |
+| Hydration | 0.800 | 0.800 | 0.720 |
 | Exercise | 0.880 | 0.880 | 0.814 |
-| Obesity | 0.880 | 0.840 | 0.648 |
+| Pre-Diabetes | 0.880 | 0.850 | 0.804 |
 | Diabetes | 0.860 | 0.900 | 0.780 |
 | Hypertension | 0.860 | 0.870 | 0.724 |
-| Hydration | 0.800 | 0.800 | 0.720 |
+| Obesity | 0.880 | 0.840 | 0.648 |
+| General | 0.880 | 0.980 | 0.840 |
 
-> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Scores reflect the current knowledge base (61 documents, 177 chunks) and should be re-run after knowledge base updates.
+
+> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Scores reflect the current knowledge base and should be re-run after knowledge base updates.
 
 To run the evaluation yourself:
 
