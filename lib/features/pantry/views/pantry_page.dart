@@ -12,6 +12,107 @@ import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:showcaseview/showcaseview.dart';
 
+/// Clamps pantry tile title/expiry [TextScaler] to 0.9–1.35×.
+TextScaler _pantryTileTextScaler(BuildContext context) {
+  final scale = MediaQuery.textScalerOf(context).scale(1.0);
+  return TextScaler.linear(scale.clamp(0.9, 1.35));
+}
+
+/// Pantry list row: 64×64 image, title/expiry (max two lines), fixed 78×40 qty box.
+class _PantryItemRowContent extends StatelessWidget {
+  final PantryItem item;
+  final String expiryText;
+
+  const _PantryItemRowContent({
+    required this.item,
+    required this.expiryText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = _pantryTileTextScaler(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        IngredientImage(
+          imageUrl: item.imageUrl,
+          width: 64,
+          height: 64,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(12),
+            bottomLeft: Radius.circular(12),
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C2C2C),
+                  ),
+                  textScaler: textScaler,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (expiryText.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    expiryText,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textScaler: textScaler,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 78,
+          height: 40,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3EB),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    item.quantityDisplay,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFFFF6A00),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textScaler: TextScaler.noScaling,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class PantryPage extends StatefulWidget {
   const PantryPage({Key? key}) : super(key: key);
 
@@ -800,86 +901,9 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            children: [
-              // Item image
-              IngredientImage(
-                imageUrl: item.imageUrl,
-                width: 64,
-                height: 64,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-              ),
-              // Item details
-              Expanded(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Builder(
-                    builder: (context) {
-                      final textScaleFactor =
-                          MediaQuery.textScaleFactorOf(context);
-                      final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            item.name,
-                            style: TextStyle(
-                              fontSize: 16 * clampedScale,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getExpiryText(item.expiryDate),
-                            style: TextStyle(
-                              fontSize: 14 * clampedScale,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-              // Qty tag
-              Builder(
-                builder: (context) {
-                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                  return Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 10 * clampedScale,
-                      vertical: 6 * clampedScale,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3EB),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item.quantityDisplay,
-                      style: TextStyle(
-                        fontSize: 13 * clampedScale,
-                        color: const Color(0xFFFF6A00),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                },
-              ),
-            ],
+          child: _PantryItemRowContent(
+            item: item,
+            expiryText: _getExpiryText(item.expiryDate),
           ),
         ),
       ),
@@ -1464,86 +1488,9 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            children: [
-              // Item image
-              IngredientImage(
-                imageUrl: item.imageUrl,
-                width: 64,
-                height: 64,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
-              ),
-              // Item details
-              Expanded(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Builder(
-                    builder: (context) {
-                      final textScaleFactor =
-                          MediaQuery.textScaleFactorOf(context);
-                      final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            item.name,
-                            style: TextStyle(
-                              fontSize: 16 * clampedScale,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getExpiryText(item.expiryDate),
-                            style: TextStyle(
-                              fontSize: 14 * clampedScale,
-                              color: Colors.grey[600],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-              // Qty tag
-              Builder(
-                builder: (context) {
-                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                  return Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 10 * clampedScale,
-                      vertical: 6 * clampedScale,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3EB),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item.quantityDisplay,
-                      style: TextStyle(
-                        fontSize: 13 * clampedScale,
-                        color: const Color(0xFFFF6A00),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                },
-              ),
-            ],
+          child: _PantryItemRowContent(
+            item: item,
+            expiryText: _getExpiryText(item.expiryDate),
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/features/auth/utils/signup_field_errors.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -35,7 +36,8 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   String? _preferredMealPrepTime;
   String? _cookingSkill;
   bool _isLoading = false;
-  bool _showErrors = false;
+  final _fieldErrors = SignupFieldErrors();
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
   final List<String> _healthGoals = [
     'Lower blood pressure',
@@ -61,7 +63,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     super.initState();
     // Reset loading state when widget is initialized
     _isLoading = false;
-    _showErrors = false;
+    _fieldErrors.clearAll();
 
     final signupData = context.read<SignupProvider>().data;
     _selectedHealthGoals = List.from(signupData.healthGoals);
@@ -69,12 +71,9 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
     _cookingForPeopleController.text = signupData.cookingForPeople ?? '';
     _cookingSkill = signupData.cookingSkill;
 
-    // Clear error state when user types in cooking for people field
     _cookingForPeopleController.addListener(() {
-      if (_showErrors && _cookingForPeopleController.text.trim().isNotEmpty) {
-        setState(() {
-          _showErrors = false;
-        });
+      if (_cookingForPeopleController.text.trim().isNotEmpty) {
+        setState(() => _fieldErrors.clear('cookingForPeople'));
       }
     });
   }
@@ -99,7 +98,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
   }
 
   Future<void> _handleSubmit() async {
-    // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
     final hasMissingFields = _selectedHealthGoals.isEmpty ||
         _preferredMealPrepTime == null ||
@@ -107,15 +105,19 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
         _cookingSkill == null;
 
     if (!isFormValid || hasMissingFields) {
-      // Show errors on fields
       setState(() {
-        _showErrors = true;
+        _fieldErrors.mark([
+          if (_selectedHealthGoals.isEmpty) 'healthGoals',
+          if (_preferredMealPrepTime == null) 'mealPrep',
+          if (_cookingForPeopleController.text.trim().isEmpty)
+            'cookingForPeople',
+          if (_cookingSkill == null) 'cookingSkill',
+        ]);
+        _autovalidateMode = AutovalidateMode.onUserInteraction;
       });
 
-      // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Move user to the first missing required field.
       if (_selectedHealthGoals.isEmpty) {
         await _scrollToKey(_healthGoalsSectionKey);
         return;
@@ -138,11 +140,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
 
     setState(() {
       _isLoading = true;
-      _showErrors = false;
+      _fieldErrors.clearAll();
     });
 
     try {
-      // Update other details in SignupProvider
       context.read<SignupProvider>().updateOtherDetails(
             healthGoals: _selectedHealthGoals,
             preferredMealPrepTime: _preferredMealPrepTime,
@@ -150,12 +151,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
             cookingSkill: _cookingSkill,
           );
 
-      // Generate personalized diet plan
       final signupProvider = context.read<SignupProvider>();
       final signupData = signupProvider.data;
 
       try {
-        // Load nutrition content and create personalization service
         final nutritionContent = await NutritionContentLoader.load();
         final personalizationService = PersonalizationService(nutritionContent);
 
@@ -170,7 +169,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
           healthGoals: signupData.healthGoals,
         );
 
-        // Set the personalized diet plan
         signupProvider.setPersonalizedDietPlan(
           dietType: personalizationResult.dietType,
           myPlanType: personalizationResult.myPlanType,
@@ -185,7 +183,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
               'Generated personalized plan: ${personalizationResult.dietType} with ${personalizationResult.targetCalories} calories');
         }
       } catch (e) {
-        // Fallback to simple diet type selection if personalization fails
         final bool isDashDiet =
             signupData.medicalConditions.contains('Hypertension') ||
                 signupData.healthGoals.contains('Lower blood pressure');
@@ -196,12 +193,10 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
         }
       }
 
-      // Reset loading state before navigating to next step
       setState(() {
         _isLoading = false;
       });
 
-      // Advance to next step (Diet Plan)
       widget.onSubmit();
     } catch (e) {
       if (mounted) {
@@ -223,14 +218,15 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        SingleChildScrollView(
-          controller: _scrollController,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 200, left: 16, right: 16),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             child: Form(
               key: _formKey,
+              autovalidateMode: _autovalidateMode,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -257,11 +253,14 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           onChanged: (values) {
                             setState(() {
                               _selectedHealthGoals = values;
-                              _showErrors = false;
+                              if (values.isNotEmpty) {
+                                _fieldErrors.clear('healthGoals');
+                              }
                             });
                           },
                         ),
-                        if (_showErrors && _selectedHealthGoals.isEmpty) ...[
+                        if (_fieldErrors.show('healthGoals') &&
+                            _selectedHealthGoals.isEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
                             'Please select at least one health goal',
@@ -299,11 +298,14 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           onChanged: (value) {
                             setState(() {
                               _preferredMealPrepTime = value;
-                              _showErrors = false;
+                              if (value != null) {
+                                _fieldErrors.clear('mealPrep');
+                              }
                             });
                           },
                         ),
-                        if (_showErrors && _preferredMealPrepTime == null) ...[
+                        if (_fieldErrors.show('mealPrep') &&
+                            _preferredMealPrepTime == null) ...[
                           const SizedBox(height: 8),
                           Text(
                             'Please select preferred meal prep time',
@@ -329,20 +331,30 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: AppFormField(
-                      label:
-                          'I am cooking for this many people (Including Yourself)',
-                      hintText: 'Type Here',
-                      controller: _cookingForPeopleController,
-                      focusNode: _cookingForPeopleFocusNode,
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (_showErrors &&
-                            (value == null || value.trim().isEmpty)) {
-                          return 'Please enter how many people you cook for';
-                        }
-                        return null;
-                      },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppFormField(
+                          label:
+                              'I am cooking for this many people (Including Yourself)',
+                          hintText: 'Type Here',
+                          controller: _cookingForPeopleController,
+                          focusNode: _cookingForPeopleFocusNode,
+                          keyboardType: TextInputType.number,
+                        ),
+                        if (_fieldErrors.show('cookingForPeople') &&
+                            _cookingForPeopleController.text.trim().isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please enter how many people you cook for',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   // Rate your Cooking Skill
@@ -369,11 +381,14 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           onChanged: (value) {
                             setState(() {
                               _cookingSkill = value;
-                              _showErrors = false;
+                              if (value != null) {
+                                _fieldErrors.clear('cookingSkill');
+                              }
                             });
                           },
                         ),
-                        if (_showErrors && _cookingSkill == null) ...[
+                        if (_fieldErrors.show('cookingSkill') &&
+                            _cookingSkill == null) ...[
                           const SizedBox(height: 8),
                           Text(
                             'Please rate your cooking skill',
@@ -392,16 +407,12 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
             ),
           ),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Row(
+        SafeArea(
+          top: false,
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
@@ -418,7 +429,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           if (_isLoading) {
                             setState(() {
                               _isLoading = false;
-                              _showErrors = false;
+                              _fieldErrors.clearAll();
                             });
                           }
                           widget.onPrevious();
@@ -462,7 +473,6 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                     ),
                   ),
                 ],
-              ),
             ),
           ),
         ),

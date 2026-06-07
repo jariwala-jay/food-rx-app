@@ -14,8 +14,7 @@ class TrackerCard extends StatelessWidget {
   final VoidCallback? onTap;
   final GlobalKey? infoShowcaseKey;
 
-  /// When system text scale exceeds this, cards use a stacked layout so the
-  /// info icon does not overlap category labels (e.g. "Veggies").
+  /// [TextScaler] threshold for [_buildLargeTextLayout] instead of inline layout.
   static const double largeTextLayoutThreshold = 1.1;
 
   const TrackerCard({
@@ -29,17 +28,55 @@ class TrackerCard extends StatelessWidget {
     return MediaQuery.textScaleFactorOf(context) > largeTextLayoutThreshold;
   }
 
-  /// Progress fraction size — slightly larger than labels; scales down only when long.
-  static const double progressFractionMaxFontSize = 15;
-  static const double progressUnitFontSize = 11;
+  static const double progressInlineNormalFontSize = 14;
+  static const double progressFractionAccessibleMaxFontSize = 16;
+  static const double progressLargeLayoutFractionBaseFontSize = 14;
+  static const double progressLargeLayoutFractionMinFontSize = 11;
+  static const double progressUnitFontSize = 12;
+
+  static const double infoIconReserveWidth = 22;
+
+  static double progressInlineFontSizeFor(BuildContext context) {
+    final scale = MediaQuery.textScaleFactorOf(context);
+    if (usesLargeTextLayout(context)) {
+      return progressFractionAccessibleMaxFontSize * scale;
+    }
+    if (scale <= 1.0) {
+      return progressInlineNormalFontSize;
+    }
+    final t =
+        ((scale - 1.0) / (largeTextLayoutThreshold - 1.0)).clamp(0.0, 1.0);
+    return progressInlineNormalFontSize +
+        t *
+            (progressFractionAccessibleMaxFontSize -
+                progressInlineNormalFontSize);
+  }
+
+  static double progressFractionMaxFontSizeFor(BuildContext context) {
+    if (usesLargeTextLayout(context)) {
+      return progressLargeLayoutFractionBaseFontSize;
+    }
+    return progressInlineFontSizeFor(context);
+  }
+
+  static FontWeight progressFractionWeightFor(BuildContext context) {
+    return usesLargeTextLayout(context) ? FontWeight.bold : FontWeight.w600;
+  }
 
   /// Height used by [TrackerGrid] for grid aspect ratio.
   static double preferredHeight(BuildContext context) {
     final textScale = MediaQuery.textScaleFactorOf(context);
     if (usesLargeTextLayout(context)) {
-      return 88 + (textScale - 1.0) * 36;
+      return 72 + (textScale - 1.0) * 20;
     }
     return 68.0 * textScale.clamp(1.0, 1.3);
+  }
+
+  static EdgeInsets cardPaddingFor(BuildContext context) {
+    if (usesLargeTextLayout(context)) {
+      return const EdgeInsets.fromLTRB(6, 10, 6, 2);
+    }
+    return const EdgeInsets.all(8);
   }
 
   // Get progress color based on percentage and goal value
@@ -108,6 +145,7 @@ class TrackerCard extends StatelessWidget {
     final isSvg = iconPath.endsWith('.svg');
     final cardHeight = preferredHeight(context);
     final useLargeLayout = usesLargeTextLayout(context);
+    final cardPadding = cardPaddingFor(context);
 
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
@@ -134,7 +172,7 @@ class TrackerCard extends StatelessWidget {
             ),
           ],
         ),
-        padding: const EdgeInsets.all(8),
+        padding: cardPadding,
         child: useLargeLayout
             ? _buildLargeTextLayout(
                 context,
@@ -143,6 +181,7 @@ class TrackerCard extends StatelessWidget {
                 iconPath: iconPath,
                 isSvg: isSvg,
                 cardHeight: cardHeight,
+                cardPadding: cardPadding,
               )
             : _buildCompactLayout(
                 context,
@@ -151,6 +190,7 @@ class TrackerCard extends StatelessWidget {
                 iconPath: iconPath,
                 isSvg: isSvg,
                 cardHeight: cardHeight,
+                cardPadding: cardPadding,
               ),
       ),
     );
@@ -163,9 +203,10 @@ class TrackerCard extends StatelessWidget {
     required String iconPath,
     required bool isSvg,
     required double cardHeight,
+    required EdgeInsets cardPadding,
   }) {
-    final clampedScale =
-        MediaQuery.textScaleFactorOf(context).clamp(1.0, 1.3);
+    final clampedScale = MediaQuery.textScaleFactorOf(context).clamp(1.0, 1.3);
+    final innerHeight = cardHeight - cardPadding.vertical;
 
     return Stack(
       children: [
@@ -173,7 +214,7 @@ class TrackerCard extends StatelessWidget {
           children: [
             SizedBox(
               width: 68,
-              height: cardHeight - 16,
+              height: innerHeight,
               child: _buildProgressIcon(
                 progress: progress,
                 progressColor: progressColor,
@@ -189,51 +230,102 @@ class TrackerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      tracker.name,
-                      style: TextStyle(
-                        fontSize: 14 * clampedScale,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textTertiary,
+                  Padding(
+                    padding: const EdgeInsets.only(right: infoIconReserveWidth),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        tracker.name,
+                        style: TextStyle(
+                          fontSize: 14 * clampedScale,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textTertiary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  _buildScaledProgressFraction(
-                    fraction: tracker.formattedProgressFraction,
-                    color: progressColor,
-                    maxFontSize: progressFractionMaxFontSize * clampedScale,
+                  _buildInlineProgressLine(
+                    context,
+                    progressColor: progressColor,
                   ),
-                  if (tracker.unitString.isNotEmpty) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      tracker.unitString,
-                      style: TextStyle(
-                        fontSize: progressUnitFontSize * clampedScale,
-                        fontWeight: FontWeight.w600,
-                        color: progressColor,
-                        height: 1.1,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
                 ],
               ),
             ),
           ],
         ),
         Positioned(
-          top: 4,
-          right: 4,
+          top: 0,
+          right: 0,
           child: _buildInfoIcon(context),
         ),
       ],
+    );
+  }
+
+  /// Inline progress fraction; shrinks font via [TextPainter] to fit [constraints.maxWidth].
+  Widget _buildInlineProgressLine(
+    BuildContext context, {
+    required Color progressColor,
+  }) {
+    final unit = tracker.unitString;
+    final weight = progressFractionWeightFor(context);
+    final label = unit.isEmpty
+        ? tracker.formattedProgressFraction
+        : '${tracker.formattedProgressFraction} $unit';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final baseSize = progressInlineFontSizeFor(context);
+        const minSize = 11.0;
+
+        double fitFontSize(double size) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: label,
+              style: TextStyle(
+                fontSize: size,
+                fontWeight: weight,
+                color: progressColor,
+                height: 1.1,
+              ),
+            ),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+          )..layout(maxWidth: double.infinity);
+
+          if (painter.width <= constraints.maxWidth) {
+            return size;
+          }
+          // Fit against 96% of max width to absorb kerning/rounding overflow.
+          final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.96);
+          final scaled =
+              (size * (safeMaxWidth / painter.width)).clamp(minSize, size);
+          return scaled;
+        }
+
+        final fontSize = fitFontSize(baseSize);
+        final textStyle = TextStyle(
+          fontSize: fontSize,
+          fontWeight: weight,
+          color: progressColor,
+          height: 1.1,
+        );
+
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: textStyle,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            softWrap: false,
+          ),
+        );
+      },
     );
   }
 
@@ -245,75 +337,78 @@ class TrackerCard extends StatelessWidget {
     required String iconPath,
     required bool isSvg,
     required double cardHeight,
+    required EdgeInsets cardPadding,
   }) {
-    const infoReserveWidth = 26.0;
     final unit = tracker.unitString;
+    final innerHeight = cardHeight - cardPadding.vertical;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(right: infoReserveWidth),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 56,
-                height: cardHeight - 16,
-                child: _buildProgressIcon(
-                  progress: progress,
-                  progressColor: progressColor,
-                  iconPath: iconPath,
-                  isSvg: isSvg,
-                  diameter: 52,
-                  iconSize: 26,
+        SizedBox(
+          height: innerHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(right: infoIconReserveWidth),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 52,
+                  height: innerHeight,
+                  child: _buildProgressIcon(
+                    progress: progress,
+                    progressColor: progressColor,
+                    iconPath: iconPath,
+                    isSvg: isSvg,
+                    diameter: 48,
+                    iconSize: 24,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        tracker.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textTertiary,
-                          height: 1.2,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          tracker.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textTertiary,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          softWrap: false,
                         ),
-                        maxLines: 1,
-                        softWrap: false,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    _buildScaledProgressFraction(
-                      fraction: tracker.formattedProgressFraction,
-                      color: progressColor,
-                      maxFontSize: progressFractionMaxFontSize,
-                    ),
-                    if (unit.isNotEmpty) ...[
-                      const SizedBox(height: 1),
-                      Text(
-                        unit,
-                        style: TextStyle(
-                          fontSize: progressUnitFontSize,
-                          fontWeight: FontWeight.w600,
-                          color: progressColor,
-                          height: 1.1,
+                      const SizedBox(height: 2),
+                      _buildLargeLayoutProgressFraction(
+                        context,
+                        progressColor: progressColor,
+                      ),
+                      if (unit.isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          unit,
+                          style: TextStyle(
+                            fontSize: progressUnitFontSize,
+                            fontWeight: FontWeight.w600,
+                            color: progressColor,
+                            height: 1.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         Positioned(
@@ -325,24 +420,57 @@ class TrackerCard extends StatelessWidget {
     );
   }
 
-  Widget _buildScaledProgressFraction({
-    required String fraction,
-    required Color color,
-    required double maxFontSize,
+  /// Large-layout progress fraction; same width-based font fitting as [_buildInlineProgressLine].
+  Widget _buildLargeLayoutProgressFraction(
+    BuildContext context, {
+    required Color progressColor,
   }) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Text(
-        fraction,
-        style: TextStyle(
-          fontSize: maxFontSize,
-          fontWeight: FontWeight.bold,
-          color: color,
-          height: 1.1,
-        ),
-        maxLines: 1,
-      ),
+    final fraction = tracker.formattedProgressFraction;
+    final weight = progressFractionWeightFor(context);
+    final baseSize = progressLargeLayoutFractionBaseFontSize;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double fitFontSize(double size) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: fraction,
+              style: TextStyle(
+                fontSize: size,
+                fontWeight: weight,
+                color: progressColor,
+                height: 1.1,
+              ),
+            ),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+          )..layout(maxWidth: double.infinity);
+
+          if (painter.width <= constraints.maxWidth) {
+            return size;
+          }
+          final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.94);
+          return (size * (safeMaxWidth / painter.width))
+              .clamp(progressLargeLayoutFractionMinFontSize, size);
+        }
+
+        final fontSize = fitFontSize(baseSize);
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            fraction,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: weight,
+              color: progressColor,
+              height: 1.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            softWrap: false,
+          ),
+        );
+      },
     );
   }
 
@@ -377,9 +505,7 @@ class TrackerCard extends StatelessWidget {
         SizedBox(
           width: iconSize,
           height: iconSize,
-          child: isSvg
-              ? SvgPicture.asset(iconPath)
-              : Image.asset(iconPath),
+          child: isSvg ? SvgPicture.asset(iconPath) : Image.asset(iconPath),
         ),
       ],
     );

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/core/services/credential_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
@@ -20,6 +21,7 @@ import 'package:http/http.dart' show ClientException;
 class AuthController with ChangeNotifier {
   final EmailService _emailService = GmailSMTPEmailService();
   final LocalAuthentication _localAuth = LocalAuthentication();
+  BiometricSignInLabels? _cachedBiometricLabels;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -33,9 +35,7 @@ class AuthController with ChangeNotifier {
       await ApiClient.patch('/auth/profile', body: {
         'lastActiveAt': DateTime.now().toUtc().toIso8601String(),
       });
-    } catch (_) {
-      // Non-blocking heartbeat; ignore failures.
-    }
+    } catch (_) {}
   }
 
   UserModel? get currentUser => _currentUser;
@@ -62,7 +62,10 @@ class AuthController with ChangeNotifier {
 
   Future<bool> hasSavedLogin() => CredentialStorage.hasSavedCredentials();
 
-  Future<void> clearSavedLogin() => CredentialStorage.clearCredentials();
+  Future<void> clearSavedLogin() async {
+    await CredentialStorage.clearCredentials();
+    invalidateBiometricSignInLabelsCache();
+  }
 
   Future<bool> _completeAuthFromResponse(
     Map<String, dynamic> res, {
@@ -113,6 +116,32 @@ class AuthController with ChangeNotifier {
       unawaited(_markUserActive());
     }
     return _currentUser != null;
+  }
+
+  Future<BiometricSignInLabels> getBiometricSignInLabels({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _cachedBiometricLabels != null) {
+      return _cachedBiometricLabels!;
+    }
+    final labels = await resolveBiometricSignInLabels(_localAuth);
+    _cachedBiometricLabels = labels;
+    return labels;
+  }
+
+  void invalidateBiometricSignInLabelsCache() {
+    _cachedBiometricLabels = null;
+  }
+
+  Future<bool> canUseBiometricLogin() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      return canCheck || isSupported;
+    } catch (e) {
+      debugPrint('Biometric availability check error: $e');
+      return false;
+    }
   }
 
   Future<bool> authenticateWithBiometrics() async {
@@ -262,8 +291,6 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// When a token exists but [initialize] could not load the user (e.g. offline),
-  /// try again after the OS restores connectivity (app resume).
   Future<void> resumeSessionIfNeeded() async {
     if (_currentUser != null) return;
     final hasRefresh = await ApiClient.hasRefreshToken();
@@ -305,6 +332,7 @@ class AuthController with ChangeNotifier {
     required String password,
     required Map<String, dynamic> userData,
     File? profilePhoto,
+    bool saveLogin = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -318,7 +346,12 @@ class AuthController with ChangeNotifier {
 
       final res = await ApiClient.post('/auth/register', body: cleanUserData, requireAuth: false)
           as Map<String, dynamic>;
-      if (await _completeAuthFromResponse(res)) {
+      if (await _completeAuthFromResponse(
+        res,
+        saveLogin: saveLogin,
+        loginEmail: email.trim().toLowerCase(),
+        loginPassword: password,
+      )) {
         if (profilePhoto != null) {
           try {
             _localProfilePhotoData = await profilePhoto.readAsBytes();
@@ -375,7 +408,7 @@ class AuthController with ChangeNotifier {
       ) as Map<String, dynamic>?;
       return res?['exists'] == true;
     } catch (_) {
-      return false; // On error, allow user to proceed; register will fail if duplicate
+      return false;
     }
   }
 
@@ -442,8 +475,6 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // Best effort: detach this device token from current user to avoid
-      // receiving pushes for an account after switching users on same device.
       try {
         await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
       } catch (_) {
@@ -636,8 +667,11 @@ class AuthController with ChangeNotifier {
       }
       return true;
     } on ApiException catch (e) {
-      if (e.statusCode == 429) _error = 'Too many reset requests. Please try again later.';
-      else _error = e.message;
+      if (e.statusCode == 429) {
+        _error = 'Too many reset requests. Please try again later.';
+      } else {
+        _error = e.message;
+      }
       return false;
     } catch (e) {
       _error = userFacingErrorMessage(e);

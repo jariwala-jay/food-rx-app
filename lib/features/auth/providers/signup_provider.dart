@@ -6,10 +6,18 @@ class SignupProvider extends ChangeNotifier {
   final SignupData _data = SignupData();
   int _currentStep = 0;
   File? _profilePhoto;
+  bool _saveBiometricLogin = false;
 
   SignupData get data => _data;
   int get currentStep => _currentStep;
   File? get profilePhoto => _profilePhoto;
+  bool get saveBiometricLogin => _saveBiometricLogin;
+
+  void setSaveBiometricLogin(bool value) {
+    if (_saveBiometricLogin == value) return;
+    _saveBiometricLogin = value;
+    notifyListeners();
+  }
 
   void updateBasicInfo({
     String? name,
@@ -137,6 +145,7 @@ class SignupProvider extends ChangeNotifier {
     _data.selectedDietPlan = null;
     _data.diagnostics = null;
     _profilePhoto = null;
+    _saveBiometricLogin = false;
     notifyListeners();
   }
 }

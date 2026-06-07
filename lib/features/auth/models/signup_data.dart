@@ -14,12 +14,10 @@ class SignupData {
   String? dietType;
   String? myPlanType;
   bool showGlycemicIndex = false;
-  // New fields for preferences step
   List<String> favoriteCuisines;
   String? dailyFruitIntake;
   String? dailyVegetableIntake;
   String? dailyWaterIntake;
-  // New fields for other details step
   String? preferredMealPrepTime;
   String? cookingForPeople;
   String? cookingSkill;
@@ -64,7 +62,6 @@ class SignupData {
       'heightInches': heightInches,
       'weight': weight,
       'medicalConditions': medicalConditions,
-      // Persist allergies under keys the backend and UserModel accept
       'allergies': foodAllergies,
       'foodRestrictions': foodAllergies,
       'activityLevel': activityLevel,
@@ -84,12 +81,10 @@ class SignupData {
       'diagnostics': diagnostics,
     };
 
-    // Only add dateOfBirth if it's not null and convert it to ISO string
     if (dateOfBirth != null) {
       data['dateOfBirth'] = dateOfBirth!.toIso8601String();
     }
 
-    // Remove null values
     data.removeWhere((key, value) => value == null);
 
     return data;

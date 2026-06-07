@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/features/auth/utils/signup_field_errors.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -35,7 +36,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   String? _dailyVegetableIntake;
   String? _dailyWaterIntake;
   bool _isLoading = false;
-  bool _showErrors = false;
+  final _fieldErrors = SignupFieldErrors();
 
   final List<String> _activityLevels = [
     'Not Very Active (Spend Most of the day sitting)',
@@ -78,7 +79,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
     super.initState();
     // Reset loading state when widget is initialized
     _isLoading = false;
-    _showErrors = false;
+    _fieldErrors.clearAll();
 
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
@@ -172,7 +173,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
   }
 
   Future<void> _handleSubmit() async {
-    // Validate form fields
     final isFormValid = _formKey.currentState!.validate();
     final hasMissingFields = _favoriteCuisines.isEmpty ||
         _selectedFoodAllergies.isEmpty ||
@@ -181,17 +181,20 @@ class _PreferencesStepState extends State<PreferencesStep> {
         _dailyWaterIntake == null ||
         _activityLevel == null;
 
-    // If there are any missing fields or form validation failed, show inline errors.
     if (!isFormValid || hasMissingFields) {
-      // Show errors on fields
       setState(() {
-        _showErrors = true;
+        _fieldErrors.mark([
+          if (_favoriteCuisines.isEmpty) 'cuisines',
+          if (_selectedFoodAllergies.isEmpty) 'allergies',
+          if (_dailyFruitIntake == null) 'fruit',
+          if (_dailyVegetableIntake == null) 'vegetable',
+          if (_dailyWaterIntake == null) 'water',
+          if (_activityLevel == null) 'activity',
+        ]);
       });
 
-      // Trigger form validation to show field errors
       _formKey.currentState?.validate();
 
-      // Move user to first missing required field instead of showing snackbar.
       if (_favoriteCuisines.isEmpty) {
         await _scrollToKey(_favoriteCuisinesKey);
         return;
@@ -217,7 +220,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
     setState(() {
       _isLoading = true;
-      _showErrors = false;
+      _fieldErrors.clearAll();
     });
 
     try {
@@ -257,12 +260,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        SingleChildScrollView(
-          controller: _scrollController,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 200, left: 16, right: 16),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             child: Form(
               key: _formKey,
               child: Column(
@@ -296,7 +299,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           onChangedMulti: (values) {
                             setState(() {
                               _favoriteCuisines = values;
-                              _showErrors = false;
+                              if (values.isNotEmpty) {
+                                _fieldErrors.clear('cuisines');
+                              }
                             });
                           },
                         ),
@@ -307,12 +312,15 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             onChanged: (values) {
                               setState(() {
                                 _favoriteCuisines = values;
-                                _showErrors = false;
+                                if (values.isNotEmpty) {
+                                  _fieldErrors.clear('cuisines');
+                                }
                               });
                             },
                           ),
                         ],
-                        if (_showErrors && _favoriteCuisines.isEmpty) ...[
+                        if (_fieldErrors.show('cuisines') &&
+                            _favoriteCuisines.isEmpty) ...[
                           const SizedBox(height: 8),
                           const Text(
                             'Please select your favorite cuisines (or "No preference")',
@@ -368,7 +376,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               } else {
                                 _selectedFoodAllergies = values;
                               }
-                              _showErrors = false;
+                              if (_selectedFoodAllergies.isNotEmpty) {
+                                _fieldErrors.clear('allergies');
+                              }
                             });
                           },
                         ),
@@ -385,12 +395,15 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 } else {
                                   _selectedFoodAllergies = values;
                                 }
-                                _showErrors = false;
+                                if (_selectedFoodAllergies.isNotEmpty) {
+                                  _fieldErrors.clear('allergies');
+                                }
                               });
                             },
                           ),
                         ],
-                        if (_showErrors && _selectedFoodAllergies.isEmpty) ...[
+                        if (_fieldErrors.show('allergies') &&
+                            _selectedFoodAllergies.isEmpty) ...[
                           const SizedBox(height: 8),
                           const Text(
                             'Please select your food allergies & intolerances (or "No allergies" if you have none)',
@@ -446,7 +459,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 onChanged: (value) {
                                   setState(() {
                                     _dailyFruitIntake = value;
-                                    _showErrors = false;
+                                    if (value != null) {
+                                      _fieldErrors.clear('fruit');
+                                    }
                                   });
                                 },
                                 hintText: 'Fruit',
@@ -460,7 +475,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
                                 onChanged: (value) {
                                   setState(() {
                                     _dailyVegetableIntake = value;
-                                    _showErrors = false;
+                                    if (value != null) {
+                                      _fieldErrors.clear('vegetable');
+                                    }
                                   });
                                 },
                                 hintText: 'Vegetable',
@@ -468,18 +485,24 @@ class _PreferencesStepState extends State<PreferencesStep> {
                             ),
                           ],
                         ),
-                        if (_showErrors &&
-                            (_dailyFruitIntake == null ||
-                                _dailyVegetableIntake == null)) ...[
+                        if (_fieldErrors.show('fruit') &&
+                            _dailyFruitIntake == null) ...[
                           const SizedBox(height: 8),
-                          Text(
-                            _dailyFruitIntake == null &&
-                                    _dailyVegetableIntake == null
-                                ? 'Please select daily fruit and vegetable intake'
-                                : _dailyFruitIntake == null
-                                    ? 'Please select daily fruit intake'
-                                    : 'Please select daily vegetable intake',
-                            style: const TextStyle(
+                          const Text(
+                            'Please select daily fruit intake',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ],
+                        if (_fieldErrors.show('vegetable') &&
+                            _dailyVegetableIntake == null) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Please select daily vegetable intake',
+                            style: TextStyle(
                               color: Colors.red,
                               fontSize: 12,
                               fontFamily: 'BricolageGrotesque',
@@ -517,11 +540,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           onChanged: (value) {
                             setState(() {
                               _dailyWaterIntake = value;
-                              _showErrors = false;
+                              if (value != null) _fieldErrors.clear('water');
                             });
                           },
                         ),
-                        if (_showErrors && _dailyWaterIntake == null) ...[
+                        if (_fieldErrors.show('water') &&
+                            _dailyWaterIntake == null) ...[
                           const SizedBox(height: 8),
                           const Text(
                             'Please select daily water intake',
@@ -591,11 +615,14 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           onChanged: (value) {
                             setState(() {
                               _activityLevel = value;
-                              _showErrors = false;
+                              if (value != null) {
+                                _fieldErrors.clear('activity');
+                              }
                             });
                           },
                         ),
-                        if (_showErrors && _activityLevel == null) ...[
+                        if (_fieldErrors.show('activity') &&
+                            _activityLevel == null) ...[
                           const SizedBox(height: 8),
                           const Text(
                             'Please select your activity level',
@@ -614,16 +641,12 @@ class _PreferencesStepState extends State<PreferencesStep> {
             ),
           ),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Row(
+        SafeArea(
+          top: false,
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
@@ -640,7 +663,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                           if (_isLoading) {
                             setState(() {
                               _isLoading = false;
-                              _showErrors = false;
+                              _fieldErrors.clearAll();
                             });
                           }
                           widget.onPrevious();
@@ -684,7 +707,6 @@ class _PreferencesStepState extends State<PreferencesStep> {
                     ),
                   ),
                 ],
-              ),
             ),
           ),
         ),
