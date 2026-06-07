@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import chromadb
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
@@ -1569,6 +1570,8 @@ class RAGService:
         self._client: genai.Client | None = None
         self._chunks: list[dict[str, str | int]] = []
         self._chunk_embeddings: list[list[float]] = []
+        self._chromadb_client = None
+        self._collection = None
 
     async def initialize(self) -> None:
         api_key = settings.gemini_api_key
@@ -1584,21 +1587,33 @@ class RAGService:
             return
 
         self._client = genai.Client(api_key=api_key)
-
         self._chunks = build_chunks(KNOWLEDGE_DOCS)
         _log_chunk_preview(self._chunks, sample_per_doc=2)
 
-        cached = _load_embedding_cache(self._chunks)
-        if cached is not None:
-            self._chunk_embeddings = cached
+        # ── ChromaDB persistent collection ──────────────────────────────
+        chroma_path = Path(__file__).parent.parent / "knowledge" / "chroma_db"
+        self._chroma_client = chromadb.PersistentClient(path=str(chroma_path))
+        self._collection = self._chroma_client.get_or_create_collection(
+            name="myfoodrx_chunks",
+            metadata={"hnsw:space": "cosine"},
+        )
+
+        # If collection already has all chunks, skip embedding entirely
+        existing_count = self._collection.count()
+        if existing_count == len(self._chunks):
+            logger.info(
+                "ChromaDB collection already has %d chunks — skipping embedding.",
+                existing_count,
+            )
             self._ready = True
             logger.info(
-                "RAG service ready (from cache) — %d chunks across %d documents.",
+                "RAG service ready (from ChromaDB) — %d chunks across %d documents.",
                 len(self._chunks),
                 len(KNOWLEDGE_DOCS),
             )
             return
 
+        # First run — embed all chunks and store in ChromaDB
         logger.info(
             "Embedding %d chunks from %d docs with %s …",
             len(self._chunks),
@@ -1606,7 +1621,11 @@ class RAGService:
             EMBEDDING_MODEL,
         )
 
+        ids: list[str] = []
         embeddings: list[list[float]] = []
+        metadatas: list[dict] = []
+        documents: list[str] = []
+
         client = self._client
         assert client is not None
         for idx, chunk in enumerate(self._chunks):
@@ -1656,32 +1675,58 @@ class RAGService:
                         exc,
                     )
                     break
-            embeddings.append(vec if vec else [0.0] * EMBEDDING_DIM_FALLBACK)
 
-        self._chunk_embeddings = embeddings
-        _save_embedding_cache(self._chunks, embeddings)
+            final_vec = vec if vec else [0.0] * EMBEDDING_DIM_FALLBACK
+            chunk_id = f"{chunk.get('doc_id', 'unknown')}_{idx}"
+
+            ids.append(chunk_id)
+            embeddings.append(final_vec)
+            metadatas.append(
+                {
+                    "doc_id": str(chunk.get("doc_id", "")),
+                    "title": str(chunk.get("title", "")),
+                    "category": str(chunk.get("category", "")),
+                    "source": str(chunk.get("source", "")),
+                    "chunk_index": int(chunk.get("chunk_index", 0)),
+                }
+            )
+            documents.append(chunk.get("text", ""))
+
+        # Store everything in ChromaDB in one batch
+        self._collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            metadatas=metadatas,
+            documents=documents,
+        )
 
         self._ready = True
         logger.info(
-            "RAG service ready — %d chunks embedded across %d documents.",
+            "RAG service ready — %d chunks embedded and stored in ChromaDB.",
             len(self._chunks),
-            len(KNOWLEDGE_DOCS),
         )
 
     def _retrieve(
         self, query_embedding: list[float]
     ) -> tuple[list[dict[str, str]], float]:
-        if not self._chunk_embeddings or not self._chunks:
+        if self._collection is None or not self._chunks:
             return [], 0.0
-        scores = [
-            (i, _cosine(query_embedding, emb))
-            for i, emb in enumerate(self._chunk_embeddings)
-        ]
-        scores.sort(key=lambda x: x[1], reverse=True)
-        best_score = scores[0][1] if scores else 0.0
-        chunks = [self._chunks[i] for i, _ in scores[:RETRIEVAL_CANDIDATES_K]]
-        # Downcast chunk fields used in generation context.
-        return [dict(c) for c in chunks], best_score
+        results = self._collection.query(
+            query_embeddings=[query_embedding],
+            n_results=RETRIEVAL_CANDIDATES_K,
+            include=["metadatas", "documents", "distances"],
+        )
+        if not results["ids"] or not results["ids"][0]:
+            return [], 0.0
+        # ChromaDB cosine distance = 1 - similarity; convert back
+        distances = results["distances"][0]
+        best_score = 1.0 - distances[0] if distances else 0.0
+        chunks = []
+        for meta, doc in zip(results["metadatas"][0], results["documents"][0]):
+            chunk = dict(meta)
+            chunk["text"] = doc
+            chunks.append(chunk)
+        return chunks, best_score
 
     def _retrieve_for_categories(
         self,
@@ -1689,20 +1734,29 @@ class RAGService:
         categories_lower: frozenset[str],
     ) -> tuple[list[dict[str, str]], float]:
         """Like _retrieve but only chunks whose category (lowercased) is in the set."""
-        if not self._chunk_embeddings or not self._chunks:
+        if self._collection is None or not self._chunks:
             return [], 0.0
-        pairs: list[tuple[int, float]] = []
-        for i, emb in enumerate(self._chunk_embeddings):
-            cat = str(self._chunks[i].get("category", "")).lower()
-            if cat not in categories_lower:
-                continue
-            pairs.append((i, _cosine(query_embedding, emb)))
-        if not pairs:
+        # Build ChromaDB where filter for categories
+        category_list = [
+            c.title() for c in categories_lower
+        ]  # e.g. ["Sleep", "Diabetes"]
+        where = {"category": {"$in": category_list}}
+        results = self._collection.query(
+            query_embeddings=[query_embedding],
+            n_results=RETRIEVAL_CANDIDATES_K,
+            where=where,
+            include=["metadatas", "documents", "distances"],
+        )
+        if not results["ids"] or not results["ids"][0]:
             return [], 0.0
-        pairs.sort(key=lambda x: x[1], reverse=True)
-        best_score = pairs[0][1]
-        chunks = [self._chunks[i] for i, _ in pairs[:RETRIEVAL_CANDIDATES_K]]
-        return [dict(c) for c in chunks], best_score
+        distances = results["distances"][0]
+        best_score = 1.0 - distances[0] if distances else 0.0
+        chunks = []
+        for meta, doc in zip(results["metadatas"][0], results["documents"][0]):
+            chunk = dict(meta)
+            chunk["text"] = doc
+            chunks.append(chunk)
+        return chunks, best_score
 
     @staticmethod
     def _build_user_context(

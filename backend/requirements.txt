@@ -12,3 +12,5 @@ python-multipart==0.0.17
 firebase-admin==6.6.0
 google-genai>=1.0.0
 numpy>=1.26
+chromadb>=0.6.0
+groq
