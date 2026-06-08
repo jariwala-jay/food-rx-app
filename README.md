@@ -1,4 +1,4 @@
-# MyFoodRx — Personalized Food-as-Medicine Mobile Application
+# MyFoodRx: Personalized Food-as-Medicine Mobile Application
 
 <p align="center">
   <img src="assets/icons/myfoodrx_logo.png" alt="MyFoodRx Logo" width="280">

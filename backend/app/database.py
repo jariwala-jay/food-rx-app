@@ -30,6 +30,7 @@ async def get_database():
 
 
 RAG_RESPONSE_CACHE_COLLECTION = "rag_response_cache"
+SECURITY_EVENTS_COLLECTION = "security_events"
 
 
 async def ensure_database_indexes() -> None:
@@ -53,6 +54,13 @@ async def ensure_database_indexes() -> None:
         )
     except Exception as exc:
         logger.warning("ensure_database_indexes: rag_response_cache index: %s", exc)
+    try:
+        await db[SECURITY_EVENTS_COLLECTION].create_index(
+            [("timestamp", -1), ("event_type", 1)],
+            name="security_events_time_type",
+        )
+    except Exception as exc:
+        logger.warning("ensure_database_indexes: security_events index: %s", exc)
     try:
         await ensure_refresh_token_indexes(db)
     except Exception as exc:
