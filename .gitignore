@@ -59,10 +59,6 @@ app.*.map.json
 backend/.venv/
 backend/venv/
 
-# RAG embedding cache (local; regenerated on KB / model change)
-backend/app/knowledge/embeddings_cache.npy
-backend/app/knowledge/embeddings_cache_meta.json
-
 # Environment variables
 .env
 
@@ -75,5 +71,5 @@ backend/app/knowledge/embeddings_cache_meta.json
 # ChromaDB vector store (regenerated on first startup)
 backend/app/knowledge/chroma_db/
 
-# RAGAS evaluation reports
+# RAG evaluation reports
 backend/evaluation/reports/

@@ -1,17 +1,28 @@
 """
-MyFoodRx RAGAS Evaluation Script
-=================================
-Evaluates the RAG chatbot quality using three metrics:
+MyFoodRx RAG Evaluation Script
+================================
+Evaluates the RAG chatbot retrieval pipeline using an LLM-as-judge approach.
+
+IMPORTANT: This script does NOT use the official ragas Python package.
+Scoring is done via Groq (llama-3.3-70b-versatile) acting as a judge,
+returning JSON scores for three metrics:
   - Faithfulness     : Is the answer grounded in the retrieved chunks?
   - Answer Relevancy : Does the answer address the question?
-  - Context Precision: Were the retrieved chunks actually useful?
+  - Context Precision: Were the retrieved chunks useful for answering?
+
+Note: This script uses a lightweight LLM-as-judge scorer (Groq) rather than
+the official ragas package (https://docs.ragas.io) to reduce API calls during
+evaluation (2 vs 6-10+ per question).
+
+Embeddings use the same Gemini model (gemini-embedding-001) and ChromaDB
+collection as the production chatbot, so retrieval quality is identical.
 
 Usage:
     cd backend
-    python3 evaluation/run_ragas.py
+    python3 evaluation/run_rag_eval.py                      # all 40 questions
+    python3 evaluation/run_rag_eval.py --category Sleep     # single category
 
 Requirements:
-    pip3 install ragas groq
     GEMINI_API_KEY and GROQ_API_KEY must be set in your .env file
 """
 
@@ -219,7 +230,7 @@ async def run_evaluation(category_filter: str | None = None):
         print(f"Filtered to {len(questions)} questions in category: {category_filter}")
 
     print(f"\n{'='*60}")
-    print(f"MyFoodRx RAGAS Evaluation — {len(questions)} questions")
+    print(f"MyFoodRx RAG Evaluation — {len(questions)} questions")
     print(f"{'='*60}\n")
 
     results = []
@@ -305,7 +316,7 @@ async def run_evaluation(category_filter: str | None = None):
 
     # ── Save JSON report ──────────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    report_path = REPORTS_DIR / f"ragas_report_{timestamp}.json"
+    report_path = REPORTS_DIR / f"rag_eval_report_{timestamp}.json"
     report = {
         "timestamp": timestamp,
         "total_questions": len(questions),

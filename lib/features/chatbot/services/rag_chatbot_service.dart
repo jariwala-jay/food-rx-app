@@ -24,8 +24,7 @@ class ChatReply {
   });
 }
 
-/// RAG chatbot — POST /chatbot/chat on the FastAPI backend.
-/// Same static API as [DialogflowService] for minimal call-site changes.
+/// RAG chatbot client — POST /chatbot/chat on the FastAPI backend.
 class RagChatbotService {
   static const int _maxHistory = 12;
 

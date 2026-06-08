@@ -1,7 +1,7 @@
 # MyFoodRx — Personalized Food-as-Medicine Mobile Application
 
 <p align="center">
-  <img src="https://placehold.co/600x300/FFF3EB/FF6A00?text=MyFoodRx" alt="MyFoodRx Banner">
+  <img src="assets/icons/myfoodrx_logo.png" alt="MyFoodRx Logo" width="280">
 </p>
 
 **MyFoodRx** is a mobile food-as-medicine application built with Flutter and FastAPI, designed for food-insecure adults living with chronic conditions such as diabetes, hypertension, and obesity. It combines personalized diet planning, smart recipe generation, pantry management, daily health tracking, and a RAG-powered nutrition chatbot into one seamless experience.
@@ -34,7 +34,7 @@ MyFoodRx is built with a modern stack designed for scalability and a smooth user
 | RAG Generation | Google Gemini (`gemini-2.5-flash` with fallbacks) |
 | Vector Store | ChromaDB (persistent, local) |
 | Food Data & Recipes | Spoonacular API |
-| RAG Evaluation | RAGAS (faithfulness, answer relevancy, context precision) |
+| RAG Evaluation | LLM-as-judge evaluation (Groq llama-3.3-70b, 40 questions, 8 categories) |
 | iOS CI | Xcode Cloud |
 
 The project follows a **feature-first architecture** where code is organized by feature (e.g., `auth`, `recipes`, `pantry`, `chatbot`). The RAG service is fully encapsulated in `backend/app/services/rag_service.py` and is the only component permitted to call Gemini APIs.
@@ -61,7 +61,7 @@ Flutter UI (ChatbotPage)
 
 ---
 
-## 📊 RAG Evaluation (RAGAS)
+## 📊 RAG Evaluation
 
 The chatbot retrieval pipeline was evaluated using a 40-question held-out test set (5 questions per category) scored across three metrics: faithfulness, answer relevancy, and context precision.
 
@@ -91,16 +91,8 @@ To run the evaluation yourself:
 
 ```bash
 cd backend
-python3 evaluation/run_ragas.py                        # all 40 questions
-python3 evaluation/run_ragas.py --category Sleep       # single category
-```
-
-Reports are saved to `backend/evaluation/reports/`.
-
-```bash
-cd backend
-python3 evaluation/run_ragas.py                        # all 40 questions
-python3 evaluation/run_ragas.py --category Sleep       # single category
+python3 evaluation/run_rag_eval.py                        # all 40 questions
+python3 evaluation/run_rag_eval.py --category Sleep       # single category
 ```
 
 Reports are saved to `backend/evaluation/reports/`.
@@ -128,6 +120,7 @@ Reports are saved to `backend/evaluation/reports/`.
   - A MongoDB Atlas database
   - A Spoonacular API key
   - A Google Gemini API key
+  - A Groq API key
 
 ### 2. Clone the Repository
 
@@ -230,7 +223,7 @@ food-rx-app/
 │   │       ├── food_knowledge.py
 │   │       └── chroma_db/
 │   ├── evaluation/
-│   │   ├── run_ragas.py
+│   │   ├── run_rag_eval.py
 │   │   ├── test_questions.json
 │   │   └── reports/
 │   └── requirements.txt
@@ -242,15 +235,3 @@ food-rx-app/
 ## 📖 Wiki & Documentation
 
 For a deeper dive into the app's architecture, feature implementation, and backend services, visit our **[Project Wiki](https://github.com/jariwala-jay/food-rx-app/wiki)**.
-
----
-
-## 🙌 Contributing
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/your-feature-name`)
-3. Make your changes and commit (`git commit -m 'Add some feature'`)
-4. Push to the branch (`git push origin feature/your-feature-name`)
-5. Open a Pull Request
-
-Please write clean code, add comments where necessary, and follow the existing project structure.

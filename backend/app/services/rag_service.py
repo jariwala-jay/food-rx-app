@@ -4,10 +4,10 @@ RAG service — MyFoodRx chatbot.
 Uses the google-genai SDK for Gemini embeddings and generation.
 Three-layer guard: keyword pre-filter → similarity threshold → hardened system prompt.
 
-EMBEDDING CACHE: After the first successful embed run, vectors are saved under
-``backend/app/knowledge/`` as ``embeddings_cache.npy`` (float32 matrix) and
-``embeddings_cache_meta.json`` (fingerprint). Later startups load from disk and skip
-embedding API calls. Cache invalidates if chunk count, content hash, or model changes.
+VECTOR STORE: Knowledge chunks are embedded once using Gemini and stored persistently
+in ChromaDB (``backend/app/knowledge/chroma_db/``). Restarts skip re-embedding when
+the collection fingerprint (chunk count + SHA-256 content hash + embedding model)
+matches. The collection is rebuilt automatically when the knowledge base or model changes.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import chromadb
 from google import genai
 from google.genai import types
@@ -37,15 +36,11 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIM_FALLBACK = 3072
+COLLECTION_NAME = "myfoodrx_chunks"
 # Retries when embed API returns 429 (free tier often rate-limits per minute/day).
 _EMBED_MAX_ATTEMPTS = 4
 # Space out document embedding calls to avoid hitting per-minute embed quotas at startup.
 _EMBED_CHUNK_INTERVAL_SEC = 0.55
-
-# On-disk cache (alongside food_knowledge.py)
-_CACHE_DIR = Path(__file__).resolve().parent.parent / "knowledge"
-_CACHE_NPY = _CACHE_DIR / "embeddings_cache.npy"
-_CACHE_META = _CACHE_DIR / "embeddings_cache_meta.json"
 
 _EMBEDDING_FALLBACK_NOTE = (
     "\n\nNOTE — KNOWLEDGE SEARCH UNAVAILABLE: There are NO retrieved knowledge excerpts this turn. "
@@ -1135,76 +1130,6 @@ def _cache_fingerprint(chunks: list[dict[str, str | int]]) -> dict[str, Any]:
     }
 
 
-def _load_embedding_cache(
-    chunks: list[dict[str, str | int]],
-) -> list[list[float]] | None:
-    if not _CACHE_NPY.exists() or not _CACHE_META.exists():
-        logger.info("Embedding cache: not found — will embed from scratch.")
-        return None
-    try:
-        meta = json.loads(_CACHE_META.read_text(encoding="utf-8"))
-        fp = _cache_fingerprint(chunks)
-        if meta.get("count") != fp["count"]:
-            logger.warning(
-                "Embedding cache invalid: chunk count changed (%s → %s). Re-embedding.",
-                meta.get("count"),
-                fp["count"],
-            )
-            return None
-        if meta.get("chunks_sha256") != fp["chunks_sha256"]:
-            logger.warning(
-                "Embedding cache invalid: knowledge chunks changed. Re-embedding.",
-            )
-            return None
-        if meta.get("embedding_model") != fp["embedding_model"]:
-            logger.warning(
-                "Embedding cache invalid: model changed (%s → %s). Re-embedding.",
-                meta.get("embedding_model"),
-                fp["embedding_model"],
-            )
-            return None
-        matrix = np.load(str(_CACHE_NPY))
-        if matrix.shape[0] != len(chunks):
-            logger.warning(
-                "Embedding cache invalid: row count mismatch (%s vs %s). Re-embedding.",
-                matrix.shape[0],
-                len(chunks),
-            )
-            return None
-        embeddings = [matrix[i].tolist() for i in range(matrix.shape[0])]
-        logger.info(
-            "Embedding cache loaded from disk — %d embeddings, shape %s. "
-            "No Gemini embedding API calls needed at startup.",
-            len(embeddings),
-            matrix.shape,
-        )
-        return embeddings
-    except Exception as exc:
-        logger.warning("Embedding cache load failed (%s). Will re-embed.", exc)
-        return None
-
-
-def _save_embedding_cache(
-    chunks: list[dict[str, str | int]],
-    embeddings: list[list[float]],
-) -> None:
-    try:
-        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        matrix = np.array(embeddings, dtype=np.float32)
-        np.save(str(_CACHE_NPY), matrix)
-        _CACHE_META.write_text(
-            json.dumps(_cache_fingerprint(chunks), indent=2),
-            encoding="utf-8",
-        )
-        logger.info(
-            "Embedding cache saved → %s  shape=%s",
-            _CACHE_NPY,
-            matrix.shape,
-        )
-    except Exception as exc:
-        logger.error("Failed to save embedding cache: %s", exc)
-
-
 def _normalize_query_for_cache(message: str) -> str:
     return " ".join((message or "").lower().split())
 
@@ -1569,7 +1494,6 @@ class RAGService:
         self._ready = False
         self._client: genai.Client | None = None
         self._chunks: list[dict[str, str | int]] = []
-        self._chunk_embeddings: list[list[float]] = []
         self._chromadb_client = None
         self._collection = None
 
@@ -1593,25 +1517,44 @@ class RAGService:
         # ── ChromaDB persistent collection ──────────────────────────────
         chroma_path = Path(__file__).parent.parent / "knowledge" / "chroma_db"
         self._chroma_client = chromadb.PersistentClient(path=str(chroma_path))
-        self._collection = self._chroma_client.get_or_create_collection(
-            name="myfoodrx_chunks",
-            metadata={"hnsw:space": "cosine"},
-        )
+        current_fp = _cache_fingerprint(self._chunks)
 
-        # If collection already has all chunks, skip embedding entirely
-        existing_count = self._collection.count()
-        if existing_count == len(self._chunks):
-            logger.info(
-                "ChromaDB collection already has %d chunks — skipping embedding.",
-                existing_count,
+        # Try to load existing collection and verify fingerprint
+        try:
+            self._collection = self._chroma_client.get_collection(name=COLLECTION_NAME)
+            col_meta = self._collection.metadata or {}
+            fingerprint_matches = (
+                col_meta.get("chunks_sha256") == current_fp["chunks_sha256"]
+                and col_meta.get("embedding_model") == current_fp["embedding_model"]
+                and col_meta.get("chunk_count") == str(current_fp["count"])
             )
-            self._ready = True
-            logger.info(
-                "RAG service ready (from ChromaDB) — %d chunks across %d documents.",
-                len(self._chunks),
-                len(KNOWLEDGE_DOCS),
-            )
-            return
+            if fingerprint_matches:
+                logger.info(
+                    "ChromaDB fingerprint matches — skipping embedding (%d chunks).",
+                    self._collection.count(),
+                )
+                self._ready = True
+                logger.info(
+                    "RAG service ready (from ChromaDB) — %d chunks across %d documents.",
+                    len(self._chunks),
+                    len(KNOWLEDGE_DOCS),
+                )
+                return
+            logger.info("ChromaDB fingerprint changed — rebuilding collection.")
+            self._chroma_client.delete_collection(COLLECTION_NAME)
+        except Exception:
+            logger.info("ChromaDB collection not found — will create.")
+
+        # Create fresh collection with fingerprint stored in metadata
+        self._collection = self._chroma_client.get_or_create_collection(
+            name=COLLECTION_NAME,
+            metadata={
+                "hnsw:space": "cosine",
+                "chunks_sha256": current_fp["chunks_sha256"],
+                "embedding_model": current_fp["embedding_model"],
+                "chunk_count": str(current_fp["count"]),
+            },
+        )
 
         # First run — embed all chunks and store in ChromaDB
         logger.info(

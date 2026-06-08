@@ -35,22 +35,22 @@ API will be available at `http://localhost:8000`. Docs at `http://localhost:8000
 To force re-embedding (e.g. after knowledge base changes):
 
 ```bash
-# Delete ChromaDB vector store
-rm -rf backend/app/knowledge/chroma_db
-
-# Clear MongoDB response cache
+# From repo root — clear ChromaDB + MongoDB response cache
 python3 backend/clear_rag_cache.py
 
-# Or skip the database
+# ChromaDB only (force re-embed on next startup)
 python3 backend/clear_rag_cache.py --skip-db
+
+# MongoDB response cache only (keep embeddings)
+python3 backend/clear_rag_cache.py --skip-chroma
 ```
 
-## Run RAGAS evaluation
+## Run RAG evaluation
 
 ```bash
 cd backend
-python3 evaluation/run_ragas.py                        # all 40 questions
-python3 evaluation/run_ragas.py --category Diabetes    # single category
+python3 evaluation/run_rag_eval.py                        # all 40 questions
+python3 evaluation/run_rag_eval.py --category Diabetes    # single category
 ```
 
 Requires `GEMINI_API_KEY` and `GROQ_API_KEY` in your `.env` file. Reports are saved to `evaluation/reports/`.
