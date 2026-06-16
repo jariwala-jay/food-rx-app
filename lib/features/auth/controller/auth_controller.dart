@@ -56,7 +56,7 @@ class AuthController with ChangeNotifier {
   Future<void> _clearAuthSession() async {
     await ApiClient.revokeRefreshTokenOnLogout();
     await ApiClient.clearSession();
-    RagChatbotService.resetConversation();
+    await RagChatbotService.resetConversation();
     _localProfilePhotoData = null;
   }
 

@@ -58,7 +58,7 @@ void main() async {
 
   try {
     await dotenv.load(fileName: ".env");
-    RagChatbotService.resetConversation();
+    await RagChatbotService.resetConversation();
 
     // Initialize Firebase first (before any Firebase services)
     try {

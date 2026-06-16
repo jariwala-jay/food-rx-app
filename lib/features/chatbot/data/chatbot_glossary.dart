@@ -23,6 +23,9 @@ class ChatbotGlossary {
     'blood glucose': 'glucose_metabolism',
     'glycemic index': 'glucose_metabolism',
     'glycemic load': 'glucose_metabolism',
+    'hba1c': 'glucose_metabolism',
+    'fasting blood sugar': 'glucose_metabolism',
+    'low gi': 'glucose_metabolism',
     'insulin': 'glucose_metabolism',
     'insulin resistance': 'glucose_metabolism',
     'simple carbs': 'glucose_metabolism',
@@ -52,6 +55,9 @@ class ChatbotGlossary {
     'myplate': 97,
     'dash diet': 97,
 
+    // Core diabetes management metric
+    'hba1c': 94,
+
     // High-value health concepts
     'glycemic index': 96,
     'glycemic load': 95,
@@ -66,6 +72,8 @@ class ChatbotGlossary {
     'pre-diabetes': 90,
     'hypertension': 89,
     'blood pressure': 88,
+    'fasting blood sugar': 88,
+    'obesity': 88,
 
     // Actionable diet concepts (UX-critical)
     'portion size': 87,
@@ -75,14 +83,16 @@ class ChatbotGlossary {
     'refined carbs': 84,
     'complex carbs': 84,
     'simple carbs': 83,
+    'low gi': 78,
+    'whole grains': 75,
 
     // Food quality
     'nutrient-dense': 82,
     'whole foods': 80,
     'processed food': 78,
     'empty calories': 76,
-    // Everyday food words — define on demand, but avoid crowding highlights.
-    'non-starchy vegetables': 28,
+    // Core Diabetes Plate term — appears in nearly every meal response.
+    'non-starchy vegetables': 65,
 
     // Lean protein: above generic "protein" so phrase wins when both could match.
     'lean protein': 52,
@@ -92,7 +102,23 @@ class ChatbotGlossary {
     'stroke': 70,
     'cholesterol': 70,
     'cholesterol levels': 68,
+    'hdl': 67,
+    'ldl': 67,
     'potassium': 66,
+    'cortisol': 65,
+    'blood pressure reading': 63,
+    'omega-3': 62,
+    'meal timing': 60,
+    'brisk walking': 58,
+    'sleep apnea': 57,
+    'insomnia': 55,
+    'plant-based protein': 54,
+    'legumes': 53,
+    'oats': 50,
+    'brown rice': 49,
+    'whole wheat': 48,
+    'unsalted nuts': 47,
+    'sleep schedule': 46,
 
     // Planning / general
     'body mass index': 64,
@@ -115,7 +141,7 @@ class ChatbotGlossary {
     'nutrients':
         'Nutrients, including vitamins and protein, are parts of food that help your body function.',
     'nutrient-dense':
-        'Nutrient-dense foods, such as spinach and eggs, provide many nutrients with fewer calories.',
+        'Nutrient-dense foods give your body a lot of vitamins, minerals, and fiber for the number of calories they contain. Examples include spinach, eggs, and beans.',
     'protein':
         'Protein helps build and repair muscles and is found in foods like chicken, eggs, and beans.',
     'carbohydrates':
@@ -123,25 +149,25 @@ class ChatbotGlossary {
     'fat':
         'Fats provide energy and support body functions and are found in foods like nuts, oil, and butter.',
     'fiber':
-        'Fiber helps digestion and keeps you full and is found in foods like fruits, vegetables, and oats.',
+        'Fiber is found in fruits, vegetables, beans, and whole grains. It slows digestion, which helps keep blood sugar steady. It also helps lower cholesterol and supports a healthy weight.',
     'sugar':
         'Sugar is a simple carbohydrate that provides quick energy and is found in foods like fruits and sweets.',
     'added sugar':
-        'Added sugar is sugar added to foods during processing, such as in soda and cakes.',
+        'Added sugar is sugar put into foods during processing, like in soda, juice, and packaged snacks. It raises blood sugar quickly. Most adults should limit it to 25–36 grams per day.',
     'sodium':
-        'Sodium is a mineral that helps control fluid balance and is commonly found in salt.',
+        'Sodium is a mineral found in salt and many packaged foods. Too much sodium can raise blood pressure. Most adults should have less than 2,300 mg per day — about one teaspoon of salt.',
     'vitamins':
         'Vitamins are nutrients needed in small amounts and are found in foods like fruits and vegetables.',
     'minerals':
         'Minerals support body functions like bone health and are found in foods like milk and leafy greens.',
     'portion':
-        'A portion is the amount of food you choose to eat, such as one bowl of rice.',
+        'A portion is how much food you choose to put on your plate. It may be more or less than the recommended serving size.',
     'serving size':
-        'A serving size is the recommended amount of food, such as one slice of bread.',
+        'A serving size is the standard amount listed on a food label. Many packages contain 2 or more servings, so check before eating the whole package.',
     'balanced diet':
         'A balanced diet includes a variety of foods like grains, vegetables, and proteins.',
     'whole grains':
-        'Whole grains, like brown rice and oats, contain all parts of the grain and more nutrients.',
+        'Whole grains like brown rice, oats, and whole wheat bread contain all parts of the grain. They have more fiber than white bread or white rice, which helps keep blood sugar steady.',
     'refined grains':
         'Refined grains, such as white bread, are processed and have less fiber.',
     'processed food':
@@ -158,19 +184,19 @@ class ChatbotGlossary {
         'Digestion is the process of breaking down food into nutrients your body can use.',
     'metabolism': 'Metabolism is how your body uses energy from food to function.',
     'blood sugar':
-        'Blood sugar is the amount of glucose in your blood and is important for energy.',
+        'Blood sugar is the amount of glucose in your blood. Keeping it steady helps prevent diabetes problems. A normal level before eating is below 100 mg/dL.',
     'blood glucose':
         'Blood glucose is another name for blood sugar.',
     'cholesterol':
-        'Cholesterol is a fat-like substance in the blood that the body needs in small amounts, but high levels can increase heart disease risk.',
+        'Cholesterol is a fat-like substance in your blood. HDL is the good kind that protects your heart. LDL is the bad kind that can clog your arteries. Eating fish, nuts, and fiber helps keep cholesterol healthy.',
     'insulin':
         'Insulin is a hormone that helps move glucose from the blood into cells for energy.',
     'insulin resistance':
-        'Insulin resistance is when the body does not respond well to insulin, causing higher blood sugar levels.',
+        'Insulin resistance is when your body does not use insulin well. This makes blood sugar stay too high. Healthy eating and regular movement can help improve it.',
     'glycemic index':
-        'The glycemic index measures how quickly a carbohydrate-containing food raises blood sugar levels.',
+        'The glycemic index (GI) shows how fast a food raises blood sugar. Foods like beans and oats raise it slowly. White bread raises it quickly. Lower is better.',
     'glycemic load':
-        'Glycemic load measures both the amount of carbohydrates and their impact on blood sugar levels.',
+        'Glycemic load shows how much a food raises your blood sugar based on how much you actually eat. A small portion of a sugary food may still have a low glycemic load.',
     'complex carbs':
         'Complex carbohydrates, such as oats and whole grains, are digested slowly and provide steady energy.',
     'simple carbs':
@@ -194,7 +220,6 @@ class ChatbotGlossary {
     'cravings':
         'Cravings are strong desires for specific foods, such as chocolate or chips.',
     'overeating': 'Overeating means eating more food than your body needs.',
-    'undereating': 'Undereating means eating less food than your body needs.',
     'portion control':
         'Portion control means managing how much food you eat at each meal.',
     'portion size':
@@ -223,8 +248,8 @@ class ChatbotGlossary {
         'Exercise is planned physical activity, such as working out at the gym.',
     'physical activity':
         'Physical activity includes any movement, such as walking or doing household work.',
-    'aerobic activity':
-        'Aerobic activity is exercise that increases heart rate and breathing for a sustained period, such as brisk walking.',
+    'brisk walking':
+        'Brisk walking means walking fast enough to raise your heart rate and feel slightly out of breath, but still able to talk. 30 minutes most days is one of the best things you can do for blood sugar and blood pressure.',
     'strength training':
         'Strength training is exercise that uses resistance to build and maintain muscle mass.',
     'cardio':
@@ -239,33 +264,39 @@ class ChatbotGlossary {
     'active lifestyle':
         'An active lifestyle includes regular movement, such as taking stairs or walking often.',
     'sedentary':
-        'A sedentary lifestyle involves prolonged sitting or low physical activity and is linked to health risks.',
+        'A sedentary lifestyle means sitting or resting most of the day with little movement. This can increase the risk of diabetes, high blood pressure, and weight gain.',
     'blood pressure':
         'Blood pressure is the force of blood moving through your arteries, such as a reading of 120/80.',
     'hypertension':
-        'Hypertension is high blood pressure, usually at levels starting around 130/80 or higher such as 140/90.',
+        'Hypertension is high blood pressure. Stage 1 is 130/80 or higher; Stage 2 is 140/90 or higher. Reducing sodium and staying active help manage it.',
     'hypertension stage 1':
         'Stage 1 hypertension means blood pressure is around 130/80 or higher.',
     'body mass index':
-        'Body mass index (BMI) is a number based on your height and weight used to estimate body fat.',
+        'Body mass index (BMI) is a number based on your height and weight. It helps show if your weight is in a healthy range.',
     'diabetes':
         'Diabetes is a condition where blood sugar levels are too high, often requiring careful management of carbohydrate intake.',
     'pre-diabetes':
-        'Pre-diabetes is when blood sugar levels are higher than normal but not high enough to be diagnosed as diabetes.',
+        'Pre-diabetes is when blood sugar is higher than normal but not yet at diabetes levels. The good news is that lifestyle changes like healthy eating and regular movement can often reverse it.',
     'obesity':
-        'Obesity is excess body fat that increases the risk of health problems.',
+        'Obesity is a health condition where body weight is higher than what is considered healthy for a person\'s height. It can be managed with support from healthy eating and physical activity.',
     'heart disease':
         'Heart disease includes conditions that affect the heart and blood vessels, such as blocked arteries.',
     'stroke':
         'Stroke occurs when blood flow to the brain is blocked or reduced, leading to brain damage.',
     'cholesterol levels':
         'Cholesterol levels refer to the amount of cholesterol measured in your blood.',
+    'hdl':
+        'HDL is the "good" cholesterol. Higher HDL levels help protect your heart. Foods like fish, nuts, and olive oil help raise HDL.',
+    'ldl':
+        'LDL is the "bad" cholesterol. Too much LDL can build up in your arteries and raise your risk of heart disease. Eating less processed food and saturated fat helps lower LDL.',
     'immune system':
         'The immune system protects your body from infections and illness.',
     'hormones':
         'Hormones are chemicals, such as insulin, that control body functions.',
     'sleep quality':
         'Sleep quality refers to how well you sleep, including how deeply and continuously you rest.',
+    'sleep schedule':
+        'A sleep schedule means going to bed and waking up at the same time every day. A regular sleep schedule helps your body know when to rest, which improves sleep quality and blood sugar control.',
     'stress':
         'Stress is the body\'s physical and mental response to challenges or demands.',
     'mental health':
@@ -274,9 +305,7 @@ class ChatbotGlossary {
         'Energy levels describe how active or tired you feel during the day.',
     'insomnia': 'Insomnia is difficulty falling asleep or staying asleep.',
     'sleep apnea':
-        'Sleep apnea is a condition where breathing stops briefly during sleep, often with loud snoring.',
-    'circadian rhythm':
-        'Circadian rhythm is your body\'s internal clock that controls sleep and wake cycles.',
+        'Sleep apnea is when your breathing stops and starts while you sleep. It can cause poor sleep, tiredness, and higher blood sugar and blood pressure.',
     'weight management':
         'Weight management involves maintaining a healthy body weight through balanced eating and physical activity.',
     'body weight':
@@ -286,7 +315,7 @@ class ChatbotGlossary {
     'calorie intake':
         'Calorie intake is the total number of calories you consume daily.',
     'calorie deficit':
-        'A calorie deficit occurs when you consume fewer calories than your body uses, leading to weight loss over time.',
+        'A calorie deficit means you eat fewer calories than your body burns. Over time, this leads to weight loss.',
     'healthy habits':
         'Healthy habits are behaviors like eating well and staying active.',
     'dash diet':
@@ -322,13 +351,38 @@ class ChatbotGlossary {
     'lifestyle change':
         'A lifestyle change is improving daily habits to support better health.',
     'risk factors':
-        'Risk factors are characteristics or behaviors that increase the likelihood of developing a disease, such as smoking or poor diet.',
+        'Risk factors are habits or health conditions that make it more likely you will get a disease. Examples include smoking, poor eating, and not being active.',
     'prevention':
-        'Prevention involves actions taken to reduce the risk of disease, such as healthy eating and regular exercise.',
+        'Prevention means taking steps to stop a disease before it starts. Eating well, staying active, and getting enough sleep all help prevent chronic diseases.',
     'chronic disease':
-        'A chronic disease is a long-term condition that often requires ongoing management, such as diabetes or hypertension.',
-    'lifestyle disease':
-        'A lifestyle disease is caused by unhealthy habits, such as obesity.',
+        'A chronic disease is a long-term health condition that does not go away. Examples include diabetes and high blood pressure. Healthy habits help manage it.',
+
+    'fasting blood sugar':
+        'Fasting blood sugar is your blood sugar level after not eating for 8 hours or more. Below 100 is normal. 100 to 125 means prediabetes. 126 or above may mean diabetes.',
+    'hba1c':
+        'HbA1c (A1c) shows your average blood sugar over the past 2 to 3 months. Below 5.7% is normal. 5.7 to 6.4% is prediabetes. 6.5% or above is diabetes.',
+    'brown rice':
+        'Brown rice is a whole grain that has more fiber than white rice. It digests more slowly, which helps keep blood sugar steady.',
+    'whole wheat':
+        'Whole wheat products like whole wheat bread use the entire wheat grain. They have more fiber than white bread and help keep blood sugar steadier.',
+    'legumes':
+        'Legumes are foods like beans, lentils, and chickpeas. They are high in fiber and protein, which helps keep blood sugar steady and supports heart health.',
+    'omega-3':
+        'Omega-3s are healthy fats found in fish like salmon and sardines. They help protect your heart and reduce swelling inside the body.',
+    'blood pressure reading':
+        'A blood pressure reading has two numbers, like 120/80. The top is pressure when your heart beats; the bottom is when it rests. Below 120/80 is normal.',
+    'cortisol':
+        'Cortisol is a stress hormone. When you feel stressed or do not sleep well, cortisol goes up. This can raise your blood sugar and blood pressure.',
+    'plant-based protein':
+        'Plant-based protein comes from foods like beans, lentils, tofu, and nuts. These provide protein without the saturated fat found in red meat.',
+    'low gi':
+        'Low GI means a food has a glycemic index of 55 or below. These foods raise blood sugar slowly. Examples include beans, oats, and most vegetables.',
+    'oats':
+        'Oats are a whole grain that are high in fiber. They digest slowly and help keep blood sugar steady. They also support heart health by lowering cholesterol.',
+    'unsalted nuts':
+        'Unsalted nuts are nuts with no added salt. They are a healthy snack for blood sugar and blood pressure because they have healthy fats and protein without extra sodium.',
+    'meal timing':
+        'Meal timing means eating at the same times each day. Eating regularly helps keep your blood sugar steady and prevents it from going too high or too low.',
   };
 
   static const Map<String, String> aliases = {
@@ -340,6 +394,18 @@ class ChatbotGlossary {
     'my plate': 'myplate',
     'sugar levels': 'blood sugar',
     'bmi': 'body mass index',
+    'prediabetes': 'pre-diabetes',
+    'a1c': 'hba1c',
+    'low sodium': 'sodium',
+    'low-sodium': 'sodium',
+    'beans': 'legumes',
+    'lentils': 'legumes',
+    'gi': 'glycemic index',
+    'fasting glucose': 'fasting blood sugar',
+    'chickpeas': 'legumes',
+    'salmon': 'omega-3',
+    'sardines': 'omega-3',
+    'oatmeal': 'oats',
   };
 
   static String normalizeTerm(String term) => term.trim().toLowerCase();

@@ -191,26 +191,6 @@ class _ChatbotPageState extends State<ChatbotPage>
   }
 
   /// Emoji hint per chip text (rule-based, no network).
-  String _getIcon(String text) {
-    final t = text.toLowerCase();
-    if (t.contains('sleep') || t.contains('rest')) return '😴';
-    if (t.contains('water') || t.contains('hydrat')) return '💧';
-    if (t.contains('exercise') || t.contains('workout') || t.contains('walk'))
-      return '🏃';
-    if (t.contains('food') ||
-        t.contains('foods') ||
-        t.contains('meal') ||
-        t.contains('recipe') ||
-        t.contains('eat')) return '🍽️';
-    if (t.contains('pantry') || t.contains('grocery')) return '🥫';
-    if (t.contains('carb') || t.contains('sugar') || t.contains('blood'))
-      return '📊';
-    if (t.contains('snack')) return '🥕';
-    if (t.contains('tip') || t.contains('idea') || t.contains('curious'))
-      return '💡';
-    return '🍎';
-  }
-
   /// Remove common Markdown syntax so plain chat bubbles remain readable.
   String _stripMarkdownTokens(String input) {
     var text = input;
@@ -300,7 +280,11 @@ class _ChatbotPageState extends State<ChatbotPage>
       }
 
       final colonIndex = content.indexOf(':');
-      final canBoldLabel = colonIndex > 0 && colonIndex <= 30;
+      // Bullet/numbered item names can be longer (e.g. "Carrot sticks with hummus and oats:").
+      // Plain paragraph subheadings stay at 30 chars to avoid bolding mid-sentence colons.
+      final isBulletOrNumber = bulletMatch != null || numberMatch != null;
+      final canBoldLabel =
+          colonIndex > 0 && colonIndex <= (isBulletOrNumber ? 80 : 30);
       if (canBoldLabel) {
         final label = content.substring(0, colonIndex + 1).trim();
         final rawRest = content.substring(colonIndex + 1);
@@ -747,28 +731,16 @@ class _ChatbotPageState extends State<ChatbotPage>
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 11),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _getIcon(q),
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    q,
-                                    textAlign: TextAlign.left,
-                                    softWrap: true,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      height: 1.35,
-                                      color: Color(0xFF3D4652),
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              q,
+                              textAlign: TextAlign.left,
+                              softWrap: true,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.35,
+                                color: Color(0xFF3D4652),
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           ),
                         ),
@@ -919,7 +891,7 @@ class _ChatbotPageState extends State<ChatbotPage>
 
                 final message = _messages[index];
                 final isUser = message['isUser'];
-                return Align(
+                final bubble = Align(
                   alignment:
                       isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Stack(
@@ -984,6 +956,18 @@ class _ChatbotPageState extends State<ChatbotPage>
                         ),
                     ],
                   ),
+                );
+                if (isUser) return bubble;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    bubble,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20, bottom: 4),
+                      child: _CopyButton(text: message['text'] as String),
+                    ),
+                  ],
                 );
               },
             ),
@@ -1216,4 +1200,43 @@ class CustomTriangleClipperLeft extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+/// Copy-to-clipboard icon shown beneath each bot bubble.
+/// Switches to a green checkmark for 2 seconds after a successful copy.
+class _CopyButton extends StatefulWidget {
+  final String text;
+  const _CopyButton({required this.text});
+
+  @override
+  State<_CopyButton> createState() => _CopyButtonState();
+}
+
+class _CopyButtonState extends State<_CopyButton> {
+  bool _copied = false;
+
+  Future<void> _handleCopy() async {
+    await Clipboard.setData(ClipboardData(text: widget.text));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleCopy,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Icon(
+          _copied ? Icons.check_rounded : Icons.copy_rounded,
+          size: 15,
+          color: _copied ? Colors.green : Colors.grey[400],
+        ),
+      ),
+    );
+  }
 }

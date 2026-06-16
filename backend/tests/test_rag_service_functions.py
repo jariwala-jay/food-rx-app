@@ -21,12 +21,19 @@ from app.services.rag_service import (
     _resolve_plan_for_profile,
     _strip_llm_ui_phrases,
     _build_rag_user_message,
+    _build_multi_condition_note,
+    _should_apply_multi_condition_overlay,
+    _is_followup_query,
+    _infer_kb_categories_from_history,
+    _embedding_text_for_retrieval,
+    _profile_kb_categories,
     should_suggest_follow_ups,
     build_chunks,
     _chunk_doc,
     RAGService,
 )
-from app.routers.chatbot import (
+
+from app.routers.suggestion_engine import (
     _rag_category_label,
     _is_generic_meal_scope_query,
     _all_conditions,
@@ -291,6 +298,22 @@ class TestBuildRagUserMessage(unittest.TestCase):
             question="Some question?",
         )
         self.assertIsInstance(result, str)
+
+    def test_multi_condition_note_injected_before_question(self):
+        profile = {"medicalConditions": ["diabetes", "hypertension"]}
+        note = _build_multi_condition_note(profile)
+        result = _build_rag_user_message(
+            context_from_documents="Plate method guidance.",
+            question="How do I divide my plate for blood sugar control?",
+            resolved_plan="DiabetesPlate",
+            multi_condition_note=note,
+        )
+        self.assertIn("IMPORTANT FOR THIS ANSWER:", result)
+        self.assertIn("low-sodium", result)
+        self.assertLess(
+            result.index("IMPORTANT FOR THIS ANSWER:"),
+            result.index("How do I divide my plate"),
+        )
 
 
 # ── build_chunks and _chunk_doc ───────────────────────────────────────────────
@@ -573,6 +596,113 @@ class TestBuildUserContext(unittest.TestCase):
         profile = {"medicalConditions": [], "healthGoals": ["lose weight"]}
         result = RAGService._build_user_context(profile, [])
         self.assertIn("lose weight", result)
+
+    def test_multi_condition_overlay_for_diabetes_and_hypertension(self):
+        profile = {"medicalConditions": ["diabetes", "hypertension"]}
+        note = _build_multi_condition_note(profile)
+        self.assertIsNotNone(note)
+        self.assertIn("low-sodium", note)
+        self.assertIn("blended answer", note)
+        # Profile block lists conditions only — blending note lives in RAG question payload.
+        context = RAGService._build_user_context(profile, [])
+        self.assertNotIn("MULTI-CONDITION INSTRUCTIONS", context)
+        self.assertIn("hypertension", context)
+
+
+class TestEmbeddingTextForRetrieval(unittest.TestCase):
+
+    def test_profile_conditions_add_hints_without_query_keywords(self):
+        profile = {"medicalConditions": ["diabetes", "hypertension"]}
+        result = _embedding_text_for_retrieval("what should I eat for breakfast?", profile)
+        self.assertIn("Topic keywords:", result)
+        self.assertIn("glycemic", result)
+        self.assertIn("sodium", result)
+
+    def test_profile_kb_categories_maps_conditions(self):
+        profile = {"medicalConditions": ["type 2 diabetes", "hypertension"]}
+        cats = _profile_kb_categories(profile)
+        self.assertIn("diabetes", cats)
+        self.assertIn("hypertension", cats)
+
+    def test_caps_expanded_text_at_500_chars(self):
+        profile = {"medicalConditions": ["diabetes", "hypertension", "obesity"]}
+        message = "Can you show a Diabetes Plate meal example?"
+        result = _embedding_text_for_retrieval(message, profile)
+        self.assertLessEqual(len(result), 500)
+        self.assertTrue(result.startswith(message))
+
+
+class TestShouldApplyMultiConditionOverlay(unittest.TestCase):
+
+    def test_general_food_query_applies_overlay(self):
+        self.assertTrue(
+            _should_apply_multi_condition_overlay("What should I eat?", None)
+        )
+
+    def test_explicit_prediabetes_skips_overlay(self):
+        self.assertFalse(
+            _should_apply_multi_condition_overlay(
+                "How do I reduce my pre-diabetes?", None
+            )
+        )
+
+    def test_followup_reference_skips_overlay(self):
+        self.assertFalse(
+            _should_apply_multi_condition_overlay(
+                "What are those specific foods?", None
+            )
+        )
+
+    def test_explicit_dual_condition_query_skips_overlay(self):
+        self.assertFalse(
+            _should_apply_multi_condition_overlay(
+                "What foods help blood sugar and reduce salt?", None
+            )
+        )
+
+    def test_non_diet_query_skips_overlay(self):
+        self.assertFalse(
+            _should_apply_multi_condition_overlay("How are you today?", None)
+        )
+
+
+class TestFollowupQueryHandling(unittest.TestCase):
+
+    def test_is_followup_detects_those_reference(self):
+        self.assertTrue(_is_followup_query("What are those specific foods?"))
+
+    def test_is_followup_detects_specific_foods_phrasing(self):
+        self.assertTrue(
+            _is_followup_query("what are the specific foods to include in my meals")
+        )
+
+    def test_is_followup_detects_more_options(self):
+        self.assertTrue(_is_followup_query("Can you give me more food ideas?"))
+
+    def test_history_carries_prediabetes_category(self):
+        history = [
+            {
+                "role": "user",
+                "parts": ["How do I reduce my pre-diabetes?"],
+            },
+            {
+                "role": "model",
+                "parts": ["Focus on whole grains and lean protein."],
+            },
+        ]
+        cats = _infer_kb_categories_from_history(history)
+        self.assertIn("pre-diabetes", cats)
+
+    def test_followup_embedding_uses_history_topic_hints(self):
+        history_cats = frozenset({"pre-diabetes"})
+        result = _embedding_text_for_retrieval(
+            "What are those specific foods?",
+            {"medicalConditions": ["diabetes", "hypertension"]},
+            is_followup=True,
+            history_cats=history_cats,
+        )
+        self.assertIn("Topic keywords:", result)
+        self.assertIn("prediabetes", result.lower())
 
 
 if __name__ == "__main__":

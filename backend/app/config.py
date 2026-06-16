@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # RAG chatbot (Gemini): used for embeddings and generation
     gemini_api_key: str = ""
 
+    # Groq: fallback generation when Gemini quota is exhausted
+    groq_api_key: str = ""
+
     class Config:
         env_file = "../.env"  # Read from project root .env (shared with Flutter)
         extra = "ignore"
