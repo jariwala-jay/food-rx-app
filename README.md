@@ -34,10 +34,11 @@ MyFoodRx is built with a modern stack designed for scalability and a smooth user
 | RAG Generation | Google Gemini (`gemini-2.5-flash` with fallbacks) |
 | Vector Store | ChromaDB (persistent, local) |
 | Food Data & Recipes | Spoonacular API |
+| RAG Generation Fallback | Groq (`llama-3.3-70b-versatile`) — auto-activated on Gemini quota exhaustion |
 | RAG Evaluation | LLM-as-judge evaluation (Groq llama-3.3-70b, 40 questions, 8 categories) |
 | iOS CI | Xcode Cloud |
 
-The project follows a **feature-first architecture** where code is organized by feature (e.g., `auth`, `recipes`, `pantry`, `chatbot`). The RAG service is fully encapsulated in `backend/app/services/rag_service.py` and is the only component permitted to call Gemini APIs.
+The project follows a **feature-first architecture** where code is organized by feature (e.g., `auth`, `recipes`, `pantry`, `chatbot`). The RAG service uses a facade pattern — `rag_service.py` is the single public entry point, backed by 9 focused sub-modules under `backend/app/services/rag/` (constants, security, query classifier, profile helpers, prompt builder, cache, chunker, and response helpers). Only `rag_service.py` is permitted to call Gemini APIs.
 
 ---
 
@@ -48,16 +49,16 @@ The chatbot is implemented as a four-layer system:
 ```
 Flutter UI (ChatbotPage)
     → POST /chatbot/chat (FastAPI)
-        → rag_service.py
+        → rag_service.py  [facade over 9 sub-modules in services/rag/]
             Layer 1: Regex/rule-based safety classification
             Layer 2: ChromaDB retrieval + cosine similarity gating
-            Layer 3: Gemini generation under hardened system prompt
-        → MongoDB (conversation state + response cache)
+            Layer 3: Gemini generation (Groq fallback on quota exhaustion)
+        → MongoDB (conversation history + chip rotation + response cache)
 ```
 
 **Knowledge base:** 61 curated nutrition documents across 8 categories — Sleep, Exercise, Hydration, Hypertension, Pre-Diabetes, Diabetes, Obesity, and General — sourced from CDC, NIH, AHA, ADA, USDA, FDA, and Harvard T.H. Chan School of Public Health.
 
-**Personalization:** Every response is conditioned on the user's resolved diet plan (Diabetes Plate, DASH, or MyPlate), conditions, pantry inventory, and bounded conversation history.
+**Personalization:** Every response is conditioned on the user's resolved diet plan (Diabetes Plate, DASH, or MyPlate), conditions, pantry inventory, and server-side conversation history persisted in MongoDB. Multi-condition users (e.g. diabetes + hypertension) receive blended guidance that respects constraints from all active conditions simultaneously.
 
 ---
 
@@ -210,15 +211,31 @@ food-rx-app/
 │   └── features/
 │       ├── auth/
 │       ├── chatbot/
+│       │   ├── services/
+│       │   │   └── rag_chatbot_service.dart   # Flutter chatbot client
+│       │   └── views/
+│       │       └── chatbot_page.dart
 │       ├── recipes/
 │       ├── pantry/
 │       └── ...
 ├── backend/
 │   ├── app/
 │   │   ├── services/
-│   │   │   └── rag_service.py
+│   │   │   ├── rag_service.py                 # public facade
+│   │   │   ├── conversation_history_service.py
+│   │   │   └── rag/                           # 9 focused sub-modules
+│   │   │       ├── constants.py
+│   │   │       ├── security.py
+│   │   │       ├── query_classifier.py
+│   │   │       ├── profile_helpers.py
+│   │   │       ├── prompt_builder.py
+│   │   │       ├── cache.py
+│   │   │       ├── chunker.py
+│   │   │       └── response_helpers.py
 │   │   ├── routers/
-│   │   │   └── chatbot.py
+│   │   │   ├── chatbot.py
+│   │   │   ├── question_banks.py              # starter + follow-up pools
+│   │   │   └── suggestion_engine.py           # chip selection + rotation
 │   │   └── knowledge/
 │   │       ├── food_knowledge.py
 │   │       └── chroma_db/
