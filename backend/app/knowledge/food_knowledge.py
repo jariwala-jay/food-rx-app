@@ -1,7 +1,7 @@
 """
 Food & Nutrition Knowledge Base for MyFoodRx RAG Chatbot.
-Sources: CDC, AHA, ADA, USDA/MyPlate, NIH/NHLBI.
-61 documents covering: Sleep, Exercise, Hydration, Hypertension,
+Sources: CDC, AHA, ADA, USDA/MyPlate, NIH/NIDDK/NHLBI.
+63 documents covering: Sleep, Exercise, Hydration, Hypertension,
 Pre-Diabetes, Diabetes, Obesity, and General Nutrition.
 """
 
@@ -1877,6 +1877,73 @@ KNOWLEDGE_DOCS = [
             "This approach helps control portion sizes and ensures a balance of nutrients. Choosing whole grains instead of refined grains and including a variety of fruits and vegetables "
             "can improve digestion and help maintain a healthy weight.\n\n"
             "Limiting added sugars, unhealthy fats, and processed foods is important for preventing weight gain and supporting long-term health. Following MyPlate regularly can help build healthy eating habits."
+        ),
+    },
+    {
+        "id": "obesity_mindful_eating",
+        "title": "Mindful Eating: How Paying Attention to Food Helps with Weight Management",
+        "category": "Obesity",
+        "tags": ["mindful eating", "weight management", "eating habits", "portion control", "hunger cues", "obesity"],
+        "source": "https://www.niddk.nih.gov/health-information/weight-management/changing-habits-better-health",
+        "content": (
+            "Mindful eating means paying full attention to what you eat, how much you eat, and how your body "
+            "feels before, during, and after eating. It is not a diet. It is a way of relating to food that "
+            "helps you make better choices without strict rules or calorie counting.\n\n"
+            "Many people eat for reasons other than hunger — stress, boredom, habit, or emotions. This is "
+            "called emotional or mindless eating. When you eat without thinking, it is easy to eat more than "
+            "your body needs. Over time, this can contribute to weight gain. Mindful eating helps break this "
+            "pattern by slowing down the eating process and helping you notice when you are truly hungry and "
+            "when you are full.\n\n"
+            "Key practices in mindful eating include: eating slowly without distractions like phones or "
+            "television; paying attention to the taste, texture, and smell of food; stopping to check in on "
+            "hunger and fullness levels during the meal; eating only until you feel comfortably full, not "
+            "stuffed; and recognizing emotional triggers that lead to eating when you are not physically hungry.\n\n"
+            "Research shows that people who eat more slowly tend to eat fewer calories and feel more satisfied "
+            "after meals. It takes about 20 minutes for the stomach to signal fullness to the brain. Eating "
+            "too quickly means you may eat well past the point of fullness before that signal arrives.\n\n"
+            "Practical steps to eat more mindfully: use a smaller plate to help with portion sizes; sit down "
+            "at a table for every meal; put down your fork between bites; chew each bite thoroughly; avoid "
+            "eating straight from a bag or container; and plan meals ahead of time so you are not eating "
+            "impulsively when very hungry.\n\n"
+            "Mindful eating does not require eliminating any food group. It helps you enjoy food more and "
+            "naturally eat less by tuning in to your body's real signals. For people managing obesity or "
+            "working toward a healthier weight, mindful eating is a practical, sustainable habit that "
+            "supports long-term change without the restriction and deprivation of traditional dieting."
+        ),
+    },
+    {
+        "id": "hypertension_potassium_foods",
+        "title": "Potassium-Rich Foods That Help Lower Blood Pressure",
+        "category": "Hypertension",
+        "tags": ["potassium", "blood pressure", "hypertension", "fruits", "vegetables", "DASH", "sodium", "heart health"],
+        "source": "https://www.heart.org/en/health-topics/high-blood-pressure/changes-you-can-make-to-manage-high-blood-pressure/how-potassium-can-help-control-high-blood-pressure",
+        "content": (
+            "Potassium is one of the most important nutrients for managing high blood pressure. According to "
+            "the American Heart Association, potassium-rich foods help reduce the effects of sodium. The more "
+            "potassium you eat, the more sodium your body removes through urine. Potassium also helps ease "
+            "tension in the walls of blood vessels, which directly helps lower blood pressure.\n\n"
+            "The American Heart Association recommends 3,500 to 5,000 milligrams of potassium per day for "
+            "adults with elevated or high blood pressure, ideally from food sources rather than supplements. "
+            "This is best achieved by following the DASH eating plan, which is specifically designed to be "
+            "rich in potassium, magnesium, and calcium — all three nutrients that support healthy blood "
+            "pressure.\n\n"
+            "Fruits high in potassium include bananas, oranges, orange juice, cantaloupe, apricots, kiwifruit, "
+            "and pomegranate juice. A medium banana contains about 451 milligrams of potassium. "
+            "Vegetables high in potassium include sweet potatoes, potatoes, spinach, Swiss chard, beet greens, "
+            "lima beans, acorn squash, and plantains. Half a cup of plain cooked sweet potato has about 286 "
+            "milligrams of potassium. Other good sources include Greek yogurt, low-fat milk, kefir, canned "
+            "white beans, lentils, salmon, and tuna.\n\n"
+            "Potassium-based salt substitutes are another option for reducing sodium intake and helping "
+            "lower blood pressure, particularly for people who cook at home. However, potassium supplements "
+            "and salt substitutes should only be used after checking with a healthcare professional, especially "
+            "for people with kidney disease or those taking medications that affect potassium levels.\n\n"
+            "Eating too much potassium can be harmful for people with kidney problems, since the kidneys "
+            "may not be able to remove excess potassium from the blood. Anyone with kidney disease should "
+            "consult their doctor before significantly increasing potassium intake.\n\n"
+            "To increase potassium naturally through food: add a banana or handful of spinach to breakfast; "
+            "swap white rice for a baked sweet potato; include Greek yogurt as a snack; add lentils or white "
+            "beans to soups and stews; and choose fresh or frozen vegetables over canned versions, which are "
+            "often high in sodium."
         ),
     },
 ]

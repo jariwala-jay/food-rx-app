@@ -15,7 +15,7 @@
 - **📝 Pantry Management**: Easily track your food inventory. Add items to your virtual pantry, categorize them, and get reminders for expiring goods.
 - **🎯 Daily & Weekly Health Tracking**: Stay on top of your goals with a dashboard that tracks your daily intake of water, vegetables, protein, and other essential nutrients.
 - **📚 Educational Content**: Browse and bookmark articles on nutrition, healthy eating, and managing health conditions.
-- **🤖 RAG Nutrition Chatbot**: An AI-powered chatbot grounded in a curated 61-document, 8-category nutrition knowledge base. Built with Gemini embeddings, ChromaDB vector storage, and a three-layer safety guard (emergency redirection, relevance gating, and a hardened plan-aware system prompt). Delivers personalized, plan-consistent nutrition guidance written at a 2nd–3rd grade reading level.
+- **🤖 RAG Nutrition Chatbot**: An AI-powered chatbot grounded in a curated 63-document, 8-category nutrition knowledge base. Built with Gemini embeddings, ChromaDB vector storage, and a three-layer safety guard (emergency redirection, relevance gating, and a hardened plan-aware system prompt). Delivers personalized, plan-consistent nutrition guidance written at a 2nd–3rd grade reading level.
 - **🔐 Secure Authentication**: Your data is protected with secure user authentication and JWT-based authorization.
 
 ---
@@ -56,7 +56,7 @@ Flutter UI (ChatbotPage)
         → MongoDB (conversation history + chip rotation + response cache)
 ```
 
-**Knowledge base:** 61 curated nutrition documents across 8 categories — Sleep, Exercise, Hydration, Hypertension, Pre-Diabetes, Diabetes, Obesity, and General — sourced from CDC, NIH, AHA, ADA, USDA, FDA, and Harvard T.H. Chan School of Public Health.
+**Knowledge base:** 63 curated nutrition documents across 8 categories — Sleep, Exercise, Hydration, Hypertension, Pre-Diabetes, Diabetes, Obesity, and General — sourced from CDC, NIH, AHA, ADA, USDA, FDA, and Harvard T.H. Chan School of Public Health.
 
 **Personalization:** Every response is conditioned on the user's resolved diet plan (Diabetes Plate, DASH, or MyPlate), conditions, pantry inventory, and server-side conversation history persisted in MongoDB. Multi-condition users (e.g. diabetes + hypertension) receive blended guidance that respects constraints from all active conditions simultaneously.
 
@@ -68,25 +68,25 @@ The chatbot retrieval pipeline was evaluated using a 40-question held-out test s
 
 | Metric | Score |
 |---|---|
-| Faithfulness | 0.870 |
-| Answer Relevancy | 0.886 |
-| Context Precision | 0.775 |
+| Faithfulness | 0.868 |
+| Answer Relevancy | 0.945 |
+| Context Precision | 0.830 |
 
 **Per-category breakdown:**
 
 | Category | Faithfulness | Relevancy | Precision |
 |---|---|---|---|
-| Sleep | 0.920 | 0.970 | 0.870 |
-| Hydration | 0.800 | 0.800 | 0.720 |
-| Exercise | 0.880 | 0.880 | 0.814 |
-| Pre-Diabetes | 0.880 | 0.850 | 0.804 |
+| Sleep | 0.900 | 0.980 | 0.880 |
+| General | 0.860 | 0.980 | 0.860 |
+| Obesity | 0.860 | 0.960 | 0.880 |
+| Exercise | 0.860 | 0.960 | 0.850 |
+| Hydration | 0.880 | 0.980 | 0.830 |
 | Diabetes | 0.860 | 0.900 | 0.780 |
-| Hypertension | 0.860 | 0.870 | 0.724 |
-| Obesity | 0.880 | 0.840 | 0.648 |
-| General | 0.880 | 0.980 | 0.840 |
+| Hypertension | 0.860 | 0.900 | 0.780 |
+| Pre-Diabetes | 0.860 | 0.900 | 0.780 |
 
 
-> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Scores reflect the current knowledge base and should be re-run after knowledge base updates.
+> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Scores should be re-run after knowledge base updates or retrieval pipeline changes.
 
 To run the evaluation yourself:
 
