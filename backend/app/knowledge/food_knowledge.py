@@ -1,7 +1,7 @@
 """
 Food & Nutrition Knowledge Base for MyFoodRx RAG Chatbot.
 Sources: CDC, AHA, ADA, USDA/MyPlate, NIH/NIDDK/NHLBI.
-63 documents covering: Sleep, Exercise, Hydration, Hypertension,
+66 documents covering: Sleep, Exercise, Hydration, Hypertension,
 Pre-Diabetes, Diabetes, Obesity, and General Nutrition.
 """
 
@@ -1944,6 +1944,97 @@ KNOWLEDGE_DOCS = [
             "swap white rice for a baked sweet potato; include Greek yogurt as a snack; add lentils or white "
             "beans to soups and stews; and choose fresh or frozen vegetables over canned versions, which are "
             "often high in sodium."
+        ),
+    },
+    {
+        "id": "diabetes_healthy_snacks",
+        "title": "Healthy Snacks for Blood Sugar Management",
+        "category": "Diabetes",
+        "tags": ["diabetes", "snacks", "blood sugar", "protein", "fiber", "snacking"],
+        "source": (
+            "https://diabetes.org/food-nutrition/meal-planning, "
+            "https://diabetes.org/health-wellness/weight-management/5-ideas-reduce-sugar-diet, "
+            "https://professional.diabetes.org/sites/dpro/files/2024-01/nutrition_smart_snacks_fnl.pdf"
+        ),
+        "content": (
+            "Healthy snacks can be part of a diabetes meal plan and help with hunger management between "
+            "meals. Before you reach for a snack, consider whether you are hungry or thirsty — sometimes "
+            "thirst can make your body feel hungry. If you are thirsty, drink water or a zero-calorie "
+            "beverage first.\n\n"
+            "When you do snack, the American Diabetes Association recommends choosing options that combine "
+            "protein, healthy fats, and fiber, with or without carbohydrates. Examples from ADA guidance "
+            "include fruit with cheese or nuts; hummus or guacamole with carrots or celery; and nut butter "
+            "with apple slices or celery. You can also balance a snack by pairing protein with a "
+            "carbohydrate food, such as hummus with vegetables (carrots, celery, or cucumbers); no-sugar-"
+            "added peanut butter with apple slices; whole grain crackers with string cheese; or a trail mix "
+            "of nuts, seeds, and a small amount of dried fruit.\n\n"
+            "The ADA Smart Snacks handout groups moderate-carbohydrate snacks (about 15 to 20 grams of "
+            "carbohydrate) with a protein source. Examples include one small or medium piece of fruit with "
+            "one string cheese or one quarter cup unsalted nuts; six ounces of light yogurt; six whole wheat "
+            "crackers with one tablespoon nut butter or one slice reduced-fat cheese; or one third cup hummus "
+            "with one cup raw vegetables.\n\n"
+            "Work with your health care team to decide whether snacks fit your meal plan and which portion "
+            "sizes are right for you."
+        ),
+    },
+    {
+        "id": "hydration_dehydration_signs",
+        "title": "Signs of Dehydration and How to Prevent It",
+        "category": "Hydration",
+        "tags": ["dehydration", "signs", "symptoms", "hydration", "water", "thirst", "urine color"],
+        "source": (
+            "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/index.html, "
+            "https://newsinhealth.nih.gov/2023/05/hydrating-health"
+        ),
+        "content": (
+            "Getting enough water every day is important for health. According to the CDC, drinking water "
+            "can prevent dehydration, which may cause unclear thinking, mood change, overheating, "
+            "constipation, and kidney stones.\n\n"
+            "Signs that you may be getting dehydrated include feeling very thirsty and having headaches. "
+            "Your mouth or skin may feel very dry, and your urine may get darker because your body is trying "
+            "to conserve water. Drinking fluids is usually enough to relieve mild dehydration.\n\n"
+            "If dehydration becomes severe, it can cause confusion, fainting, an inability to urinate, and "
+            "rapid heartbeat and breathing. At that point it can be life-threatening, and you should seek "
+            "medical help quickly. Drinking liquids may not be enough to replenish your body's fluids, and "
+            "fluids may need to be given intravenously in a medical setting.\n\n"
+            "The CDC notes that you may need more water when you are in hot climates, are more physically "
+            "active, have a fever, or have diarrhea or vomiting. The best way to avoid dehydration is to "
+            "drink enough fluids every day. Ideally, choose water or other low-calorie beverages such as "
+            "plain coffee or tea, sparkling or flavored waters, milk, or 100% vegetable juice within "
+            "recommended calorie limits. Carry a reusable water bottle, choose water over sugary drinks, "
+            "and serve water during meals."
+        ),
+    },
+    {
+        "id": "diabetes_safe_exercises",
+        "title": "Safe Exercises for People with Diabetes",
+        "category": "Exercise",
+        "tags": ["exercise", "diabetes", "walking", "swimming", "biking", "safe", "blood sugar"],
+        "source": (
+            "https://diabetes.org/health-wellness/fitness/getting-started-safely, "
+            "https://www.cdc.gov/diabetes/living-with/physical-activity.html, "
+            "https://professional.diabetes.org/sites/dpro/files/2023-12/types_of_physical_activity.pdf"
+        ),
+        "content": (
+            "Physical activity is a foundation of diabetes management. It helps you manage blood sugar levels "
+            "and lowers your risk of heart disease and other complications. The CDC recommends getting at "
+            "least 150 minutes of moderate-intensity physical activity every week — for example, being active "
+            "for 30 minutes on most days.\n\n"
+            "The American Diabetes Association notes that light activities like walking are fine for most "
+            "people with diabetes. If you have not been active and feel unsure about your health, talk to "
+            "your health care provider before doing anything more demanding. If you have diabetes "
+            "complications, there may be certain exercises you should avoid.\n\n"
+            "Types of physical activity that can help people with diabetes include walking, biking, and "
+            "swimming. Walking is an accessible option — even short walk breaks throughout the day add up. "
+            "Biking, including on a stationary bike, builds heart and lung strength. Swimming and exercising "
+            "in water provide a low-impact way to stay active.\n\n"
+            "The CDC suggests checking your blood sugar before and after activity to see how your body "
+            "responds — for example, you may see a lower number after a walk. Pick a clear, measurable goal "
+            "such as walking every weekday for 30 minutes, and check with your doctor before starting any "
+            "new or more difficult activity.\n\n"
+            "When beginning an exercise plan, start slowly and take steps to help prevent injuries, "
+            "dehydration, and hypoglycemia. Your health care provider should support your efforts to become "
+            "more active."
         ),
     },
 ]
