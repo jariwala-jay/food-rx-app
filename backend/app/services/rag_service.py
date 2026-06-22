@@ -601,6 +601,7 @@ class RAGService:
         user_profile: dict[str, Any] | None = None,
         pantry_items: list[dict] | None = None,
         user_id: str | None = None,
+        eval_meta_out: dict[str, Any] | None = None,
     ) -> str:
         audit: dict[str, Any] = {
             "query_class": "unknown",
@@ -610,6 +611,8 @@ class RAGService:
             "cache": "none",
             "blocked": None,
             "chars": 0,
+            "model_used": None,
+            "retrieved_chunks": [],
         }
         try:
             message = (message or "").strip()
@@ -618,6 +621,7 @@ class RAGService:
                 audit["blocked"] = "input_too_long"
                 reply = _MSG_INPUT_TOO_LONG
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if user_id and _is_rate_limited(user_id):
@@ -626,6 +630,7 @@ class RAGService:
                 await _log_security_event("rate_limit", message, user_id)
                 reply = _MSG_RATE_LIMITED
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if _contains_embedded_instructions(message):
@@ -636,6 +641,7 @@ class RAGService:
                 await _log_security_event("embedded_instruction", message, user_id)
                 reply = _MSG_OFFTOPIC
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             query_class = classify_query(message)
@@ -645,12 +651,14 @@ class RAGService:
                 logger.info("Query blocked: EMERGENCY")
                 reply = _MSG_EMERGENCY
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
             if query_class == _QueryClass.MEDICAL:
                 audit["blocked"] = "medical"
                 logger.info("Query blocked: MEDICAL")
                 reply = _MSG_MEDICAL
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
             if query_class == _QueryClass.OFF_TOPIC:
                 if _INJECTION_PATTERNS.search(message):
@@ -661,6 +669,7 @@ class RAGService:
                 logger.info("Query blocked: OFF_TOPIC")
                 reply = _MSG_OFFTOPIC
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if not self._ready or self._client is None:
@@ -668,6 +677,7 @@ class RAGService:
                     "I am having trouble connecting right now. Please try again in a moment."
                 )
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             history_contents = _history_to_contents(history)
@@ -692,12 +702,15 @@ class RAGService:
                     message, full_system, history_contents
                 )
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if _is_plan_query(message):
                 plan_response = _build_plan_response(plan_key)
                 if plan_response:
                     audit["chars"] = len(plan_response)
+                    audit["reply"] = plan_response
+                    audit["plan_canned"] = True
                     return plan_response
 
             cached_exact = await _rag_cache_get_exact(
@@ -707,6 +720,7 @@ class RAGService:
                 audit["cache"] = "exact"
                 reply = _rewrite_lifestyle_scope_refusal(message, cached_exact)
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             client = self._client
@@ -771,9 +785,11 @@ class RAGService:
                     )
                     reply = _rewrite_lifestyle_scope_refusal(message, reply)
                     audit["chars"] = len(reply)
+                    audit["reply"] = reply
                     return reply
                 reply = "I am having trouble processing your question. Please try again."
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if not any(v != 0.0 for v in query_embedding):
@@ -788,11 +804,12 @@ class RAGService:
                 else:
                     full_system += _EMBEDDING_FALLBACK_NOTE
                 full_system = _maybe_append_food_drug_note(full_system, message)
-                reply, _, _ = self._generate_reply(
+                reply, _, _, _ = self._generate_reply(
                     message, full_system, history_contents
                 )
                 reply = _rewrite_lifestyle_scope_refusal(message, reply)
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             topic_cats = _infer_kb_categories(message)
@@ -868,6 +885,7 @@ class RAGService:
                 )
                 reply = _rewrite_lifestyle_scope_refusal(message, reply)
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             if best_score < min_rel:
@@ -882,6 +900,7 @@ class RAGService:
                 else:
                     reply = _MSG_LOW_RELEVANCE
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             cached_vec: str | None = None
@@ -898,6 +917,7 @@ class RAGService:
                 audit["cache"] = "embedding"
                 reply = _rewrite_lifestyle_scope_refusal(message, cached_vec)
                 audit["chars"] = len(reply)
+                audit["reply"] = reply
                 return reply
 
             prioritized = _prioritize_chunks_for_profile(relevant_docs, user_profile)
@@ -949,9 +969,23 @@ class RAGService:
             elif truncated:
                 logger.info("Skipping RAG cache write (truncated LLM output).")
             reply = _rewrite_lifestyle_scope_refusal(message, reply)
+            audit["model_used"] = model_used
+            audit["retrieved_chunks"] = [
+                {
+                    "doc_id": str(chunk.get("doc_id", "")),
+                    "title": str(chunk.get("title", "")),
+                    "category": str(chunk.get("category", "")),
+                    "text": str(chunk.get("text", "")),
+                }
+                for chunk in top_docs
+            ]
             audit["chars"] = len(reply)
+            audit["reply"] = reply
             return reply
         finally:
+            if eval_meta_out is not None:
+                eval_meta_out.clear()
+                eval_meta_out.update(audit)
             _log_rag_audit(audit)
 
 

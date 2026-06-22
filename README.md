@@ -62,41 +62,83 @@ Flutter UI (ChatbotPage)
 
 ---
 
-## 📊 RAG Evaluation
+## 📊 Chatbot Evaluation
 
-The chatbot retrieval pipeline was evaluated using a 40-question held-out test set (5 questions per category) scored across three metrics: faithfulness, answer relevancy, and context precision.
+The chatbot is evaluated in four layers: **production E2E** (real `rag_service.chat()` path), **retrieval quality** (RAG), **safety routing**, and **personalization**. Fast regression tests run in CI via `pytest` / `unittest`; offline eval uses Groq as an LLM judge.
+
+### Production E2E (13 realistic + integrated cases)
+
+Calls `rag_service.chat()` with user profiles — same path as the app (Gemini generation, safety routing, plan resolution). Groq judges answer quality on diet cases; integrated cases verify emergency/medical/off-topic blocking.
+
+```bash
+cd backend
+python3 evaluation/run_e2e_eval.py
+python3 evaluation/run_e2e_eval.py --id realistic_canned_soup_multi
+```
+
+Requires `GEMINI_API_KEY` and `GROQ_API_KEY`. Reports: `backend/evaluation/reports/e2e_eval_report_*.json`.
+
+### RAG retrieval (40-question held-out set)
+
+5 questions per category across 8 topics. Scored on faithfulness, answer relevancy, and context precision.
 
 | Metric | Score |
 |---|---|
-| Faithfulness | 0.882 |
-| Answer Relevancy | 0.927 |
-| Context Precision | 0.812 |
+| Faithfulness | 0.885 |
+| Answer Relevancy | 0.924 |
+| Context Precision | 0.823 |
 
 **Per-category breakdown:**
 
 | Category | Faithfulness | Relevancy | Precision |
 |---|---|---|---|
 | Sleep | 0.940 | 0.970 | 0.904 |
-| Exercise | 0.900 | 0.940 | 0.820 |
-| General | 0.880 | 0.940 | 0.814 |
-| Diabetes | 0.880 | 0.940 | 0.820 |
-| Pre-Diabetes | 0.880 | 0.910 | 0.804 |
-| Obesity | 0.860 | 0.920 | 0.794 |
+| Exercise | 0.900 | 0.930 | 0.864 |
+| General | 0.860 | 0.930 | 0.874 |
+| Diabetes | 0.880 | 0.960 | 0.820 |
+| Obesity | 0.880 | 0.930 | 0.814 |
+| Pre-Diabetes | 0.880 | 0.870 | 0.784 |
 | Hydration | 0.880 | 0.900 | 0.780 |
-| Hypertension | 0.840 | 0.900 | 0.760 |
+| Hypertension | 0.860 | 0.900 | 0.740 |
 
+| Metric | What it measures |
+|---|---|
+| **Faithfulness** | Is the answer grounded in retrieved knowledge chunks? |
+| **Answer Relevancy** | Does the answer address the user's question? |
+| **Context Precision** | Were the retrieved chunks useful for answering? |
 
-> **Note:** Evaluation uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer used by the chatbot. Scores measure retrieval quality and knowledge base coverage. Overall scores combine a full 40-question run with re-evaluated Diabetes, Hydration, and Exercise categories after expanding the knowledge base to 66 documents.
+> **Note:** RAG eval uses an offline pipeline (Groq `llama-3.3-70b-versatile`) over the same ChromaDB retrieval layer as production. Scores measure retrieval quality and knowledge-base coverage on the 66-document base (189 chunks). Re-run after knowledge-base or retrieval changes.
 
-To run the evaluation yourself:
+### Safety & personalization regression
+
+| Suite | What it tests | API keys needed |
+|---|---|---|
+| `run_e2e_eval.py` | Production `rag_service.chat()` + Gemini + Groq judge | Yes |
+| `run_safety_eval.py` | Emergency, medical, off-topic, and injection guardrails | No |
+| `run_personalization_eval.py` | Profile → plan resolution, user context, canned plan replies | No |
+| `tests/test_chatbot_e2e.py` | `POST /chatbot/chat` and starter-questions API contract | No |
+
+### Run evaluations
 
 ```bash
 cd backend
+
+# Production E2E (requires GEMINI_API_KEY + GROQ_API_KEY)
+python3 evaluation/run_e2e_eval.py
+
+# RAG retrieval quality (requires GEMINI_API_KEY + GROQ_API_KEY)
 python3 evaluation/run_rag_eval.py                        # all 40 questions
 python3 evaluation/run_rag_eval.py --category Sleep       # single category
+
+# Safety and personalization (no API keys)
+python3 evaluation/run_safety_eval.py
+python3 evaluation/run_personalization_eval.py
+
+# CI regression tests (safety + personalization + API contract)
+python3 -m unittest tests.test_safety_regression tests.test_personalization_regression tests.test_chatbot_e2e -v
 ```
 
-Reports are saved to `backend/evaluation/reports/`.
+RAG reports are saved to `backend/evaluation/reports/`.
 
 ---
 
@@ -240,7 +282,13 @@ food-rx-app/
 │   │       ├── food_knowledge.py
 │   │       └── chroma_db/
 │   ├── evaluation/
+│   │   ├── run_e2e_eval.py
 │   │   ├── run_rag_eval.py
+│   │   ├── run_safety_eval.py
+│   │   ├── run_personalization_eval.py
+│   │   ├── e2e_test_cases.json
+│   │   ├── safety_test_cases.json
+│   │   ├── personalization_test_cases.json
 │   │   ├── test_questions.json
 │   │   └── reports/
 │   └── requirements.txt

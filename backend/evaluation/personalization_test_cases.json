@@ -1,0 +1,70 @@
+{
+  "description": "Profile-to-plan personalization regression cases. Validates plan resolution, user context injection, and canned plan responses without calling Gemini or Groq.",
+  "cases": [
+    {
+      "id": "diabetes_only",
+      "profile": {"medicalConditions": ["diabetes"]},
+      "expected_plan": "DiabetesPlate",
+      "context_must_contain": ["DiabetesPlate", "diabetes"],
+      "context_must_not_contain": ["DASH diet"]
+    },
+    {
+      "id": "hypertension_only",
+      "profile": {"medicalConditions": ["hypertension"]},
+      "expected_plan": "DASH",
+      "context_must_contain": ["DASH", "hypertension"],
+      "context_must_not_contain": ["Diabetes Plate"]
+    },
+    {
+      "id": "obesity_only",
+      "profile": {"medicalConditions": ["obesity"]},
+      "expected_plan": "MyPlate",
+      "context_must_contain": ["MyPlate", "obesity"],
+      "context_must_not_contain": ["DASH diet"]
+    },
+    {
+      "id": "prediabetes_only",
+      "profile": {"medicalConditions": ["prediabetes"]},
+      "expected_plan": "DiabetesPlate",
+      "context_must_contain": ["DiabetesPlate", "prediabetes"]
+    },
+    {
+      "id": "diabetes_and_hypertension",
+      "profile": {"medicalConditions": ["diabetes", "hypertension"]},
+      "expected_plan": "DiabetesPlate",
+      "context_must_contain": ["diabetes", "hypertension"],
+      "multi_condition_note_must_contain": ["low-sodium", "blended answer"]
+    },
+    {
+      "id": "explicit_dash_plan",
+      "profile": {"medicalConditions": [], "myPlanType": "DASH"},
+      "expected_plan": "DASH",
+      "context_must_contain": ["DASH"]
+    },
+    {
+      "id": "plan_query_diabetes_plate",
+      "profile": {"medicalConditions": ["diabetes"]},
+      "question": "What is the Diabetes Plate?",
+      "response_must_contain": ["vegetables", "protein", "carbs"]
+    },
+    {
+      "id": "plan_query_dash",
+      "profile": {"medicalConditions": ["hypertension"]},
+      "question": "What is the DASH diet?",
+      "response_must_contain": ["low-sodium", "blood pressure"]
+    },
+    {
+      "id": "plan_query_myplate",
+      "profile": {"medicalConditions": ["obesity"]},
+      "question": "What is MyPlate?",
+      "response_must_contain": ["fruits", "vegetables", "balanced"]
+    },
+    {
+      "id": "pantry_in_context",
+      "profile": {"medicalConditions": ["diabetes"], "name": "Sam"},
+      "pantry": [{"name": "broccoli"}, {"name": "chicken breast"}],
+      "expected_plan": "DiabetesPlate",
+      "context_must_contain": ["broccoli", "chicken", "Sam"]
+    }
+  ]
+}
