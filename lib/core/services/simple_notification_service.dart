@@ -5,6 +5,21 @@ import 'package:flutter_app/core/services/pantry_api_service.dart';
 class SimpleNotificationService {
   final PantryApiService _pantryApi = PantryApiService();
 
+  static DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  static String _expiringItemMessage(DateTime expiryDate) {
+    final days =
+        _dateOnly(expiryDate).difference(_dateOnly(DateTime.now())).inDays;
+    if (days <= 0) {
+      return 'Use it in a recipe today so it doesn\'t go to waste.';
+    }
+    if (days == 1) {
+      return 'Expires tomorrow. Use it in a recipe so it doesn\'t go to waste.';
+    }
+    return 'Expires in $days days. Use it in a recipe so it doesn\'t go to waste.';
+  }
+
   Future<void> checkExpiringIngredients(String userId) async {
     try {
       final expiringItems =
@@ -39,7 +54,9 @@ class SimpleNotificationService {
           ? '${names.first} expires soon'
           : '${names.length} food items expiring soon';
       final message = names.length == 1
-          ? 'Use it in a recipe today so it doesn\'t go to waste.'
+          ? _expiringItemMessage(
+              DateTime.parse(inWindow.first['expiryDate'].toString()),
+            )
           : 'Expiring soon: $itemsSummary';
 
       final list = await ApiClient.get('/notifications') as List?;
@@ -135,7 +152,18 @@ class SimpleNotificationService {
     }
   }
 
-  Future<void> checkTrackerReminder(String userId) async {
+  Future<void> checkTrackerReminder(
+    String userId, {
+    DateTime? accountCreatedAt,
+  }) async {
+    // Give brand-new users a 24-hour grace period before nagging them to log.
+    if (accountCreatedAt != null &&
+        DateTime.now().difference(accountCreatedAt).inHours < 24) {
+      debugPrint(
+          '[Notifications] Skipping tracker reminder: account is less than 24 hours old');
+      return;
+    }
+
     try {
       final list = await ApiClient.get('/trackers/progress') as List?;
       final today = DateTime.now();
@@ -173,9 +201,9 @@ class SimpleNotificationService {
 
         await ApiClient.post('/notifications', body: {
           'type': 'tracker_reminder',
-          'title': 'Time to log your food!',
+          'title': "Don't forget to log today",
           'message':
-              "You haven't logged anything in your tracker today. Don't forget to track your food!",
+              "You haven't logged anything yet today. Tap to open your tracker and record your meals.",
         });
       }
     } catch (e) {

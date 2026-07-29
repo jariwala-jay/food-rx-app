@@ -6,10 +6,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
+
+const String _dailyReminderChannelId = 'daily_meal_reminders';
+const String _dailyReminderChannelName = 'Daily Meal Reminders';
+const String _dailyReminderChannelDesc =
+    'Daily reminders to log your meals and track nutrition';
+const int _morningReminderId = 1001;
+const int _middayReminderId = 1002;
+const int _eveningReminderId = 1003;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -270,14 +279,17 @@ class NotificationService {
   // Sync stored FCM token to database (call this after user login/registration)
   Future<void> syncFCMTokenToDatabase() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
+      // Read userId from secure storage (SessionStorage), not SharedPreferences.
+      // SharedPreferences previously held 'user_id' but that key is removed after
+      // the migration to FlutterSecureStorage, so it would always return null.
+      final userId = await ApiClient.userId;
 
       if (userId == null) {
         debugPrint('⚠️ No user ID found, cannot sync FCM token');
         return;
       }
 
+      final prefs = await SharedPreferences.getInstance();
       // Use stored token if available, otherwise try to get current token
       String? tokenToSync = prefs.getString('fcm_token') ?? _fcmToken;
 
@@ -556,6 +568,96 @@ class NotificationService {
     }
   }
 
+  /// Schedule all three daily meal reminder notifications.
+  /// Safe to call multiple times — cancels existing ones first.
+  Future<void> scheduleDailyReminders() async {
+    await cancelDailyReminders();
+    await _scheduleDailyReminder(
+      id: _morningReminderId,
+      title: 'Good morning! Start your day with MyFoodRx',
+      body: 'Log your breakfast and check your nutrition targets for today.',
+      hour: 10,
+      minute: 0,
+    );
+    await _scheduleDailyReminder(
+      id: _middayReminderId,
+      title: 'Lunchtime check-in',
+      body:
+          "Don't forget to log your lunch and keep your daily progress on track.",
+      hour: 14,
+      minute: 0,
+    );
+    await _scheduleDailyReminder(
+      id: _eveningReminderId,
+      title: 'End your day strong',
+      body:
+          "Log your dinner to complete today's nutrition summary and stay on your plan.",
+      hour: 21,
+      minute: 0,
+    );
+    debugPrint('✅ Daily meal reminders scheduled (10 AM, 2 PM, 9 PM)');
+  }
+
+  /// Cancel all three daily meal reminder notifications.
+  Future<void> cancelDailyReminders() async {
+    await _localNotifications.cancel(_morningReminderId);
+    await _localNotifications.cancel(_middayReminderId);
+    await _localNotifications.cancel(_eveningReminderId);
+    debugPrint('✅ Daily meal reminders cancelled');
+  }
+
+  Future<void> _scheduleDailyReminder({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+  }) async {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    // If the time already passed today, start from tomorrow.
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      _dailyReminderChannelId,
+      _dailyReminderChannelName,
+      channelDescription: _dailyReminderChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: false,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledDate,
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexact,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: 'meal_reminder',
+    );
+  }
+
   // Dispose resources
   void dispose() {
     // No subscriptions to cancel in simplified version
@@ -571,7 +673,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 // Navigation helpers
 void _navigateFromPayload(String? payload) {
-  // If payload is a JSON string you could parse here. We currently rely on FCM data route.
+  if (payload == 'meal_reminder') {
+    _navigateByType('tracker_reminder');
+  }
 }
 
 void _navigateByType(dynamic type) {

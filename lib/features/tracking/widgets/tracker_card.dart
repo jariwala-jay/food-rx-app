@@ -34,7 +34,30 @@ class TrackerCard extends StatelessWidget {
   static const double progressLargeLayoutFractionMinFontSize = 11;
   static const double progressUnitFontSize = 12;
 
-  static const double infoIconReserveWidth = 22;
+  static const double infoButtonBaseSize = 24;
+  static const double infoButtonMaxSize = 32;
+  static const double infoIconBaseSize = 16;
+  static const double infoIconMaxSize = 22;
+  static const double infoIconReserveGap = 2;
+
+  static double _infoScaleFor(BuildContext context) {
+    return MediaQuery.textScaleFactorOf(context).clamp(1.0, 1.3);
+  }
+
+  static double infoButtonSizeFor(BuildContext context) {
+    final scale = _infoScaleFor(context);
+    return (infoButtonBaseSize * scale)
+        .clamp(infoButtonBaseSize, infoButtonMaxSize);
+  }
+
+  static double infoIconSizeFor(BuildContext context) {
+    final scale = _infoScaleFor(context);
+    return (infoIconBaseSize * scale).clamp(infoIconBaseSize, infoIconMaxSize);
+  }
+
+  static double infoIconReserveWidthFor(BuildContext context) {
+    return infoButtonSizeFor(context) + infoIconReserveGap;
+  }
 
   static double progressInlineFontSizeFor(BuildContext context) {
     final scale = MediaQuery.textScaleFactorOf(context);
@@ -59,8 +82,8 @@ class TrackerCard extends StatelessWidget {
     return progressInlineFontSizeFor(context);
   }
 
-  static FontWeight progressFractionWeightFor(BuildContext context) {
-    return usesLargeTextLayout(context) ? FontWeight.bold : FontWeight.w600;
+  static FontWeight progressFractionWeightFor() {
+    return FontWeight.bold;
   }
 
   /// Height used by [TrackerGrid] for grid aspect ratio.
@@ -231,7 +254,9 @@ class TrackerCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(right: infoIconReserveWidth),
+                    padding: EdgeInsets.only(
+                      right: infoIconReserveWidthFor(context),
+                    ),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
@@ -239,8 +264,8 @@ class TrackerCard extends StatelessWidget {
                         tracker.name,
                         style: TextStyle(
                           fontSize: 14 * clampedScale,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textTertiary,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -266,13 +291,14 @@ class TrackerCard extends StatelessWidget {
     );
   }
 
-  /// Inline progress fraction; shrinks font via [TextPainter] to fit [constraints.maxWidth].
+  /// Inline progress fraction; shrinks font via [TextPainter] to fit
+  /// [constraints.maxWidth], no floor, so it always stays on one line.
   Widget _buildInlineProgressLine(
     BuildContext context, {
     required Color progressColor,
   }) {
     final unit = tracker.unitString;
-    final weight = progressFractionWeightFor(context);
+    final weight = progressFractionWeightFor();
     final label = unit.isEmpty
         ? tracker.formattedProgressFraction
         : '${tracker.formattedProgressFraction} $unit';
@@ -280,9 +306,10 @@ class TrackerCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final baseSize = progressInlineFontSizeFor(context);
-        const minSize = 11.0;
+        // Measure with the same text scaling Text will apply when rendering.
+        final textScaler = MediaQuery.textScalerOf(context);
 
-        double fitFontSize(double size) {
+        double measureWidth(double size) {
           final painter = TextPainter(
             text: TextSpan(
               text: label,
@@ -293,33 +320,41 @@ class TrackerCard extends StatelessWidget {
                 height: 1.1,
               ),
             ),
+            textScaler: textScaler,
             maxLines: 1,
             textDirection: Directionality.of(context),
           )..layout(maxWidth: double.infinity);
+          return painter.width;
+        }
 
-          if (painter.width <= constraints.maxWidth) {
-            return size;
+        // Iteratively shrink toward a size that actually fits — a single
+        // linear estimate can undershoot on long strings (kerning/rounding).
+        double fitFontSize(double size) {
+          var candidate = size;
+          for (var i = 0; i < 5; i++) {
+            final width = measureWidth(candidate);
+            if (width <= constraints.maxWidth) {
+              return candidate;
+            }
+            final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.96);
+            final next = candidate * (safeMaxWidth / width);
+            if (next >= candidate) break;
+            candidate = math.max(1.0, next);
           }
-          // Fit against 96% of max width to absorb kerning/rounding overflow.
-          final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.96);
-          final scaled =
-              (size * (safeMaxWidth / painter.width)).clamp(minSize, size);
-          return scaled;
+          return candidate;
         }
 
         final fontSize = fitFontSize(baseSize);
-        final textStyle = TextStyle(
-          fontSize: fontSize,
-          fontWeight: weight,
-          color: progressColor,
-          height: 1.1,
-        );
-
         return Align(
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: textStyle,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: weight,
+              color: progressColor,
+              height: 1.1,
+            ),
             maxLines: 1,
             overflow: TextOverflow.clip,
             softWrap: false,
@@ -348,7 +383,9 @@ class TrackerCard extends StatelessWidget {
         SizedBox(
           height: innerHeight,
           child: Padding(
-            padding: const EdgeInsets.only(right: infoIconReserveWidth),
+            padding: EdgeInsets.only(
+              right: infoIconReserveWidthFor(context),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -377,8 +414,8 @@ class TrackerCard extends StatelessWidget {
                           tracker.name,
                           style: const TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textTertiary,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
                             height: 1.2,
                           ),
                           maxLines: 1,
@@ -392,16 +429,20 @@ class TrackerCard extends StatelessWidget {
                       ),
                       if (unit.isNotEmpty) ...[
                         const SizedBox(height: 1),
-                        Text(
-                          unit,
-                          style: TextStyle(
-                            fontSize: progressUnitFontSize,
-                            fontWeight: FontWeight.w600,
-                            color: progressColor,
-                            height: 1.1,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            unit,
+                            style: TextStyle(
+                              fontSize: progressUnitFontSize,
+                              fontWeight: FontWeight.bold,
+                              color: progressColor,
+                              height: 1.1,
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ],
@@ -426,12 +467,15 @@ class TrackerCard extends StatelessWidget {
     required Color progressColor,
   }) {
     final fraction = tracker.formattedProgressFraction;
-    final weight = progressFractionWeightFor(context);
+    final weight = progressFractionWeightFor();
     final baseSize = progressLargeLayoutFractionBaseFontSize;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        double fitFontSize(double size) {
+        // Measure with the same text scaling Text will apply when rendering.
+        final textScaler = MediaQuery.textScalerOf(context);
+
+        double measureWidth(double size) {
           final painter = TextPainter(
             text: TextSpan(
               text: fraction,
@@ -442,16 +486,28 @@ class TrackerCard extends StatelessWidget {
                 height: 1.1,
               ),
             ),
+            textScaler: textScaler,
             maxLines: 1,
             textDirection: Directionality.of(context),
           )..layout(maxWidth: double.infinity);
+          return painter.width;
+        }
 
-          if (painter.width <= constraints.maxWidth) {
-            return size;
+        // Iterate rather than a single linear estimate — kerning/rounding
+        // can undershoot on long strings. No floor: must never clip.
+        double fitFontSize(double size) {
+          var candidate = size;
+          for (var i = 0; i < 5; i++) {
+            final width = measureWidth(candidate);
+            if (width <= constraints.maxWidth) {
+              return candidate;
+            }
+            final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.94);
+            final next = candidate * (safeMaxWidth / width);
+            if (next >= candidate) break;
+            candidate = math.max(1.0, next);
           }
-          final safeMaxWidth = math.max(0.0, constraints.maxWidth * 0.94);
-          return (size * (safeMaxWidth / painter.width))
-              .clamp(progressLargeLayoutFractionMinFontSize, size);
+          return candidate;
         }
 
         final fontSize = fitFontSize(baseSize);
@@ -547,18 +603,17 @@ class TrackerCard extends StatelessWidget {
   }
 
   Widget _buildInfoIcon(BuildContext context) {
-    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-    final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-    final iconSize = (14 * clampedScale).clamp(14.0, 18.0);
+    final buttonSize = infoButtonSizeFor(context);
+    final iconSize = infoIconSizeFor(context);
 
     final iconButton = GestureDetector(
       onTap: () => _openInfoAndMaybeAdvanceTour(context),
       child: Container(
-        width: 20,
-        height: 20,
+        width: buttonSize,
+        height: buttonSize,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(buttonSize / 2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),

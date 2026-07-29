@@ -31,6 +31,10 @@ class NotificationManager extends ChangeNotifier {
   }
 
   Future<void> loadNotifications() async {
+    // _userId is set by initialize(), but the Provider-registered instance in
+    // main.dart never has initialize() called on it. Fall back to reading the
+    // active session from secure storage so both instances work correctly.
+    _userId ??= await ApiClient.userId;
     if (_userId == null) return;
     _setLoading(true);
     _setError(null);
@@ -87,11 +91,27 @@ class NotificationManager extends ChangeNotifier {
     }
   }
 
+  Future<void> dismissNotifications(Iterable<String> notificationIds) async {
+    final ids = notificationIds.toSet();
+    if (ids.isEmpty) return;
+    try {
+      for (final id in ids) {
+        await ApiClient.delete('/notifications/$id');
+      }
+      _notifications.removeWhere((n) => ids.contains(n.id));
+      notifyListeners();
+      await _syncAppIconBadge();
+    } catch (e) {
+      debugPrint('Error dismissing notifications: $e');
+    }
+  }
+
   List<AppNotification> get unreadNotifications {
     return _notifications.where((n) => !n.isRead).toList();
   }
 
   Future<void> markAllAsRead() async {
+    _userId ??= await ApiClient.userId;
     if (_userId == null) return;
     try {
       await ApiClient.post('/notifications/mark-all-read');
@@ -110,6 +130,7 @@ class NotificationManager extends ChangeNotifier {
   }
 
   Future<void> clearAllNotifications() async {
+    _userId ??= await ApiClient.userId;
     if (_userId == null) return;
     try {
       await ApiClient.delete('/notifications');
@@ -137,6 +158,7 @@ class NotificationManager extends ChangeNotifier {
   }
 
   Future<void> createTestNotification() async {
+    _userId ??= await ApiClient.userId;
     if (_userId == null) return;
     try {
       await ApiClient.post('/notifications', body: {

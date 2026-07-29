@@ -7,6 +7,7 @@ import '../models/tracker_goal.dart';
 import '../widgets/tracker_card.dart';
 import '../widgets/pantry_tracker_logging_modal.dart';
 import '../widgets/manual_tracker_logging_modal.dart';
+import '../notifications/goal_limit_notification_service.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:showcaseview/showcaseview.dart' as showcaseview;
@@ -307,9 +308,10 @@ class _TrackerGridState extends State<TrackerGrid>
                                       child: Text(
                                         'My Plan',
                                         style: TextStyle(
+                                          fontFamily: 'BricolageGrotesque',
                                           fontSize:
                                               14 * clampedScale.clamp(0.8, 1.0),
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
@@ -429,9 +431,18 @@ class _TrackerGridState extends State<TrackerGrid>
           tracker: tracker,
           onLog: (newValue) async {
             try {
-              await Provider.of<TrackerProvider>(context, listen: false)
-                  .updateTrackerValueOptimized(
-                      tracker.id, tracker.currentValue + newValue);
+              final provider =
+                  Provider.of<TrackerProvider>(context, listen: false);
+              final goalLimitSnapshot = {tracker.id: tracker.currentValue};
+              await provider.updateTrackerValueOptimized(
+                  tracker.id, tracker.currentValue + newValue);
+              final updatedTracker = provider.findTrackerById(tracker.id);
+              if (updatedTracker != null) {
+                GoalLimitNotificationService.instance.checkAndNotify(
+                  before: goalLimitSnapshot,
+                  trackers: [updatedTracker],
+                );
+              }
               return true;
             } catch (e) {
               return Future.error(e);
@@ -447,9 +458,18 @@ class _TrackerGridState extends State<TrackerGrid>
           tracker: tracker,
           onLog: (newValue) async {
             try {
-              await Provider.of<TrackerProvider>(context, listen: false)
-                  .updateTrackerValueOptimized(
-                      tracker.id, tracker.currentValue + newValue);
+              final provider =
+                  Provider.of<TrackerProvider>(context, listen: false);
+              final goalLimitSnapshot = {tracker.id: tracker.currentValue};
+              await provider.updateTrackerValueOptimized(
+                  tracker.id, tracker.currentValue + newValue);
+              final updatedTracker = provider.findTrackerById(tracker.id);
+              if (updatedTracker != null) {
+                GoalLimitNotificationService.instance.checkAndNotify(
+                  before: goalLimitSnapshot,
+                  trackers: [updatedTracker],
+                );
+              }
               return true;
             } catch (e) {
               return Future.error(e);
@@ -465,8 +485,7 @@ class _TrackerGridState extends State<TrackerGrid>
     final clampedScale = textScaleFactor.clamp(1.0, 1.3);
     final cardHeight = TrackerCard.preferredHeight(context);
     final childAspectRatio = 152 / cardHeight;
-    final gridSpacing =
-        TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
+    final gridSpacing = TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -561,8 +580,9 @@ class _TrackerGridState extends State<TrackerGrid>
                                 child: Text(
                                   'My Plan',
                                   style: TextStyle(
+                                    fontFamily: 'BricolageGrotesque',
                                     fontSize: 14 * clampedScale.clamp(1.0, 1.2),
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),

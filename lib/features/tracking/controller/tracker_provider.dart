@@ -50,6 +50,30 @@ class TrackerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _weeklyGoalsMismatchPlan(
+    Map<String, dynamic> personalizedDietPlan,
+    String dietType,
+  ) {
+    if (dietType != 'DASH' && dietType != 'DiabetesPlate') return false;
+
+    for (final tracker in _weeklyTrackers) {
+      final categoryName = tracker.category.name.toLowerCase();
+      double? expectedValue;
+      if (categoryName == 'sweets') {
+        expectedValue =
+            (personalizedDietPlan['sweetsMaxPerWeek'] as num?)?.toDouble();
+      } else if (categoryName == 'nutslegumes') {
+        expectedValue =
+            (personalizedDietPlan['nutsLegumesPerWeek'] as num?)?.toDouble();
+      }
+      if (expectedValue != null &&
+          (tracker.goalValue - expectedValue).abs() > 0.1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> initializeUserTrackers(String userId, String dietType,
       {Map<String, dynamic>? personalizedDietPlan}) async {
     _setError(null);
@@ -106,8 +130,8 @@ class TrackerProvider extends ChangeNotifier {
         (_dailyTrackers.isNotEmpty || _weeklyTrackers.isEmpty)) {
       final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
       if (allTrackers.isNotEmpty &&
-          allTrackers.every((t) =>
-              t.dietType.toLowerCase() == dietType.toLowerCase())) {
+          allTrackers.every(
+              (t) => t.dietType.toLowerCase() == dietType.toLowerCase())) {
         return;
       }
     }
@@ -132,8 +156,8 @@ class TrackerProvider extends ChangeNotifier {
           // Strictly verify trackers match the requested diet type
           final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
           final hasMatchingDietType = allTrackers.isNotEmpty &&
-              allTrackers.every((t) =>
-                  t.dietType.toLowerCase() == dietType.toLowerCase());
+              allTrackers.every(
+                  (t) => t.dietType.toLowerCase() == dietType.toLowerCase());
 
           if (hasMatchingDietType &&
               (_dailyTrackers.isNotEmpty || _weeklyTrackers.isNotEmpty)) {
@@ -186,6 +210,10 @@ class TrackerProvider extends ChangeNotifier {
                   shouldUpdateForPersonalizedPlan = true;
                   break;
                 }
+              }
+              if (!shouldUpdateForPersonalizedPlan) {
+                shouldUpdateForPersonalizedPlan =
+                    _weeklyGoalsMismatchPlan(personalizedDietPlan, dietType);
               }
             }
 
@@ -260,12 +288,11 @@ class TrackerProvider extends ChangeNotifier {
       // Verify trackers match the requested diet type (critical validation)
       final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];
       final hasMatchingDietType = allTrackers.isNotEmpty &&
-          allTrackers.every((t) =>
-              t.dietType.toLowerCase() == dietType.toLowerCase());
+          allTrackers
+              .every((t) => t.dietType.toLowerCase() == dietType.toLowerCase());
 
       // MyPlate: 7 daily; DASH/DiabetesPlate: 8 daily + 2 weekly
-      final expectedDailyCount =
-          dietType == 'MyPlate' ? 7 : 8;
+      final expectedDailyCount = dietType == 'MyPlate' ? 7 : 8;
       final expectedWeeklyCount = dietType == 'MyPlate' ? 0 : 2;
       final hasIncompleteTrackers = hasMatchingDietType &&
           (_dailyTrackers.length < expectedDailyCount ||
@@ -372,6 +399,11 @@ class TrackerProvider extends ChangeNotifier {
           }
         }
 
+        if (!needsUpdate &&
+            _weeklyGoalsMismatchPlan(personalizedDietPlan, dietType)) {
+          needsUpdate = true;
+        }
+
         if (needsUpdate) {
           await _trackerService.clearUserTrackerCacheForDietType(
               userId, dietType);
@@ -440,8 +472,7 @@ class TrackerProvider extends ChangeNotifier {
             await _trackerService.getDailyTrackers(userId, dietType);
         _weeklyTrackers =
             await _trackerService.getWeeklyTrackers(userId, dietType);
-      } catch (e) {
-      }
+      } catch (e) {}
     }
   }
 

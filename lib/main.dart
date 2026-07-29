@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -57,6 +60,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    tz.initializeTimeZones();
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timezoneInfo.identifier));
+    } catch (e) {
+      debugPrint('Failed to set local timezone, defaulting to UTC: $e');
+    }
+
     await dotenv.load(fileName: ".env");
     await RagChatbotService.resetConversation();
 
@@ -126,7 +137,13 @@ void main() async {
           // Core Controllers / State Managers
           ChangeNotifierProvider(create: (_) => AuthController()..initialize()),
           ChangeNotifierProvider(create: (_) => SignupProvider()),
-          ChangeNotifierProvider(create: (_) => TrackerProvider()),
+          ChangeNotifierProxyProvider<AuthController, TrackerProvider>(
+            create: (_) => TrackerProvider(),
+            update: (context, auth, tracker) {
+              if (!auth.isAuthenticated) tracker?.clearTrackers();
+              return tracker!;
+            },
+          ),
           ChangeNotifierProvider(create: (_) => NotificationManager()),
 
           // Dependent Controllers (as ProxyProviders)
@@ -151,6 +168,8 @@ void main() async {
             update: (context, auth, pantry) {
               if (auth.isAuthenticated) {
                 pantry!.initializeWithUser(auth.currentUser!.id!);
+              } else {
+                pantry!.resetUser();
               }
               return pantry!;
             },
@@ -314,19 +333,43 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
+  ThemeData _buildTheme() {
+    final base = ThemeData(
+      primarySwatch: Colors.orange,
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      dropdownMenuTheme: const DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(Colors.white),
+        ),
+      ),
+    );
+
+    return base.copyWith(
+      appBarTheme: base.appBarTheme.copyWith(
+        titleTextStyle: base.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          fontSize: 24,
+        ),
+      ),
+      cardTheme: base.cardTheme.copyWith(
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: base.dialogTheme.copyWith(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: base.textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Food RX',
-      theme: ThemeData(
-        primarySwatch: Colors.orange,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        dropdownMenuTheme: const DropdownMenuThemeData(
-          menuStyle: MenuStyle(
-            backgroundColor: WidgetStatePropertyAll<Color>(Colors.white),
-          ),
-        ),
-      ),
+      theme: _buildTheme(),
       navigatorObservers: [routeObserver],
       home: Consumer<AuthController>(
         builder: (context, authController, _) {
@@ -341,6 +384,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           }
 
           if (authController.isAuthenticated) {
+            // New Google user — show health-profile onboarding before home.
+            final onboarding = authController.pendingGoogleOnboarding;
+            if (onboarding != null) {
+              return SignupPage(
+                initialStep: 1,
+                prefillData: onboarding,
+                isGoogleOnboarding: true,
+              );
+            }
+            // Show one-time biometric suggestion after the user's second login.
+            if (authController.shouldSuggestBiometric) {
+              return _BiometricSuggestionWrapper(
+                child: const MainScreen(),
+              );
+            }
             return const MainScreen();
           }
 
@@ -400,4 +458,118 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       navigatorKey: NavigationService.navigatorKey,
     );
   }
+}
+
+// ── One-time biometric suggestion ───────────────────────────────────────────
+
+class _BiometricSuggestionWrapper extends StatefulWidget {
+  final Widget child;
+  const _BiometricSuggestionWrapper({required this.child});
+
+  @override
+  State<_BiometricSuggestionWrapper> createState() =>
+      _BiometricSuggestionWrapperState();
+}
+
+class _BiometricSuggestionWrapperState
+    extends State<_BiometricSuggestionWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showDialog());
+  }
+
+  Future<void> _showDialog() async {
+    if (!mounted) return;
+    final auth = context.read<AuthController>();
+    final labels = await auth.getBiometricSignInLabels();
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                labels.continueIcon,
+                size: 48,
+                color: const Color(0xFFFF6A00),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Sign in faster next time?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Use ${labels.saveLoginCheckbox.toLowerCase()} so you never need to type your password again.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF666666),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    final ok = await auth.enableBiometricLogin();
+                    if (!ok && auth.error != null && ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text(auth.error!)),
+                      );
+                    }
+                    await auth.dismissBiometricSuggestion();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6A00),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Enable',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await auth.dismissBiometricSuggestion();
+                },
+                child: const Text(
+                  'Maybe later',
+                  style: TextStyle(
+                    color: Color(0xFF90909A),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
