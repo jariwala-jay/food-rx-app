@@ -51,6 +51,19 @@ class PantryController extends ChangeNotifier {
     loadItems();
   }
 
+  /// Clear all in-memory user data on logout so the previous user's pantry
+  /// items are never visible — even briefly — when a new user signs in.
+  void resetUser() {
+    _userId = null;
+    _pantryItems = [];
+    _otherItems = [];
+    _filteredPantryItems = [];
+    _filteredOtherItems = [];
+    _searchQuery = '';
+    _selectedCategory = null;
+    notifyListeners();
+  }
+
   // Load pantry items from database
   Future<void> loadItems() async {
     if (_userId == null) {
@@ -70,8 +83,7 @@ class PantryController extends ChangeNotifier {
       _otherItems = otherItemsData;
 
       // Sort main lists by expiration date - items expiring soonest first
-      _pantryItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
-      _otherItems.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      _sortPantryLists();
 
       // Merge rows that are the same item added on the same calendar day (sum qty).
       try {
@@ -130,11 +142,11 @@ class PantryController extends ChangeNotifier {
       if (item.isPantryItem) {
         _pantryItems = [..._pantryItems, newItem];
         _pantryItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       } else {
         _otherItems = [..._otherItems, newItem];
         _otherItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       }
 
       // Apply filters after adding new item
@@ -221,12 +233,12 @@ class PantryController extends ChangeNotifier {
         _pantryItems =
             _pantryItems.map((i) => i.id == item.id ? item : i).toList();
         _pantryItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       } else {
         _otherItems =
             _otherItems.map((i) => i.id == item.id ? item : i).toList();
         _otherItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       }
 
       // Apply filters after updating item
@@ -300,9 +312,9 @@ class PantryController extends ChangeNotifier {
 
     // Sort by expiration date - items expiring soonest first
     _filteredPantryItems
-        .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+        .sort(PantryController.compareByExpiration);
     _filteredOtherItems
-        .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+        .sort(PantryController.compareByExpiration);
 
     notifyListeners();
   }
@@ -316,22 +328,32 @@ class PantryController extends ChangeNotifier {
     final priorityOrder = isPantryItem
         ? [
             'fresh_fruits',
-            'fresh_veggies',
-            'protein',
-            'dairy',
-            'grains',
+            'frozen_fruits',
             'canned_fruits',
+            'fresh_veggies',
+            'frozen_veggies',
             'canned_veggies',
+            'grains',
+            'meat',
+            'beans',
+            'dairy',
+            'nuts_seeds',
             'seasonings',
           ]
         : [
-            'fresh_produce',
-            'protein_meat',
-            'dairy_eggs',
-            'pantry_staples',
-            'frozen_foods',
+            'fresh_fruits',
+            'frozen_fruits',
+            'canned_fruits',
+            'fresh_veggies',
+            'frozen_veggies',
+            'canned_veggies',
+            'grains',
+            'meat',
+            'beans',
+            'dairy',
+            'nuts_seeds',
+            'seasonings',
             'snacks_beverages',
-            'essentials_condiments',
           ];
 
     // Sort categories by priority, then alphabetically for unlisted categories
@@ -387,7 +409,7 @@ class PantryController extends ChangeNotifier {
     for (final list in groups.values) {
       if (list.length < 2) continue;
       changed = true;
-      list.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+      list.sort(PantryController.compareByExpiration);
       final keeper = list.first;
       var total = 0.0;
       DateTime earliestExpiry = list.first.expirationDate;
@@ -413,16 +435,46 @@ class PantryController extends ChangeNotifier {
       if (isPantryItem) {
         _pantryItems = refreshed;
         _pantryItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       } else {
         _otherItems = refreshed;
         _otherItems
-            .sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+            .sort(PantryController.compareByExpiration);
       }
     }
   }
 
   // Helper methods
+  /// Non-expired items first (soonest expiry at top), expired items at the end.
+  static int compareByExpiration(PantryItem a, PantryItem b) {
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final aDay = DateTime(
+      a.expirationDate.year,
+      a.expirationDate.month,
+      a.expirationDate.day,
+    );
+    final bDay = DateTime(
+      b.expirationDate.year,
+      b.expirationDate.month,
+      b.expirationDate.day,
+    );
+    final aExpired = aDay.isBefore(today);
+    final bExpired = bDay.isBefore(today);
+    if (aExpired != bExpired) {
+      return aExpired ? 1 : -1;
+    }
+    return a.expirationDate.compareTo(b.expirationDate);
+  }
+
+  void _sortPantryLists() {
+    _pantryItems.sort(compareByExpiration);
+    _otherItems.sort(compareByExpiration);
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     if (loading) {

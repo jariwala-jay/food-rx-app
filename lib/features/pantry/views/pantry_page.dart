@@ -18,6 +18,250 @@ TextScaler _pantryTileTextScaler(BuildContext context) {
   return TextScaler.linear(scale.clamp(0.9, 1.35));
 }
 
+DateTime _dateOnly(DateTime date) =>
+    DateTime(date.year, date.month, date.day);
+
+String _formatExpiryDate(DateTime date) {
+  return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}
+
+/// Calendar-day aware expiry label (avoids "Expires Today" for tomorrow midnight).
+String _pantryExpiryText(DateTime? expiryDate) {
+  if (expiryDate == null) return '';
+  final today = _dateOnly(DateTime.now());
+  final expiry = _dateOnly(expiryDate);
+  final days = expiry.difference(today).inDays;
+  if (days < 0) return 'Expired';
+  if (days == 0) return 'Expires Today';
+  if (days == 1) return 'Expires Tomorrow';
+  if (days > 30) {
+    final months = days ~/ 30;
+    return 'Expires in $months Month${months > 1 ? 's' : ''}';
+  }
+  return 'Expires in $days Day${days != 1 ? 's' : ''}';
+}
+
+/// Bottom sheet for editing pantry item quantity and expiration date.
+class EditPantryItemSheet extends StatefulWidget {
+  final PantryItem item;
+
+  const EditPantryItemSheet({super.key, required this.item});
+
+  @override
+  State<EditPantryItemSheet> createState() => _EditPantryItemSheetState();
+}
+
+class _EditPantryItemSheetState extends State<EditPantryItemSheet> {
+  late final TextEditingController _qtyController;
+  late DateTime _selectedDate;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _qtyController =
+        TextEditingController(text: widget.item.quantity.toString());
+    _selectedDate = _dateOnly(widget.item.expiryDate ?? DateTime.now());
+  }
+
+  @override
+  void dispose() {
+    _qtyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickExpirationDate() async {
+    final today = _dateOnly(DateTime.now());
+    final initialDate =
+        _selectedDate.isBefore(today) ? today : _selectedDate;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365 * 5)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFFF6A00),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF2C2C2C),
+              onSurfaceVariant: Colors.white,
+            ),
+            datePickerTheme: const DatePickerThemeData(
+              backgroundColor: Colors.white,
+              headerBackgroundColor: Colors.white,
+              headerForegroundColor: Color(0xFF2C2C2C),
+              weekdayStyle: TextStyle(color: Color(0xFF8E8E93)),
+              dayStyle: TextStyle(color: Color(0xFF2C2C2C)),
+              cancelButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+              confirmButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _selectedDate = _dateOnly(picked));
+    }
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+
+    double qty = 1.0;
+    try {
+      qty = double.parse(_qtyController.text);
+    } catch (_) {}
+
+    setState(() => _isSaving = true);
+
+    try {
+      final updatedItem = widget.item.copyWith(
+        quantity: qty,
+        expirationDate: _selectedDate,
+      );
+      final pantryController = context.read<PantryController>();
+      await pantryController.updateItem(updatedItem);
+      if (!mounted) return;
+      if (pantryController.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(pantryController.error!),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+        return;
+      }
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update item. Please try again.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaleFactor = MediaQuery.textScaleFactorOf(context);
+    final clampedScale = textScaleFactor.clamp(0.8, 1.0);
+
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit ${widget.item.name}',
+              style: TextStyle(
+                fontSize: 20 * clampedScale,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _qtyController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Quantity (${widget.item.unitLabel})',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'Expiration Date:',
+                    style: TextStyle(fontSize: 16 * clampedScale),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                SizedBox(width: 12 * clampedScale),
+                Flexible(
+                  child: TextButton(
+                    onPressed: _pickExpirationDate,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _formatExpiryDate(_selectedDate),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFFF6A00),
+                          fontSize: 14 * clampedScale,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _isSaving ? null : () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF6A00),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6A00),
+                  ),
+                  onPressed: _isSaving ? null : _save,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Save', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Pantry list row: 64×64 image, title/expiry (max two lines), fixed 78×40 qty box.
 class _PantryItemRowContent extends StatelessWidget {
   final PantryItem item;
@@ -366,7 +610,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                                         'FoodRx Items',
                                         style: TextStyle(
                                           fontSize: 16 * clampedScale,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.bold,
                                           color: _selectedTabIndex == 0
                                               ? Colors.white
                                               : Colors.grey,
@@ -406,7 +650,7 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                                         'Home Items',
                                         style: TextStyle(
                                           fontSize: 16 * clampedScale,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.bold,
                                           color: _selectedTabIndex == 1
                                               ? Colors.white
                                               : Colors.grey,
@@ -903,24 +1147,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
           ),
           child: _PantryItemRowContent(
             item: item,
-            expiryText: _getExpiryText(item.expiryDate),
+            expiryText: _pantryExpiryText(item.expiryDate),
           ),
         ),
       ),
     );
-  }
-
-  String _getExpiryText(DateTime? expiryDate) {
-    if (expiryDate == null) return '';
-    final days = expiryDate.difference(DateTime.now()).inDays;
-    if (days < 0) return 'Expired';
-    if (days == 0) return 'Expires Today';
-    if (days == 1) return 'Expires Tomorrow';
-    if (days > 30) {
-      final months = days ~/ 30;
-      return 'Expires in $months Month${months > 1 ? 's' : ''}';
-    }
-    return 'Expires in $days Day${days != 1 ? 's' : ''}';
   }
 
   Widget _buildAddButton(
@@ -1027,177 +1258,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
   }
 
   void _showEditItemDialog(PantryItem item) {
-    final qtyController = TextEditingController(text: item.quantity.toString());
-    DateTime selectedDate = item.expiryDate ?? DateTime.now();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Builder(
-                builder: (context) {
-                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                  return Text(
-                    'Edit ${item.name}',
-                    style: TextStyle(
-                      fontSize: 20 * clampedScale,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Quantity (${item.unitLabel})',
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Builder(
-                builder: (context) {
-                  final textScaleFactor = MediaQuery.textScaleFactorOf(context);
-                  final clampedScale = textScaleFactor.clamp(0.8, 1.0);
-                  return Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'Expiration Date:',
-                          style: TextStyle(fontSize: 16 * clampedScale),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      SizedBox(width: 12 * clampedScale),
-                      Flexible(
-                        child: TextButton(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: selectedDate.isBefore(DateTime.now())
-                                  ? DateTime.now()
-                                  : selectedDate,
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now()
-                                  .add(const Duration(days: 365 * 5)),
-                              builder: (context, child) {
-                                return Theme(
-                                  data: Theme.of(context).copyWith(
-                                    colorScheme: const ColorScheme.light(
-                                      primary: Color(0xFFFF6A00),
-                                      onPrimary: Colors.white,
-                                      surface: Colors.white,
-                                      onSurface: Color(0xFF2C2C2C),
-                                      onSurfaceVariant: Colors.white,
-                                    ),
-                                    datePickerTheme: DatePickerThemeData(
-                                      backgroundColor: Colors.white,
-                                      headerBackgroundColor: Colors.white,
-                                      headerForegroundColor: Color(0xFF2C2C2C),
-                                      weekdayStyle: TextStyle(
-                                        color: Color(0xFF8E8E93),
-                                      ),
-                                      dayStyle: TextStyle(
-                                        color: Color(0xFF2C2C2C),
-                                      ),
-                                      cancelButtonStyle: TextButton.styleFrom(
-                                        foregroundColor: Color(0xFFFF6A00),
-                                      ),
-                                      confirmButtonStyle: TextButton.styleFrom(
-                                        foregroundColor: Color(0xFFFF6A00),
-                                      ),
-                                    ),
-                                  ),
-                                  child: child!,
-                                );
-                              },
-                            );
-                            if (picked != null && mounted) {
-                              // Check mounted before setState
-                              setState(() {
-                                selectedDate = picked;
-                              });
-                            }
-                          },
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFFFF6A00),
-                                fontSize: 14 * clampedScale,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFFF6A00),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6A00),
-                    ),
-                    onPressed: () {
-                      // Get the quantity value and validate it
-                      double qty = 1.0;
-                      try {
-                        qty = double.parse(qtyController.text);
-                      } catch (_) {}
-
-                      // Update the item in the controller
-                      final updatedItem = item.copyWith(
-                        quantity: qty,
-                        expirationDate: selectedDate,
-                        // unit: selectedUnit, // If you add unit editing
-                      );
-                      context
-                          .read<PantryController>()
-                          .updateItem(updatedItem); // Changed to updateItem
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Save',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => EditPantryItemSheet(item: item),
     );
   }
 }
@@ -1490,130 +1555,19 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
           ),
           child: _PantryItemRowContent(
             item: item,
-            expiryText: _getExpiryText(item.expiryDate),
+            expiryText: _pantryExpiryText(item.expiryDate),
           ),
         ),
       ),
     );
   }
 
-  String _getExpiryText(DateTime? expiryDate) {
-    if (expiryDate == null) return '';
-    final days = expiryDate.difference(DateTime.now()).inDays;
-    if (days < 0) return 'Expired';
-    if (days == 0) return 'Expires Today';
-    if (days == 1) return 'Expires Tomorrow';
-    if (days > 30) {
-      final months = days ~/ 30;
-      return 'Expires in $months Month${months > 1 ? 's' : ''}';
-    }
-    return 'Expires in $days Day${days != 1 ? 's' : ''}';
-  }
-
   void _showEditItemDialog(PantryItem item) {
-    // Same as parent class method
-    final qtyController = TextEditingController(text: item.quantity.toString());
-    DateTime selectedDate = item.expiryDate ?? DateTime.now();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Edit ${item.name}',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Quantity (${item.unitLabel})',
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Expiration Date:'),
-                  const SizedBox(width: 12),
-                  TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate.isBefore(DateTime.now())
-                            ? DateTime.now()
-                            : selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 365 * 5)),
-                      );
-                      if (picked != null && mounted) {
-                        setState(() {
-                          selectedDate = picked;
-                        });
-                      }
-                    },
-                    child: Text(
-                      '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6A00),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      double qty = 1.0;
-                      try {
-                        qty = double.parse(qtyController.text);
-                      } catch (_) {}
-
-                      final updatedItem = item.copyWith(
-                        quantity: qty,
-                        expirationDate: selectedDate,
-                      );
-                      context.read<PantryController>().updateItem(updatedItem);
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6A00),
-                    ),
-                    child: const Text('Save',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => EditPantryItemSheet(item: item),
     );
   }
 }

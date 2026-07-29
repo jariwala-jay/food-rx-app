@@ -3,12 +3,8 @@ class ImageUrlHelper {
   static const String spoonacularBaseUrl = 'https://spoonacular.com/cdn/ingredients_100x100/';
   static const String spoonacularFallbackUrl = 'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg';
 
-  /// Constructs a proper Spoonacular image URL from various input formats
-  /// Handles cases where the input might be:
-  /// - Just a filename (e.g., "avocado.jpg")
-  /// - A full URL (e.g., "https://spoonacular.com/cdn/ingredients_100x100/avocado.jpg")
-  /// - A different base URL format (e.g., "https://img.spoonacular.com/ingredients_100x100/avocado.jpg")
-  /// - An empty or null value
+  /// Normalizes a Spoonacular image reference (bare filename, full URL, or
+  /// an alternate base URL) to our standard base URL.
   static String getSpoonacularImageUrl(String? imageInput) {
     if (imageInput == null || imageInput.isEmpty) {
       return spoonacularFallbackUrl;

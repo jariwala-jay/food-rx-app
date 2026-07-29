@@ -14,6 +14,8 @@ class ExpiredItemsPage extends StatefulWidget {
   State<ExpiredItemsPage> createState() => _ExpiredItemsPageState();
 }
 
+enum _ExtendAction { oneDay, twoDays, chooseDate, discard }
+
 class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
   bool _isLoading = true;
   String? _error;
@@ -82,27 +84,67 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
   Future<void> _showExtendDialog(PantryItem item) async {
     final accent = const Color(0xFFFF6A00);
 
-    final result = await showDialog<int>(
+    final result = await showDialog<_ExtendAction>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text('Extend ${item.name}?'),
-          content: const Text(
-            'If it is not spoiled, you can extend the expiration date by 1 or 2 days.',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'If it is not spoiled, you can extend the expiration date.',
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, _ExtendAction.oneDay),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: accent,
+                        side: BorderSide(color: accent),
+                      ),
+                      child: const Text('+1 day'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, _ExtendAction.twoDays),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: accent,
+                        side: BorderSide(color: accent),
+                      ),
+                      child: const Text('+2 days'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: OutlinedButton(
+                  onPressed: () =>
+                      Navigator.pop(context, _ExtendAction.chooseDate),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: accent,
+                    side: BorderSide(color: accent),
+                  ),
+                  child: const Text('Choose another date'),
+                ),
+              ),
+            ],
           ),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, 1),
-              child: Text(
-                '+1 day',
-                style: TextStyle(color: accent, fontWeight: FontWeight.w600),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 2),
-              child: Text(
-                '+2 days',
-                style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+              onPressed: () => Navigator.pop(context, _ExtendAction.discard),
+              child: const Text(
+                'Discard item',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
               ),
             ),
             TextButton(
@@ -115,7 +157,99 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
     );
 
     if (result == null) return;
-    await _confirmAndExtend(item, result);
+
+    switch (result) {
+      case _ExtendAction.oneDay:
+        await _confirmAndExtend(item, 1);
+        break;
+      case _ExtendAction.twoDays:
+        await _confirmAndExtend(item, 2);
+        break;
+      case _ExtendAction.chooseDate:
+        await _pickAnotherDate(item);
+        break;
+      case _ExtendAction.discard:
+        await _confirmDiscard(item);
+        break;
+    }
+  }
+
+  Future<void> _pickAnotherDate(PantryItem item) async {
+    final pantryController = context.read<PantryController>();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: today,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFFF6A00),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF2C2C2C),
+              onSurfaceVariant: Colors.white,
+            ),
+            datePickerTheme: const DatePickerThemeData(
+              backgroundColor: Colors.white,
+              headerBackgroundColor: Colors.white,
+              headerForegroundColor: Color(0xFF2C2C2C),
+              weekdayStyle: TextStyle(color: Color(0xFF8E8E93)),
+              dayStyle: TextStyle(color: Color(0xFF2C2C2C)),
+              cancelButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+              confirmButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked == null) return;
+
+    final updated = item.copyWith(expirationDate: picked);
+    await pantryController.updateItem(updated);
+    await _loadExpiredItems();
+  }
+
+  Future<void> _confirmDiscard(PantryItem item) async {
+    final pantryController = context.read<PantryController>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Discard ${item.name}?'),
+          content: const Text('This will remove it from your pantry.'),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Discard',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    await pantryController.removeItem(item.id, item.isPantryItem);
+    await _loadExpiredItems();
   }
 
   void _goBackToNotifications() {

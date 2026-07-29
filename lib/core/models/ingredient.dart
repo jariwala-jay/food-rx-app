@@ -27,11 +27,15 @@ class Ingredient {
       localAssetPath != null ? 'asset:$localAssetPath' : imageUrl;
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
+    // Spoonacular result entries can omit `name`/`image` on some rows (e.g.
+    // sparse autocomplete matches); fall back instead of throwing, so one
+    // malformed row doesn't take down the whole batch it's parsed with.
+    final image = json['image'] as String? ?? '';
     return Ingredient(
       id: json['id'].toString(),
-      name: json['name'] as String,
-      image: json['image'] as String,
-      imageName: json['image'] as String,
+      name: json['name'] as String? ?? '',
+      image: image,
+      imageName: image,
       aisle: json['aisle'] as String?,
     );
   }
