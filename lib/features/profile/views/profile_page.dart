@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/utils/typography.dart';
@@ -290,104 +289,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _showDisableBiometricConfirmation(
-    BuildContext context,
-    BiometricSignInLabels labels,
-  ) async {
-    const brand = Color(0xFFFF6A00);
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  labels.disableDialogTitle,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  labels.disableDialogBody,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF444444),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF5F5F6E),
-                          side: BorderSide(color: Colors.grey.shade300),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: brand,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('Turn off'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (result != true || !context.mounted) return;
-
-    await context.read<AuthController>().clearSavedLogin();
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(labels.disabledSnackbar)),
-    );
-    setState(() {});
-  }
-
-  Future<({bool hasSaved, BiometricSignInLabels labels})?> _loadSavedLoginSection(
-    AuthController auth,
-  ) async {
-    final hasSaved = await auth.hasSavedLogin();
-    if (!hasSaved) return null;
-    final labels = await auth.getBiometricSignInLabels();
-    return (hasSaved: true, labels: labels);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -491,7 +392,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Container(
@@ -522,7 +422,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   _buildSection(
                     context: context,
                     title: 'Personal Information',
@@ -574,9 +473,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   _buildSection(
                     context: context,
                     title: 'Physical Information',
@@ -623,9 +520,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   _buildSection(
                     context: context,
                     title: 'Diet-related Health Goals',
@@ -692,9 +587,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   _buildSection(
                     context: context,
                     title: 'Medical Information',
@@ -788,13 +681,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ],
                               ),
-                              if (user.allergies != null &&
-                                  user.allergies!.isNotEmpty) ...[
+                              if ((user.allergies?.isNotEmpty ?? false) ||
+                                  (user.excludedIngredients?.isNotEmpty ??
+                                      false)) ...[
                                 const SizedBox(height: 12),
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: user.allergies!
+                                  children: [
+                                    ...?user.allergies,
+                                    ...?user.excludedIngredients
+                                        ?.map((item) => item.displayName),
+                                  ]
                                       .map((allergy) => Chip(
                                             label: Text(allergy),
                                             backgroundColor:
@@ -824,9 +722,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   _buildSection(
                     context: context,
                     title: 'Settings',
@@ -860,40 +756,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       _buildDivider(),
-                      FutureBuilder<bool>(
-                        future: context.read<AuthController>().hasSavedLogin(),
-                        builder: (context, snapshot) {
-                          if (snapshot.data != true) {
-                            return const SizedBox.shrink();
-                          }
-                          return Column(
-                            children: [
-                              _buildInfoRow(
-                                context: context,
-                                label: 'Remove Saved Login',
-                                value: '',
-                                textColor: Colors.red,
-                                onTap: () async {
-                                  await context
-                                      .read<AuthController>()
-                                      .clearSavedLogin();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Saved login removed from this device',
-                                        ),
-                                      ),
-                                    );
-                                    setState(() {});
-                                  }
-                                },
-                              ),
-                              _buildDivider(),
-                            ],
-                          );
-                        },
-                      ),
+                      _BiometricToggleRow(onChanged: () => setState(() {})),
+                      _buildDivider(),
                       _buildInfoRow(
                         context: context,
                         label: 'Log Out',
@@ -903,41 +767,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
-                  FutureBuilder<({bool hasSaved, BiometricSignInLabels labels})?>(
-                    future: _loadSavedLoginSection(
-                      context.read<AuthController>(),
-                    ),
-                    builder: (context, snapshot) {
-                      final section = snapshot.data;
-                      if (section == null) {
-                        return const SizedBox.shrink();
-                      }
-                      final labels = section.labels;
-                      return Column(
-                        children: [
-                          const SizedBox(height: 12),
-                          _buildSection(
-                            context: context,
-                            title: 'Security',
-                            children: [
-                              _buildInfoRow(
-                                context: context,
-                                label: labels.disableRow,
-                                value: '',
-                                textColor: Colors.red,
-                                onTap: () => _showDisableBiometricConfirmation(
-                                  context,
-                                  labels,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
                   const SizedBox(height: 32),
                 ],
               ),
@@ -1042,6 +871,198 @@ class _ProfilePageState extends State<ProfilePage> {
           fieldType: fieldType,
           currentValue: currentValue,
         ),
+      ),
+    );
+  }
+}
+
+// ── Biometric toggle row ────────────────────────────────────────────────────
+
+class _BiometricToggleRow extends StatefulWidget {
+  final VoidCallback onChanged;
+
+  const _BiometricToggleRow({required this.onChanged});
+
+  @override
+  State<_BiometricToggleRow> createState() => _BiometricToggleRowState();
+}
+
+class _BiometricToggleRowState extends State<_BiometricToggleRow> {
+  bool? _isEnabled;
+  bool _isSupported = false;
+  String _label = 'Sign in with Face ID / Fingerprint';
+  bool _isBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final auth = context.read<AuthController>();
+    final supported = await auth.canUseBiometricLogin();
+    final enabled = await auth.isBiometricEnabled();
+    String label = 'Sign in with Face ID / Fingerprint';
+    if (supported) {
+      final labels = await auth.getBiometricSignInLabels();
+      label = labels.saveLoginCheckbox;
+    }
+    if (!mounted) return;
+    setState(() {
+      _isSupported = supported;
+      _isEnabled = enabled;
+      _label = label;
+    });
+  }
+
+  Future<void> _toggle(bool value) async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    final auth = context.read<AuthController>();
+
+    if (value) {
+      final ok = await auth.enableBiometricLogin();
+      if (mounted) {
+        setState(() {
+          _isEnabled = ok ? true : _isEnabled;
+          _isBusy = false;
+        });
+        if (!ok && auth.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(auth.error!)),
+          );
+        } else if (ok) {
+          widget.onChanged();
+        }
+      }
+    } else {
+      await _confirmDisable(auth);
+    }
+  }
+
+  Future<void> _confirmDisable(AuthController auth) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Turn off biometric sign-in?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "You'll need to sign in manually next time.",
+                style: TextStyle(fontSize: 15, color: Color(0xFF444444)),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF5F5F6E),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6A00),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Turn off'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await auth.disableBiometricLogin();
+      setState(() {
+        _isEnabled = false;
+        _isBusy = false;
+      });
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric sign-in turned off')),
+        );
+      }
+    } else if (mounted) {
+      setState(() => _isBusy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isSupported || _isEnabled == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _isEnabled!
+                      ? 'Sign in without a password'
+                      : 'Enable for faster sign-in',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF90909A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _isEnabled!,
+            onChanged: _isBusy ? null : _toggle,
+            activeColor: const Color(0xFFFF6A00),
+          ),
+        ],
       ),
     );
   }
