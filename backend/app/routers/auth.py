@@ -2,7 +2,9 @@ from datetime import date, datetime, timezone, timedelta
 import base64
 import hashlib
 import json
+import re
 import secrets
+import warnings
 from html import escape
 from urllib.parse import quote
 
@@ -13,7 +15,9 @@ from fastapi.responses import HTMLResponse, Response
 from app.database import get_database
 from app.auth_password import hash_password, verify_password
 from app.auth_jwt import ACCESS_TOKEN_EXPIRE_HOURS, create_access_token
+from app.config import settings
 from app.deps import get_current_user_id
+from app.firebase_admin_app import verify_google_access_token
 from app.refresh_tokens import (
     issue_refresh_token,
     revoke_all_refresh_tokens_for_user,
@@ -22,6 +26,21 @@ from app.refresh_tokens import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Warn loudly at startup if the JWT secret is still the insecure default.
+# A weak/default secret allows anyone to forge valid access tokens.
+if settings.secret_key in ("", "change-me-in-production"):
+    warnings.warn(
+        "SECRET_KEY is not set or is using the default value. "
+        "Set a strong random SECRET_KEY in your .env file before deploying.",
+        stacklevel=1,
+    )
+
+MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+# Dummy hash so a missing-email login still runs verify_password, keeping
+# response time constant to prevent email enumeration via timing.
+_DUMMY_HASH = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:" + "0" * 64
 
 USERS = "users"
 PASSWORD_RESET_TOKENS = "passwordResetTokens"
@@ -32,8 +51,26 @@ LOCK_MINUTES = 30
 MINIMUM_AGE_YEARS = 18
 
 
+_SENSITIVE_FIELDS = {"password", "failedLoginAttempts", "isLocked", "lockUntil"}
+
+_PASSWORD_RULES = [
+    (lambda p: len(p) >= 8,                          "Password must be at least 8 characters"),
+    (lambda p: bool(re.search(r"[A-Z]", p)),          "Password must contain at least one uppercase letter"),
+    (lambda p: bool(re.search(r"[a-z]", p)),          "Password must contain at least one lowercase letter"),
+    (lambda p: bool(re.search(r"[0-9]", p)),          "Password must contain at least one number"),
+    (lambda p: bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', p)), "Password must contain at least one special character"),
+]
+
+def _validate_password_complexity(password: str) -> str | None:
+    """Return an error message if password fails complexity rules, else None."""
+    for check, message in _PASSWORD_RULES:
+        if not check(password):
+            return message
+    return None
+
+
 def _serialize_user(doc: dict) -> dict:
-    out = dict(doc)
+    out = {k: v for k, v in doc.items() if k not in _SENSITIVE_FIELDS}
     if "_id" in out:
         out["_id"] = str(out["_id"])
     return out
@@ -161,10 +198,18 @@ async def register(body: dict):
     """
     db = await get_database()
     users = db[USERS]
-    email = (body.get("email") or "").strip().lower()
-    password = body.get("password")
+    raw_email = body.get("email")
+    raw_password = body.get("password")
+    if not isinstance(raw_email, str) or not isinstance(raw_password, str):
+        raise HTTPException(status_code=400, detail="email and password required")
+    email = raw_email.strip().lower()
+    password = raw_password
     if not email or not password:
         raise HTTPException(status_code=400, detail="email and password required")
+
+    pw_error = _validate_password_complexity(password)
+    if pw_error:
+        raise HTTPException(status_code=400, detail=pw_error)
 
     if "dateOfBirth" in body:
         dob = _parse_date_of_birth(body.get("dateOfBirth"))
@@ -228,25 +273,55 @@ async def login(body: dict):
     """Login with email and password. Returns JWT and user."""
     db = await get_database()
     users = db[USERS]
-    email = (body.get("email") or "").strip().lower()
-    password = body.get("password")
+    raw_email = body.get("email")
+    raw_password = body.get("password")
+    # Reject non-string inputs early to prevent type-confusion errors downstream.
+    if not isinstance(raw_email, str) or not isinstance(raw_password, str):
+        raise HTTPException(status_code=400, detail="email and password required")
+    email = raw_email.strip().lower()
+    password = raw_password
     if not email or not password:
         raise HTTPException(status_code=400, detail="email and password required")
 
     user = await users.find_one({"email": email})
     if not user:
+        # Dummy verification keeps response time constant regardless of
+        # whether the email exists, to prevent enumeration via timing.
+        verify_password("_dummy_", _DUMMY_HASH)
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user.get("authProvider") == "google":
+        # Constant-time dummy so this path takes the same time as a real check.
+        verify_password("_dummy_", _DUMMY_HASH)
+        raise HTTPException(
+            status_code=400,
+            detail="This account uses Google Sign-In. Please tap 'Continue with Google' to sign in.",
+        )
 
     if user.get("isLocked"):
         lock_until = user.get("lockUntil")
         if lock_until:
             try:
                 until = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
-                if until > datetime.now(timezone.utc):
+                now = datetime.now(timezone.utc)
+                if until > now:
+                    remaining_secs = (until - now).total_seconds()
+                    minutes = max(1, int(remaining_secs // 60) + (1 if remaining_secs % 60 > 0 else 0))
+                    unit = "minute" if minutes == 1 else "minutes"
                     raise HTTPException(
                         status_code=403,
-                        detail="Account temporarily locked. Try again later.",
+                        detail=f"Account temporarily locked after too many failed attempts. Try again in {minutes} {unit}.",
                     )
+                else:
+                    # Lock has expired — reset so the user gets a fresh set of attempts.
+                    # Without this, failedLoginAttempts stays at LOCK_THRESHOLD and the
+                    # very next wrong password would re-lock them immediately.
+                    await users.update_one(
+                        {"_id": user["_id"]},
+                        {"$set": {"isLocked": False, "lockUntil": None, "failedLoginAttempts": 0}},
+                    )
+                    user["isLocked"] = False
+                    user["failedLoginAttempts"] = 0
             except (ValueError, TypeError):
                 pass
 
@@ -295,6 +370,78 @@ async def refresh_session(body: dict):
     }
 
 
+@router.post("/google")
+async def google_sign_in(body: dict):
+    """
+    Authenticate via Google Sign-In. Body: { "accessToken": "<google-oauth-access-token>" }.
+    Verifies the token via Google's userinfo endpoint, finds or creates the user,
+    and returns the same JWT + refresh-token payload as /login, plus "isNewUser": bool.
+    """
+    access_token = (body.get("accessToken") or "").strip()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="accessToken required")
+
+    try:
+        decoded = await verify_google_access_token(access_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired Google token")
+
+    email = (decoded.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email address")
+
+    name = decoded.get("name") or ""
+    picture = decoded.get("picture") or ""
+
+    db = await get_database()
+    users = db[USERS]
+    now = datetime.now(timezone.utc).isoformat()
+
+    user = await users.find_one({"email": email})
+    is_new_user = user is None
+
+    if user:
+        if user.get("password") and not user.get("authProvider"):
+            # Existing email/password account — do not silently merge.
+            raise HTTPException(
+                status_code=400,
+                detail="An account with this email already exists. Please sign in with your email and password.",
+            )
+        await _handle_successful_login(users, user["_id"])
+    else:
+        user_id = ObjectId()
+        user = {
+            "_id": user_id,
+            "email": email,
+            "name": name,
+            "profilePhotoUrl": picture,
+            "authProvider": "google",
+            "createdAt": now,
+            "updatedAt": now,
+            "lastLoginAt": now,
+            "lastActiveAt": now,
+            "failedLoginAttempts": 0,
+            "isLocked": False,
+            "lockUntil": None,
+        }
+        await users.insert_one(user)
+        notifications = db["notifications"]
+        await notifications.insert_one({
+            "_id": ObjectId(),
+            "userId": str(user_id),
+            "type": "admin",
+            "title": "Welcome to MyFoodRx",
+            "message": "We're glad you're here. Start by adding items to your pantry!",
+            "createdAt": now,
+        })
+
+    response = await _auth_token_response(db, user["_id"], user["email"], user)
+    response["isNewUser"] = is_new_user
+    return response
+
+
 @router.post("/logout")
 async def logout_session(body: dict):
     """Revoke the refresh token for this device. Body: { \"refresh_token\": \"...\" }."""
@@ -313,7 +460,6 @@ async def _handle_failed_login(users, user_id: ObjectId):
     )
     u = await users.find_one({"_id": user_id})
     if u and u.get("failedLoginAttempts", 0) >= LOCK_THRESHOLD:
-        from datetime import timedelta
         lock_until = (datetime.now(timezone.utc) + timedelta(minutes=LOCK_MINUTES)).isoformat()
         await users.update_one(
             {"_id": user_id},
@@ -372,6 +518,13 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         return {"ok": True}
+    # Prevent clients from setting lastActiveAt to a future timestamp to bypass
+    # the 90-day idle-logout check. Clamp to server time if the value is ahead of now.
+    if "lastActiveAt" in updates:
+        provided = _parse_iso_datetime(str(updates["lastActiveAt"]))
+        server_now = datetime.now(timezone.utc)
+        if provided is None or provided > server_now + timedelta(minutes=5):
+            updates["lastActiveAt"] = server_now.isoformat()
     if "dateOfBirth" in updates:
         dob = _parse_date_of_birth(updates.get("dateOfBirth"))
         if dob is None:
@@ -445,6 +598,8 @@ async def upload_profile_photo(
     """Upload profile photo. Returns profilePhotoId."""
     db = await get_database()
     content = await file.read()
+    if len(content) > MAX_PHOTO_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Profile photo must be under 5 MB")
     photo_id = ObjectId()
     files = db[PROFILE_PHOTOS_FILES]
     chunks = db[PROFILE_PHOTOS_CHUNKS]
@@ -529,7 +684,7 @@ async def forgot_password(body: dict):
 
 @router.post("/validate-reset-token")
 async def validate_reset_token(body: dict):
-    """Validate reset token. Body: { \"token\" }. Returns { \"valid\": true, \"userId\": \"...\" } or valid: false."""
+    """Validate reset token. Body: { \"token\" }. Returns { \"valid\": true } or { \"valid\": false }."""
     db = await get_database()
     tokens_coll = db[PASSWORD_RESET_TOKENS]
     token = body.get("token") or ""
@@ -543,7 +698,7 @@ async def validate_reset_token(body: dict):
     if expires is None or datetime.now(timezone.utc) > expires:
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         return {"valid": False}
-    return {"valid": True, "userId": str(doc["userId"])}
+    return {"valid": True}
 
 
 @router.post("/reset-password")
@@ -556,6 +711,11 @@ async def reset_password(body: dict):
     new_password = body.get("newPassword") or ""
     if not token or not new_password:
         raise HTTPException(status_code=400, detail="token and newPassword required")
+
+    pw_error = _validate_password_complexity(new_password)
+    if pw_error:
+        raise HTTPException(status_code=400, detail=pw_error)
+
     hashed = _hash_token(token)
     doc = await tokens_coll.find_one({"token": hashed, "used": False})
     if not doc:

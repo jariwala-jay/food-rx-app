@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+import 'package:flutter_app/core/widgets/additional_foods_to_avoid_field.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/utils/signup_field_errors.dart';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
@@ -29,6 +31,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
   final _waterIntakeKey = GlobalKey();
   final _activityLevelKey = GlobalKey();
   List<String> _selectedFoodAllergies = [];
+  List<ExcludedIngredient> _selectedExcludedIngredients = [];
   String? _activityLevel;
   // New preference fields
   List<String> _favoriteCuisines = [];
@@ -83,6 +86,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
     final signupData = context.read<SignupProvider>().data;
     _selectedFoodAllergies = List.from(signupData.foodAllergies);
+    _selectedExcludedIngredients = List.from(signupData.excludedIngredients);
     _activityLevel = signupData.activityLevel;
     _favoriteCuisines = List.from(signupData.favoriteCuisines);
     _dailyFruitIntake = signupData.dailyFruitIntake;
@@ -105,6 +109,40 @@ class _PreferencesStepState extends State<PreferencesStep> {
       curve: Curves.easeInOut,
       alignment: 0.2,
     );
+  }
+
+  Future<List<String>?> _openAdditionalFoodsPicker() async {
+    final values = await AdditionalFoodsToAvoidField.showPicker(
+      context,
+      initialSelection: _selectedExcludedIngredients,
+    );
+    if (!mounted || values == null) return null;
+    setState(() {
+      _selectedExcludedIngredients = values;
+      if (values.isNotEmpty) {
+        _fieldErrors.clear('allergies');
+      }
+    });
+    return values.map((ingredient) => ingredient.displayName).toList();
+  }
+
+  void _updateSelectedAllergies(List<String> values) {
+    setState(() {
+      final hadNoAllergies = _selectedFoodAllergies.contains('No allergies');
+      final hasNoAllergies = values.contains('No allergies');
+      if (hasNoAllergies && !hadNoAllergies) {
+        _selectedFoodAllergies = ['No allergies'];
+      } else if (hadNoAllergies && hasNoAllergies && values.length > 1) {
+        _selectedFoodAllergies =
+            values.where((value) => value != 'No allergies').toList();
+      } else {
+        _selectedFoodAllergies = values;
+      }
+      if (_selectedFoodAllergies.isNotEmpty ||
+          _selectedExcludedIngredients.isNotEmpty) {
+        _fieldErrors.clear('allergies');
+      }
+    });
   }
 
   void _showServingSizeInfo(BuildContext context) {
@@ -175,7 +213,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
   Future<void> _handleSubmit() async {
     final isFormValid = _formKey.currentState!.validate();
     final hasMissingFields = _favoriteCuisines.isEmpty ||
-        _selectedFoodAllergies.isEmpty ||
+        (_selectedFoodAllergies.isEmpty &&
+            _selectedExcludedIngredients.isEmpty) ||
         _dailyFruitIntake == null ||
         _dailyVegetableIntake == null ||
         _dailyWaterIntake == null ||
@@ -185,7 +224,9 @@ class _PreferencesStepState extends State<PreferencesStep> {
       setState(() {
         _fieldErrors.mark([
           if (_favoriteCuisines.isEmpty) 'cuisines',
-          if (_selectedFoodAllergies.isEmpty) 'allergies',
+          if (_selectedFoodAllergies.isEmpty &&
+              _selectedExcludedIngredients.isEmpty)
+            'allergies',
           if (_dailyFruitIntake == null) 'fruit',
           if (_dailyVegetableIntake == null) 'vegetable',
           if (_dailyWaterIntake == null) 'water',
@@ -199,7 +240,8 @@ class _PreferencesStepState extends State<PreferencesStep> {
         await _scrollToKey(_favoriteCuisinesKey);
         return;
       }
-      if (_selectedFoodAllergies.isEmpty) {
+      if (_selectedFoodAllergies.isEmpty &&
+          _selectedExcludedIngredients.isEmpty) {
         await _scrollToKey(_allergiesKey);
         return;
       }
@@ -229,6 +271,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
       // Update preferences in SignupProvider
       context.read<SignupProvider>().updatePreferences(
             foodAllergies: _selectedFoodAllergies,
+            excludedIngredients: _selectedExcludedIngredients,
             activityLevel: _activityLevel,
             favoriteCuisines: _favoriteCuisines,
             dailyFruitIntake: _dailyFruitIntake,
@@ -260,56 +303,47 @@ class _PreferencesStepState extends State<PreferencesStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  // Favorite Cuisines (multi-select modal)
-                  Container(
-                    key: _favoriteCuisinesKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppDropdownField(
-                          label: 'Favorite Cuisines',
-                          value: null,
-                          options: _cuisineOptions,
-                          onChanged: (_) {},
-                          hintText: 'Select cuisines',
-                          showSearchBar: true,
-                          multiSelect: true,
-                          selectedValues: _favoriteCuisines,
-                          onChangedMulti: (values) {
-                            setState(() {
-                              _favoriteCuisines = values;
-                              if (values.isNotEmpty) {
-                                _fieldErrors.clear('cuisines');
-                              }
-                            });
-                          },
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    // Favorite Cuisines (multi-select modal)
+                    Container(
+                      key: _favoriteCuisinesKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_favoriteCuisines.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          AppChipGroup(
-                            values: _favoriteCuisines,
-                            onChanged: (values) {
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppDropdownField(
+                            label: 'Favorite Cuisines',
+                            value: null,
+                            options: _cuisineOptions,
+                            onChanged: (_) {},
+                            hintText: 'Select cuisines',
+                            showSearchBar: true,
+                            multiSelect: true,
+                            exclusiveOption: 'No preference',
+                            selectedValues: _favoriteCuisines,
+                            onChangedMulti: (values) {
                               setState(() {
                                 _favoriteCuisines = values;
                                 if (values.isNotEmpty) {
@@ -318,335 +352,391 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               });
                             },
                           ),
-                        ],
-                        if (_fieldErrors.show('cuisines') &&
-                            _favoriteCuisines.isEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select your favorite cuisines (or "No preference")',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
+                          if (_favoriteCuisines.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            AppChipGroup(
+                              values: _favoriteCuisines,
+                              onChanged: (values) {
+                                setState(() {
+                                  _favoriteCuisines = values;
+                                  if (values.isNotEmpty) {
+                                    _fieldErrors.clear('cuisines');
+                                  }
+                                });
+                              },
                             ),
-                          ),
+                          ],
+                          if (_fieldErrors.show('cuisines') &&
+                              _favoriteCuisines.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select your favorite cuisines (or "No preference")',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                  // Food Allergies (multi-select modal)
-                  Container(
-                    key: _allergiesKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppDropdownField(
-                          label: 'Food Allergies & Intolerances',
-                          value: null,
-                          options: const [
-                            'No allergies',
-                            'Tree Nuts',
-                            'Peanuts',
-                            'Dairy',
-                            'Eggs',
-                            'Soy',
-                            'Wheat',
-                            'Fish',
-                            'Shellfish',
-                          ],
-                          onChanged: (_) {},
-                          hintText: 'Food Allergies & Intolerances',
-                          showSearchBar: true,
-                          multiSelect: true,
-                          selectedValues: _selectedFoodAllergies,
-                          onChangedMulti: (values) {
-                            setState(() {
-                              // Allow explicit 'No allergies' as a value but not with others
-                              if (values.contains('No allergies')) {
-                                _selectedFoodAllergies = ['No allergies'];
-                              } else {
-                                _selectedFoodAllergies = values;
-                              }
-                              if (_selectedFoodAllergies.isNotEmpty) {
-                                _fieldErrors.clear('allergies');
-                              }
-                            });
-                          },
+                    // Food Allergies (multi-select modal)
+                    Container(
+                      key: _allergiesKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_selectedFoodAllergies.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          AppChipGroup(
-                            values: _selectedFoodAllergies,
-                            onChanged: (values) {
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppDropdownField(
+                            label: 'Food Allergies & Intolerances',
+                            value: null,
+                            options: const [
+                              'No allergies',
+                              'Tree Nuts',
+                              'Peanuts',
+                              'Dairy',
+                              'Eggs',
+                              'Soy',
+                              'Wheat',
+                              'Fish',
+                              'Shellfish',
+                              'Sesame',
+                              'Other',
+                            ],
+                            onChanged: (_) {},
+                            hintText: 'Food Allergies & Intolerances',
+                            showSearchBar: true,
+                            multiSelect: true,
+                            exclusiveOption: 'No allergies',
+                            nestedOption: 'Other',
+                            nestedOptionValues: _selectedExcludedIngredients
+                                .map((ingredient) => ingredient.displayName)
+                                .toList(),
+                            onNestedOptionTap: _openAdditionalFoodsPicker,
+                            onNestedOptionCleared: () {
                               setState(() {
-                                // Respect 'No allergies' exclusivity
-                                if (values.contains('No allergies') &&
-                                    values.length > 1) {
-                                  _selectedFoodAllergies = ['No allergies'];
-                                } else {
-                                  _selectedFoodAllergies = values;
-                                }
-                                if (_selectedFoodAllergies.isNotEmpty) {
-                                  _fieldErrors.clear('allergies');
+                                _selectedExcludedIngredients = [];
+                              });
+                            },
+                            selectedValues: _selectedFoodAllergies,
+                            onChangedMulti: _updateSelectedAllergies,
+                          ),
+                          if (_selectedFoodAllergies.isNotEmpty ||
+                              _selectedExcludedIngredients.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ..._selectedFoodAllergies.map(
+                                  (value) => Chip(
+                                    label: Text(value),
+                                    deleteIcon: const Icon(
+                                      Icons.close,
+                                      size: 18,
+                                    ),
+                                    onDeleted: () => _updateSelectedAllergies(
+                                      _selectedFoodAllergies
+                                          .where((v) => v != value)
+                                          .toList(),
+                                    ),
+                                    backgroundColor: const Color(0xFFFFEFE7),
+                                    labelStyle: const TextStyle(
+                                      color: Color(0xFFFF6A00),
+                                    ),
+                                    deleteIconColor: const Color(0xFFFF6A00),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 0,
+                                    ),
+                                  ),
+                                ),
+                                ..._selectedExcludedIngredients.map(
+                                  (ingredient) => Chip(
+                                    label: Text(ingredient.displayName),
+                                    deleteIcon: const Icon(
+                                      Icons.close,
+                                      size: 18,
+                                    ),
+                                    onDeleted: () {
+                                      setState(() {
+                                        _selectedExcludedIngredients =
+                                            _selectedExcludedIngredients
+                                                .where(
+                                                  (item) => item != ingredient,
+                                                )
+                                                .toList();
+                                      });
+                                    },
+                                    backgroundColor: const Color(0xFFFFEFE7),
+                                    labelStyle: const TextStyle(
+                                      color: Color(0xFFFF6A00),
+                                    ),
+                                    deleteIconColor: const Color(0xFFFF6A00),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 0,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (_fieldErrors.show('allergies') &&
+                              _selectedFoodAllergies.isEmpty &&
+                              _selectedExcludedIngredients.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select your food allergies & intolerances (or "No allergies" if you have none)',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // Daily Intake (Fruit & Vegetable)
+                    Container(
+                      key: _dailyIntakeKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text('Daily Fruit & Vegetable Intake',
+                                    style: AppTypography.bg_16_m),
+                              ),
+                              GestureDetector(
+                                onTap: () => _showServingSizeInfo(context),
+                                child: const Icon(
+                                  Icons.info_outline,
+                                  size: 20,
+                                  color: Color(0xFFFF6A00),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: AppDropdownField(
+                                  value: _dailyFruitIntake,
+                                  options: _dailyIntakeOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _dailyFruitIntake = value;
+                                      if (value != null) {
+                                        _fieldErrors.clear('fruit');
+                                      }
+                                    });
+                                  },
+                                  hintText: 'Fruit',
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: AppDropdownField(
+                                  value: _dailyVegetableIntake,
+                                  options: _dailyIntakeOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _dailyVegetableIntake = value;
+                                      if (value != null) {
+                                        _fieldErrors.clear('vegetable');
+                                      }
+                                    });
+                                  },
+                                  hintText: 'Vegetable',
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_fieldErrors.show('fruit') &&
+                              _dailyFruitIntake == null) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select daily fruit intake',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
+                          if (_fieldErrors.show('vegetable') &&
+                              _dailyVegetableIntake == null) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select daily vegetable intake',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Daily Water Intake (Radio)
+                    Container(
+                      key: _waterIntakeKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppRadioGroup<String>(
+                            label: 'Daily Water Intake (1 cup = 8 oz)',
+                            value: _dailyWaterIntake,
+                            options: const [
+                              {'less than 1 cup': 'less than 1 cup'},
+                              {'1-2 cups': '1-2 cups'},
+                              {'3-4 cups': '3-4 cups'},
+                              {'5-7 cups': '5-7 cups'},
+                              {'8 cups or more': '8 cups or more'},
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _dailyWaterIntake = value;
+                                if (value != null) _fieldErrors.clear('water');
+                              });
+                            },
+                          ),
+                          if (_fieldErrors.show('water') &&
+                              _dailyWaterIntake == null) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select daily water intake',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Activity Level
+                    Container(
+                      key: _activityLevelKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppRadioGroup<String>(
+                            label: 'How active are you?',
+                            value: _activityLevel,
+                            options: _activityLevels
+                                .map((level) => {level: level})
+                                .toList(),
+                            titleBuilder: (label) {
+                              // Split the label at the opening parenthesis to bold the first part
+                              final parts = label.split(' (');
+                              if (parts.length == 2) {
+                                // Use Text.rich instead of RichText to respect system font scaling
+                                return Text.rich(
+                                  TextSpan(
+                                    style: AppTypography.bg_14_r.copyWith(
+                                      color: const Color(0xFF2C2C2C),
+                                    ),
+                                    children: [
+                                      TextSpan(
+                                        text: parts[0],
+                                        style: AppTypography.bg_14_b.copyWith(
+                                          color: const Color(0xFF2C2C2C),
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: ' (${parts[1]}',
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              // Fallback to regular text if format doesn't match
+                              return Text(
+                                label,
+                                style: AppTypography.bg_14_r.copyWith(
+                                  color: const Color(0xFF2C2C2C),
+                                ),
+                              );
+                            },
+                            onChanged: (value) {
+                              setState(() {
+                                _activityLevel = value;
+                                if (value != null) {
+                                  _fieldErrors.clear('activity');
                                 }
                               });
                             },
                           ),
-                        ],
-                        if (_fieldErrors.show('allergies') &&
-                            _selectedFoodAllergies.isEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select your food allergies & intolerances (or "No allergies" if you have none)',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  // Daily Intake (Fruit & Vegetable)
-                  Container(
-                    key: _dailyIntakeKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: Text('Daily Fruit & Vegetable Intake',
-                                  style: AppTypography.bg_16_m),
-                            ),
-                            GestureDetector(
-                              onTap: () => _showServingSizeInfo(context),
-                              child: const Icon(
-                                Icons.info_outline,
-                                size: 20,
-                                color: Color(0xFFFF6A00),
+                          if (_fieldErrors.show('activity') &&
+                              _activityLevel == null) ...[
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please select your activity level',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: AppDropdownField(
-                                value: _dailyFruitIntake,
-                                options: _dailyIntakeOptions,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _dailyFruitIntake = value;
-                                    if (value != null) {
-                                      _fieldErrors.clear('fruit');
-                                    }
-                                  });
-                                },
-                                hintText: 'Fruit',
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppDropdownField(
-                                value: _dailyVegetableIntake,
-                                options: _dailyIntakeOptions,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _dailyVegetableIntake = value;
-                                    if (value != null) {
-                                      _fieldErrors.clear('vegetable');
-                                    }
-                                  });
-                                },
-                                hintText: 'Vegetable',
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_fieldErrors.show('fruit') &&
-                            _dailyFruitIntake == null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select daily fruit intake',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
                         ],
-                        if (_fieldErrors.show('vegetable') &&
-                            _dailyVegetableIntake == null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select daily vegetable intake',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  // Daily Water Intake (Radio)
-                  Container(
-                    key: _waterIntakeKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppRadioGroup<String>(
-                          label: 'Daily Water Intake (1 cup = 8 oz)',
-                          value: _dailyWaterIntake,
-                          options: const [
-                            {'less than 1 cup': 'less than 1 cup'},
-                            {'1-2 cups': '1-2 cups'},
-                            {'3-4 cups': '3-4 cups'},
-                            {'5-7 cups': '5-7 cups'},
-                            {'8 cups or more': '8 cups or more'},
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _dailyWaterIntake = value;
-                              if (value != null) _fieldErrors.clear('water');
-                            });
-                          },
-                        ),
-                        if (_fieldErrors.show('water') &&
-                            _dailyWaterIntake == null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select daily water intake',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  // Activity Level
-                  Container(
-                    key: _activityLevelKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppRadioGroup<String>(
-                          label: 'How active are you?',
-                          value: _activityLevel,
-                          options: _activityLevels
-                              .map((level) => {level: level})
-                              .toList(),
-                          titleBuilder: (label) {
-                            // Split the label at the opening parenthesis to bold the first part
-                            final parts = label.split(' (');
-                            if (parts.length == 2) {
-                              // Use Text.rich instead of RichText to respect system font scaling
-                              return Text.rich(
-                                TextSpan(
-                                  style: AppTypography.bg_14_r.copyWith(
-                                    color: const Color(0xFF2C2C2C),
-                                  ),
-                                  children: [
-                                    TextSpan(
-                                      text: parts[0],
-                                      style: AppTypography.bg_14_b.copyWith(
-                                        color: const Color(0xFF2C2C2C),
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: ' (${parts[1]}',
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            // Fallback to regular text if format doesn't match
-                            return Text(
-                              label,
-                              style: AppTypography.bg_14_r.copyWith(
-                                color: const Color(0xFF2C2C2C),
-                              ),
-                            );
-                          },
-                          onChanged: (value) {
-                            setState(() {
-                              _activityLevel = value;
-                              if (value != null) {
-                                _fieldErrors.clear('activity');
-                              }
-                            });
-                          },
-                        ),
-                        if (_fieldErrors.show('activity') &&
-                            _activityLevel == null) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Please select your activity level',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        SafeArea(
-          top: false,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          SafeArea(
+            top: false,
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
@@ -707,10 +797,11 @@ class _PreferencesStepState extends State<PreferencesStep> {
                     ),
                   ),
                 ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

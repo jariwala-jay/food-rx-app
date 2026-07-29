@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app/features/auth/models/signup_data.dart';
 import 'package:flutter_app/features/auth/views/signup/basic_info_step.dart';
 import 'package:flutter_app/features/auth/views/signup/health_info_step.dart';
 import 'package:flutter_app/features/auth/views/signup/preferences_step.dart';
@@ -12,17 +13,51 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/widgets/signup_autofill_bridge.dart';
 
 class SignupPage extends StatefulWidget {
-  const SignupPage({super.key});
+  const SignupPage({
+    super.key,
+    this.initialStep = 0,
+    this.prefillData,
+    this.isGoogleOnboarding = false,
+  });
+
+  /// Zero-based index to start the wizard at. Google users start at 1 (step 2).
+  final int initialStep;
+
+  /// Pre-populated data to seed into the SignupProvider (e.g. from Google).
+  final SignupData? prefillData;
+
+  /// When true the final submit patches the already-authenticated user's
+  /// profile instead of calling the register endpoint.
+  final bool isGoogleOnboarding;
 
   @override
   State<SignupPage> createState() => _SignupPageState();
 }
 
 class _SignupPageState extends State<SignupPage> {
-  int _currentStep = 0;
+  late int _currentStep;
   static const int _totalSteps = 5;
   final _autofillEmailController = TextEditingController();
   final _autofillPasswordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStep = widget.initialStep;
+
+    if (widget.prefillData != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final provider = context.read<SignupProvider>();
+        final d = widget.prefillData!;
+        provider.prefillForGoogle(
+          name: d.name,
+          email: d.email,
+          profilePhotoUrl: d.profilePhotoUrl,
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -46,13 +81,21 @@ class _SignupPageState extends State<SignupPage> {
 
   void _handlePrevious() {
     setState(() {
-      if (_currentStep > 0) {
+      if (_currentStep > widget.initialStep) {
         _currentStep--;
       }
     });
   }
 
   Future<void> _handleSubmit() async {
+    if (widget.isGoogleOnboarding) {
+      await _handleGoogleOnboardingSubmit();
+    } else {
+      await _handleRegisterSubmit();
+    }
+  }
+
+  Future<void> _handleRegisterSubmit() async {
     try {
       final signupProvider = context.read<SignupProvider>();
       final authController = context.read<AuthController>();
@@ -65,7 +108,6 @@ class _SignupPageState extends State<SignupPage> {
         password: signupData.password!,
         userData: signupData.toJson(),
         profilePhoto: profilePhoto,
-        saveLogin: signupProvider.saveBiometricLogin,
       );
 
       if (success) {
@@ -77,9 +119,11 @@ class _SignupPageState extends State<SignupPage> {
       } else {
         TextInput.finishAutofillContext(shouldSave: false);
         if (mounted) {
+          final message =
+              context.read<AuthController>().error ?? 'Registration failed';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(authController.error ?? 'Registration failed'),
+              content: Text(message),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 5),
             ),
@@ -89,13 +133,37 @@ class _SignupPageState extends State<SignupPage> {
     } catch (e) {
       TextInput.finishAutofillContext(shouldSave: false);
       if (mounted) {
-        final controller = context.read<AuthController>();
-        final message = controller.error ?? 'An error occurred. Please try again.';
+        final message = context.read<AuthController>().error ??
+            'An error occurred. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleGoogleOnboardingSubmit() async {
+    try {
+      final signupProvider = context.read<SignupProvider>();
+      final authController = context.read<AuthController>();
+      final signupData = signupProvider.data;
+
+      await authController.updateUserProfile(signupData.toJson());
+
+      // Clearing the flag triggers a root rebuild: isAuthenticated=true and
+      // pendingGoogleOnboarding=null → root shows MainScreen automatically.
+      authController.clearGoogleOnboarding();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save your preferences. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
           ),
         );
       }
@@ -139,10 +207,11 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
               ),
-              SignupAutofillBridge(
-                emailController: _autofillEmailController,
-                passwordController: _autofillPasswordController,
-              ),
+              if (!widget.isGoogleOnboarding)
+                SignupAutofillBridge(
+                  emailController: _autofillEmailController,
+                  passwordController: _autofillPasswordController,
+                ),
             ],
           ),
         ),

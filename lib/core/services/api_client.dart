@@ -1,12 +1,27 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_app/core/services/session_storage.dart';
 import 'package:http/http.dart' as http;
 
+/// `invalid` means the server rejected the token (safe to sign out);
+/// `networkError` means the request itself failed (offline/timeout/5xx) —
+/// the refresh token may still be valid, so don't sign out.
+enum SessionRefreshOutcome { success, invalid, networkError }
+
 /// HTTP client for Food Rx backend API. Session tokens live in secure storage.
 class ApiClient {
-  static bool _refreshInFlight = false;
+  // Shared so concurrent callers don't each send the single-use refresh
+  // token, which would trip the server's reuse detection (refresh_tokens.py).
+  static Future<SessionRefreshOutcome>? _refreshFuture;
+
+  /// Fires when an authenticated request receives a 401 and the token refresh
+  /// also fails (i.e. the session is truly expired / revoked). Listeners should
+  /// treat this as a forced sign-out signal.
+  static final StreamController<void> _unauthorizedController =
+      StreamController<void>.broadcast();
+  static Stream<void> get onUnauthorized => _unauthorizedController.stream;
 
   static String get _baseUrl {
     final url = dotenv.env['API_BASE_URL'] ?? '';
@@ -70,22 +85,44 @@ class ApiClient {
     throw ApiException(response.statusCode, message);
   }
 
-  /// Exchange refresh token for a new access + refresh pair. Returns true on success.
-  static Future<bool> refreshSession() async {
-    if (_refreshInFlight) return false;
-    final refreshToken = await getRefreshToken();
-    if (refreshToken == null || refreshToken.isEmpty) return false;
+  /// Exchange refresh token for a new access + refresh pair, distinguishing a
+  /// confirmed-invalid token from a request that simply couldn't complete.
+  /// Concurrent callers are collapsed onto the same in-flight attempt.
+  static Future<SessionRefreshOutcome> refreshSessionDetailed() {
+    return _refreshFuture ??= _performRefresh().whenComplete(() {
+      _refreshFuture = null;
+    });
+  }
 
-    _refreshInFlight = true;
+  /// Convenience wrapper for callers that only care whether the session is
+  /// usable again, not why it failed (e.g. a simple retry-once on 401).
+  static Future<bool> refreshSession() async =>
+      (await refreshSessionDetailed()) == SessionRefreshOutcome.success;
+
+  static Future<SessionRefreshOutcome> _performRefresh() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return SessionRefreshOutcome.invalid;
+    }
+
+    http.Response response;
     try {
       final uri = Uri.parse('$_baseUrl/auth/refresh');
-      final response = await http.post(
+      response = await http.post(
         uri,
         headers: await _headers(includeAuth: false),
         body: jsonEncode({'refresh_token': refreshToken}),
       );
-      if (response.statusCode >= 400) return false;
+    } catch (_) {
+      // Couldn't even reach the server — say nothing about the token itself.
+      return SessionRefreshOutcome.networkError;
+    }
 
+    // 5xx means the server is having a bad time, not that the token is bad.
+    if (response.statusCode >= 500) return SessionRefreshOutcome.networkError;
+    if (response.statusCode >= 400) return SessionRefreshOutcome.invalid;
+
+    try {
       final body = jsonDecode(response.body) as Map<String, dynamic>?;
       final access = body?['access_token'] as String?;
       final refresh = body?['refresh_token'] as String?;
@@ -93,7 +130,7 @@ class ApiClient {
           access.isEmpty ||
           refresh == null ||
           refresh.isEmpty) {
-        return false;
+        return SessionRefreshOutcome.invalid;
       }
 
       await SessionStorage.updateTokens(
@@ -111,11 +148,9 @@ class ApiClient {
           email: email,
         );
       }
-      return true;
+      return SessionRefreshOutcome.success;
     } catch (_) {
-      return false;
-    } finally {
-      _refreshInFlight = false;
+      return SessionRefreshOutcome.networkError;
     }
   }
 
@@ -141,9 +176,14 @@ class ApiClient {
   }) async {
     final response = await request();
     if (requireAuth && response.statusCode == 401 && !retried) {
-      final refreshed = await refreshSession();
-      if (refreshed) {
+      final outcome = await refreshSessionDetailed();
+      if (outcome == SessionRefreshOutcome.success) {
         return _send(request, requireAuth: requireAuth, retried: true);
+      }
+      // Only sign out on a confirmed rejection; a network error during
+      // refresh says nothing about the token's validity.
+      if (outcome == SessionRefreshOutcome.invalid) {
+        _unauthorizedController.add(null);
       }
     }
     return response;

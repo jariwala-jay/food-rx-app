@@ -218,201 +218,206 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-            child: Form(
-              key: _formKey,
-              autovalidateMode: _autovalidateMode,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  // Health Goal
-                  Container(
-                    key: _healthGoalsSectionKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: _autovalidateMode,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    // Health Goal
+                    Container(
+                      key: _healthGoalsSectionKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppCheckboxGroup(
+                            label: 'Diet-related Health Goals',
+                            selectedValues: _selectedHealthGoals,
+                            options: _healthGoals,
+                            onChanged: (values) {
+                              setState(() {
+                                _selectedHealthGoals = values;
+                                if (values.isNotEmpty) {
+                                  _fieldErrors.clear('healthGoals');
+                                }
+                              });
+                            },
+                          ),
+                          if (_fieldErrors.show('healthGoals') &&
+                              _selectedHealthGoals.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please select at least one health goal',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppCheckboxGroup(
-                          label: 'Diet-related Health Goals',
-                          selectedValues: _selectedHealthGoals,
-                          options: _healthGoals,
-                          onChanged: (values) {
-                            setState(() {
-                              _selectedHealthGoals = values;
-                              if (values.isNotEmpty) {
-                                _fieldErrors.clear('healthGoals');
-                              }
-                            });
-                          },
+                    // Preferred Meal Prep time
+                    Container(
+                      key: _mealPrepSectionKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_fieldErrors.show('healthGoals') &&
-                            _selectedHealthGoals.isEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please select at least one health goal',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppRadioGroup<String>(
+                            label: 'Preferred Meal Prep Time',
+                            value: _preferredMealPrepTime,
+                            options: _mealPrepTimeOptions
+                                .map((option) => {option: option})
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _preferredMealPrepTime = value;
+                                if (value != null) {
+                                  _fieldErrors.clear('mealPrep');
+                                }
+                              });
+                            },
                           ),
+                          if (_fieldErrors.show('mealPrep') &&
+                              _preferredMealPrepTime == null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please select preferred meal prep time',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                  // Preferred Meal Prep time
-                  Container(
-                    key: _mealPrepSectionKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppRadioGroup<String>(
-                          label: 'Preferred Meal Prep Time',
-                          value: _preferredMealPrepTime,
-                          options: _mealPrepTimeOptions
-                              .map((option) => {option: option})
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _preferredMealPrepTime = value;
-                              if (value != null) {
-                                _fieldErrors.clear('mealPrep');
-                              }
-                            });
-                          },
+                    // Cooking for how many people
+                    Container(
+                      key: _cookingForPeopleSectionKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_fieldErrors.show('mealPrep') &&
-                            _preferredMealPrepTime == null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please select preferred meal prep time',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppFormField(
+                            label:
+                                'I am cooking for this many people (Including Yourself)',
+                            hintText: 'Type Here',
+                            controller: _cookingForPeopleController,
+                            focusNode: _cookingForPeopleFocusNode,
+                            keyboardType: TextInputType.number,
                           ),
+                          if (_fieldErrors.show('cookingForPeople') &&
+                              _cookingForPeopleController.text
+                                  .trim()
+                                  .isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please enter how many people you cook for',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                  // Cooking for how many people
-                  Container(
-                    key: _cookingForPeopleSectionKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppFormField(
-                          label:
-                              'I am cooking for this many people (Including Yourself)',
-                          hintText: 'Type Here',
-                          controller: _cookingForPeopleController,
-                          focusNode: _cookingForPeopleFocusNode,
-                          keyboardType: TextInputType.number,
+                    // Rate your Cooking Skill
+                    Container(
+                      key: _cookingSkillSectionKey,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        if (_fieldErrors.show('cookingForPeople') &&
-                            _cookingForPeopleController.text.trim().isEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please enter how many people you cook for',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppRadioGroup<String>(
+                            label: 'Rate Your Cooking Skills',
+                            value: _cookingSkill,
+                            options: _cookingSkillOptions
+                                .map((option) => {option: option})
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _cookingSkill = value;
+                                if (value != null) {
+                                  _fieldErrors.clear('cookingSkill');
+                                }
+                              });
+                            },
                           ),
+                          if (_fieldErrors.show('cookingSkill') &&
+                              _cookingSkill == null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Please rate your cooking skill',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontFamily: 'BricolageGrotesque',
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                  // Rate your Cooking Skill
-                  Container(
-                    key: _cookingSkillSectionKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppRadioGroup<String>(
-                          label: 'Rate Your Cooking Skills',
-                          value: _cookingSkill,
-                          options: _cookingSkillOptions
-                              .map((option) => {option: option})
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _cookingSkill = value;
-                              if (value != null) {
-                                _fieldErrors.clear('cookingSkill');
-                              }
-                            });
-                          },
-                        ),
-                        if (_fieldErrors.show('cookingSkill') &&
-                            _cookingSkill == null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please rate your cooking skill',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'BricolageGrotesque',
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        SafeArea(
-          top: false,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          SafeArea(
+            top: false,
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
@@ -473,10 +478,11 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                     ),
                   ),
                 ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

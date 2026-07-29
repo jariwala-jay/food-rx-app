@@ -1,7 +1,10 @@
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+
 class SignupData {
   String? name;
   String? email;
   String? password;
+  String? profilePhotoUrl;
   DateTime? dateOfBirth;
   String? sex;
   double? heightFeet;
@@ -9,6 +12,7 @@ class SignupData {
   double? weight;
   List<String> medicalConditions;
   List<String> foodAllergies;
+  List<ExcludedIngredient> excludedIngredients;
   String? activityLevel;
   List<String> healthGoals;
   String? dietType;
@@ -29,6 +33,7 @@ class SignupData {
     this.name,
     this.email,
     this.password,
+    this.profilePhotoUrl,
     this.dateOfBirth,
     this.sex,
     this.heightFeet,
@@ -36,6 +41,7 @@ class SignupData {
     this.weight,
     this.medicalConditions = const [],
     this.foodAllergies = const [],
+    this.excludedIngredients = const [],
     this.activityLevel,
     this.healthGoals = const [],
     this.dietType,
@@ -64,6 +70,8 @@ class SignupData {
       'medicalConditions': medicalConditions,
       'allergies': foodAllergies,
       'foodRestrictions': foodAllergies,
+      'excludedIngredients':
+          excludedIngredients.map((ingredient) => ingredient.toJson()).toList(),
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,
@@ -83,6 +91,9 @@ class SignupData {
 
     if (dateOfBirth != null) {
       data['dateOfBirth'] = dateOfBirth!.toIso8601String();
+    }
+    if (profilePhotoUrl != null) {
+      data['profilePhotoUrl'] = profilePhotoUrl;
     }
 
     data.removeWhere((key, value) => value == null);

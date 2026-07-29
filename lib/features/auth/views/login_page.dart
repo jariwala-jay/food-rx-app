@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/core/widgets/google_sign_in_button.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/app_outlined_icon_button.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
@@ -23,9 +24,8 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordFocusNode = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _saveLoginOnDevice = false;
+  bool _isGoogleLoading = false;
   bool _hasSavedLogin = false;
-  bool _biometricLoginAvailable = false;
   BiometricSignInLabels? _biometricLabels;
   String? _errorMessage;
 
@@ -35,15 +35,13 @@ class _LoginPageState extends State<LoginPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authController = context.read<AuthController>();
       final saved = await authController.hasSavedLogin();
-      final available = await authController.canUseBiometricLogin();
       BiometricSignInLabels? labels;
-      if (available) {
+      if (saved) {
         labels = await authController.getBiometricSignInLabels();
       }
       if (!mounted) return;
       setState(() {
         _hasSavedLogin = saved;
-        _biometricLoginAvailable = available;
         _biometricLabels = labels;
         if (authController.error != null) {
           _errorMessage = authController.error;
@@ -59,6 +57,42 @@ class _LoginPageState extends State<LoginPage> {
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleLoading) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final authController = context.read<AuthController>();
+      final success = await authController.loginWithGoogle();
+      if (!mounted) return;
+      setState(() => _isGoogleLoading = false);
+
+      if (success) {
+        // LoginPage is pushed on top of Consumer<AuthController>'s home
+        // widget, so rebuilding home alone won't pop this route.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
+
+      if (authController.error != null) {
+        setState(() => _errorMessage = authController.error);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(authController.error!),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGoogleLoading = false;
+        _errorMessage = userFacingErrorMessage(e);
+      });
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -79,11 +113,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final authController = context.read<AuthController>();
-      final success = await authController.login(
-        email,
-        password,
-        saveLogin: _saveLoginOnDevice,
-      );
+      final success = await authController.login(email, password);
 
       if (!mounted) return;
       setState(() {
@@ -272,9 +302,6 @@ class _LoginPageState extends State<LoginPage> {
                                   if (value == null || value.isEmpty) {
                                     return 'Please enter your password';
                                   }
-                                  if (value.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
                                   return null;
                                 },
                                 suffixIcon: IconButton(
@@ -311,46 +338,6 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                               ),
-                              if (_biometricLoginAvailable &&
-                                  _biometricLabels != null) ...[
-                                const SizedBox(height: 12),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: Checkbox(
-                                        value: _saveLoginOnDevice,
-                                        activeColor: const Color(0xFFFF6A00),
-                                        onChanged: _isLoading
-                                            ? null
-                                            : (v) => setState(
-                                                  () => _saveLoginOnDevice =
-                                                      v ?? false,
-                                                ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: GestureDetector(
-                                        onTap: _isLoading
-                                            ? null
-                                            : () => setState(
-                                                  () => _saveLoginOnDevice =
-                                                      !_saveLoginOnDevice,
-                                                ),
-                                        child: Text(
-                                          _biometricLabels!.saveLoginCheckbox,
-                                          style: AppTypography.bg_14_r.copyWith(
-                                            color: const Color(0xFF545454),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
                               if (_errorMessage != null) ...[
                                 const SizedBox(height: 8),
                                 Container(
@@ -407,6 +394,29 @@ class _LoginPageState extends State<LoginPage> {
                                 : const Text('Submit',
                                     style: AppTypography.bg_16_sb),
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: const [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                'or',
+                                style: TextStyle(
+                                  color: Color(0xFF90909A),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            Expanded(child: Divider()),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        GoogleSignInButton(
+                          isLoading: _isGoogleLoading,
+                          onPressed:
+                              _isLoading ? null : _handleGoogleSignIn,
                         ),
                         const SizedBox(height: 20),
                         Center(

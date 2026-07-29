@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_app/core/models/user_model.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/core/services/credential_storage.dart';
+import 'package:flutter_app/core/services/session_storage.dart';
+import 'package:flutter_app/features/auth/models/signup_data.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_app/features/chatbot/services/rag_chatbot_service.dart';
 import 'package:flutter_app/core/services/nutrition_content_loader.dart';
@@ -29,6 +33,22 @@ class AuthController with ChangeNotifier {
   ReplanTrigger? _pendingReplanTrigger;
   NotificationManager? _notificationManager;
   Uint8List? _localProfilePhotoData;
+  StreamSubscription<void>? _unauthorizedSubscription;
+
+  // Non-null while a new Google user needs to complete health-profile onboarding.
+  // The root widget shows SignupPage instead of MainScreen when this is set.
+  SignupData? _pendingGoogleOnboarding;
+  SignupData? get pendingGoogleOnboarding => _pendingGoogleOnboarding;
+
+  void clearGoogleOnboarding() {
+    _pendingGoogleOnboarding = null;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
 
   Future<void> _markUserActive() async {
     try {
@@ -53,18 +73,102 @@ class AuthController with ChangeNotifier {
       e is HandshakeException ||
       e is TlsException;
 
+  /// Full session teardown — called on both explicit logout and forced expiry.
+  /// Must clear every piece of user-specific state so the next login starts
+  /// clean. Feature providers (Pantry, Tracker) clear themselves reactively
+  /// via ProxyProvider in main.dart when isAuthenticated flips to false; new
+  /// user-specific providers should hook in there or be added below.
   Future<void> _clearAuthSession() async {
     await ApiClient.revokeRefreshTokenOnLogout();
     await ApiClient.clearSession();
     await RagChatbotService.resetConversation();
+    // Cancel local reminders and dispose notification manager on every sign-out
+    // path (explicit logout AND forced session expiry), so reminders don't keep
+    // firing when the user is no longer authenticated.
+    await NotificationService().cancelDailyReminders();
+    _notificationManager?.dispose();
+    _notificationManager = null;
     _localProfilePhotoData = null;
   }
 
-  Future<bool> hasSavedLogin() => CredentialStorage.hasSavedCredentials();
+  /// True if the user has biometric login enabled AND a usable refresh token,
+  /// OR has legacy saved credentials. Used to decide whether to show the
+  /// biometric sign-in button on the login screen.
+  ///
+  /// After logout the refresh token is cleared, so even if biometricEnabled
+  /// is still true the button correctly hides — preventing a dead-end Face ID
+  /// prompt that immediately fails.
+  Future<bool> hasSavedLogin() async {
+    if (await SessionStorage.isBiometricEnabled()) {
+      if (await SessionStorage.hasRefreshToken()) return true;
+    }
+    return CredentialStorage.hasSavedCredentials();
+  }
 
-  Future<void> clearSavedLogin() async {
+  Future<bool> isBiometricEnabled() => SessionStorage.isBiometricEnabled();
+
+  /// Enable biometric login: authenticate once to confirm it works, then save
+  /// the flag. Works for both email and Google users — no password stored.
+  Future<bool> enableBiometricLogin() async {
+    _error = null;
+    try {
+      final canUse = await canUseBiometricLogin();
+      if (!canUse) {
+        _error = 'Biometric login is not available on this device';
+        notifyListeners();
+        return false;
+      }
+      final ok = await authenticateWithBiometrics();
+      if (!ok) {
+        _error ??= 'Authentication cancelled';
+        notifyListeners();
+        return false;
+      }
+      await SessionStorage.setBiometricEnabled(true);
+      notifyListeners();
+      return true;
+    } on PlatformException catch (e) {
+      _error = biometricAuthUserMessage(e);
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = userFacingErrorMessage(e);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Disable biometric login and clear any stored credentials.
+  Future<void> disableBiometricLogin() async {
+    await SessionStorage.setBiometricEnabled(false);
     await CredentialStorage.clearCredentials();
     invalidateBiometricSignInLabelsCache();
+    notifyListeners();
+  }
+
+  Future<void> clearSavedLogin() => disableBiometricLogin();
+
+  // ── One-time biometric suggestion ─────────────────────────────────────────
+
+  bool _shouldSuggestBiometric = false;
+  bool get shouldSuggestBiometric => _shouldSuggestBiometric;
+
+  Future<void> _checkBiometricSuggestion() async {
+    if (_shouldSuggestBiometric) return;
+    if (await SessionStorage.isBiometricEnabled()) return;
+    if (await CredentialStorage.hasSavedCredentials()) return;
+    if (await SessionStorage.isBiometricSuggestionShown()) return;
+    final count = await SessionStorage.getLoginCount();
+    if (count < 2) return;
+    if (!await canUseBiometricLogin()) return;
+    _shouldSuggestBiometric = true;
+    notifyListeners();
+  }
+
+  Future<void> dismissBiometricSuggestion() async {
+    await SessionStorage.markBiometricSuggestionShown();
+    _shouldSuggestBiometric = false;
+    notifyListeners();
   }
 
   Future<bool> _completeAuthFromResponse(
@@ -108,12 +212,12 @@ class AuthController with ChangeNotifier {
     }
 
     if (_currentUser?.id != null) {
-      try {
-        await _initializeNotificationServices(_currentUser!.id!);
-      } catch (e) {
-        debugPrint('Warning: Failed to initialize notification services: $e');
-      }
+      // Unawaited so navigation isn't blocked on notification init, which
+      // can take several seconds (network calls + FCM retry loops).
+      unawaited(_initializeNotificationServices(_currentUser!.id!));
       unawaited(_markUserActive());
+      unawaited(SessionStorage.incrementLoginCount());
+      unawaited(_checkBiometricSuggestion());
     }
     return _currentUser != null;
   }
@@ -148,22 +252,64 @@ class AuthController with ChangeNotifier {
     try {
       final canCheck = await _localAuth.canCheckBiometrics;
       final isSupported = await _localAuth.isDeviceSupported();
-      if (!canCheck && !isSupported) return false;
+      if (!canCheck && !isSupported) {
+        _error = 'Biometric login is not available on this device';
+        notifyListeners();
+        return false;
+      }
 
-      return _localAuth.authenticate(
+      final ok = await _localAuth.authenticate(
         localizedReason: 'Sign in to MyFoodRx',
         options: const AuthenticationOptions(
           biometricOnly: false,
-          stickyAuth: true,
+          stickyAuth: false,
         ),
       );
+      if (!ok) {
+        _error = 'Authentication cancelled';
+        notifyListeners();
+      }
+      return ok;
+    } on PlatformException catch (e) {
+      debugPrint('Biometric auth error: $e');
+      _error = biometricAuthUserMessage(e);
+      notifyListeners();
+      return false;
     } catch (e) {
       debugPrint('Biometric auth error: $e');
+      _error = userFacingErrorMessage(e);
+      notifyListeners();
       return false;
     }
   }
 
   Future<bool> loginWithSavedCredentials() async {
+    // New approach: flag-based biometric → restore from stored refresh token.
+    // Works for Google users and email users alike — no password needed.
+    final biometricEnabled = await SessionStorage.isBiometricEnabled();
+    final hasRefresh = await SessionStorage.hasRefreshToken();
+
+    if (biometricEnabled && hasRefresh) {
+      _error = null;
+      final ok = await authenticateWithBiometrics();
+      if (!ok) {
+        _error ??= 'Authentication cancelled';
+        return false;
+      }
+      final restored = await _restoreSessionFromStorage();
+      if (!restored) {
+        // Refresh token expired or revoked. Clear the biometric flag so the
+        // button doesn't keep showing on the login page, and give the user
+        // a clear message prompting a fresh sign-in.
+        await SessionStorage.setBiometricEnabled(false);
+        _error =
+            'Your session has expired. Please sign in again to re-enable biometric login.';
+        notifyListeners();
+      }
+      return restored;
+    }
+
+    // Legacy: email+password saved in CredentialStorage (old checkbox flow).
     final creds = await CredentialStorage.readCredentials();
     if (creds == null) {
       _error = 'No saved login on this device';
@@ -195,9 +341,15 @@ class AuthController with ChangeNotifier {
 
     final access = await ApiClient.getToken();
     if ((access == null || access.isEmpty) && hasRefresh) {
-      final refreshed = await ApiClient.refreshSession();
-      if (!refreshed) {
-        await _clearAuthSession();
+      final outcome = await ApiClient.refreshSessionDetailed();
+      if (outcome != SessionRefreshOutcome.success) {
+        // Only clear on a server-confirmed rejection. A network/server
+        // error says nothing about whether the refresh token is still
+        // good, so wiping the session here would log users out over a
+        // dropped connection rather than an actually-expired session.
+        if (outcome == SessionRefreshOutcome.invalid) {
+          await _clearAuthSession();
+        }
         return false;
       }
     }
@@ -210,7 +362,23 @@ class AuthController with ChangeNotifier {
     final email = await ApiClient.userEmail;
     if (userData != null && email != null && userData['email'] == email) {
       _currentUser = _createUserModel(userData);
-      await _initializeNotificationServices(_currentUser!.id!);
+
+      // If this is a Google user whose onboarding was interrupted (no dietType
+      // means they never completed the health-profile signup), resume onboarding
+      // instead of sending them to Home with an empty profile.
+      final isGoogleUser = userData['authProvider'] == 'google';
+      final onboardingIncomplete =
+          (userData['dietType'] == null || (userData['dietType'] as String?)?.isEmpty == true);
+      if (isGoogleUser && onboardingIncomplete) {
+        debugPrint('[AuthController] Google user has incomplete onboarding — resuming signup flow');
+        _pendingGoogleOnboarding = SignupData(
+          name: _currentUser!.name,
+          email: _currentUser!.email,
+          profilePhotoUrl: userData['profilePhotoUrl'] as String?,
+        );
+      }
+
+      unawaited(_initializeNotificationServices(_currentUser!.id!));
       unawaited(_markUserActive());
       return true;
     }
@@ -243,6 +411,21 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // Listen once for unrecoverable 401s that occur during normal API usage
+    // (not just at startup). When the token is truly expired/revoked mid-session
+    // this immediately clears local state and returns the user to the login screen.
+    _unauthorizedSubscription ??= ApiClient.onUnauthorized.listen((_) async {
+      if (_currentUser != null) {
+        try {
+          await _clearAuthSession();
+        } catch (e) {
+          debugPrint('Warning: error during forced sign-out: $e');
+        }
+        _currentUser = null;
+        notifyListeners();
+      }
+    });
+
     try {
       try {
         final nutritionContent = await NutritionContentLoader.load();
@@ -262,15 +445,19 @@ class AuthController with ChangeNotifier {
           }
         } on ApiException catch (e) {
           if (e.statusCode == 401 || e.statusCode == 404) {
-            final refreshed = await ApiClient.refreshSession();
-            if (refreshed) {
+            final outcome = await ApiClient.refreshSessionDetailed();
+            if (outcome == SessionRefreshOutcome.success) {
               try {
                 await _restoreSessionFromStorage();
               } catch (_) {
                 await _clearAuthSession();
               }
-            } else {
+            } else if (outcome == SessionRefreshOutcome.invalid) {
               await _clearAuthSession();
+            } else {
+              // Couldn't confirm the refresh token is bad — keep the
+              // session and let the user retry instead of signing out.
+              _error = 'Could not verify your session. Check your connection.';
             }
           } else {
             _error = 'Failed to restore session: ${e.message}';
@@ -305,7 +492,8 @@ class AuthController with ChangeNotifier {
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 404) {
-        if (await ApiClient.refreshSession()) {
+        final outcome = await ApiClient.refreshSessionDetailed();
+        if (outcome == SessionRefreshOutcome.success) {
           try {
             if (await _restoreSessionFromStorage()) {
               _error = null;
@@ -313,6 +501,9 @@ class AuthController with ChangeNotifier {
               return;
             }
           } catch (_) {}
+        } else if (outcome == SessionRefreshOutcome.networkError) {
+          // Transient — keep stored tokens for a later retry.
+          return;
         }
         await _clearAuthSession();
         notifyListeners();
@@ -471,6 +662,101 @@ class AuthController with ChangeNotifier {
     }
   }
 
+  /// Signs in with Google and returns true on success.
+  /// For new users, sets [pendingGoogleOnboarding] so the root widget routes
+  /// to the health-profile onboarding instead of MainScreen.
+  Future<bool> loginWithGoogle() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final googleSignIn = GoogleSignIn();
+
+      // Sign out first: iOS can silently restore a cached session and return
+      // a null accessToken instead of doing a fresh OAuth round-trip.
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {}
+
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        // User dismissed the sheet intentionally — not an error, no message needed.
+        debugPrint('[Google] Sign-in cancelled by user');
+        return false;
+      }
+
+      debugPrint('[Google] User selected: ${googleUser.email}');
+
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      if (accessToken == null) {
+        _error = 'Failed to get Google access token';
+        debugPrint('[Google] accessToken is null — authentication object: idToken=${googleAuth.idToken != null}');
+        return false;
+      }
+
+      final res = await ApiClient.post(
+        '/auth/google',
+        body: {'accessToken': accessToken},
+        requireAuth: false,
+      ) as Map<String, dynamic>?;
+
+      if (res == null) {
+        _error = 'Google Sign-In failed';
+        debugPrint('[Backend] /auth/google returned null response');
+        return false;
+      }
+
+      final isNewUser = res['isNewUser'] == true;
+      debugPrint('[Backend] Existing user found: ${!isNewUser}');
+      debugPrint('[Backend] accessToken: ${res['access_token'] != null}, refreshToken: ${res['refresh_token'] != null}, isNewUser: $isNewUser');
+
+      if (await _completeAuthFromResponse(res)) {
+        debugPrint('[AuthController] currentUser updated: ${_currentUser != null}, isAuthenticated: $isAuthenticated');
+        debugPrint('[Navigation] Going to: ${isNewUser ? "Signup/Onboarding" : "Home"}');
+
+        // For new Google users, set the onboarding flag BEFORE notifyListeners()
+        // so the root widget routes to SignupPage (step 2) instead of MainScreen.
+        if (isNewUser) {
+          _pendingGoogleOnboarding = SignupData(
+            name: googleUser.displayName,
+            email: googleUser.email,
+            profilePhotoUrl: googleUser.photoUrl,
+          );
+        }
+        return true;
+      }
+
+      debugPrint('[AuthController] _completeAuthFromResponse returned false — currentUser: $_currentUser');
+      _error = 'Google Sign-In failed';
+      return false;
+    } on ApiException catch (e) {
+      debugPrint('[Google] ApiException: ${e.statusCode} ${e.message}');
+      _error = e.message;
+      return false;
+    } on SocketException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
+    } on PlatformException catch (e) {
+      // Most codes here (sign_in_canceled, access_denied, etc.) are just the
+      // user backing out — stay silent, only surface network errors.
+      debugPrint('[Google] PlatformException: ${e.code} — ${e.message}');
+      if (e.code == 'network_error') {
+        _error = 'Network error. Please check your connection and try again.';
+      }
+      // Any other code (cancel, dismissed, access denied) → no message shown.
+      return false;
+    } catch (e) {
+      debugPrint('[Google] Unexpected error: $e');
+      _error = userFacingErrorMessage(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
@@ -480,9 +766,12 @@ class AuthController with ChangeNotifier {
       } catch (_) {
         // Ignore; logout should proceed regardless.
       }
+      // Clear cached Google credentials so the next loginWithGoogle() call
+      // does a fresh OAuth flow instead of silently reusing this session.
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
       await _clearAuthSession();
-      _notificationManager?.dispose();
-      _notificationManager = null;
       _currentUser = null;
     } catch (e) {
       _error = userFacingErrorMessage(e);
@@ -640,9 +929,16 @@ class AuthController with ChangeNotifier {
       await _notificationManager!.initialize(userId);
       final notificationService = NotificationService();
       await notificationService.syncFCMTokenToDatabase();
+      await notificationService.scheduleDailyReminders();
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _unauthorizedSubscription?.cancel();
+    super.dispose();
   }
 
   Future<bool> requestPasswordReset(String email) async {
