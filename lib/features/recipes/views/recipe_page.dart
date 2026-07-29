@@ -374,13 +374,13 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.chat_bubble_outline),
-                    iconSize: 24,
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/chatbot');
-                    },
-                  ),
+                  // IconButton(
+                  //   icon: const Icon(Icons.chat_bubble_outline),
+                  //   iconSize: 24,
+                  //   onPressed: () {
+                  //     Navigator.pushNamed(context, '/chatbot');
+                  //   },
+                  // ),
                   IconButton(
                     icon: const Icon(Icons.star_border_rounded),
                     iconSize: 28,
@@ -876,7 +876,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 'Prepared recipes',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
                 textAlign: TextAlign.center,
@@ -1026,7 +1026,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     'Prepared recipes',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                     textAlign: TextAlign.center,
@@ -1088,18 +1088,18 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     if (pantryItems.isEmpty) {
       return 'Start by adding ingredients to your pantry.\nThen we can suggest personalized recipes based on your dietary needs and preferences.';
     } else if (controller.error != null) {
-      return 'We encountered an issue loading recipes.\nPlease check your connection and try again.';
+      return controller.error!;
     } else {
       return 'No recipes met all your dietary constraints and pantry requirements.\nThis can happen when recipes don’t match your health conditions or available ingredients.\nTry adding more ingredients or generate custom recipes with relaxed filters.';
     }
   }
 
   Widget _buildErrorState(BuildContext context) {
+    final controller = Provider.of<RecipeController>(context, listen: false);
     return TabLoadErrorView(
       title: 'Unable to load recipes',
+      message: controller.error ?? TabLoadErrorView.standardMessage,
       onRetry: () {
-        final controller =
-            Provider.of<RecipeController>(context, listen: false);
         controller.clearError();
         if (!_hasInitialized) {
           _hasInitialized = true;

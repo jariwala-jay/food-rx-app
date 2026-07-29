@@ -57,6 +57,27 @@ class IngredientSubstitutionService {
       'sweet potato'
     ],
     'lettuce': ['romaine', 'iceberg', 'butter lettuce', 'spring mix'],
+    'pak choi': [
+      'bok choy',
+      'bok choy leaves',
+      'baby bok choy',
+      'baby bok choy leaves',
+      'pak choy'
+    ],
+    'pak choy': [
+      'bok choy',
+      'bok choy leaves',
+      'baby bok choy',
+      'baby bok choy leaves',
+      'pak choi'
+    ],
+    'bok choy': [
+      'pak choi',
+      'pak choy',
+      'baby bok choy',
+      'baby bok choy leaves',
+      'bok choy leaves'
+    ],
     'berries': [
       'strawberry',
       'blueberry',
@@ -65,6 +86,43 @@ class IngredientSubstitutionService {
       'mixed berries'
     ],
     'apple': ['gala apple', 'granny smith apple', 'fuji apple', 'pineapple'],
+
+    // Regional/spelling aliases — same ingredient, different common name.
+    'cilantro': ['coriander', 'coriander leaves', 'fresh coriander'],
+    'coriander': ['cilantro', 'fresh cilantro'],
+    'green onion': [
+      'scallion',
+      'scallions',
+      'spring onion',
+      'spring onions'
+    ],
+    'scallion': [
+      'green onion',
+      'green onions',
+      'spring onion',
+      'spring onions'
+    ],
+    'spring onion': ['scallion', 'scallions', 'green onion', 'green onions'],
+    'chickpea': ['garbanzo beans', 'garbanzo bean', 'garbanzo'],
+    'garbanzo': ['chickpeas', 'chickpea'],
+    'eggplant': ['aubergine'],
+    'aubergine': ['eggplant'],
+    'zucchini': ['courgette', 'courgettes'],
+    'courgette': ['zucchini'],
+    'shrimp': ['prawn', 'prawns'],
+    'prawn': ['shrimp', 'shrimps'],
+    'chili paste': ['chilli paste', 'chile paste'],
+    'chilli paste': ['chili paste', 'chile paste'],
+    'green chutney': [
+      'mint chutney',
+      'coriander chutney',
+      'cilantro chutney'
+    ],
+    'mint chutney': [
+      'green chutney',
+      'coriander chutney',
+      'cilantro chutney'
+    ],
 
     // Sugars & Sweeteners
     'sugar': [

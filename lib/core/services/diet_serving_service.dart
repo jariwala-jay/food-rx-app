@@ -404,7 +404,12 @@ class DietServingService {
         'canonical_amount': 1500.0, // 1500mg daily (stricter DASH goal)
         'canonical_unit': 'milligram',
         'display_unit': 'mg',
-        'examples': ['Daily sodium intake limit']
+        'examples': [
+          '1 cup milk = 110 mg',
+          '1 slice bread = 120–210 mg',
+          '2/3 tsp table salt ≈ 1,500 mg',
+          '3 oz fresh or frozen meat, fish, or poultry = 55–75 mg',
+        ]
       },
       TrackerCategory.water: {
         'canonical_amount': 240.0, // 240ml = 1 cup
@@ -462,6 +467,17 @@ class DietServingService {
         'canonical_unit': 'milliliter',
         'display_unit': 'cup',
         'examples': ['1 cup dairy milk or yogurt', '1.5 oz hard cheese']
+      },
+      TrackerCategory.sodium: {
+        'canonical_amount': 2300.0, // 2300mg daily (MyPlate general guideline)
+        'canonical_unit': 'milligram',
+        'display_unit': 'mg',
+        'examples': [
+          '1 cup milk ≈ 110 mg',
+          '1 slice bread ≈ 120–210 mg',
+          '1 tsp table salt ≈ 2,300 mg',
+          '3 oz fresh or frozen meat, fish, poultry ≈ 55–75 mg',
+        ]
       },
       TrackerCategory.water: {
         'canonical_amount': 240.0, // 240ml = 1 cup
@@ -579,8 +595,10 @@ class DietServingService {
     required TrackerCategory category,
     required String dietType,
   }) {
-    final lowerDiet = dietType.toLowerCase();
-    return _officialServingDefinitions[lowerDiet]?[category];
+    final normalizedDiet = dietType.toLowerCase() == 'diabetesplate'
+        ? 'dash'
+        : dietType.toLowerCase();
+    return _officialServingDefinitions[normalizedDiet]?[category];
   }
 
   /// Gets all available diet types

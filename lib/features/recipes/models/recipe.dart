@@ -103,8 +103,8 @@ class Recipe {
       RecipeImageUrls.hasResolvableImage(id: id, image: image);
 
   /// True when the recipe has at least one real written cooking step.
-  bool get hasCookingInstructions => analyzedInstructions
-      .any((block) => block.cookingSteps.isNotEmpty);
+  bool get hasCookingInstructions =>
+      analyzedInstructions.any((block) => block.cookingSteps.isNotEmpty);
 
   /// URLs to try when the primary [image] fails to load (jpg/png, CDN + legacy).
   List<String> get imageUrlCandidates => RecipeImageUrls.candidatesFor(
@@ -126,10 +126,12 @@ class Recipe {
       cuisines: List<String>.from(json['cuisines'] ?? []),
       dishTypes: List<String>.from(json['dishTypes'] ?? []),
       diets: List<String>.from(json['diets'] ?? []),
-      extendedIngredients: (json['extendedIngredients'] as List<dynamic>?)
-              ?.map((e) => RecipeIngredient.fromJson(e))
-              .toList() ??
-          [],
+      extendedIngredients: RecipeIngredient.mergeDuplicateLines(
+        (json['extendedIngredients'] as List<dynamic>?)
+                ?.map((e) => RecipeIngredient.fromJson(e))
+                .toList() ??
+            [],
+      ),
       analyzedInstructions: (json['analyzedInstructions'] as List<dynamic>?)
               ?.map((e) => RecipeInstruction.fromJson(e))
               .toList() ??
@@ -187,10 +189,12 @@ class Recipe {
       cuisines: List<String>.from(json['cuisines'] ?? []),
       dishTypes: List<String>.from(json['dishTypes'] ?? []),
       diets: List<String>.from(json['diets'] ?? []),
-      extendedIngredients: (json['extendedIngredients'] as List<dynamic>?)
-              ?.map((e) => RecipeIngredient.fromJson(e))
-              .toList() ??
-          [],
+      extendedIngredients: RecipeIngredient.mergeDuplicateLines(
+        (json['extendedIngredients'] as List<dynamic>?)
+                ?.map((e) => RecipeIngredient.fromJson(e))
+                .toList() ??
+            [],
+      ),
       analyzedInstructions: (json['analyzedInstructions'] as List<dynamic>?)
               ?.map((e) => RecipeInstruction.fromJson(e))
               .toList() ??
@@ -377,13 +381,15 @@ class Recipe {
   }
 
   /// Required ingredient lines (excludes optional — matches green/orange badges).
-  int get requiredIngredientLineCount => extendedIngredients
-      .where((i) => !i.isOptionalIngredient)
-      .length;
+  int get requiredIngredientLineCount =>
+      RecipeIngredient.mergeDuplicateLines(extendedIngredients)
+          .where((i) => !i.isOptionalIngredient)
+          .length;
 
-  int get optionalIngredientLineCount => extendedIngredients
-      .where((i) => i.isOptionalIngredient)
-      .length;
+  int get optionalIngredientLineCount =>
+      RecipeIngredient.mergeDuplicateLines(extendedIngredients)
+          .where((i) => i.isOptionalIngredient)
+          .length;
 
   /// Shopping-cart style count: missed items excluding optional lines (see [RecipeIngredient.isOptionalIngredient]).
   int get requiredMissedIngredientCount {
@@ -451,11 +457,120 @@ class RecipeIngredient {
     return '$withoutTag optional';
   }
 
+  /// Key for collapsing identical Spoonacular lines (same name + unit + optional).
+  static String duplicateMergeKey(RecipeIngredient ingredient) {
+    final name = resolveDisplayName(ingredient.nameClean, ingredient.name)
+        .toLowerCase()
+        .trim();
+    final unit = ingredient.unit.toLowerCase().trim();
+    final optional = ingredient.isOptionalIngredient ? '1' : '0';
+    return '$name|$unit|$optional';
+  }
+
+  /// Collapses identical ingredient lines (same name + unit + optional).
+  static List<RecipeIngredient> mergeDuplicateLines(
+    List<RecipeIngredient> ingredients,
+  ) {
+    if (ingredients.length < 2) return List<RecipeIngredient>.from(ingredients);
+
+    final seen = <String>{};
+    final unique = <RecipeIngredient>[];
+
+    for (final ingredient in ingredients) {
+      final key = duplicateMergeKey(ingredient);
+      if (!seen.add(key)) continue;
+      unique.add(ingredient);
+    }
+
+    return unique;
+  }
+
   /// Best label for display / pantry matching (non-empty [nameClean], else [name]).
   static String resolveDisplayName(String nameClean, String name) {
     final clean = nameClean.trim();
-    if (clean.isNotEmpty) return dedupeConsecutiveWords(clean);
-    return dedupeConsecutiveWords(name.trim());
+    if (clean.isNotEmpty) {
+      return dedupeConsecutiveWords(_stripOrphanPunctuation(clean));
+    }
+    return dedupeConsecutiveWords(_stripOrphanPunctuation(name.trim()));
+  }
+
+  /// Strips orphan punctuation Spoonacular sometimes leaves in `nameClean`
+  /// (e.g. `"garlic - &"` from `"garlic – crushed & chopped"`). Runs before
+  /// [composeIngredientDisplayName] appends its suffix, since a later
+  /// boundary-only pass wouldn't catch the `&` once it's glued to a comma.
+  /// Dashes only strip at word boundaries (not `"half-and-half"`); `&` only
+  /// at the start/end (not mid-string `"salt & pepper"`).
+  static String _stripOrphanPunctuation(String text) {
+    return text
+        .replaceAll(RegExp(r'(^|\s)[-–—](\s|$)'), ' ')
+        .replaceAll(RegExp(r'^&\s*'), '')
+        .replaceAll(RegExp(r'\s*&$'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  /// Natural reading order for UI (e.g. `basil dried` → `dried basil`).
+  static String composeIngredientDisplayName(
+    String nameClean,
+    String prepDescriptors,
+  ) {
+    final merged = dedupeConsecutiveWords('$prepDescriptors $nameClean'.trim());
+    if (merged.isEmpty) return nameClean.trim();
+
+    const attributeDescriptors = {
+      'dried',
+      'fresh',
+      'ground',
+      'whole',
+      'large',
+      'small',
+      'medium',
+      'organic',
+      'lean',
+      'free-range',
+    };
+    const actionDescriptors = {
+      'chopped',
+      'diced',
+      'sliced',
+      'grated',
+      'shredded',
+      'minced',
+    };
+
+    final words = merged.split(RegExp(r'\s+'));
+    if (words.length < 2) return merged;
+
+    final attributeWords = <String>[];
+    final actionWords = <String>[];
+    final nounWords = <String>[];
+
+    for (final word in words) {
+      final lower = word.toLowerCase().replaceAll(RegExp(r'[,.]$'), '');
+      if (attributeDescriptors.contains(lower)) {
+        if (!attributeWords.any((w) => w.toLowerCase() == lower)) {
+          attributeWords.add(word);
+        }
+      } else if (actionDescriptors.contains(lower)) {
+        if (!actionWords.any((w) => w.toLowerCase() == lower)) {
+          actionWords.add(lower);
+        }
+      } else if (!attributeWords.any((w) => w.toLowerCase() == lower) &&
+          !actionWords.any((w) => w.toLowerCase() == lower)) {
+        nounWords.add(word);
+      }
+    }
+
+    if (nounWords.isEmpty) return merged;
+
+    final namePart = attributeWords.isEmpty
+        ? nounWords.join(' ')
+        : '${attributeWords.join(' ')} ${nounWords.join(' ')}';
+
+    if (actionWords.isEmpty) {
+      return dedupeConsecutiveWords(namePart);
+    }
+    return dedupeConsecutiveWords('$namePart, ${actionWords.join(', ')}');
   }
 
   /// Collapses repeated words (e.g. Spoonacular `nameClean`: "celery celery").
@@ -465,8 +580,7 @@ class RecipeIngredient {
 
     final out = <String>[];
     for (final word in words) {
-      if (out.isNotEmpty &&
-          out.last.toLowerCase() == word.toLowerCase()) {
+      if (out.isNotEmpty && out.last.toLowerCase() == word.toLowerCase()) {
         continue;
       }
       out.add(word);
@@ -500,13 +614,45 @@ class RecipeIngredient {
 
   /// Strips ingredient name accidentally embedded in Spoonacular [unit] (e.g. "cups celery").
   static String sanitizeUnit(String unit, String ingredientName) {
-    var u = unit.trim();
+    var u = _stripSizeDescriptorFromUnit(unit.trim());
     final name = ingredientName.trim();
-    if (u.isEmpty || name.isEmpty) return u;
+    if (u.isEmpty) return '';
+    if (name.isEmpty) return u;
 
     final uLower = u.toLowerCase();
     final nameLower = name.toLowerCase();
     if (uLower == nameLower) return '';
+
+    // Spoonacular often uses bare "spoon" instead of tsp/tbsp.
+    if (uLower == 'spoon' || uLower == 'spoons') {
+      if (nameLower.contains('butter') ||
+          nameLower.contains('ghee') ||
+          nameLower.contains('oil') ||
+          nameLower.contains('margarine')) {
+        return 'tablespoon';
+      }
+      return 'teaspoon';
+    }
+
+    // Normalize common tablespoon abbreviations (Tbs, tbsp, Tb, etc.).
+    if (uLower == 'tbs' ||
+        uLower == 'tbs.' ||
+        uLower == 'tb' ||
+        uLower == 'tb.' ||
+        uLower == 'tbl' ||
+        uLower == 'tbls' ||
+        uLower == 'tblsp' ||
+        uLower == 'tbsp' ||
+        uLower == 'tbsp.' ||
+        uLower == 'tbsps') {
+      return 'tablespoon';
+    }
+    if (uLower == 'tsp' ||
+        uLower == 'tsp.' ||
+        uLower == 'tsps' ||
+        uLower == 'ts') {
+      return 'teaspoon';
+    }
 
     if (uLower.endsWith(' $nameLower')) {
       return u.substring(0, u.length - name.length).trim();
@@ -524,13 +670,37 @@ class RecipeIngredient {
         .trim();
   }
 
+  /// Spoonacular sometimes stores size words in [unit] (e.g. `small` for spring onions).
+  static String _stripSizeDescriptorFromUnit(String unit) {
+    if (unit.isEmpty) return unit;
+
+    const sizeDescriptors = {'small', 'medium', 'large'};
+    var remaining = unit.trim();
+    var lower = remaining.toLowerCase();
+
+    while (sizeDescriptors.contains(lower)) {
+      return '';
+    }
+
+    for (final size in sizeDescriptors) {
+      final prefix = '$size ';
+      if (lower.startsWith(prefix)) {
+        remaining = remaining.substring(size.length).trim();
+        lower = remaining.toLowerCase();
+        if (sizeDescriptors.contains(lower)) return '';
+      }
+    }
+
+    return remaining;
+  }
+
   /// Fixes malformed units from Spoonacular API at the source
   static String _fixMalformedUnit(String unit, String ingredientName) {
     // If unit is 'servings' or 'serving', try to convert to a proper unit
     if (unit.toLowerCase() == 'servings' || unit.toLowerCase() == 'serving') {
       // For common ingredients, convert to appropriate units based on typical usage
       final lowerName = ingredientName.toLowerCase();
-      
+
       if (lowerName.contains('egg')) {
         return 'piece'; // eggs are typically counted as pieces
       } else if (lowerName.contains('cheese') && lowerName.contains('cream')) {
@@ -543,7 +713,8 @@ class RecipeIngredient {
         return 'cup'; // milk is typically measured in cups
       } else if (lowerName.contains('bread')) {
         return 'slice'; // bread is typically measured in slices
-      } else if (lowerName.contains('chicken') && (lowerName.contains('breast') || lowerName.contains('thigh'))) {
+      } else if (lowerName.contains('chicken') &&
+          (lowerName.contains('breast') || lowerName.contains('thigh'))) {
         return 'piece'; // chicken pieces are typically counted
       } else {
         return 'piece'; // default to piece for count-based items

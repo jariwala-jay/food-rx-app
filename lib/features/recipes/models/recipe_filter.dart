@@ -25,6 +25,7 @@ enum CuisineType {
   spanish,
   thai,
   vietnamese,
+
   /// UI-only: no cuisine filter sent to Spoonacular (see [RecipeFilter.toSpoonacularParams]).
   noPreference,
 }
@@ -108,6 +109,7 @@ class RecipeFilter {
   final bool dairyFree;
   final bool veryHealthy;
   final String? query; // Search query
+  final List<String> excludedIngredientNames;
 
   /// True when the user chose at least one cuisine (not [CuisineType.noPreference] only).
   bool get hasExplicitCuisinePreference =>
@@ -158,6 +160,7 @@ class RecipeFilter {
     this.dairyFree = false,
     this.veryHealthy = false,
     this.query,
+    this.excludedIngredientNames = const [],
   });
 
   static const Object _unset = Object();
@@ -187,10 +190,12 @@ class RecipeFilter {
     bool? dairyFree,
     bool? veryHealthy,
     Object? query = _unset,
+    List<String>? excludedIngredientNames,
   }) {
     return RecipeFilter(
       cuisines: cuisines ?? this.cuisines,
-      mealType: identical(mealType, _unset) ? this.mealType : mealType as MealType?,
+      mealType:
+          identical(mealType, _unset) ? this.mealType : mealType as MealType?,
       spoonacularMealType: identical(spoonacularMealType, _unset)
           ? this.spoonacularMealType
           : spoonacularMealType as String?,
@@ -212,18 +217,19 @@ class RecipeFilter {
       maxCalories: identical(maxCalories, _unset)
           ? this.maxCalories
           : maxCalories as int?,
-      minProtein: identical(minProtein, _unset)
-          ? this.minProtein
-          : minProtein as int?,
-      maxSodium: identical(maxSodium, _unset) ? this.maxSodium : maxSodium as int?,
-      maxSugar:
-          identical(maxSugar, _unset) ? this.maxSugar : maxSugar as int?,
+      minProtein:
+          identical(minProtein, _unset) ? this.minProtein : minProtein as int?,
+      maxSodium:
+          identical(maxSodium, _unset) ? this.maxSodium : maxSodium as int?,
+      maxSugar: identical(maxSugar, _unset) ? this.maxSugar : maxSugar as int?,
       vegetarian: vegetarian ?? this.vegetarian,
       vegan: vegan ?? this.vegan,
       glutenFree: glutenFree ?? this.glutenFree,
       dairyFree: dairyFree ?? this.dairyFree,
       veryHealthy: veryHealthy ?? this.veryHealthy,
       query: identical(query, _unset) ? this.query : query as String?,
+      excludedIngredientNames:
+          excludedIngredientNames ?? this.excludedIngredientNames,
     );
   }
 
@@ -253,6 +259,7 @@ class RecipeFilter {
       'dairyFree': dairyFree,
       'veryHealthy': veryHealthy,
       'query': query,
+      'excludedIngredientNames': excludedIngredientNames,
     };
   }
 
@@ -313,6 +320,8 @@ class RecipeFilter {
       dairyFree: json['dairyFree'] ?? false,
       veryHealthy: json['veryHealthy'] ?? false,
       query: json['query'],
+      excludedIngredientNames:
+          List<String>.from(json['excludedIngredientNames'] ?? const []),
     );
   }
 
@@ -422,6 +431,10 @@ class RecipeFilter {
       params['query'] = query!;
     }
 
+    if (excludedIngredientNames.isNotEmpty) {
+      params['excludeIngredients'] = excludedIngredientNames.join(',');
+    }
+
     // Add medical condition constraints
     final constraints = getMedicalConditionConstraints();
     constraints.forEach((key, value) {
@@ -511,8 +524,7 @@ extension CuisineTypeExtension on CuisineType {
 
     return names
         .where((name) =>
-            name.trim().isNotEmpty &&
-            name.toLowerCase() != 'no preference')
+            name.trim().isNotEmpty && name.toLowerCase() != 'no preference')
         .map((name) => cuisineMap[name])
         .whereType<CuisineType>()
         .toList();

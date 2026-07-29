@@ -1,3 +1,5 @@
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+
 class UserModel {
   final String? id;
   final String email;
@@ -24,7 +26,7 @@ class UserModel {
   final String? dietType; // DASH or MyPlate
   final String? myPlanType; // "DASH", "MyPlate", "DiabetesPlate"
   final bool? showGlycemicIndex; // true if diabetes detected
-  final List<String>? excludedIngredients;
+  final List<ExcludedIngredient>? excludedIngredients;
   final List<String>? foodRestrictions;
   final List<String>? favoriteCuisines;
   final String? dailyFruitIntake;
@@ -133,9 +135,9 @@ class UserModel {
       // allergies, legacy foodAllergies, or foodRestrictions (signup/API)
       allergies: List<String>.from(
         (json['allergies'] ??
-                json['foodAllergies'] ??
-                json['foodRestrictions'] ??
-                []) as List,
+            json['foodAllergies'] ??
+            json['foodRestrictions'] ??
+            []) as List,
       ),
       // Diet Preferences
       dietType: json['dietType'],
@@ -147,7 +149,9 @@ class UserModel {
               : json['showGlycemicIndex'] == true ||
                   json['showGlycemicIndex'] == 'true' ||
                   json['showGlycemicIndex'] == 1,
-      excludedIngredients: List<String>.from(json['excludedIngredients'] ?? []),
+      excludedIngredients: (json['excludedIngredients'] as List? ?? const [])
+          .map(ExcludedIngredient.fromJson)
+          .toList(),
       foodRestrictions: List<String>.from(json['foodRestrictions'] ?? []),
       favoriteCuisines: List<String>.from(json['favoriteCuisines'] ?? []),
       dailyFruitIntake: json['dailyFruitIntake'],
@@ -208,7 +212,9 @@ class UserModel {
       'dietType': dietType,
       'myPlanType': myPlanType,
       'showGlycemicIndex': showGlycemicIndex,
-      'excludedIngredients': excludedIngredients,
+      'excludedIngredients': excludedIngredients
+          ?.map((ingredient) => ingredient.toJson())
+          .toList(),
       'foodRestrictions': foodRestrictions,
       // Diet Plan
       'selectedDietPlan': selectedDietPlan,
@@ -254,7 +260,7 @@ class UserModel {
     String? dietType,
     String? myPlanType,
     bool? showGlycemicIndex,
-    List<String>? excludedIngredients,
+    List<ExcludedIngredient>? excludedIngredients,
     List<String>? foodRestrictions,
     // Diet Plan
     Map<String, dynamic>? selectedDietPlan,

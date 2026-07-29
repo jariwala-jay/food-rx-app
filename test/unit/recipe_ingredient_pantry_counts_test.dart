@@ -52,6 +52,17 @@ void main() {
         'cups',
       );
     });
+
+    test('strips Spoonacular size descriptor used as unit', () {
+      expect(
+        RecipeIngredient.sanitizeUnit('small', 'spring onions'),
+        '',
+      );
+      expect(
+        RecipeIngredient.sanitizeUnit('small piece', 'spring onions'),
+        'piece',
+      );
+    });
   });
 
   group('RecipeIngredient.isOptionalIngredient', () {
@@ -112,6 +123,27 @@ void main() {
   });
 
   group('RecipeIngredientPantryCounts', () {
+    test('expired pantry items do not count as in pantry for display', () {
+      final recipe = _recipe(
+        extendedIngredients: [
+          _ingredient(name: 'salt'),
+          _ingredient(name: 'broccoli'),
+        ],
+      );
+      final pantry = [
+        _pantryItem(
+          'salt',
+          expirationDate: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+        _pantryItem('broccoli'),
+      ];
+
+      expect(counts.isInPantry(recipe.extendedIngredients[0], pantry), isFalse);
+      expect(counts.isInPantry(recipe.extendedIngredients[1], pantry), isTrue);
+      expect(counts.inPantryCount(recipe, pantry), 1);
+      expect(counts.requiredMissingCount(recipe, pantry), 1);
+    });
+
     test('green and orange exclude optional ingredients', () {
       final recipe = _recipe(
         extendedIngredients: [
@@ -215,17 +247,65 @@ void main() {
       expect(counts.inPantryCount(recipe, const []), 0);
       expect(counts.requiredMissingCount(recipe, const []), 2);
     });
+
+    test('duplicate identical lines count once for badges', () {
+      final recipe = _recipe(
+        extendedIngredients: [
+          _ingredient(name: 'pepper', amount: 0.25, unit: 'teaspoon'),
+          _ingredient(name: 'pepper', amount: 0.25, unit: 'teaspoon'),
+          _ingredient(name: 'salt', amount: 1, unit: 'teaspoon'),
+        ],
+      );
+      final pantry = [_pantryItem('pepper')];
+
+      expect(counts.inPantryCount(recipe, pantry), 1);
+      expect(counts.requiredMissingCount(recipe, pantry), 1);
+      expect(recipe.requiredIngredientLineCount, 2);
+    });
+  });
+
+  group('RecipeIngredient.mergeDuplicateLines', () {
+    test('keeps first identical line and drops later duplicates', () {
+      final merged = RecipeIngredient.mergeDuplicateLines([
+        _ingredient(name: 'pepper', amount: 0.25, unit: 'teaspoon'),
+        _ingredient(name: 'pepper', amount: 0.25, unit: 'teaspoon'),
+      ]);
+
+      expect(merged, hasLength(1));
+      expect(merged.first.amount, 0.25);
+      expect(merged.first.unit, 'teaspoon');
+    });
+
+    test('keeps distinct peppers separate', () {
+      final merged = RecipeIngredient.mergeDuplicateLines([
+        _ingredient(name: 'black pepper', amount: 0.25, unit: 'teaspoon'),
+        _ingredient(name: 'cayenne pepper', amount: 0.25, unit: 'teaspoon'),
+      ]);
+
+      expect(merged, hasLength(2));
+    });
+
+    test('keeps same name with different units separate', () {
+      final merged = RecipeIngredient.mergeDuplicateLines([
+        _ingredient(name: 'garlic', amount: 1, unit: 'clove'),
+        _ingredient(name: 'garlic', amount: 1, unit: 'teaspoon'),
+      ]);
+
+      expect(merged, hasLength(2));
+    });
   });
 }
 
-Measures _emptyMeasures() => Measures(
-      us: Measure(amount: 0, unitShort: 'g', unitLong: 'grams'),
-      metric: Measure(amount: 0, unitShort: 'g', unitLong: 'grams'),
+Measures _emptyMeasures({double amount = 0}) => Measures(
+      us: Measure(amount: amount, unitShort: 'g', unitLong: 'grams'),
+      metric: Measure(amount: amount, unitShort: 'g', unitLong: 'grams'),
     );
 
 RecipeIngredient _ingredient({
   required String name,
   String original = '',
+  double amount = 1,
+  String unit = 'cup',
 }) {
   final line = original.isNotEmpty ? original : name;
   return RecipeIngredient(
@@ -237,10 +317,10 @@ RecipeIngredient _ingredient({
     nameClean: name,
     original: line,
     originalName: line,
-    amount: 1,
-    unit: 'cup',
+    amount: amount,
+    unit: unit,
     meta: const [],
-    measures: _emptyMeasures(),
+    measures: _emptyMeasures(amount: amount),
   );
 }
 
@@ -287,12 +367,17 @@ Recipe _recipe({
   );
 }
 
-PantryItem _pantryItem(String name) => PantryItem(
+PantryItem _pantryItem(
+  String name, {
+  DateTime? expirationDate,
+}) =>
+    PantryItem(
       id: name,
       name: name,
       imageUrl: '',
       category: 'produce',
       quantity: 5,
       unit: UnitType.piece,
-      expirationDate: DateTime.now().add(const Duration(days: 7)),
+      expirationDate:
+          expirationDate ?? DateTime.now().add(const Duration(days: 7)),
     );

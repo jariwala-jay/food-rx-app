@@ -12,6 +12,7 @@ import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
+import 'package:flutter_app/features/tracking/notifications/goal_limit_notification_service.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
 
@@ -102,7 +103,10 @@ class RecipeController extends ChangeNotifier {
         'healthGoals': user.healthGoals,
         'allergies': user.allergies ?? [],
         'foodRestrictions': user.foodRestrictions ?? [],
-        'excludedIngredients': user.excludedIngredients ?? [],
+        'excludedIngredients': user.excludedIngredients
+                ?.map((ingredient) => ingredient.toJson())
+                .toList() ??
+            [],
         'favoriteCuisines': user.favoriteCuisines ?? [],
         'activityLevel': user.activityLevel,
         'age': user.age,
@@ -238,8 +242,9 @@ class RecipeController extends ChangeNotifier {
     if (recipeServings <= 0) return;
     final consumedFraction =
         (servingsConsumed / recipeServings).clamp(0.0, 1.0);
-    final userDietType =
-        (user.myPlanType ?? user.dietType ?? 'MyPlate').toString().toLowerCase();
+    final userDietType = (user.myPlanType ?? user.dietType ?? 'MyPlate')
+        .toString()
+        .toLowerCase();
 
     final scaledIngredients = recipe.extendedIngredients
         .map((ing) => {
@@ -277,7 +282,8 @@ class RecipeController extends ChangeNotifier {
       if (ingredient.unit.toLowerCase() == 'servings' ||
           ingredient.unit.toLowerCase() == 'serving') continue;
       final categories = dietServingService.getCategoriesForIngredient(
-          ingredient.nameClean, dietType: userDietType);
+          ingredient.nameClean,
+          dietType: userDietType);
       final perPersonAmount = ingredient.amount / recipe.servings;
       for (final category in categories) {
         final dietServings = dietServingService.getServingsForTracker(
@@ -288,8 +294,7 @@ class RecipeController extends ChangeNotifier {
           dietType: userDietType,
         );
         if (dietServings > 0) {
-          final rounded =
-              double.parse(dietServings.toStringAsFixed(2));
+          final rounded = double.parse(dietServings.toStringAsFixed(2));
           categoryServings[category] =
               (categoryServings[category] ?? 0.0) + rounded;
         }
@@ -313,13 +318,20 @@ class RecipeController extends ChangeNotifier {
       }
     }
 
+    final goalLimitSnapshot = GoalLimitNotificationService.instance.snapshot(
+      [...trackerProvider.dailyTrackers, ...trackerProvider.weeklyTrackers],
+    );
     for (final entry in categoryServings.entries) {
-      final matchingTracker = trackerProvider.findTrackerByCategory(
-          entry.key, userDietType);
+      final matchingTracker =
+          trackerProvider.findTrackerByCategory(entry.key, userDietType);
       if (matchingTracker != null) {
         await trackerProvider.incrementTracker(matchingTracker.id, entry.value);
       }
     }
+    GoalLimitNotificationService.instance.checkAndNotify(
+      before: goalLimitSnapshot,
+      trackers: [...trackerProvider.dailyTrackers, ...trackerProvider.weeklyTrackers],
+    );
 
     await pantryController.loadItems();
   }

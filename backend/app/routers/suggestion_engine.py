@@ -34,10 +34,7 @@ from app.services.rag_service import (
     should_suggest_follow_ups,
 )
 
-# ---------------------------------------------------------------------------
-# Session rotation state
-# In-memory: resets on process restart. Per (user_id, conversation_id) pair.
-# ---------------------------------------------------------------------------
+# Session rotation state, in-memory per (user_id, conversation_id); resets on restart.
 
 _seen_follow_up_questions: dict[tuple[str, str], set[str]] = {}
 

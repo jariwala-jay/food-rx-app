@@ -130,29 +130,24 @@ class RecipeScalingService {
         ? 1.0 + (scaleFactor - 1.0) * 0.5  // Reduce scaling for seasonings
         : scaleFactor;
 
-    // Scale the amount
+    // Scale the amount — keep exact values for pantry/nutrition calculations.
     final scaledAmount = originalAmount * adjustedScaleFactor;
-    
-    // Optimize units for readability (always optimize, even for empty units)
-    final optimized = _conversionService.optimizeUnits(scaledAmount, originalUnit);
-    final finalAmount = optimized['amount'] as double;
-    final finalUnit = optimized['unit'] as String;
-    
+
     // Create scaled ingredient
     final scaledIngredient = Map<String, dynamic>.from(ingredient);
-    scaledIngredient['amount'] = finalAmount;
-    scaledIngredient['unit'] = finalUnit;
-    
+    scaledIngredient['amount'] = scaledAmount;
+    scaledIngredient['unit'] = originalUnit;
+
     // Update measures if they exist
     if (ingredient.containsKey('measures')) {
       scaledIngredient['measures'] = _scaleMeasures(
         originalMeasures: ingredient['measures'] as Map<String, dynamic>,
         originalAmount: originalAmount,
-        finalAmount: finalAmount,
-        finalUnit: finalUnit,
+        finalAmount: scaledAmount,
+        finalUnit: originalUnit,
       );
     }
-    
+
     // Add scaling metadata
     scaledIngredient['scalingMetadata'] = {
       'originalAmount': originalAmount,
@@ -161,7 +156,7 @@ class RecipeScalingService {
       'confidence': 0.95, // High confidence for direct scaling
       'conversionPath': 'direct_scaling',
       'seasoningAdjusted': isSeasoningOrSpice && scaleFactor > 2.0,
-      'optimized': finalUnit != originalUnit,
+      'optimized': false,
     };
 
     return scaledIngredient;
