@@ -10,13 +10,8 @@ class Settings(BaseSettings):
     broadcast_secret: str = ""
     # Optional: set TRACKER_RESET_SECRET in .env to enable tracker reset cron endpoints
     tracker_reset_secret: str = ""
-    # Optional: Firebase Admin config for sending tray push notifications via FCM.
-    # Preferred:
-    # - FIREBASE_SERVICE_ACCOUNT_B64 (base64-encoded service account JSON)
-    # Also supported:
-    # - FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON string)
-    # Backward compatibility:
-    # - FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 (legacy name)
+    # Firebase Admin config for FCM push notifications. Prefer
+    # FIREBASE_SERVICE_ACCOUNT_B64; JSON and the legacy _BASE64 name also work.
     firebase_project_id: str = ""
     firebase_service_account_json: str = ""
     firebase_service_account_b64: str = ""

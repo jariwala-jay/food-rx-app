@@ -1,11 +1,12 @@
 import logging
 from contextlib import asynccontextmanager
 from bson import ObjectId
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from pymongo.errors import AutoReconnect, ConnectionFailure, ServerSelectionTimeoutError
 
-from app.database import ensure_database_indexes, get_database, close_database
+from app.database import ensure_database_indexes, get_database, close_database, reset_database
 from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips
 from app.services.rag_service import rag_service
 
@@ -14,6 +15,12 @@ logging.basicConfig(
     format="%(levelname)s %(name)s: %(message)s",
 )
 logging.getLogger("app").setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+
+_DB_UNAVAILABLE_DETAIL = (
+    "Could not connect to the server. Check your internet connection and try again."
+)
 
 
 @asynccontextmanager
@@ -39,6 +46,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+async def _mongo_connection_unavailable_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """Return 503 when Atlas is unreachable (e.g. device offline) instead of 500."""
+    logger.warning(
+        "Database unavailable for %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
+    await reset_database()
+    return JSONResponse(
+        status_code=503,
+        content={"detail": _DB_UNAVAILABLE_DETAIL},
+    )
+
+
+for _mongo_exc in (
+    ServerSelectionTimeoutError,
+    AutoReconnect,
+    ConnectionFailure,
+):
+    app.add_exception_handler(_mongo_exc, _mongo_connection_unavailable_handler)
 
 app.include_router(auth.router)
 app.include_router(education.router)

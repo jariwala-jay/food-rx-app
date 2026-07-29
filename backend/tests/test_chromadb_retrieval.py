@@ -23,7 +23,7 @@ import chromadb
 
 CHROMA_PATH = BACKEND_ROOT / "app" / "knowledge" / "chroma_db"
 COLLECTION_NAME = "myfoodrx_chunks"
-EXPECTED_CHUNK_COUNT = 177
+EXPECTED_CHUNK_COUNT = 189
 KNOWN_CATEGORIES = [
     "Sleep",
     "Exercise",
@@ -56,13 +56,15 @@ class TestChromaDBCollection(unittest.TestCase):
             )
 
     def test_collection_has_correct_chunk_count(self):
-        """Collection must contain exactly 177 chunks."""
+        """Collection must contain exactly EXPECTED_CHUNK_COUNT chunks."""
         count = self.collection.count()
         self.assertEqual(
             count,
             EXPECTED_CHUNK_COUNT,
             f"Expected {EXPECTED_CHUNK_COUNT} chunks but found {count}. "
-            "Re-run the backend to re-embed.",
+            "This is a snapshot check, not a live sync — if you added or "
+            "removed knowledge base docs on purpose, update "
+            "EXPECTED_CHUNK_COUNT to match.",
         )
 
     def test_collection_chunks_have_required_metadata_fields(self):

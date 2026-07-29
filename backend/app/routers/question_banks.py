@@ -74,15 +74,8 @@ def format_conditions(conditions: list[str]) -> str:
     return ", ".join(clean[:-1]) + f", and {clean[-1]}"
 
 
-# ---------------------------------------------------------------------------
-# Plan resolver (lightweight copy — avoids circular import with rag_service)
-#
-# Priority matches _resolve_plan_for_profile() in rag_service.py exactly:
-#   1. diabetes/prediabetes in conditions  → DiabetesPlate  (always overrides)
-#   2. myPlanType field (normalised)       → DiabetesPlate / DASH / MyPlate
-#   3. hypertension in conditions          → DASH
-#   4. default                             → MyPlate
-# ---------------------------------------------------------------------------
+# Lightweight copy of _resolve_plan_for_profile() (rag_service.py) to avoid a
+# circular import. Priority: diabetes/prediabetes > myPlanType > hypertension > MyPlate.
 
 
 def _resolve_starter_plan(user_profile: dict[str, Any] | None) -> str:
@@ -305,10 +298,8 @@ def generate_starter_questions(
     if len(chosen_food) < 2:
         chosen_food = random.sample(food_qs, min(2, len(food_qs)))
 
-    # Enforce sub-bucket uniqueness for lifestyle questions:
-    # at most ONE exercise question, ONE sleep question, ONE hydration question.
-    # This prevents two near-identical exercise questions appearing together
-    # (e.g. "How can I stay active?" and "How does staying active help with diabetes?").
+    # At most one question per lifestyle sub-topic, so we don't show two
+    # near-identical exercise (or sleep/hydration) questions together.
     _exercise_kw = {"active", "exercise"}
     _sleep_kw = {"sleep"}
     _hydration_kw = {"water", "drink", "hydrat"}
@@ -504,8 +495,8 @@ COMBINATION_QUESTION_BANK: dict[tuple[str, ...], list[str]] = {
         "What snacks are low in sugar, sodium, and calories all at once?",
         "Can you give me a simple lunch idea that fits all my health conditions?",
     ],
-    # Prediabetes + hypertension — softer framing (prevention, not Diabetes Plate).
-    # Checked before ("diabetes", "hypertension") via _generate_suggestions special-case.
+    # Softer prevention framing, not Diabetes Plate; checked before the plain
+    # ("diabetes", "hypertension") key in _generate_suggestions.
     ("hypertension", "prediabetes"): [
         "What foods help keep my blood sugar steady and support healthy blood pressure?",
         "What are some blood-sugar-friendly, low-sodium meal ideas?",

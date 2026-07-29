@@ -68,8 +68,14 @@ async def ensure_database_indexes() -> None:
 
 
 async def close_database():
+    """Close the Mongo client and clear the cached database handle."""
     global _client, _db
     if _client is not None:
         _client.close()
         _client = None
         _db = None
+
+
+async def reset_database() -> None:
+    """Drop the cached connection so the next request opens a fresh client."""
+    await close_database()
