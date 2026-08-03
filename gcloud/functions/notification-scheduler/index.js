@@ -88,33 +88,53 @@ const APP_OPEN_WEEK_MILESTONES = [7, 14, 21, 28];
 const APP_OPEN_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const NEW_ACCOUNT_GRACE_HOURS = 24;
 
-function toStartOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function dayDiffFloor(later, earlier) {
+// Milestone day-count, using the user's LOCAL calendar day (localDayStartUtc,
+// defined below) rather than the server runtime's timezone. Cloud Functions
+// run in UTC, so without this every user's "days since last log" would
+// silently be computed against UTC calendar-day boundaries instead of their
+// own -- the same bug class localDayStartUtc already exists to prevent for
+// same-day dedupe checks elsewhere in this file.
+//
+// Returns the number of LOCAL CALENDAR DAY boundaries crossed between
+// `earlier` and `later` -- not elapsed 24-hour periods. Do not simplify
+// this to Math.floor((later - earlier) / DAY_MS); that reintroduces the
+// timezone bug this function exists to fix.
+function dayDiffFloor(later, earlier, timezoneOffsetMinutes) {
   const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor(
-    (toStartOfDay(later).getTime() - toStartOfDay(earlier).getTime()) / msPerDay
-  );
+  const laterStart = localDayStartUtc(later, timezoneOffsetMinutes);
+  const earlierStart = localDayStartUtc(earlier, timezoneOffsetMinutes);
+  return Math.floor((laterStart.getTime() - earlierStart.getTime()) / msPerDay);
 }
 
-function addMonths(date, months) {
-  const d = new Date(date);
-  const originalDay = d.getDate();
-  d.setMonth(d.getMonth() + months);
-  if (d.getDate() < originalDay) {
-    d.setDate(0);
+// Adds `months` to `date`'s LOCAL calendar day, clamping day-of-month
+// overflow to the last day of the target month (e.g. Jan 31 + 1 month ->
+// Feb 28/29, not Mar 3 -- the standard setMonth() overflow idiom), but
+// anchored to the user's local calendar instead of the server's. Returns
+// that target day's local midnight, expressed back in UTC, so it can be
+// compared directly against another localDayStartUtc() value.
+function addMonthsLocalDayStartUtc(date, months, timezoneOffsetMinutes) {
+  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
+  const local = new Date(date.getTime() + offsetMs);
+  const originalDay = local.getUTCDate();
+  local.setUTCMonth(local.getUTCMonth() + months);
+  if (local.getUTCDate() < originalDay) {
+    local.setUTCDate(0);
   }
-  return d;
+  const localMidnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  return new Date(localMidnightUtc - offsetMs);
 }
 
-function getInactivityBucket(now, referenceDate, dayMilestones, weekMilestones, monthMilestones) {
+function getInactivityBucket(
+  now,
+  referenceDate,
+  dayMilestones,
+  weekMilestones,
+  monthMilestones,
+  timezoneOffsetMinutes
+) {
   if (!referenceDate) return null;
 
-  const days = dayDiffFloor(now, referenceDate);
+  const days = dayDiffFloor(now, referenceDate, timezoneOffsetMinutes);
   if (days <= 0) return null;
 
   for (const d of dayMilestones) {
@@ -129,11 +149,10 @@ function getInactivityBucket(now, referenceDate, dayMilestones, weekMilestones, 
     }
   }
 
+  const todayLocalStart = localDayStartUtc(now, timezoneOffsetMinutes);
   for (const m of monthMilestones) {
-    const target = addMonths(toStartOfDay(referenceDate), m);
-    const targetDay = toStartOfDay(target).getTime();
-    const todayDay = toStartOfDay(now).getTime();
-    if (targetDay === todayDay) {
+    const targetLocalStart = addMonthsLocalDayStartUtc(referenceDate, m, timezoneOffsetMinutes);
+    if (targetLocalStart.getTime() === todayLocalStart.getTime()) {
       return { key: `m${m}`, days };
     }
   }
@@ -409,7 +428,8 @@ async function checkMealLoggingInactivityReminders() {
           latestDate,
           MEAL_LOGGING_DAY_MILESTONES,
           MEAL_LOGGING_WEEK_MILESTONES,
-          MEAL_LOGGING_MONTH_MILESTONES
+          MEAL_LOGGING_MONTH_MILESTONES,
+          user.timezoneOffsetMinutes
         );
 
         if (!bucket) {
@@ -538,7 +558,8 @@ async function checkAppInactivityReminders() {
           lastActiveDate,
           APP_OPEN_DAY_MILESTONES,
           APP_OPEN_WEEK_MILESTONES,
-          APP_OPEN_MONTH_MILESTONES
+          APP_OPEN_MONTH_MILESTONES,
+          user.timezoneOffsetMinutes
         );
 
         if (!bucket) continue;
@@ -596,3 +617,14 @@ async function runAllNotificationChecks() {
     appInactivityReminders: app.notificationsCreated || 0,
   };
 }
+
+// Exposed only for scripts/test_inactivity_bucket.js so the regression
+// check exercises the real production logic instead of a reimplementation
+// that could silently drift from it. Not used by the Cloud Function
+// runtime itself, which only invokes exports.notificationScheduler.
+exports.__testables = {
+  localDayStartUtc,
+  dayDiffFloor,
+  addMonthsLocalDayStartUtc,
+  getInactivityBucket,
+};
