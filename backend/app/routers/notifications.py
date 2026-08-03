@@ -107,6 +107,14 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     if type_ == "expired_items" and item_ids:
         # Push once per item ("first sighting"); the Center digest doc is
         # still created every time so it reflects the current expired set.
+        #
+        # Note: this route only ever receives expired_items from the client
+        # (SimpleNotificationService.checkExpiredItems) — there's no
+        # server-side cron creating it, unlike expiring_ingredient. That's
+        # intentional: expiring items need a proactive nudge before their
+        # window closes even if the app stays unopened, while expired items
+        # have no closing window left to protect, so detecting them the next
+        # time the client already has pantry state loaded is sufficient.
         pantry = db[PANTRY]
         already_notified_ids = {
             str(doc_id["_id"])

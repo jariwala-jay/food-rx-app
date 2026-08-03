@@ -46,6 +46,15 @@ exports.notificationScheduler = async (req, res) => {
 
     let result;
 
+    // Deliberately no "expired_items" case here. expiring_ingredient needs a
+    // server-side cron because it's a preventive nudge with a closing
+    // window (use it before it's gone) that must reach the user even if
+    // they haven't opened the app in days. expired_items is the opposite:
+    // the window already closed, so there's no benefit to catching it the
+    // instant it happens — it's a "review your pantry" trigger that's
+    // naturally and cheaply detected the next time the client already has
+    // pantry state loaded (see SimpleNotificationService.checkExpiredItems),
+    // with no separate server-side check needed.
     switch (type) {
       case "expiring_ingredients":
         result = await checkExpiringIngredients();
@@ -171,10 +180,12 @@ function bucketLabel(bucketKey) {
   return "";
 }
 
-function formatBucketMessage(prefix, bucketKey) {
+// Leads with the "why" (time since sincePhrase) before the call to action,
+// so the reminder reads as personalized rather than generic.
+function formatReasonFirstMessage(sincePhrase, callToAction, bucketKey) {
   const label = bucketLabel(bucketKey);
-  if (!label) return prefix;
-  return `${prefix} It's been ${label}.`;
+  if (!label) return callToAction;
+  return `It's been ${label} since ${sincePhrase}. ${callToAction}`;
 }
 
 function isWithinNewAccountGracePeriod(now, user) {
@@ -459,8 +470,9 @@ async function checkMealLoggingInactivityReminders() {
           userId: userId,
           type: "tracker_reminder",
           title: "Don't forget to log your meals",
-          message: formatBucketMessage(
-            "It's time to log your food and stay on track with your nutrition goals.",
+          message: formatReasonFirstMessage(
+            "your last meal log",
+            "Log your food to stay on track with your nutrition goals.",
             bucket.key
           ),
           bucketKey: bucket.key,
@@ -576,8 +588,9 @@ async function checkAppInactivityReminders() {
           userId: userId,
           type: "app_inactivity_reminder",
           title: "We miss you at MyFoodRx",
-          message: formatBucketMessage(
-            "Open the app to review your pantry, trackers, and recommendations.",
+          message: formatReasonFirstMessage(
+            "your last visit",
+            "Open MyFoodRx to review your pantry, trackers, and recommendations.",
             bucket.key
           ),
           bucketKey: bucket.key,

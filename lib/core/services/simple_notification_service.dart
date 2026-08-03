@@ -15,9 +15,9 @@ class SimpleNotificationService {
       return 'Use it in a recipe today so it doesn\'t go to waste.';
     }
     if (days == 1) {
-      return 'Expires tomorrow. Use it soon or add it to a recipe today.';
+      return 'Expires tomorrow. Use it today before it goes to waste.';
     }
-    return 'Expires in $days days. Consider using it in a recipe soon.';
+    return 'Expires in $days days. Try adding it to a recipe before it expires.';
   }
 
   Future<void> checkExpiringIngredients(String userId) async {
@@ -90,6 +90,18 @@ class SimpleNotificationService {
     }
   }
 
+  // Unlike checkExpiringIngredients (which is mirrored by a server-side cron
+  // in notification-scheduler), this is intentionally the only place where
+  // expired_items are created.
+  // Expiring items have a deadline: users benefit from being warned before
+  // the ingredient expires, even if they have not opened the app recently.
+  // That requires proactive server-side detection.
+  // Expired items are different. There is no additional deadline to protect;
+  // this notification is simply a prompt to review pantry state. The client
+  // already has pantry data available when this runs (during pantry loading or
+  // notification center open), so adding a server-side check would duplicate
+  // work without improving delivery.
+  // Keeping this client-only avoids duplicate notification creation paths.
   Future<void> checkExpiredItems(String userId) async {
     try {
       final expiringItems =
