@@ -5,10 +5,16 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from app.config import settings
 from app.database import get_database
 from app.deps import get_current_user_id
+from app.notification_eligibility import (
+    is_eligible_for_non_welcome_notification,
+    is_eligible_given_created_at,
+    resolve_created_at_from_user_doc,
+)
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 COLL = "notifications"
 USERS = "users"
+PANTRY = "pantry_items"
 
 
 def _serialize(doc: dict) -> dict:
@@ -69,6 +75,13 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     dedupe_hours = 24 if dedupe_raw is None else int(dedupe_raw)
     send_push = bool(body.get("sendPush", False))
 
+    # New accounts get the Welcome notification only (that flow bypasses this
+    # route entirely via a direct Mongo insert). Every other notification
+    # type created here — including admin/education broadcasts — is
+    # suppressed for a user's first NEW_ACCOUNT_GRACE_HOURS.
+    if not await is_eligible_for_non_welcome_notification(db, user_id):
+        return {"ok": True, "skipped": "onboarding_grace_period"}
+
     if type_ in ("admin", "education"):
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
         existing = await db[COLL].find_one(
@@ -88,9 +101,33 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     clean = dict(body)
     clean.pop("dedupeWindowHours", None)
     clean.pop("sendPush", None)
+    item_ids = clean.pop("itemIds", None)
     doc = {"_id": nid, "userId": user_id, **clean, "createdAt": now}
+
+    if type_ == "expired_items" and item_ids:
+        # Push once per item ("first sighting"); the Center digest doc is
+        # still created every time so it reflects the current expired set.
+        pantry = db[PANTRY]
+        already_notified_ids = {
+            str(doc_id["_id"])
+            async for doc_id in pantry.find(
+                {"_id": {"$in": [ObjectId(i) for i in item_ids if ObjectId.is_valid(i)]}, "expiredNotifiedAt": {"$exists": True}},
+                {"_id": 1},
+            )
+        }
+        new_ids = [i for i in item_ids if i not in already_notified_ids]
+        if new_ids:
+            await pantry.update_many(
+                {"_id": {"$in": [ObjectId(i) for i in new_ids]}},
+                {"$set": {"expiredNotifiedAt": now}},
+            )
+        else:
+            # Every item in this digest was already notified before — keep
+            # it Center-only by marking it as already sent.
+            doc["sentAt"] = now
+
     await db[COLL].insert_one(doc)
-    if send_push:
+    if send_push and "sentAt" not in doc:
         push_updates = {"pushStatus": "skipped", "pushAttemptedAt": datetime.now(timezone.utc).isoformat()}
         try:
             user = await users.find_one({"_id": ObjectId(user_id)})
@@ -200,11 +237,18 @@ async def broadcast_notification(
     dedupe_hours = int(body.get("dedupeWindowHours", 24))
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
 
-    cursor = db[USERS].find({}, {"_id": 1})
-    user_ids = [str(doc["_id"]) for doc in await cursor.to_list(length=None)]
+    cursor = db[USERS].find({}, {"_id": 1, "createdAt": 1})
+    user_docs = await cursor.to_list(length=None)
     inserted = 0
     skipped = 0
-    for uid in user_ids:
+    skipped_onboarding = 0
+    for user_doc in user_docs:
+        uid = str(user_doc["_id"])
+        # Same 24h onboarding gate as create_notification() — a broadcast
+        # created while a user is still new is suppressed, not queued.
+        if not is_eligible_given_created_at(resolve_created_at_from_user_doc(user_doc), uid):
+            skipped_onboarding += 1
+            continue
         if type_ in ("admin", "education"):
             existing = await db[COLL].find_one(
                 {
@@ -231,4 +275,5 @@ async def broadcast_notification(
         "ok": True,
         "usersNotified": inserted,
         "usersSkippedDuplicate": skipped,
+        "usersSkippedOnboarding": skipped_onboarding,
     }

@@ -15,9 +15,9 @@ class SimpleNotificationService {
       return 'Use it in a recipe today so it doesn\'t go to waste.';
     }
     if (days == 1) {
-      return 'Expires tomorrow. Use it in a recipe so it doesn\'t go to waste.';
+      return 'Expires tomorrow. Use it soon or add it to a recipe today.';
     }
-    return 'Expires in $days days. Use it in a recipe so it doesn\'t go to waste.';
+    return 'Expires in $days days. Consider using it in a recipe soon.';
   }
 
   Future<void> checkExpiringIngredients(String userId) async {
@@ -52,7 +52,7 @@ class SimpleNotificationService {
 
       final title = names.length == 1
           ? '${names.first} expires soon'
-          : '${names.length} food items expiring soon';
+          : '${names.length} ingredients expire soon';
       final message = names.length == 1
           ? _expiringItemMessage(
               DateTime.parse(inWindow.first['expiryDate'].toString()),
@@ -139,11 +139,23 @@ class SimpleNotificationService {
         return;
       }
 
+      final itemIds = expired
+          .map((i) => (i['_id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      final title = names.length == 1
+          ? '${names.first} has expired'
+          : 'Some ingredients have expired';
+      final message = names.length == 1
+          ? 'Tap to review and update this ingredient in your pantry.'
+          : '$itemsSummary need your review. Tap to view your pantry and update expiration dates.';
+
       await ApiClient.post('/notifications', body: {
         'type': 'expired_items',
-        'title': 'Some food items are expired',
-        'message':
-            'Expired: $itemsSummary. Tap to review and extend if it is not spoiled.',
+        'title': title,
+        'message': message,
+        'itemIds': itemIds,
       });
 
       debugPrint('✅ Created expired items digest');
@@ -152,18 +164,20 @@ class SimpleNotificationService {
     }
   }
 
+  // Note: the 24h new-account grace period is enforced authoritatively by
+  // the backend (POST /notifications), not here — see
+  // notification_eligibility.py::is_eligible_for_non_welcome_notification.
+  //
+  // If meal reminders are enabled, they already serve as the user's daily
+  // logging nudge, so this generic same-day reminder is skipped entirely.
+  // The server-side milestone reminders (see notification-scheduler) are a
+  // separate, longer-horizon habit-reengagement mechanism and are only
+  // gated on their day-1 bucket, not here.
   Future<void> checkTrackerReminder(
     String userId, {
-    DateTime? accountCreatedAt,
+    bool mealRemindersEnabled = false,
   }) async {
-    // Give brand-new users a 24-hour grace period before nagging them to log.
-    if (accountCreatedAt != null &&
-        DateTime.now().difference(accountCreatedAt).inHours < 24) {
-      debugPrint(
-          '[Notifications] Skipping tracker reminder: account is less than 24 hours old');
-      return;
-    }
-
+    if (mealRemindersEnabled) return;
     try {
       final list = await ApiClient.get('/trackers/progress') as List?;
       final today = DateTime.now();

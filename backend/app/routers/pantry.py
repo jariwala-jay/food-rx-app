@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import get_database
 from app.deps import get_current_user_id
+from app.notification_eligibility import parse_iso_datetime
 
 router = APIRouter(prefix="/pantry", tags=["pantry"])
 PANTRY = "pantry_items"
@@ -61,9 +62,18 @@ async def update_item(
     db = await get_database()
     now = datetime.now(timezone.utc).isoformat()
     updates = {**body, "updatedAt": now}
+    unset = {}
+    if "expiryDate" in updates:
+        new_expiry = parse_iso_datetime(str(updates["expiryDate"])) if updates["expiryDate"] else None
+        if new_expiry is not None and new_expiry > datetime.now(timezone.utc):
+            # Item was extended past expiry — allow it to notify again if/when it re-expires.
+            unset["expiredNotifiedAt"] = ""
+    update_op = {"$set": updates}
+    if unset:
+        update_op["$unset"] = unset
     result = await db[PANTRY].update_one(
         {"_id": ObjectId(item_id), "userId": ObjectId(user_id)},
-        {"$set": updates},
+        update_op,
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")

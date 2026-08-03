@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'package:flutter_app/core/services/notification_service.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
@@ -641,6 +642,9 @@ class TrackerProvider extends ChangeNotifier {
           List<TrackerGoal>.from(_dailyTrackers),
           ProgressPeriodType.daily,
         );
+        // The user has now logged progress today — the meal-reminder nudge
+        // is no longer needed today; push it to tomorrow.
+        unawaited(NotificationService().suppressTodaysMealReminder());
       } catch (_) {
         // Non-critical: history snapshot failure should not break logging UX.
       }

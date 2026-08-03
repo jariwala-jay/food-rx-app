@@ -929,7 +929,10 @@ class AuthController with ChangeNotifier {
       await _notificationManager!.initialize(userId);
       final notificationService = NotificationService();
       await notificationService.syncFCMTokenToDatabase();
-      await notificationService.scheduleDailyReminders();
+      await notificationService.applyMealLoggingReminderPreferences(
+        _currentUser?.mealLoggingReminderPrefs,
+        accountCreatedAt: _currentUser?.createdAt,
+      );
     } catch (e) {
       debugPrint('Error initializing notification services: $e');
     }

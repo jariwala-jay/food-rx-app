@@ -18,6 +18,7 @@ from app.auth_jwt import ACCESS_TOKEN_EXPIRE_HOURS, create_access_token
 from app.config import settings
 from app.deps import get_current_user_id
 from app.firebase_admin_app import verify_google_access_token
+from app.notification_eligibility import NEW_ACCOUNT_GRACE_HOURS, parse_iso_datetime
 from app.refresh_tokens import (
     issue_refresh_token,
     revoke_all_refresh_tokens_for_user,
@@ -134,21 +135,6 @@ def _password_reset_bridge_html(token: str) -> str:
 </html>"""
 
 
-def _parse_iso_datetime(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        v = value.strip()
-        if v.endswith("Z"):
-            v = v[:-1] + "+00:00"
-        dt = datetime.fromisoformat(v)
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-    except Exception:
-        return None
-
-
 def _parse_date_of_birth(value) -> date | None:
     if value is None:
         return None
@@ -261,7 +247,7 @@ async def register(body: dict):
         "userId": str(user_id),
         "type": "admin",
         "title": "Welcome to MyFoodRx",
-        "message": "We're glad you're here. Start by adding items to your pantry!",
+        "message": "We're glad you're here. Start by adding ingredients to your pantry to get personalized recommendations.",
         "createdAt": now,
     })
 
@@ -433,7 +419,7 @@ async def google_sign_in(body: dict):
             "userId": str(user_id),
             "type": "admin",
             "title": "Welcome to MyFoodRx",
-            "message": "We're glad you're here. Start by adding items to your pantry!",
+            "message": "We're glad you're here. Start by adding ingredients to your pantry to get personalized recommendations.",
             "createdAt": now,
         })
 
@@ -513,7 +499,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
         "preferredMealPrepTime", "cookingForPeople", "cookingSkill",
         "selectedDietPlan", "targetCalories", "macroNutrients", "mealTimings",
         "requiresGroceryList", "diagnostics", "healthGoals", "hasCompletedTour", "profilePhotoId",
-        "fcmToken", "lastActiveAt",
+        "fcmToken", "lastActiveAt", "timezoneOffsetMinutes", "mealLoggingReminderPrefs",
     }
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
@@ -521,7 +507,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
     # Prevent clients from setting lastActiveAt to a future timestamp to bypass
     # the 90-day idle-logout check. Clamp to server time if the value is ahead of now.
     if "lastActiveAt" in updates:
-        provided = _parse_iso_datetime(str(updates["lastActiveAt"]))
+        provided = parse_iso_datetime(str(updates["lastActiveAt"]))
         server_now = datetime.now(timezone.utc)
         if provided is None or provided > server_now + timedelta(minutes=5):
             updates["lastActiveAt"] = server_now.isoformat()
@@ -551,12 +537,11 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
     if "fcmToken" in updates and updates.get("fcmToken"):
         try:
             user = await users.find_one({"_id": ObjectId(user_id)})
-            created_at = _parse_iso_datetime((user or {}).get("createdAt"))
+            created_at = parse_iso_datetime((user or {}).get("createdAt"))
             now_dt = datetime.now(timezone.utc)
             is_new_account = (
                 created_at is not None
-                and (now_dt - created_at) <= timedelta(hours=24)
-                and (now_dt - created_at) >= timedelta(seconds=0)
+                and timedelta(seconds=0) <= (now_dt - created_at) <= timedelta(hours=NEW_ACCOUNT_GRACE_HOURS)
             )
             if user and not user.get("welcomePushSentAt") and is_new_account:
                 from app.push import send_push_to_fcm_token
@@ -564,7 +549,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
                 res = await send_push_to_fcm_token(
                     token=str(updates["fcmToken"]),
                     title="Welcome to MyFoodRx",
-                    body="We're glad you're here. Start by adding items to your pantry!",
+                    body="We're glad you're here. Start by adding ingredients to your pantry to get personalized recommendations.",
                     data={"type": "admin", "deeplink": "notifications"},
                 )
                 if res.get("ok"):
@@ -694,7 +679,7 @@ async def validate_reset_token(body: dict):
     doc = await tokens_coll.find_one({"token": hashed, "used": False})
     if not doc:
         return {"valid": False}
-    expires = _parse_iso_datetime(doc.get("expiresAt"))
+    expires = parse_iso_datetime(doc.get("expiresAt"))
     if expires is None or datetime.now(timezone.utc) > expires:
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         return {"valid": False}
@@ -720,7 +705,7 @@ async def reset_password(body: dict):
     doc = await tokens_coll.find_one({"token": hashed, "used": False})
     if not doc:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    expires = _parse_iso_datetime(doc.get("expiresAt"))
+    expires = parse_iso_datetime(doc.get("expiresAt"))
     if expires is None or datetime.now(timezone.utc) > expires:
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         raise HTTPException(status_code=400, detail="Invalid or expired token")

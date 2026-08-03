@@ -137,17 +137,21 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   /// Ensures a tracker_reminder notification exists for today if the user
-  /// hasn't logged anything yet, then reloads. Skips accounts &lt; 24h old.
+  /// hasn't logged anything yet, then reloads. New accounts (&lt; 24h old)
+  /// are gated server-side in POST /notifications.
   Future<void> _ensureTrackerReminderThenReload(
       NotificationManager notificationManager) async {
     try {
+      final mealRemindersEnabled =
+          Provider.of<AuthController>(context, listen: false)
+                  .currentUser
+                  ?.mealLoggingReminderPrefs?['enabled'] ==
+              true;
       final userId = await ApiClient.userId;
       if (userId == null || userId.isEmpty) return;
-      final authController =
-          Provider.of<AuthController>(context, listen: false);
       await _expiringService.checkTrackerReminder(
         userId,
-        accountCreatedAt: authController.currentUser?.createdAt,
+        mealRemindersEnabled: mealRemindersEnabled,
       );
       await notificationManager.loadNotifications();
     } catch (_) {

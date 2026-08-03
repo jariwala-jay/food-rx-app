@@ -45,6 +45,9 @@ class UserModel {
   final Map<String, dynamic>?
       diagnostics; // Personalization diagnostics including diet rule
 
+  // Opt-in per-meal reminder preferences: {enabled, breakfast: {hour, minute}, lunch: {...}, dinner: {...}}
+  final Map<String, dynamic>? mealLoggingReminderPrefs;
+
   // System Fields
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -98,6 +101,7 @@ class UserModel {
     this.mealTimings,
     this.requiresGroceryList,
     this.diagnostics,
+    this.mealLoggingReminderPrefs,
     // System Fields
     this.createdAt,
     this.updatedAt,
@@ -167,6 +171,7 @@ class UserModel {
       mealTimings: Map<String, String>.from(json['mealTimings'] ?? {}),
       requiresGroceryList: json['requiresGroceryList'],
       diagnostics: json['diagnostics'],
+      mealLoggingReminderPrefs: json['mealLoggingReminderPrefs'],
       // System Fields
       createdAt: json['createdAt'] is String
           ? DateTime.parse(json['createdAt'])
@@ -223,6 +228,7 @@ class UserModel {
       'mealTimings': mealTimings,
       'requiresGroceryList': requiresGroceryList,
       'diagnostics': diagnostics,
+      'mealLoggingReminderPrefs': mealLoggingReminderPrefs,
       // System Fields
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -269,6 +275,7 @@ class UserModel {
     Map<String, String>? mealTimings,
     bool? requiresGroceryList,
     Map<String, dynamic>? diagnostics,
+    Map<String, dynamic>? mealLoggingReminderPrefs,
     // System Fields
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -313,6 +320,8 @@ class UserModel {
       mealTimings: mealTimings ?? this.mealTimings,
       requiresGroceryList: requiresGroceryList ?? this.requiresGroceryList,
       diagnostics: diagnostics ?? this.diagnostics,
+      mealLoggingReminderPrefs:
+          mealLoggingReminderPrefs ?? this.mealLoggingReminderPrefs,
       // System Fields
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

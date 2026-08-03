@@ -167,6 +167,18 @@ function isWithinNewAccountGracePeriod(now, user) {
   return ageMs >= 0 && ageMs < NEW_ACCOUNT_GRACE_HOURS * 60 * 60 * 1000;
 }
 
+// Start of the user's local calendar day, expressed back in UTC.
+// `timezoneOffsetMinutes` follows the Dart `DateTime.timeZoneOffset` /
+// JS `-Date.getTimezoneOffset()` convention: minutes to ADD to UTC to get
+// local time. Mirrors `notification_eligibility.local_day_start_utc` on
+// the Python side (same semantics, same default of 0/UTC when unset).
+function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
+  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
+  const localNow = new Date(nowUtc.getTime() + offsetMs);
+  const localMidnightUtc = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate());
+  return new Date(localMidnightUtc - offsetMs);
+}
+
 /**
  * Check for expiring pantry items (3 days before expiry)
  */
@@ -213,6 +225,11 @@ async function checkExpiringIngredients() {
       for (const user of users) {
         const userId = user._id.toHexString();
 
+        // Skip alerts for very new accounts to avoid noisy first-day nudges.
+        if (isWithinNewAccountGracePeriod(now, user)) {
+          continue;
+        }
+
         // Get expiring items for this user (next 3 days)
         // expiryDate may be stored as ISO string; convert to Date for comparison
         const expiringItems = await pantryCollection
@@ -248,15 +265,14 @@ async function checkExpiringIngredients() {
         const title =
           names.length === 1
             ? `${names[0]} expires soon`
-            : `${names.length} food items expiring soon`;
+            : `${names.length} ingredients expire soon`;
         const message =
           names.length === 1
             ? "Use it in a recipe today so it doesn't go to waste."
             : `Expiring soon: ${itemsSummary}`;
 
-        // If a digest exists today, update it; otherwise insert new
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // If a digest exists today (in the user's local timezone), update it; otherwise insert new
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
 
         const existing = await notificationsCollection.findOne({
           userId: userId,
@@ -360,9 +376,8 @@ async function checkMealLoggingInactivityReminders() {
           continue;
         }
 
-        // Only one tracker reminder notification per user per day.
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Only one tracker reminder notification per user per local day.
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
         const existingToday = await notificationsCollection.findOne({
           userId: userId,
           type: "tracker_reminder",
@@ -398,6 +413,14 @@ async function checkMealLoggingInactivityReminders() {
         );
 
         if (!bucket) {
+          continue;
+        }
+
+        // Day 1 is already covered by the user's own meal reminders when
+        // enabled; days 2-6, weekly, and monthly milestones still fire
+        // regardless, since a user ignoring meal reminders for that long
+        // is a distinct "fell out of the habit" signal worth surfacing.
+        if (bucket.key === "d1" && user?.mealLoggingReminderPrefs?.enabled === true) {
           continue;
         }
 
@@ -495,9 +518,8 @@ async function checkAppInactivityReminders() {
           continue;
         }
 
-        // Only one app inactivity reminder notification per user per day.
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Only one app inactivity reminder notification per user per local day.
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
         const existingToday = await notificationsCollection.findOne({
           userId: userId,
           type: "app_inactivity_reminder",
