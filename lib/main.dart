@@ -350,6 +350,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           fontWeight: FontWeight.bold,
           fontSize: 24,
         ),
+        // Without these, Material 3 tints the AppBar and adds a shadow once
+        // content scrolls beneath it, even with backgroundColor/elevation
+        // set explicitly per-screen — same fix already applied to cardTheme
+        // and dialogTheme below.
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
       ),
       cardTheme: base.cardTheme.copyWith(
         color: Colors.white,
