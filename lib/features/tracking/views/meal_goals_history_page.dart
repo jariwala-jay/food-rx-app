@@ -915,7 +915,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     );
   }
 
-  // ---- Weekly Summary charts: shared hit-testing, tooltip, and Y-axis ----
+  // ---- Weekly Summary charts: shared hit-testing, tooltip and Y-axis ----
 
   double _weeklyChartMax(List<double?> values, double goal) {
     double maxLogged = 0.0;
@@ -1385,7 +1385,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   /// One card per category with a line/bar chart-type toggle in the header.
   /// Both chart bodies read the exact same `values`/`goal`/`category` and
-  /// share date range, tooltip, and status-color logic — the toggle only
+  /// share date range, tooltip and status-color logic — the toggle only
   /// swaps which painter is shown, it never touches the underlying data.
   Widget _buildWeeklyGraphCards({
     required String title,
@@ -1601,7 +1601,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   /// Shared bar-chart body for every category — status color comes from
   /// TrackerCard.getProgressColor (same rule as the Home tracker cards), the
-  /// Y-axis is a dynamic "nice" scale, and there is exactly one reference
+  /// Y-axis is a dynamic "nice" scale and there is exactly one reference
   /// line (Goal, or Limit for sodium where lower is better).
   Widget _buildBarChartBody({
     required List<double?> values,
@@ -1936,7 +1936,7 @@ class _WeeklyLineChartPainter extends CustomPainter {
     }
     if (points.isEmpty) return;
 
-    // Group consecutive indices (no gap between them) into runs, and draw
+    // Group consecutive indices (no gap between them) into runs and draw
     // each run as its own smoothed dashed path.
     final sortedIndices = points.keys.toList()..sort();
     final runs = <List<int>>[];

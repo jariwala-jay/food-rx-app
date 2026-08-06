@@ -323,7 +323,7 @@ class AuthController with ChangeNotifier {
       final restored = await _restoreSessionFromStorage();
       if (!restored) {
         // Refresh token expired or revoked. Clear the biometric flag so the
-        // button doesn't keep showing on the login page, and give the user
+        // button doesn't keep showing on the login page and give the user
         // a clear message prompting a fresh sign-in.
         await SessionStorage.setBiometricEnabled(false);
         _error =

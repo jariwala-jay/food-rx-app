@@ -3,7 +3,7 @@
 This repo includes **`ios/ci_scripts/ci_post_clone.sh`**, which Xcode Cloud runs after cloning the repository and **before** archiving. It:
 
 1. Installs the **Flutter SDK** (not bundled on Apple’s CI images).
-2. Runs **`flutter precache --ios`**, **`flutter pub get`**, and **`flutter build ios --config-only`** so **`ios/Flutter/Generated.xcconfig`** exists (fixes missing `Generated.xcconfig` / Pods `*.xcfilelist` errors).
+2. Runs **`flutter precache --ios`**, **`flutter pub get`** and **`flutter build ios --config-only`** so **`ios/Flutter/Generated.xcconfig`** exists (fixes missing `Generated.xcconfig` / Pods `*.xcfilelist` errors).
 3. Runs **`pod install`** under **`ios/`**.
 
 ## Environment file (`.env`)

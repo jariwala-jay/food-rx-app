@@ -262,7 +262,7 @@ class _WelcomePageState extends State<WelcomePage> {
 
             // Second paragraph
             Text(
-              'As you use this app, you will receive a personalized meal plan and recipes tailored to your health conditions, health goals, and food and cooking preferences.',
+              'As you use this app, you will receive a personalized meal plan and recipes tailored to your health conditions, health goals and food and cooking preferences.',
               textAlign: TextAlign.center,
               style: AppTypography.bg_14_r.copyWith(
                 color: AppColors.textTertiary,

@@ -88,7 +88,7 @@ class _ChatbotPageState extends State<ChatbotPage>
     } catch (_) {
       if (!mounted) return;
       _addBotMessage(
-          "Hey! Let's talk about food, nutrition, and healthy eating. What do you need help with?");
+          "Hey! Let's talk about food, nutrition and healthy eating. What do you need help with?");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -195,7 +195,7 @@ class _ChatbotPageState extends State<ChatbotPage>
   String _stripMarkdownTokens(String input) {
     var text = input;
 
-    // Headers, blockquotes, and list markers.
+    // Headers, blockquotes and list markers.
     text = text.replaceAllMapped(
       RegExp(r'^\s{0,3}#{1,6}\s*', multiLine: true),
       (_) => '',

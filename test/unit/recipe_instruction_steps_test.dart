@@ -25,7 +25,7 @@ void main() {
     test('keeps real cooking steps', () {
       expect(
         InstructionStep.isVideoPlaceholder(
-          'Toss broccoli with garlic, lemon juice, and chili flakes.',
+          'Toss broccoli with garlic, lemon juice and chili flakes.',
         ),
         isFalse,
       );

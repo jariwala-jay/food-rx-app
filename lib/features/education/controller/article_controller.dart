@@ -158,7 +158,7 @@ class ArticleController extends ChangeNotifier {
       final allArticles = await _articleRepository.getArticles();
 
       // Normalize medical conditions for comparison
-      // Handle case sensitivity, hyphens, slashes, and common variations
+      // Handle case sensitivity, hyphens, slashes and common variations
       final normalizedConditions = user.medicalConditions!.expand((condition) {
         final normalized = condition
             .toLowerCase()

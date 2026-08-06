@@ -47,7 +47,9 @@ class _NotificationPreferencesPageState
   }
 
   static TimeOfDay? _timeOfDayFrom(dynamic mealPrefs) {
-    if (mealPrefs is Map && mealPrefs['hour'] is int && mealPrefs['minute'] is int) {
+    if (mealPrefs is Map &&
+        mealPrefs['hour'] is int &&
+        mealPrefs['minute'] is int) {
       return TimeOfDay(
         hour: mealPrefs['hour'] as int,
         minute: mealPrefs['minute'] as int,
@@ -60,7 +62,10 @@ class _NotificationPreferencesPageState
     return {
       'enabled': _mealRemindersEnabled,
       for (final meal in _mealOrder)
-        meal: {'hour': _mealTimes[meal]!.hour, 'minute': _mealTimes[meal]!.minute},
+        meal: {
+          'hour': _mealTimes[meal]!.hour,
+          'minute': _mealTimes[meal]!.minute
+        },
     };
   }
 
@@ -219,7 +224,7 @@ class _NotificationPreferencesPageState
                     _buildNotificationSwitch(
                       title: 'Meal reminders',
                       subtitle:
-                          'Receive reminders to log your breakfast, lunch, and dinner',
+                          'Receive reminders to log your breakfast, lunch and dinner',
                       value: _mealRemindersEnabled,
                       onChanged: (value) => _toggleMealReminders(value),
                     ),

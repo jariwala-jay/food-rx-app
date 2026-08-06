@@ -103,7 +103,7 @@ class IngredientCategoryMapper {
     for (final keyword in keywords) {
       // Short tokens need word boundaries so "pea" doesn't match inside
       // "chickpea", "ham" doesn't match inside "hamburger", "corn" doesn't
-      // match inside "popcorn"/"cornstarch", and "pear" doesn't match
+      // match inside "popcorn"/"cornstarch" and "pear" doesn't match
       // inside "pearl onion".
       if (keyword.length <= 4) {
         if (RegExp('\\b${RegExp.escape(keyword)}s?\\b').hasMatch(name)) {

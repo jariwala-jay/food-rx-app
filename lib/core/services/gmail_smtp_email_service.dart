@@ -4,7 +4,7 @@ import 'package:mailer/smtp_server.dart';
 import 'package:flutter_app/core/services/email_service.dart';
 
 /// Gmail SMTP implementation of EmailService
-/// This is completely free, doesn't require a domain, and works server-side
+/// This is completely free, doesn't require a domain and works server-side
 /// Requires Gmail app password setup (see EMAIL_SETUP.md)
 class GmailSMTPEmailService implements EmailService {
   GmailSMTPEmailService();

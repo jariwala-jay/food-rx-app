@@ -252,7 +252,7 @@ class PantryDeductionService {
       return true;
     }
 
-    // Remove common prefixes/suffixes, sizes, and descriptors, then check again
+    // Remove common prefixes/suffixes, sizes and descriptors, then check again
     final cleanRequired = _cleanIngredientName(requiredLower);
     final cleanAvailable = _cleanIngredientName(availableLower);
 

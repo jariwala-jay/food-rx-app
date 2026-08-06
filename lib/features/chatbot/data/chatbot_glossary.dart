@@ -141,19 +141,19 @@ class ChatbotGlossary {
     'nutrients':
         'Nutrients, including vitamins and protein, are parts of food that help your body function.',
     'nutrient-dense':
-        'Nutrient-dense foods give your body a lot of vitamins, minerals, and fiber for the number of calories they contain. Examples include spinach, eggs, and beans.',
+        'Nutrient-dense foods give your body a lot of vitamins, minerals and fiber for the number of calories they contain. Examples include spinach, eggs and beans.',
     'protein':
-        'Protein helps build and repair muscles and is found in foods like chicken, eggs, and beans.',
+        'Protein helps build and repair muscles and is found in foods like chicken, eggs and beans.',
     'carbohydrates':
-        'Carbohydrates, such as rice, bread, and pasta, are the body\'s main source of energy.',
+        'Carbohydrates, such as rice, bread and pasta, are the body\'s main source of energy.',
     'fat':
-        'Fats provide energy and support body functions and are found in foods like nuts, oil, and butter.',
+        'Fats provide energy and support body functions and are found in foods like nuts, oil and butter.',
     'fiber':
-        'Fiber is found in fruits, vegetables, beans, and whole grains. It slows digestion, which helps keep blood sugar steady. It also helps lower cholesterol and supports a healthy weight.',
+        'Fiber is found in fruits, vegetables, beans and whole grains. It slows digestion, which helps keep blood sugar steady. It also helps lower cholesterol and supports a healthy weight.',
     'sugar':
         'Sugar is a simple carbohydrate that provides quick energy and is found in foods like fruits and sweets.',
     'added sugar':
-        'Added sugar is sugar put into foods during processing, like in soda, juice, and packaged snacks. It raises blood sugar quickly. Most adults should limit it to 25–36 grams per day.',
+        'Added sugar is sugar put into foods during processing, like in soda, juice and packaged snacks. It raises blood sugar quickly. Most adults should limit it to 25–36 grams per day.',
     'sodium':
         'Sodium is a mineral found in salt and many packaged foods. Too much sodium can raise blood pressure. Most adults should have less than 2,300 mg per day — about one teaspoon of salt.',
     'vitamins':
@@ -165,9 +165,9 @@ class ChatbotGlossary {
     'serving size':
         'A serving size is the standard amount listed on a food label. Many packages contain 2 or more servings, so check before eating the whole package.',
     'balanced diet':
-        'A balanced diet includes a variety of foods like grains, vegetables, and proteins.',
+        'A balanced diet includes a variety of foods like grains, vegetables and proteins.',
     'whole grains':
-        'Whole grains like brown rice, oats, and whole wheat bread contain all parts of the grain. They have more fiber than white bread or white rice, which helps keep blood sugar steady.',
+        'Whole grains like brown rice, oats and whole wheat bread contain all parts of the grain. They have more fiber than white bread or white rice, which helps keep blood sugar steady.',
     'refined grains':
         'Refined grains, such as white bread, are processed and have less fiber.',
     'processed food':
@@ -179,7 +179,7 @@ class ChatbotGlossary {
     'low-fat': 'Low-fat foods, such as low-fat milk, have reduced fat content.',
     'fat-free': 'Fat-free foods, like fat-free yogurt, contain little to no fat.',
     'plant-based food':
-        'Plant-based foods come from plants, such as beans, vegetables, and fruits.',
+        'Plant-based foods come from plants, such as beans, vegetables and fruits.',
     'digestion':
         'Digestion is the process of breaking down food into nutrients your body can use.',
     'metabolism': 'Metabolism is how your body uses energy from food to function.',
@@ -188,7 +188,7 @@ class ChatbotGlossary {
     'blood glucose':
         'Blood glucose is another name for blood sugar.',
     'cholesterol':
-        'Cholesterol is a fat-like substance in your blood. HDL is the good kind that protects your heart. LDL is the bad kind that can clog your arteries. Eating fish, nuts, and fiber helps keep cholesterol healthy.',
+        'Cholesterol is a fat-like substance in your blood. HDL is the good kind that protects your heart. LDL is the bad kind that can clog your arteries. Eating fish, nuts and fiber helps keep cholesterol healthy.',
     'insulin':
         'Insulin is a hormone that helps move glucose from the blood into cells for energy.',
     'insulin resistance':
@@ -204,11 +204,11 @@ class ChatbotGlossary {
     'refined carbs':
         'Refined carbs are processed carbohydrates like white bread that digest quickly.',
     'whole foods':
-        'Whole foods are natural foods that are not heavily processed, like fruits, vegetables, and grains.',
+        'Whole foods are natural foods that are not heavily processed, like fruits, vegetables and grains.',
     'empty calories':
         'Empty calories are calories with little nutrition, such as from sugary drinks and snacks.',
     'non-starchy vegetables':
-        'Non-starchy vegetables are low-carb vegetables like spinach, broccoli, and cucumbers.',
+        'Non-starchy vegetables are low-carb vegetables like spinach, broccoli and cucumbers.',
     'healthy fats':
         'Healthy fats, such as those in olive oil and nuts, support heart health.',
     'saturated fat':
@@ -227,9 +227,9 @@ class ChatbotGlossary {
     'satiety':
         'Satiety is the feeling of being full after eating.',
     'diabetes plate':
-        'The Diabetes Plate is a simple way to plan meals. Fill half your plate with vegetables, one quarter with protein, and one quarter with carbs to help keep blood sugar steady.',
+        'The Diabetes Plate is a simple way to plan meals. Fill half your plate with vegetables, one quarter with protein and one quarter with carbs to help keep blood sugar steady.',
     'myplate':
-        'MyPlate is a guide for balanced meals. Fill half your plate with fruits and vegetables, and the other half with grains and protein, with some dairy on the side.',
+        'MyPlate is a guide for balanced meals. Fill half your plate with fruits and vegetables and the other half with grains and protein, with some dairy on the side.',
     'hydration':
         'Hydration means having enough water in your body by drinking fluids regularly.',
     'dehydration':
@@ -264,7 +264,7 @@ class ChatbotGlossary {
     'active lifestyle':
         'An active lifestyle includes regular movement, such as taking stairs or walking often.',
     'sedentary':
-        'A sedentary lifestyle means sitting or resting most of the day with little movement. This can increase the risk of diabetes, high blood pressure, and weight gain.',
+        'A sedentary lifestyle means sitting or resting most of the day with little movement. This can increase the risk of diabetes, high blood pressure and weight gain.',
     'blood pressure':
         'Blood pressure is the force of blood moving through your arteries, such as a reading of 120/80.',
     'hypertension':
@@ -286,7 +286,7 @@ class ChatbotGlossary {
     'cholesterol levels':
         'Cholesterol levels refer to the amount of cholesterol measured in your blood.',
     'hdl':
-        'HDL is the "good" cholesterol. Higher HDL levels help protect your heart. Foods like fish, nuts, and olive oil help raise HDL.',
+        'HDL is the "good" cholesterol. Higher HDL levels help protect your heart. Foods like fish, nuts and olive oil help raise HDL.',
     'ldl':
         'LDL is the "bad" cholesterol. Too much LDL can build up in your arteries and raise your risk of heart disease. Eating less processed food and saturated fat helps lower LDL.',
     'immune system':
@@ -305,7 +305,7 @@ class ChatbotGlossary {
         'Energy levels describe how active or tired you feel during the day.',
     'insomnia': 'Insomnia is difficulty falling asleep or staying asleep.',
     'sleep apnea':
-        'Sleep apnea is when your breathing stops and starts while you sleep. It can cause poor sleep, tiredness, and higher blood sugar and blood pressure.',
+        'Sleep apnea is when your breathing stops and starts while you sleep. It can cause poor sleep, tiredness and higher blood sugar and blood pressure.',
     'weight management':
         'Weight management involves maintaining a healthy body weight through balanced eating and physical activity.',
     'body weight':
@@ -319,7 +319,7 @@ class ChatbotGlossary {
     'healthy habits':
         'Healthy habits are behaviors like eating well and staying active.',
     'dash diet':
-        'The DASH diet is a low-sodium eating plan. It focuses on fruits, vegetables, whole grains, and lean protein to help lower blood pressure.',
+        'The DASH diet is a low-sodium eating plan. It focuses on fruits, vegetables, whole grains and lean protein to help lower blood pressure.',
     'low-sodium diet':
         'A low-sodium diet limits salt intake to help control blood pressure.',
     'diet plan':
@@ -327,19 +327,19 @@ class ChatbotGlossary {
     'meal planning':
         'Meal planning means deciding meals in advance to maintain healthy eating.',
     'balanced plate':
-        'A balanced plate includes proper portions of vegetables, protein, and carbohydrates.',
+        'A balanced plate includes proper portions of vegetables, protein and carbohydrates.',
     'potassium':
-        'Potassium is a mineral that helps regulate fluid balance and supports healthy blood pressure, and is found in foods like bananas.',
+        'Potassium is a mineral that helps regulate fluid balance and supports healthy blood pressure and is found in foods like bananas.',
     'magnesium':
         'Magnesium supports muscle and nerve function and is found in foods like nuts and leafy greens.',
     'calcium':
-        'Calcium is a mineral that is essential for strong bones, teeth, and muscle function, and is found in milk.',
+        'Calcium is a mineral that is essential for strong bones, teeth and muscle function and is found in milk.',
     'iron':
         'Iron is a mineral that helps carry oxygen in the blood through red blood cells and is found in foods like spinach and meat.',
     'fiber intake':
         'Fiber intake is the amount of fiber you consume daily from foods like fruits and whole grains.',
     'protein intake':
-        'Protein intake is the amount of protein you consume from foods like eggs, chicken, and beans.',
+        'Protein intake is the amount of protein you consume from foods like eggs, chicken and beans.',
     'carbohydrate intake':
         'Carbohydrate intake is the amount of carbohydrates you eat from foods like rice and bread.',
     'physical activity level':
@@ -351,9 +351,9 @@ class ChatbotGlossary {
     'lifestyle change':
         'A lifestyle change is improving daily habits to support better health.',
     'risk factors':
-        'Risk factors are habits or health conditions that make it more likely you will get a disease. Examples include smoking, poor eating, and not being active.',
+        'Risk factors are habits or health conditions that make it more likely you will get a disease. Examples include smoking, poor eating and not being active.',
     'prevention':
-        'Prevention means taking steps to stop a disease before it starts. Eating well, staying active, and getting enough sleep all help prevent chronic diseases.',
+        'Prevention means taking steps to stop a disease before it starts. Eating well, staying active and getting enough sleep all help prevent chronic diseases.',
     'chronic disease':
         'A chronic disease is a long-term health condition that does not go away. Examples include diabetes and high blood pressure. Healthy habits help manage it.',
 
@@ -366,7 +366,7 @@ class ChatbotGlossary {
     'whole wheat':
         'Whole wheat products like whole wheat bread use the entire wheat grain. They have more fiber than white bread and help keep blood sugar steadier.',
     'legumes':
-        'Legumes are foods like beans, lentils, and chickpeas. They are high in fiber and protein, which helps keep blood sugar steady and supports heart health.',
+        'Legumes are foods like beans, lentils and chickpeas. They are high in fiber and protein, which helps keep blood sugar steady and supports heart health.',
     'omega-3':
         'Omega-3s are healthy fats found in fish like salmon and sardines. They help protect your heart and reduce swelling inside the body.',
     'blood pressure reading':
@@ -374,9 +374,9 @@ class ChatbotGlossary {
     'cortisol':
         'Cortisol is a stress hormone. When you feel stressed or do not sleep well, cortisol goes up. This can raise your blood sugar and blood pressure.',
     'plant-based protein':
-        'Plant-based protein comes from foods like beans, lentils, tofu, and nuts. These provide protein without the saturated fat found in red meat.',
+        'Plant-based protein comes from foods like beans, lentils, tofu and nuts. These provide protein without the saturated fat found in red meat.',
     'low gi':
-        'Low GI means a food has a glycemic index of 55 or below. These foods raise blood sugar slowly. Examples include beans, oats, and most vegetables.',
+        'Low GI means a food has a glycemic index of 55 or below. These foods raise blood sugar slowly. Examples include beans, oats and most vegetables.',
     'oats':
         'Oats are a whole grain that are high in fiber. They digest slowly and help keep blood sugar steady. They also support heart health by lowering cholesterol.',
     'unsalted nuts':

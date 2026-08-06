@@ -211,7 +211,7 @@ void main() {
       expect(result.gateSkipped, isTrue);
     });
 
-    test('ignores seasonings, condiments, and water when picking main', () {
+    test('ignores seasonings, condiments and water when picking main', () {
       final recipe = _recipe(
         extendedIngredients: [
           _ingredient(name: 'water', amount: 2),

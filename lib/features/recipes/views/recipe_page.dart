@@ -1041,7 +1041,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.generateRecipeButtonKey,
               title: 'Generate Recipes',
               description:
-                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
+                  'Tap to set cuisine preferences, meal type, servings and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(24)),
               ),

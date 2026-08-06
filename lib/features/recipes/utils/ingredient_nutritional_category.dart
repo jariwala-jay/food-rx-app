@@ -11,7 +11,7 @@ enum IngredientNutritionalCategory {
   other,
 }
 
-/// Maps pantry keys, ingredient names, and categories to weights.
+/// Maps pantry keys, ingredient names and categories to weights.
 class IngredientNutritionalCategoryResolver {
   IngredientNutritionalCategoryResolver._();
 

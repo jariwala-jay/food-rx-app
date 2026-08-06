@@ -366,7 +366,7 @@ class RecipeFilter {
       return 'DASH';
     }
 
-    // MyPlate for diabetes, obesity, and general health
+    // MyPlate for diabetes, obesity and general health
     return 'MyPlate';
   }
 

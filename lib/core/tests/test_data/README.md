@@ -8,7 +8,7 @@ The `SpoonacularTestData` class provides structured access to real recipe search
 
 - **7 real burger recipes** with complete ingredient data
 - **Nutrition information** (calories, protein, fat, carbs)
-- **Ingredient details** with amounts, units, and metadata
+- **Ingredient details** with amounts, units and metadata
 - **Helper methods** for converting to different formats
 
 ## Available Recipes
@@ -183,7 +183,7 @@ To add more recipes to the test data:
 
 ## Benefits of Real Data Testing
 
-- **Realistic edge cases**: Real ingredient names, units, and amounts
+- **Realistic edge cases**: Real ingredient names, units and amounts
 - **API compatibility**: Ensures services work with actual Spoonacular responses
 - **Performance validation**: Test with realistic data sizes and complexity
 - **Confidence building**: Validates conversion accuracy with real-world examples

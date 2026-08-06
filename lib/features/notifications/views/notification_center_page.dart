@@ -372,7 +372,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'You\'ll see your health progress updates, pantry alerts, and personalized tips here.',
+                    'You\'ll see your health progress updates, pantry alerts and personalized tips here.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.grey[600],

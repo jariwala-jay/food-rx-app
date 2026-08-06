@@ -49,7 +49,7 @@ class AppScrollbar extends StatelessWidget {
         interactive: true,
 
         // Small gap from the viewport edge so the thumb doesn't touch
-        // list content, and a floor on thumb length so it stays a usable
+        // list content and a floor on thumb length so it stays a usable
         // drag target even in a list with hundreds of pantry items.
         crossAxisMargin: 2,
         minThumbLength: 48,

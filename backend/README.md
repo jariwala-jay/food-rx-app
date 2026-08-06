@@ -67,4 +67,4 @@ docker-compose down -v       # stop and delete ChromaDB volume (forces re-embed)
 
 ## Deploy to Google Cloud Run (real devices)
 
-See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for steps, runtime env vars, and Flutter `API_BASE_URL`.
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for steps, runtime env vars and Flutter `API_BASE_URL`.
