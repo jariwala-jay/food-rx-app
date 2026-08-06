@@ -7,6 +7,7 @@ import '../models/tracker_goal.dart';
 import '../widgets/tracker_card.dart';
 import '../widgets/pantry_tracker_logging_modal.dart';
 import '../widgets/manual_tracker_logging_modal.dart';
+import '../notifications/goal_limit_notification_service.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:showcaseview/showcaseview.dart' as showcaseview;
@@ -200,16 +201,12 @@ class _TrackerGridState extends State<TrackerGrid>
         AppLogger.d(
             '🎯 TrackerGrid: Showing main tracker display with ${dailyTrackers.length} daily trackers');
 
-        // Get text scale factor and clamp it for UI elements that must fit
         final textScaleFactor = MediaQuery.textScaleFactorOf(context);
         final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-
-        // Calculate responsive aspect ratio based on text scaling
-        // Base: 152 width / 68 height = 2.235
-        // When height scales, aspect ratio decreases
-        final baseHeight = 68.0;
-        final scaledHeight = baseHeight * clampedScale;
-        final childAspectRatio = 152 / scaledHeight;
+        final cardHeight = TrackerCard.preferredHeight(context);
+        final childAspectRatio = 152 / cardHeight;
+        final gridSpacing =
+            TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -311,9 +308,10 @@ class _TrackerGridState extends State<TrackerGrid>
                                       child: Text(
                                         'My Plan',
                                         style: TextStyle(
+                                          fontFamily: 'BricolageGrotesque',
                                           fontSize:
                                               14 * clampedScale.clamp(0.8, 1.0),
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
@@ -355,8 +353,8 @@ class _TrackerGridState extends State<TrackerGrid>
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     childAspectRatio: childAspectRatio,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: gridSpacing,
+                    mainAxisSpacing: gridSpacing,
                   ),
                   itemCount: dailyTrackers.length,
                   itemBuilder: (context, index) {
@@ -390,8 +388,8 @@ class _TrackerGridState extends State<TrackerGrid>
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     childAspectRatio: childAspectRatio,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: gridSpacing,
+                    mainAxisSpacing: gridSpacing,
                   ),
                   itemCount: weeklyTrackers.length,
                   itemBuilder: (context, index) {
@@ -433,9 +431,18 @@ class _TrackerGridState extends State<TrackerGrid>
           tracker: tracker,
           onLog: (newValue) async {
             try {
-              await Provider.of<TrackerProvider>(context, listen: false)
-                  .updateTrackerValueOptimized(
-                      tracker.id, tracker.currentValue + newValue);
+              final provider =
+                  Provider.of<TrackerProvider>(context, listen: false);
+              final goalLimitSnapshot = {tracker.id: tracker.currentValue};
+              await provider.updateTrackerValueOptimized(
+                  tracker.id, tracker.currentValue + newValue);
+              final updatedTracker = provider.findTrackerById(tracker.id);
+              if (updatedTracker != null) {
+                GoalLimitNotificationService.instance.checkAndNotify(
+                  before: goalLimitSnapshot,
+                  trackers: [updatedTracker],
+                );
+              }
               return true;
             } catch (e) {
               return Future.error(e);
@@ -451,9 +458,18 @@ class _TrackerGridState extends State<TrackerGrid>
           tracker: tracker,
           onLog: (newValue) async {
             try {
-              await Provider.of<TrackerProvider>(context, listen: false)
-                  .updateTrackerValueOptimized(
-                      tracker.id, tracker.currentValue + newValue);
+              final provider =
+                  Provider.of<TrackerProvider>(context, listen: false);
+              final goalLimitSnapshot = {tracker.id: tracker.currentValue};
+              await provider.updateTrackerValueOptimized(
+                  tracker.id, tracker.currentValue + newValue);
+              final updatedTracker = provider.findTrackerById(tracker.id);
+              if (updatedTracker != null) {
+                GoalLimitNotificationService.instance.checkAndNotify(
+                  before: goalLimitSnapshot,
+                  trackers: [updatedTracker],
+                );
+              }
               return true;
             } catch (e) {
               return Future.error(e);
@@ -465,14 +481,11 @@ class _TrackerGridState extends State<TrackerGrid>
   }
 
   Widget _buildSkeletonLoading() {
-    // Get text scale factor and clamp it for UI elements that must fit
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(1.0, 1.3);
-
-    // Calculate responsive aspect ratio based on text scaling
-    final baseHeight = 68.0;
-    final scaledHeight = baseHeight * clampedScale;
-    final childAspectRatio = 152 / scaledHeight;
+    final cardHeight = TrackerCard.preferredHeight(context);
+    final childAspectRatio = 152 / cardHeight;
+    final gridSpacing = TrackerCard.usesLargeTextLayout(context) ? 6.0 : 8.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -567,8 +580,9 @@ class _TrackerGridState extends State<TrackerGrid>
                                 child: Text(
                                   'My Plan',
                                   style: TextStyle(
+                                    fontFamily: 'BricolageGrotesque',
                                     fontSize: 14 * clampedScale.clamp(1.0, 1.2),
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -608,8 +622,8 @@ class _TrackerGridState extends State<TrackerGrid>
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: childAspectRatio,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: gridSpacing,
+              mainAxisSpacing: gridSpacing,
             ),
             itemCount: 8, // Show 4 daily skeleton cards
             itemBuilder: (context, index) {
@@ -632,8 +646,8 @@ class _TrackerGridState extends State<TrackerGrid>
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: childAspectRatio,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              crossAxisSpacing: gridSpacing,
+              mainAxisSpacing: gridSpacing,
             ),
             itemCount: 2, // Show 4 weekly skeleton cards
             itemBuilder: (context, index) {
@@ -649,11 +663,12 @@ class _TrackerGridState extends State<TrackerGrid>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
+        final cardHeight = TrackerCard.preferredHeight(context);
         return Opacity(
           opacity: _animation.value,
           child: Container(
             width: 152,
-            height: 68,
+            height: cardHeight,
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),

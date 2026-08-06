@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_app/core/widgets/app_scrollbar.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import '../providers/pantry_item_picker_provider.dart';
 import 'dart:developer' as developer;
@@ -8,27 +9,33 @@ import 'dart:async';
 import '../widgets/pantry_item_add_modal.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
-import '../repositories/spoonacular_ingredient_repository.dart';
+import '../repositories/ingredient_repository.dart';
 import '../controller/pantry_controller.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
+import 'package:flutter_app/core/services/ingredient_category_mapper.dart';
 import 'package:showcaseview/showcaseview.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
   final String categoryTitle;
   final String categoryKey;
   final bool isFoodPantryItem;
+  final String? initialSearchQuery;
 
   const PantryItemPickerPage({
     Key? key,
     required this.categoryTitle,
     required this.categoryKey,
     this.isFoodPantryItem = true,
+    this.initialSearchQuery,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final ingredientRepository = SpoonacularIngredientRepository();
+    // Shared instance so rate-limit backoff state is visible to every screen
+    // that searches ingredients, instead of each screen tracking its own.
+    final ingredientRepository =
+        Provider.of<IngredientRepository>(context, listen: false);
     final authController = Provider.of<AuthController>(context, listen: false);
 
     return ChangeNotifierProvider(
@@ -45,6 +52,7 @@ class PantryItemPickerPage extends StatelessWidget {
         title: categoryTitle,
         categoryKey: categoryKey,
         isFoodPantryItem: isFoodPantryItem,
+        initialSearchQuery: initialSearchQuery,
       ),
     );
   }
@@ -54,11 +62,13 @@ class _PantryItemPickerView extends StatefulWidget {
   final String title;
   final String categoryKey;
   final bool isFoodPantryItem;
+  final String? initialSearchQuery;
 
   const _PantryItemPickerView({
     required this.title,
     required this.categoryKey,
     required this.isFoodPantryItem,
+    this.initialSearchQuery,
   });
   @override
   State<_PantryItemPickerView> createState() => _PantryItemPickerViewState();
@@ -73,12 +83,19 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   final GlobalKey _appleItemKey = GlobalKey();
   bool _hasScrolledToApple = false;
   bool _hasTriggeredSaveShowcase = false;
+  bool _didApplyInitialSearch = false;
 
   @override
   void initState() {
     super.initState();
     developer.log(
         'PantryItemPickerView initialized for category: ${widget.categoryKey}');
+    final initial = widget.initialSearchQuery?.trim();
+    if (initial != null && initial.isNotEmpty) {
+      _searchController.text = initial;
+      _isSearching = true;
+      _isTyping = true;
+    }
   }
 
   @override
@@ -170,7 +187,27 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   }
 
   // Show modal dialog to add quantity and unit
-  void _showAddItemModal(BuildContext context, Ingredient item) {
+  Future<void> _showAddItemModal(BuildContext context, Ingredient item) async {
+    // Only global-search results need re-filing; curated items already
+    // belong to this category (their `aisle` is a FoodRx key, not Spoonacular's).
+    final pickerProvider =
+        Provider.of<PantryItemPickerProvider>(context, listen: false);
+    String category = widget.categoryKey;
+    if (widget.isFoodPantryItem &&
+        pickerProvider.isShowingGlobalIngredientSearch) {
+      // Name matching first — resolves the vast majority of items with no
+      // API call. Only fall back to a lazy aisle lookup when the name alone
+      // is inconclusive.
+      var resolved = IngredientCategoryMapper.resolveCategory(name: item.name);
+      if (resolved == IngredientCategoryMapper.miscellaneous) {
+        final aisle = await pickerProvider.resolveAisleForAdd(item);
+        resolved = IngredientCategoryMapper.resolveCategory(
+            name: item.name, aisle: aisle);
+      }
+      category = resolved;
+    }
+    if (!context.mounted) return;
+
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);
 
@@ -200,7 +237,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         },
         child: PantryItemAddModal(
           foodItem: item.toJson(),
-          category: widget.categoryKey,
+          category: category,
           isFoodPantryItem: widget.isFoodPantryItem,
           onAdd: (pantryItem) {
             final provider = Provider.of<PantryItemPickerProvider>(this.context,
@@ -243,514 +280,612 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         'selectedItems: ${provider.selectedItemsList.length}');
 
     return Consumer<ForcedTourProvider>(
-      builder: (context, tourProvider, child) {
-        // Check if we're in the middle of tour steps that use this page
-        final isTourItemFlow = tourProvider.isTourActive && 
-            (tourProvider.isOnStep(TourStep.selectCategory) ||
-             tourProvider.isOnStep(TourStep.selectItem) ||
-             tourProvider.isOnStep(TourStep.setQuantityUnit) ||
-             tourProvider.isOnStep(TourStep.saveItem));
+        builder: (context, tourProvider, child) {
+      // Apply deep-link search from Fruits/Vegetables group search.
+      if (!_didApplyInitialSearch &&
+          widget.initialSearchQuery != null &&
+          widget.initialSearchQuery!.trim().isNotEmpty &&
+          !provider.isLoading &&
+          provider.hasInitialized) {
+        _didApplyInitialSearch = true;
+        final q = widget.initialSearchQuery!.trim();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          // Prefer in-category curated match; only go global if none found.
+          provider.searchItems(q);
+          if (q.length >= 3 && provider.searchResults.isEmpty) {
+            provider.searchSpoonacular(q);
+          }
+        });
+      }
 
-        return PopScope(
-          canPop: !isTourItemFlow, // Block system back gesture during tour
-          onPopInvokedWithResult: (didPop, result) {
-            if (!didPop && isTourItemFlow) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Please complete the tour step first'),
-                  duration: Duration(seconds: 2),
-                  backgroundColor: Color(0xFFFF6A00),
-                ),
-              );
-            }
-          },
-          child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F8),
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
-                onPressed: () {
-                  if (isTourItemFlow) {
-                    // Block back navigation during tour
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please complete the tour step first'),
-                        duration: Duration(seconds: 2),
-                        backgroundColor: Color(0xFFFF6A00),
-                      ),
-                    );
-                    return;
-                  }
-                  Navigator.of(context).pop();
-                },
+      // Check if we're in the middle of tour steps that use this page
+      final isTourItemFlow = tourProvider.isTourActive &&
+          (tourProvider.isOnStep(TourStep.selectCategory) ||
+              tourProvider.isOnStep(TourStep.selectItem) ||
+              tourProvider.isOnStep(TourStep.setQuantityUnit) ||
+              tourProvider.isOnStep(TourStep.saveItem));
+
+      return PopScope(
+        canPop: !isTourItemFlow, // Block system back gesture during tour
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop && isTourItemFlow) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please complete the tour step first'),
+                duration: Duration(seconds: 2),
+                backgroundColor: Color(0xFFFF6A00),
               ),
-        title: Text(
-          widget.title,
-          style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search,
-                color: Colors.black),
-            onPressed: () {
-              setState(() {
-                _isSearching = !_isSearching;
-                _isTyping = false;
-                if (!_isSearching) {
-                  _searchController.clear();
-                  provider.searchItems('');
+            );
+          }
+        },
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF7F7F8),
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Colors.black),
+              onPressed: () {
+                if (isTourItemFlow) {
+                  // Block back navigation during tour
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please complete the tour step first'),
+                      duration: Duration(seconds: 2),
+                      backgroundColor: Color(0xFFFF6A00),
+                    ),
+                  );
+                  return;
                 }
-              });
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (_isSearching)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (query) {
+                Navigator.of(context).pop();
+              },
+            ),
+            title: Text(
+              provider.isShowingGlobalIngredientSearch
+                  ? 'Search Results'
+                  : widget.title,
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+              ),
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: Icon(_isSearching ? Icons.close : Icons.search,
+                    color: Colors.black),
+                onPressed: () {
                   setState(() {
-                    _isTyping = query.isNotEmpty;
-                  });
-
-                  // Cancel previous debounce timer
-                  _debounceTimer?.cancel();
-
-                  // If query is empty, search locally immediately
-                  if (query.isEmpty) {
-                    provider.searchItems(query);
-                    return;
-                  }
-
-                  // For short queries, use local search only
-                  if (query.length < 3) {
-                    provider.searchItems(query);
-                    return;
-                  }
-
-                  // Debounce API calls: wait 500ms after user stops typing
-                  _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-                    if (mounted && _searchController.text == query) {
-                      provider.searchSpoonacular(query);
+                    _isSearching = !_isSearching;
+                    _isTyping = false;
+                    if (!_isSearching) {
+                      _searchController.clear();
+                      provider.searchItems('');
                     }
                   });
                 },
-                decoration: InputDecoration(
-                  hintText: 'Search in ${widget.title}...',
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                  suffixIcon: _isTyping
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.grey),
-                          onPressed: () {
-                            _searchController.clear();
-                            provider.searchItems('');
-                            setState(() {
-                              _isTyping = false;
-                            });
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                autofocus: true,
               ),
-            ),
-          if (provider.isLoading)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Loading ingredients...',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (provider.error != null)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      provider.error!,
-                      style: const TextStyle(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => provider.loadItems(widget.categoryKey),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                      ),
-                      child: const Text('Retry',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (provider.searchResults.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      _isTyping
-                          ? 'No ingredients found for "${_searchController.text}"'
-                          : 'No ingredients available in this category',
-                      style: const TextStyle(color: Colors.grey, fontSize: 16),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (_isTyping)
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: TextButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            provider.searchItems('');
-                            setState(() {
-                              _isTyping = false;
-                            });
-                          },
-                          child: const Text(
-                            'Clear search',
-                            style: TextStyle(color: primaryColor),
-                          ),
-                        ),
-                      ),
-                    if (!_isTyping && !provider.hasInitialized)
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: ElevatedButton(
-                          onPressed: () =>
-                              provider.loadItems(widget.categoryKey),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                          ),
-                          child: const Text('Load Ingredients',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isTyping && _searchController.text.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Text(
-                        'Results for "${_searchController.text}" (${provider.searchResults.length})',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  if (provider.searchResults.isNotEmpty)
-                    Expanded(
-                      child: Consumer<ForcedTourProvider>(
-                        builder: (context, tourProvider, child) {
-                          // Check if we're on tour and in fresh_fruits category
-                          final isTourStep =
-                              tourProvider.isOnStep(TourStep.selectCategory);
-                          final isFreshFruits =
-                              widget.categoryKey == 'fresh_fruits';
-                          final isTourInFreshFruits =
-                              isTourStep && isFreshFruits;
+            ],
+          ),
+          body: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              children: [
+                if (_isSearching)
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (query) {
+                        setState(() {
+                          _isTyping = query.isNotEmpty;
+                        });
 
-                          // Use first item (index 0) for tour demo - it will always be apples in fresh_fruits
-                          final firstItemIndex = isTourInFreshFruits &&
-                                  provider.searchResults.isNotEmpty
-                              ? 0
-                              : null;
+                        // Cancel previous debounce timer
+                        _debounceTimer?.cancel();
 
-                          // Scroll to first item when items load during tour
-                          if (isTourInFreshFruits &&
-                              firstItemIndex != null &&
-                              !_hasScrolledToApple) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (_scrollController.hasClients && mounted) {
-                                _hasScrolledToApple = true;
-                                _scrollController.animateTo(
-                                  0.0, // Scroll to top to show first item
-                                  duration: const Duration(milliseconds: 500),
-                                  curve: Curves.easeInOut,
-                                );
-                              }
-                            });
-                          }
-
-                          return ListView.separated(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 8, horizontal: 16),
-                            itemCount: provider.searchResults.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final item = provider.searchResults[index];
-                              final itemId = item.id.toString();
-                              final isSelected =
-                                  provider.isItemSelected(itemId);
-                              final selectedItem = isSelected
-                                  ? provider.getSelectedItem(itemId)
-                                  : null;
-
-                              // Check if this is the first item during tour (for demo)
-                              final isFirstItem = index == 0;
-                              final shouldHighlight =
-                                  isTourInFreshFruits && isFirstItem;
-                              final isOnlyAllowedItem =
-                                  isTourInFreshFruits && !isFirstItem;
-
-                              return Container(
-                                key: shouldHighlight ? _appleItemKey : null,
-                                decoration: BoxDecoration(
-                                  color: shouldHighlight
-                                      ? const Color(0xFFFFF3EB)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: shouldHighlight
-                                      ? Border.all(
-                                          color: const Color(0xFFFF6A00),
-                                          width: 2,
-                                        )
-                                      : null,
-                                ),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 6,
-                                  ),
-                                  leading: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: CachedNetworkImageWidget(
-                                      imageUrl: item.displayImageUrl,
-                                      width: 50,
-                                      height: 50,
-                                      fit: BoxFit.cover,
-                                      borderRadius: BorderRadius.circular(8),
-                                      fallbackIcon: Icons.food_bank,
-                                      fallbackIconColor: const Color(0xFFFF6A00),
-                                      fallbackBackgroundColor:
-                                          const Color(0xFFEEEEEE),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    item.name,
-                                    style: TextStyle(
-                                      fontWeight: shouldHighlight
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      fontSize: 16,
-                                      color: shouldHighlight
-                                          ? const Color(0xFFFF6A00)
-                                          : Colors.black,
-                                    ),
-                                  ),
-                                  subtitle: isSelected
-                                      ? Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 4),
-                                          child: Text(
-                                            selectedItem!.quantityDisplay,
-                                            style: const TextStyle(
-                                              color: Color(0xFFFF6A00),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        )
-                                      : shouldHighlight
-                                          ? const Padding(
-                                              padding: EdgeInsets.only(top: 4),
-                                              child: Text(
-                                                'Tap + to add (example)',
-                                                style: TextStyle(
-                                                  color: Color(0xFFFF6A00),
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            )
-                                          : null,
-                                  trailing: isSelected
-                                      ? IconButton(
-                                          icon: const Icon(
-                                              Icons.remove_circle_outline,
-                                              color: Color(0xFFFF6A00)),
-                                          onPressed: () => provider
-                                              .removeItemFromSelection(itemId),
-                                        )
-                                      : GestureDetector(
-                                          onTap: isOnlyAllowedItem
-                                              ? null
-                                              : () => _showAddItemModal(
-                                                  context, item),
-                                          child: Container(
-                                            width: 36,
-                                            height: 36,
-                                            decoration: BoxDecoration(
-                                              color: isOnlyAllowedItem
-                                                  ? Colors.grey
-                                                  : const Color(0xFFFF6A00),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              Icons.add,
-                                              color: isOnlyAllowedItem
-                                                  ? Colors.grey[400]
-                                                  : Colors.white,
-                                              size: 22,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-          // Save button at the bottom
-          if (provider.hasSelectedItems)
-            Consumer<ForcedTourProvider>(
-              builder: (context, tourProvider, child) {
-                final isSaveStep = tourProvider.isOnStep(TourStep.saveItem);
-
-                // Trigger showcase when Save button appears during tour
-                if (isSaveStep && !_hasTriggeredSaveShowcase) {
-                  _hasTriggeredSaveShowcase = true;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    Future.delayed(const Duration(milliseconds: 300), () {
-                      if (!mounted) return;
-                      try {
-                        final tp = Provider.of<ForcedTourProvider>(context,
-                            listen: false);
-                        if (tp.isOnStep(TourStep.saveItem)) {
-                          ShowcaseView.get()
-                              .startShowCase([TourKeys.saveItemButtonKey]);
-                        } else {
-                          _hasTriggeredSaveShowcase =
-                              false; // Reset if step changed
+                        // If query is empty, search locally immediately
+                        if (query.isEmpty) {
+                          provider.searchItems(query);
+                          return;
                         }
-                      } catch (e) {
-                        print('Error triggering saveItem showcase: $e');
-                        _hasTriggeredSaveShowcase = false; // Reset on error
-                      }
-                    });
-                  });
-                } else if (!isSaveStep) {
-                  _hasTriggeredSaveShowcase =
-                      false; // Reset when not on save step
-                }
 
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Showcase(
-                    key: isSaveStep ? TourKeys.saveItemButtonKey : GlobalKey(),
-                    title: 'Save Item',
-                    description: TourDescriptions.saveItem,
-                    targetShapeBorder: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                    tooltipBackgroundColor: TourTooltipStyle.tooltipBackgroundColor,
-                    tooltipPosition: TooltipPosition.top,
-                    textColor: TourTooltipStyle.textColor,
-                    overlayColor: TourTooltipStyle.overlayColor,
-                    overlayOpacity: TourTooltipStyle.overlayOpacity,
-                    toolTipMargin: TourTooltipStyle.toolTipMargin,
-                    titleTextStyle: TourTooltipStyle.titleStyle,
-                    descTextStyle: TourTooltipStyle.descriptionStyle,
-                    showArrow: true,
-                    onTargetClick: () {
-                      // Handle click directly - trigger Save button
-                      ShowcaseView.get().dismiss();
-                      Future.delayed(const Duration(milliseconds: 100), () {
-                        if (!mounted) return;
-                        // Directly trigger the button's onPressed
-                        _handleSaveButtonClick(context, provider, tourProvider);
-                      });
-                    },
-                    onToolTipClick: () {
-                      // Handle click directly - trigger Save button
-                      ShowcaseView.get().dismiss();
-                      Future.delayed(const Duration(milliseconds: 100), () {
-                        if (!mounted) return;
-                        // Directly trigger the button's onPressed
-                        _handleSaveButtonClick(context, provider, tourProvider);
-                      });
-                    },
-                    disposeOnTap: false,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          await _handleSaveButtonClick(
-                              context, provider, tourProvider);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        // For short queries, use local search only
+                        if (query.length < 3) {
+                          provider.searchItems(query);
+                          return;
+                        }
+
+                        // Debounce API calls: wait 500ms after user stops typing
+                        _debounceTimer =
+                            Timer(const Duration(milliseconds: 500), () {
+                          if (mounted && _searchController.text == query) {
+                            provider.searchSpoonacular(query);
+                          }
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: provider.isShowingGlobalIngredientSearch
+                            ? 'Search all ingredients...'
+                            : 'Search in ${widget.title}...',
+                        prefixIcon:
+                            const Icon(Icons.search, color: Colors.grey),
+                        suffixIcon: _isTyping
+                            ? IconButton(
+                                icon:
+                                    const Icon(Icons.clear, color: Colors.grey),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  provider.searchItems('');
+                                  setState(() {
+                                    _isTyping = false;
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0, horizontal: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      ),
+                      autofocus: true,
+                    ),
+                  ),
+                if (provider.isShowingGlobalIngredientSearch &&
+                    _isTyping &&
+                    !provider.isLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4EB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFFD7B8)),
+                      ),
+                      child: Text(
+                        '"${_searchController.text}" not found in ${widget.title}.\n'
+                        'Showing results from all ingredients.',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontSize: 13,
+                          height: 1.35,
                         ),
                       ),
                     ),
                   ),
-                );
-              },
+                if (provider.isLoading)
+                  const Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFF6A00)),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Loading ingredients...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (provider.error != null)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            provider.error!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () =>
+                                provider.loadItems(widget.categoryKey),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                            ),
+                            child: const Text('Retry',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (provider.searchResults.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off,
+                              size: 48, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          Text(
+                            _isTyping
+                                ? (provider.isRateLimitedSearch
+                                    ? 'Search is temporarily unavailable. Please try again in a moment.'
+                                    : 'This ingredient is not currently available in our database. Please select a similar ingredient from the available options.')
+                                : 'No ingredients available in this category',
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (_isTyping)
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: TextButton(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  provider.searchItems('');
+                                  setState(() {
+                                    _isTyping = false;
+                                  });
+                                },
+                                child: const Text(
+                                  'Clear search',
+                                  style: TextStyle(color: primaryColor),
+                                ),
+                              ),
+                            ),
+                          if (!_isTyping && !provider.hasInitialized)
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: ElevatedButton(
+                                onPressed: () =>
+                                    provider.loadItems(widget.categoryKey),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                ),
+                                child: const Text('Load Ingredients',
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_isTyping && _searchController.text.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            child: Text(
+                              provider.isShowingGlobalIngredientSearch
+                                  ? 'All ingredients for "${_searchController.text}" (${provider.searchResults.length})'
+                                  : 'Results for "${_searchController.text}" (${provider.searchResults.length})',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        if (provider.searchResults.isNotEmpty)
+                          Expanded(
+                            child: Consumer<ForcedTourProvider>(
+                              builder: (context, tourProvider, child) {
+                                // Check if we're on tour and in fresh_fruits category
+                                final isTourStep = tourProvider
+                                    .isOnStep(TourStep.selectCategory);
+                                final isFreshFruits =
+                                    widget.categoryKey == 'fresh_fruits';
+                                final isTourInFreshFruits =
+                                    isTourStep && isFreshFruits;
+
+                                // Use first item (index 0) for tour demo - it will always be apples in fresh_fruits
+                                final firstItemIndex = isTourInFreshFruits &&
+                                        provider.searchResults.isNotEmpty
+                                    ? 0
+                                    : null;
+
+                                // Scroll to first item when items load during tour
+                                if (isTourInFreshFruits &&
+                                    firstItemIndex != null &&
+                                    !_hasScrolledToApple) {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (_scrollController.hasClients &&
+                                        mounted) {
+                                      _hasScrolledToApple = true;
+                                      _scrollController.animateTo(
+                                        0.0, // Scroll to top to show first item
+                                        duration:
+                                            const Duration(milliseconds: 500),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  });
+                                }
+
+                                return AppScrollbar(
+                                  controller: _scrollController,
+                                  child: ListView.separated(
+                                    controller: _scrollController,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8, horizontal: 16),
+                                    itemCount: provider.searchResults.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 12),
+                                    itemBuilder: (context, index) {
+                                      final item =
+                                          provider.searchResults[index];
+                                      final itemId = item.id.toString();
+                                      final isSelected =
+                                          provider.isItemSelected(itemId);
+                                      final selectedItem = isSelected
+                                          ? provider.getSelectedItem(itemId)
+                                          : null;
+
+                                      // Check if this is the first item during tour (for demo)
+                                      final isFirstItem = index == 0;
+                                      final shouldHighlight =
+                                          isTourInFreshFruits && isFirstItem;
+                                      final isOnlyAllowedItem =
+                                          isTourInFreshFruits && !isFirstItem;
+
+                                      return Container(
+                                        key: shouldHighlight
+                                            ? _appleItemKey
+                                            : null,
+                                        decoration: BoxDecoration(
+                                          color: shouldHighlight
+                                              ? const Color(0xFFFFF3EB)
+                                              : Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: shouldHighlight
+                                              ? Border.all(
+                                                  color:
+                                                      const Color(0xFFFF6A00),
+                                                  width: 2,
+                                                )
+                                              : null,
+                                        ),
+                                        child: ListTile(
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 6,
+                                          ),
+                                          leading: ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: CachedNetworkImageWidget(
+                                              imageUrl: item.displayImageUrl,
+                                              width: 50,
+                                              height: 50,
+                                              fit: BoxFit.cover,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              fallbackIcon: Icons.food_bank,
+                                              fallbackIconColor:
+                                                  const Color(0xFFFF6A00),
+                                              fallbackBackgroundColor:
+                                                  const Color(0xFFEEEEEE),
+                                            ),
+                                          ),
+                                          title: Text(
+                                            item.name,
+                                            style: TextStyle(
+                                              fontWeight: shouldHighlight
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w500,
+                                              fontSize: 16,
+                                              color: shouldHighlight
+                                                  ? const Color(0xFFFF6A00)
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                          subtitle: isSelected
+                                              ? Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 4),
+                                                  child: Text(
+                                                    selectedItem!
+                                                        .quantityDisplay,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFFFF6A00),
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                )
+                                              : shouldHighlight
+                                                  ? const Padding(
+                                                      padding: EdgeInsets.only(
+                                                          top: 4),
+                                                      child: Text(
+                                                        'Tap + to add (example)',
+                                                        style: TextStyle(
+                                                          color:
+                                                              Color(0xFFFF6A00),
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : null,
+                                          trailing: isSelected
+                                              ? IconButton(
+                                                  icon: const Icon(
+                                                      Icons
+                                                          .remove_circle_outline,
+                                                      color: Color(0xFFFF6A00)),
+                                                  onPressed: () => provider
+                                                      .removeItemFromSelection(
+                                                          itemId),
+                                                )
+                                              : GestureDetector(
+                                                  onTap: isOnlyAllowedItem
+                                                      ? null
+                                                      : () => _showAddItemModal(
+                                                          context, item),
+                                                  child: Container(
+                                                    width: 36,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      color: isOnlyAllowedItem
+                                                          ? Colors.grey
+                                                          : const Color(
+                                                              0xFFFF6A00),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.add,
+                                                      color: isOnlyAllowedItem
+                                                          ? Colors.grey[400]
+                                                          : Colors.white,
+                                                      size: 22,
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                // Save button at the bottom
+                if (provider.hasSelectedItems)
+                  Consumer<ForcedTourProvider>(
+                    builder: (context, tourProvider, child) {
+                      final isSaveStep =
+                          tourProvider.isOnStep(TourStep.saveItem);
+
+                      // Trigger showcase when Save button appears during tour
+                      if (isSaveStep && !_hasTriggeredSaveShowcase) {
+                        _hasTriggeredSaveShowcase = true;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!mounted) return;
+                            try {
+                              final tp = Provider.of<ForcedTourProvider>(
+                                  context,
+                                  listen: false);
+                              if (tp.isOnStep(TourStep.saveItem)) {
+                                ShowcaseView.get().startShowCase(
+                                    [TourKeys.saveItemButtonKey]);
+                              } else {
+                                _hasTriggeredSaveShowcase =
+                                    false; // Reset if step changed
+                              }
+                            } catch (e) {
+                              print('Error triggering saveItem showcase: $e');
+                              _hasTriggeredSaveShowcase =
+                                  false; // Reset on error
+                            }
+                          });
+                        });
+                      } else if (!isSaveStep) {
+                        _hasTriggeredSaveShowcase =
+                            false; // Reset when not on save step
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Showcase(
+                          key: isSaveStep
+                              ? TourKeys.saveItemButtonKey
+                              : GlobalKey(),
+                          title: 'Save Item',
+                          description: TourDescriptions.saveItem,
+                          targetShapeBorder: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                          ),
+                          tooltipBackgroundColor:
+                              TourTooltipStyle.tooltipBackgroundColor,
+                          tooltipPosition: TooltipPosition.top,
+                          textColor: TourTooltipStyle.textColor,
+                          overlayColor: TourTooltipStyle.overlayColor,
+                          overlayOpacity: TourTooltipStyle.overlayOpacity,
+                          toolTipMargin: TourTooltipStyle.toolTipMargin,
+                          titleTextStyle: TourTooltipStyle.titleStyle,
+                          descTextStyle: TourTooltipStyle.descriptionStyle,
+                          showArrow: true,
+                          onTargetClick: () {
+                            // Handle click directly - trigger Save button
+                            ShowcaseView.get().dismiss();
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              if (!mounted) return;
+                              // Directly trigger the button's onPressed
+                              _handleSaveButtonClick(
+                                  context, provider, tourProvider);
+                            });
+                          },
+                          onToolTipClick: () {
+                            // Handle click directly - trigger Save button
+                            ShowcaseView.get().dismiss();
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              if (!mounted) return;
+                              // Directly trigger the button's onPressed
+                              _handleSaveButtonClick(
+                                  context, provider, tourProvider);
+                            });
+                          },
+                          disposeOnTap: false,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                await _handleSaveButtonClick(
+                                    context, provider, tourProvider);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Save',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
             ),
-        ],
           ),
         ),
       );

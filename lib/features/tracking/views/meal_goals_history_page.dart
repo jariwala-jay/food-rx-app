@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/core/widgets/tab_load_error_view.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
@@ -15,6 +16,7 @@ import 'package:flutter_app/features/tracking/widgets/tracker_card.dart';
 class MealGoalsHistoryPage extends StatefulWidget {
   final String userId;
   final String? dietType;
+
   /// Optional. When set, the date picker's first selectable date is this day (e.g. account creation).
   final DateTime? accountCreatedAt;
 
@@ -29,70 +31,129 @@ class MealGoalsHistoryPage extends StatefulWidget {
   State<MealGoalsHistoryPage> createState() => _MealGoalsHistoryPageState();
 }
 
+enum _WeeklyChartType { line, bar }
+
 class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
   final TrackerApiService _api = TrackerApiService();
+
+  /// PRODUCT DECISION: Tracker days use a single global calendar anchored to
+  /// America/New_York, not each user's device timezone. The daily/weekly
+  /// Cloud Scheduler jobs (tracker-reset-daily / tracker-reset-weekly) run
+  /// once for all users at the ET calendar boundary, so snapshots must
+  /// represent the period being closed, not the cron execution timestamp
+  /// (see _save_progress_snapshot_for_docs in backend/app/routers/trackers.py).
+  /// This client uses the same timezone when determining calendar days and
+  /// querying progress history.
+  ///
+  /// Do not replace this with DateTime.now() or device-local dates; doing so
+  /// can shift snapshots and history by a day.
+  static final tz.Location _appLocation = tz.getLocation('America/New_York');
+
+  /// Current wall-clock time in the app's canonical timezone.
+  DateTime get _appNow => tz.TZDateTime.now(_appLocation);
+
+  /// Today's calendar day (y/m/d only) in the app's canonical timezone.
+  DateTime get _appToday {
+    final now = _appNow;
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// Which calendar day (in the app's canonical timezone) an arbitrary
+  /// instant falls in — e.g. for converting accountCreatedAt or a
+  /// progressDate into a comparable "day" marker.
+  DateTime _etCalendarDay(DateTime instant) {
+    final et = tz.TZDateTime.from(instant, _appLocation);
+    return DateTime(et.year, et.month, et.day);
+  }
+
+  /// Midnight of [calendarDay] (a y/m/d marker in the app's canonical
+  /// timezone), as a UTC instant — the boundary the progress API expects.
+  DateTime _etMidnightUtc(DateTime calendarDay) => tz.TZDateTime(
+        _appLocation,
+        calendarDay.year,
+        calendarDay.month,
+        calendarDay.day,
+      ).toUtc();
+
   /// Default to yesterday; Goal Progress shows data only through yesterday (today excluded).
   late DateTime _selectedDate;
   List<TrackerProgress> _progressList = [];
   List<TrackerGoal>? _todayTrackers;
+
   /// When there is no data for the selected date, this holds the most recent
   /// earlier date that has any logged progress (if found).
   DateTime? _lastLoggedDateForSelected;
-  // Weekly veggies history data for the selected week (0 = no data)
-  List<double> _veggiesWeekServings = List.filled(7, 0.0);
+  // Weekly history per category for the selected week. null = no data logged
+  // that day (a gap in the chart); 0.0 = explicitly logged as zero (a
+  // small visible mark, not a gap). Never conflate the two.
+  List<double?> _veggiesWeekServings = List.filled(7, null);
   double? _veggiesGoalValue;
-  OverlayEntry? _veggiesHoverOverlay;
-  // Weekly fruits history data for the selected week (0 = no data)
-  List<double> _fruitsWeekServings = List.filled(7, 0.0);
+  List<double?> _fruitsWeekServings = List.filled(7, null);
   double? _fruitsGoalValue;
-  OverlayEntry? _fruitsHoverOverlay;
-  // Weekly water history data for the selected week (0 = no data)
-  List<double> _waterWeekServings = List.filled(7, 0.0);
+  List<double?> _waterWeekServings = List.filled(7, null);
   double? _waterGoalValue;
-  OverlayEntry? _waterHoverOverlay;
-  // Weekly protein history data for the selected week (0 = no data)
-  List<double> _proteinWeekServings = List.filled(7, 0.0);
+  List<double?> _proteinWeekServings = List.filled(7, null);
   double? _proteinGoalValue;
-  OverlayEntry? _proteinHoverOverlay;
-  List<double> _grainsWeekServings = List.filled(7, 0.0);
+  List<double?> _grainsWeekServings = List.filled(7, null);
   double? _grainsGoalValue;
-  OverlayEntry? _grainsHoverOverlay;
-  List<double> _dairyWeekServings = List.filled(7, 0.0);
+  List<double?> _dairyWeekServings = List.filled(7, null);
   double? _dairyGoalValue;
-  OverlayEntry? _dairyHoverOverlay;
-  List<double> _fatsOilsWeekServings = List.filled(7, 0.0);
+  List<double?> _fatsOilsWeekServings = List.filled(7, null);
   double? _fatsOilsGoalValue;
-  OverlayEntry? _fatsOilsHoverOverlay;
-  List<double> _sodiumWeekServings = List.filled(7, 0.0);
+  List<double?> _sodiumWeekServings = List.filled(7, null);
   double? _sodiumGoalValue;
-  OverlayEntry? _sodiumHoverOverlay;
+
+  /// Shared across categories — only one weekly-chart tooltip is ever shown
+  /// at a time (the carousel only shows one category card at a time).
+  OverlayEntry? _weeklyBarHoverOverlay;
+
+  /// The actual start date of the current Weekly Summary window, computed by
+  /// _loadWeekBarChartData (may be anchored to account creation, not always
+  /// `end - 6 days`). Card builders must read this instead of re-deriving a
+  /// start date from list length, since list length is always 7 either way.
+  DateTime _weeklyGraphStart = DateTime(2020);
   bool _loading = true;
   String? _error;
   late PageController _weeklyGraphPageController;
   int _weeklyGraphPageIndex = 0;
   bool _showCarouselArrows = false;
   Timer? _carouselArrowsHideTimer;
+
+  /// Which chart type is shown in the Weekly Summary cards. One shared
+  /// choice for every category, held for the lifetime of this screen (not
+  /// persisted across app launches).
+  _WeeklyChartType _weeklyChartType = _WeeklyChartType.line;
+
   /// DASH and DiabetesPlate include Fats/Oils; MyPlate has 7 without Fats/Oils.
   List<String> get _effectiveCategoryOrder {
     final diet = (widget.dietType ?? '').toString();
     if (diet == 'DASH' || diet == 'DiabetesPlate') {
       return const [
-        'veggies', 'fruits', 'protein', 'grains', 'dairy',
-        'fatsOils', 'water', 'sodium',
+        'veggies',
+        'fruits',
+        'protein',
+        'grains',
+        'dairy',
+        'fatsOils',
+        'water',
+        'sodium',
       ];
     }
     return const [
-      'veggies', 'fruits', 'protein', 'grains', 'dairy',
-      'water', 'sodium',
+      'veggies',
+      'fruits',
+      'protein',
+      'grains',
+      'dairy',
+      'water',
+      'sodium',
     ];
   }
-
 
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)
-        .subtract(const Duration(days: 1));
+    _selectedDate = _appToday.subtract(const Duration(days: 1));
     _weeklyGraphPageController = PageController();
     _weeklyGraphPageController.addListener(_onWeeklyGraphPageChanged);
     _loadProgressForDate();
@@ -104,7 +165,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     if (!_weeklyGraphPageController.hasClients) return;
     final page = _weeklyGraphPageController.page?.round() ?? 0;
     if (page != _weeklyGraphPageIndex && mounted) {
-      setState(() => _weeklyGraphPageIndex = page.clamp(0, _weeklyGraphCount - 1));
+      setState(
+          () => _weeklyGraphPageIndex = page.clamp(0, _weeklyGraphCount - 1));
     }
   }
 
@@ -118,7 +180,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   void _showCarouselArrowsTemporarily() {
     _carouselArrowsHideTimer?.cancel();
-    if (!_showCarouselArrows && mounted) setState(() => _showCarouselArrows = true);
+    if (!_showCarouselArrows && mounted)
+      setState(() => _showCarouselArrows = true);
     _carouselArrowsHideTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) setState(() => _showCarouselArrows = false);
     });
@@ -153,10 +216,10 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
   }
 
   bool get _isSelectedToday {
-    final now = DateTime.now();
-    return _selectedDate.year == now.year &&
-        _selectedDate.month == now.month &&
-        _selectedDate.day == now.day;
+    final today = _appToday;
+    return _selectedDate.year == today.year &&
+        _selectedDate.month == today.month &&
+        _selectedDate.day == today.day;
   }
 
   Future<void> _loadProgressForDate() async {
@@ -182,27 +245,29 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
           _loadWeekBarChartData();
         }
       } else {
-        final start = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-        final end = start.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1));
+        final startUtc = _etMidnightUtc(_selectedDate);
+        final endUtc =
+            _etMidnightUtc(_selectedDate.add(const Duration(days: 1)))
+                .subtract(const Duration(milliseconds: 1));
         final list = await _api.getProgress(
           periodType: 'daily',
-          startDate: start.toUtc().toIso8601String(),
-          endDate: end.toUtc().toIso8601String(),
+          startDate: startUtc.toIso8601String(),
+          endDate: endUtc.toIso8601String(),
         );
         DateTime? lastLoggedDate;
         if (list.isEmpty) {
           // Find the most recent earlier date (before the selected date) that has any progress.
-          final historyStart = widget.accountCreatedAt != null
-              ? DateTime(widget.accountCreatedAt!.year, widget.accountCreatedAt!.month, widget.accountCreatedAt!.day)
+          final historyStartDay = widget.accountCreatedAt != null
+              ? _etCalendarDay(widget.accountCreatedAt!)
               : DateTime(2020);
           final history = await _api.getProgress(
             periodType: 'daily',
-            startDate: historyStart.toUtc().toIso8601String(),
-            endDate: start.toUtc().toIso8601String(),
+            startDate: _etMidnightUtc(historyStartDay).toIso8601String(),
+            endDate: startUtc.toIso8601String(),
           );
           for (final p in history) {
-            final d = DateTime(p.progressDate.year, p.progressDate.month, p.progressDate.day);
-            if (d.isBefore(start)) {
+            final d = _etCalendarDay(p.progressDate);
+            if (d.isBefore(_selectedDate)) {
               if (lastLoggedDate == null || d.isAfter(lastLoggedDate)) {
                 lastLoggedDate = d;
               }
@@ -231,524 +296,185 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     }
   }
 
-  /// Load 7 days of completion data for the bar chart (Fitbit-style).
+  /// Category keys tracked in the Weekly Summary — canonical spelling used
+  /// throughout this method (leanMeat progress records are folded into
+  /// 'protein', matching _trackerForCategory's existing convention).
+  static const List<String> _weeklyCategories = [
+    'veggies',
+    'fruits',
+    'water',
+    'protein',
+    'grains',
+    'dairy',
+    'fatsOils',
+    'sodium',
+  ];
+
+  /// Load a week of history per category for the Weekly Summary charts.
+  ///
+  /// This is strictly historical: a day with no saved progress record is
+  /// left as `null` (a gap in the chart) — never substituted with today's
+  /// live in-progress value and never defaulted to 0.0. An explicitly-logged
+  /// 0 is real data and stays 0.0, distinct from `null`.
   Future<void> _loadWeekBarChartData() async {
-    final end = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
+    final end = _selectedDate;
+    // Weekly Summary always shows a fixed 7-day window, but for a brand-new
+    // account it's anchored to start at account creation (e.g. 8/3-8/9)
+    // rather than trailing 7 days ending "today" (which would show empty
+    // pre-signup days). Days in that window after `end` haven't happened yet
+    // (or simply weren't logged) and are left as gaps — once the account is
+    // a week old, this naturally becomes an ordinary trailing window again.
+    final naturalStart = end.subtract(const Duration(days: 6));
+    final accountCreatedDay = widget.accountCreatedAt != null
+        ? _etCalendarDay(widget.accountCreatedAt!)
+        : null;
+    final start =
+        (accountCreatedDay != null && accountCreatedDay.isAfter(naturalStart))
+            ? accountCreatedDay
+            : naturalStart;
+    // Card builders read this instead of re-deriving a start date from list
+    // length — list length is always 7 either way, so it can't tell them
+    // which of the two formulas above actually produced `start`.
+    _weeklyGraphStart = start;
+    const daysCount = 7;
     try {
       final list = await _api.getProgress(
         periodType: 'daily',
-        startDate: start.toUtc().toIso8601String(),
-        endDate: end.add(const Duration(days: 1)).toUtc().toIso8601String(),
+        startDate: _etMidnightUtc(start).toIso8601String(),
+        endDate:
+            _etMidnightUtc(end.add(const Duration(days: 1))).toIso8601String(),
       );
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      // Build map of latest veggies and fruits progress per day in the selected week
-      final veggiesByDay = <DateTime, TrackerProgress>{};
-      final fruitsByDay = <DateTime, TrackerProgress>{};
-      final waterByDay = <DateTime, TrackerProgress>{};
-      final proteinByDay = <DateTime, TrackerProgress>{};
-      final grainsByDay = <DateTime, TrackerProgress>{};
-      final dairyByDay = <DateTime, TrackerProgress>{};
-      final fatsOilsByDay = <DateTime, TrackerProgress>{};
-      final sodiumByDay = <DateTime, TrackerProgress>{};
+
+      final byDayByCategory = <String, Map<DateTime, TrackerProgress>>{
+        for (final c in _weeklyCategories) c: {},
+      };
       for (final p in list) {
-        final d = DateTime(p.progressDate.year, p.progressDate.month, p.progressDate.day);
-        final key = p.trackerCategory.contains('.')
+        final d = _etCalendarDay(p.progressDate);
+        var key = p.trackerCategory.contains('.')
             ? p.trackerCategory.split('.').last
             : p.trackerCategory;
-        if (key == 'veggies') {
-          final existing = veggiesByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            veggiesByDay[d] = p;
-          }
-        } else if (key == 'fruits') {
-          final existing = fruitsByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            fruitsByDay[d] = p;
-          }
-        } else if (key == 'water') {
-          final existing = waterByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            waterByDay[d] = p;
-          }
-        } else if (key == 'protein' || key == 'leanMeat') {
-          final existing = proteinByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            proteinByDay[d] = p;
-          }
-        } else if (key == 'grains') {
-          final existing = grainsByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            grainsByDay[d] = p;
-          }
-        } else if (key == 'dairy') {
-          final existing = dairyByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            dairyByDay[d] = p;
-          }
-        } else if (key == 'fatsOils') {
-          final existing = fatsOilsByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            fatsOilsByDay[d] = p;
-          }
-        } else if (key == 'sodium') {
-          final existing = sodiumByDay[d];
-          if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
-            sodiumByDay[d] = p;
-          }
+        if (key == 'leanMeat') key = 'protein';
+        final byDay = byDayByCategory[key];
+        if (byDay == null) continue; // unrecognized category — ignore
+        final existing = byDay[d];
+        if (existing == null || p.createdAt.isAfter(existing.createdAt)) {
+          byDay[d] = p;
         }
       }
-      final weekServings = <double>[];
-      double? goalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('veggies');
-          if (tracker != null) {
-            weekServings.add(tracker.currentValue);
-            goalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            weekServings.add(0.0); // no data = 0
-          }
-        } else {
-          final p = veggiesByDay[d];
+
+      final servingsByCategory = <String, List<double?>>{};
+      final goalByCategory = <String, double?>{};
+      for (final category in _weeklyCategories) {
+        final byDay = byDayByCategory[category]!;
+        final weekServings = <double?>[];
+        double? goalValue;
+        for (int i = 0; i < daysCount; i++) {
+          final p = byDay[start.add(Duration(days: i))];
           if (p != null) {
             weekServings.add(p.achievedValue);
-            if (goalValue == null && p.targetValue > 0) {
+            goalValue ??= p.targetValue > 0 ? p.targetValue : null;
+          } else {
+            weekServings.add(null); // no record that day — a gap, not zero
+          }
+        }
+        // Prefer the goal from the selected date (most relevant to what's
+        // currently shown); fall back to the most recent earlier day's goal.
+        final pEnd = byDay[end];
+        if (pEnd != null && pEnd.targetValue > 0) {
+          goalValue = pEnd.targetValue;
+        } else {
+          for (int i = daysCount - 2; i >= 0; i--) {
+            final p = byDay[start.add(Duration(days: i))];
+            if (p != null && p.targetValue > 0) {
               goalValue = p.targetValue;
+              break;
             }
-          } else {
-            weekServings.add(0.0); // no data = 0
           }
         }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEnd = veggiesByDay[end];
-      if (pEnd != null && pEnd.targetValue > 0) {
-        goalValue = pEnd.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = veggiesByDay[d];
-          if (p != null && p.targetValue > 0) {
-            goalValue = p.targetValue;
-            break;
+        // Last resort: the user's current goal, even if no history exists yet.
+        if (goalValue == null && _todayTrackers != null) {
+          final tracker = _trackerForCategory(category);
+          if (tracker != null && tracker.goalValue > 0) {
+            goalValue = tracker.goalValue;
           }
         }
-      }
-      // Fallback goal value from today's trackers if not found in history
-      if (goalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('veggies');
-        if (tracker != null && tracker.goalValue > 0) {
-          goalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _veggiesWeekServings = weekServings;
-          _veggiesGoalValue = goalValue;
-        });
+        servingsByCategory[category] = weekServings;
+        goalByCategory[category] = goalValue;
       }
 
-      // Load fruits weekly data
-      final fruitsWeekServings = <double>[];
-      double? fruitsGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('fruits');
-          if (tracker != null) {
-            fruitsWeekServings.add(tracker.currentValue);
-            fruitsGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            fruitsWeekServings.add(0.0);
-          }
-        } else {
-          final p = fruitsByDay[d];
-          if (p != null) {
-            fruitsWeekServings.add(p.achievedValue);
-            if (fruitsGoalValue == null && p.targetValue > 0) {
-              fruitsGoalValue = p.targetValue;
-            }
-          } else {
-            fruitsWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndFruits = fruitsByDay[end];
-      if (pEndFruits != null && pEndFruits.targetValue > 0) {
-        fruitsGoalValue = pEndFruits.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = fruitsByDay[d];
-          if (p != null && p.targetValue > 0) {
-            fruitsGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (fruitsGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('fruits');
-        if (tracker != null && tracker.goalValue > 0) {
-          fruitsGoalValue = tracker.goalValue;
-        }
-      }
       if (mounted) {
         setState(() {
-          _fruitsWeekServings = fruitsWeekServings;
-          _fruitsGoalValue = fruitsGoalValue;
-        });
-      }
-
-      // Load water weekly data
-      final waterWeekServings = <double>[];
-      double? waterGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('water');
-          if (tracker != null) {
-            waterWeekServings.add(tracker.currentValue);
-            waterGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            waterWeekServings.add(0.0);
-          }
-        } else {
-          final p = waterByDay[d];
-          if (p != null) {
-            waterWeekServings.add(p.achievedValue);
-            if (waterGoalValue == null && p.targetValue > 0) {
-              waterGoalValue = p.targetValue;
-            }
-          } else {
-            waterWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndWater = waterByDay[end];
-      if (pEndWater != null && pEndWater.targetValue > 0) {
-        waterGoalValue = pEndWater.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = waterByDay[d];
-          if (p != null && p.targetValue > 0) {
-            waterGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (waterGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('water');
-        if (tracker != null && tracker.goalValue > 0) {
-          waterGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _waterWeekServings = waterWeekServings;
-          _waterGoalValue = waterGoalValue;
-        });
-      }
-
-      // Load protein weekly data
-      final proteinWeekServings = <double>[];
-      double? proteinGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('protein');
-          if (tracker != null) {
-            proteinWeekServings.add(tracker.currentValue);
-            proteinGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            proteinWeekServings.add(0.0);
-          }
-        } else {
-          final p = proteinByDay[d];
-          if (p != null) {
-            proteinWeekServings.add(p.achievedValue);
-            if (proteinGoalValue == null && p.targetValue > 0) {
-              proteinGoalValue = p.targetValue;
-            }
-          } else {
-            proteinWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndProtein = proteinByDay[end];
-      if (pEndProtein != null && pEndProtein.targetValue > 0) {
-        proteinGoalValue = pEndProtein.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = proteinByDay[d];
-          if (p != null && p.targetValue > 0) {
-            proteinGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (proteinGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('protein');
-        if (tracker != null && tracker.goalValue > 0) {
-          proteinGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _proteinWeekServings = proteinWeekServings;
-          _proteinGoalValue = proteinGoalValue;
-        });
-      }
-
-      // Load grains weekly data
-      final grainsWeekServings = <double>[];
-      double? grainsGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('grains');
-          if (tracker != null) {
-            grainsWeekServings.add(tracker.currentValue);
-            grainsGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            grainsWeekServings.add(0.0);
-          }
-        } else {
-          final p = grainsByDay[d];
-          if (p != null) {
-            grainsWeekServings.add(p.achievedValue);
-            if (grainsGoalValue == null && p.targetValue > 0) {
-              grainsGoalValue = p.targetValue;
-            }
-          } else {
-            grainsWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndGrains = grainsByDay[end];
-      if (pEndGrains != null && pEndGrains.targetValue > 0) {
-        grainsGoalValue = pEndGrains.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = grainsByDay[d];
-          if (p != null && p.targetValue > 0) {
-            grainsGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (grainsGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('grains');
-        if (tracker != null && tracker.goalValue > 0) {
-          grainsGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _grainsWeekServings = grainsWeekServings;
-          _grainsGoalValue = grainsGoalValue;
-        });
-      }
-
-      // Load dairy weekly data
-      final dairyWeekServings = <double>[];
-      double? dairyGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('dairy');
-          if (tracker != null) {
-            dairyWeekServings.add(tracker.currentValue);
-            dairyGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            dairyWeekServings.add(0.0);
-          }
-        } else {
-          final p = dairyByDay[d];
-          if (p != null) {
-            dairyWeekServings.add(p.achievedValue);
-            if (dairyGoalValue == null && p.targetValue > 0) {
-              dairyGoalValue = p.targetValue;
-            }
-          } else {
-            dairyWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndDairy = dairyByDay[end];
-      if (pEndDairy != null && pEndDairy.targetValue > 0) {
-        dairyGoalValue = pEndDairy.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = dairyByDay[d];
-          if (p != null && p.targetValue > 0) {
-            dairyGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (dairyGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('dairy');
-        if (tracker != null && tracker.goalValue > 0) {
-          dairyGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _dairyWeekServings = dairyWeekServings;
-          _dairyGoalValue = dairyGoalValue;
-        });
-      }
-
-      // Load fats/oils weekly data
-      final fatsOilsWeekServings = <double>[];
-      double? fatsOilsGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('fatsOils');
-          if (tracker != null) {
-            fatsOilsWeekServings.add(tracker.currentValue);
-            fatsOilsGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            fatsOilsWeekServings.add(0.0);
-          }
-        } else {
-          final p = fatsOilsByDay[d];
-          if (p != null) {
-            fatsOilsWeekServings.add(p.achievedValue);
-            if (fatsOilsGoalValue == null && p.targetValue > 0) {
-              fatsOilsGoalValue = p.targetValue;
-            }
-          } else {
-            fatsOilsWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndFatsOils = fatsOilsByDay[end];
-      if (pEndFatsOils != null && pEndFatsOils.targetValue > 0) {
-        fatsOilsGoalValue = pEndFatsOils.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = fatsOilsByDay[d];
-          if (p != null && p.targetValue > 0) {
-            fatsOilsGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (fatsOilsGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('fatsOils');
-        if (tracker != null && tracker.goalValue > 0) {
-          fatsOilsGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _fatsOilsWeekServings = fatsOilsWeekServings;
-          _fatsOilsGoalValue = fatsOilsGoalValue;
-        });
-      }
-
-      // Load sodium weekly data
-      final sodiumWeekServings = <double>[];
-      double? sodiumGoalValue;
-      for (int i = 0; i < 7; i++) {
-        final d = start.add(Duration(days: i));
-        if (d == today && _todayTrackers != null && _todayTrackers!.isNotEmpty) {
-          final tracker = _trackerForCategory('sodium');
-          if (tracker != null) {
-            sodiumWeekServings.add(tracker.currentValue);
-            sodiumGoalValue ??= tracker.goalValue > 0 ? tracker.goalValue : null;
-          } else {
-            sodiumWeekServings.add(0.0);
-          }
-        } else {
-          final p = sodiumByDay[d];
-          if (p != null) {
-            sodiumWeekServings.add(p.achievedValue);
-            if (sodiumGoalValue == null && p.targetValue > 0) {
-              sodiumGoalValue = p.targetValue;
-            }
-          } else {
-            sodiumWeekServings.add(0.0);
-          }
-        }
-      }
-      // Prefer goal from selected date (end of week) so thresholds match that day
-      final pEndSodium = sodiumByDay[end];
-      if (pEndSodium != null && pEndSodium.targetValue > 0) {
-        sodiumGoalValue = pEndSodium.targetValue;
-      } else {
-        for (int i = 5; i >= 0; i--) {
-          final d = start.add(Duration(days: i));
-          final p = sodiumByDay[d];
-          if (p != null && p.targetValue > 0) {
-            sodiumGoalValue = p.targetValue;
-            break;
-          }
-        }
-      }
-      if (sodiumGoalValue == null && _todayTrackers != null) {
-        final tracker = _trackerForCategory('sodium');
-        if (tracker != null && tracker.goalValue > 0) {
-          sodiumGoalValue = tracker.goalValue;
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _sodiumWeekServings = sodiumWeekServings;
-          _sodiumGoalValue = sodiumGoalValue;
+          _veggiesWeekServings = servingsByCategory['veggies']!;
+          _veggiesGoalValue = goalByCategory['veggies'];
+          _fruitsWeekServings = servingsByCategory['fruits']!;
+          _fruitsGoalValue = goalByCategory['fruits'];
+          _waterWeekServings = servingsByCategory['water']!;
+          _waterGoalValue = goalByCategory['water'];
+          _proteinWeekServings = servingsByCategory['protein']!;
+          _proteinGoalValue = goalByCategory['protein'];
+          _grainsWeekServings = servingsByCategory['grains']!;
+          _grainsGoalValue = goalByCategory['grains'];
+          _dairyWeekServings = servingsByCategory['dairy']!;
+          _dairyGoalValue = goalByCategory['dairy'];
+          _fatsOilsWeekServings = servingsByCategory['fatsOils']!;
+          _fatsOilsGoalValue = goalByCategory['fatsOils'];
+          _sodiumWeekServings = servingsByCategory['sodium']!;
+          _sodiumGoalValue = goalByCategory['sodium'];
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _veggiesWeekServings = List.generate(7, (_) => 0.0);
-          _veggiesGoalValue = _veggiesGoalValue;
-          _fruitsWeekServings = List.generate(7, (_) => 0.0);
-          _fruitsGoalValue = _fruitsGoalValue;
-          _waterWeekServings = List.generate(7, (_) => 0.0);
-          _waterGoalValue = _waterGoalValue;
-          _proteinWeekServings = List.generate(7, (_) => 0.0);
-          _proteinGoalValue = _proteinGoalValue;
-          _grainsWeekServings = List.generate(7, (_) => 0.0);
-          _grainsGoalValue = _grainsGoalValue;
-          _dairyWeekServings = List.generate(7, (_) => 0.0);
-          _dairyGoalValue = _dairyGoalValue;
-          _fatsOilsWeekServings = List.generate(7, (_) => 0.0);
-          _fatsOilsGoalValue = _fatsOilsGoalValue;
-          _sodiumWeekServings = List.generate(7, (_) => 0.0);
-          _sodiumGoalValue = _sodiumGoalValue;
+          _veggiesWeekServings = List.filled(daysCount, null);
+          _fruitsWeekServings = List.filled(daysCount, null);
+          _waterWeekServings = List.filled(daysCount, null);
+          _proteinWeekServings = List.filled(daysCount, null);
+          _grainsWeekServings = List.filled(daysCount, null);
+          _dairyWeekServings = List.filled(daysCount, null);
+          _fatsOilsWeekServings = List.filled(daysCount, null);
+          _sodiumWeekServings = List.filled(daysCount, null);
         });
       }
     }
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final yesterday = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+    final yesterday = _appToday.subtract(const Duration(days: 1));
     final firstDate = widget.accountCreatedAt != null
-        ? DateTime(widget.accountCreatedAt!.year, widget.accountCreatedAt!.month, widget.accountCreatedAt!.day)
+        ? _etCalendarDay(widget.accountCreatedAt!)
         : DateTime(2020);
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: firstDate.isAfter(yesterday) ? yesterday : firstDate,
       lastDate: yesterday,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFFF6A00),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF2C2C2C),
+              onSurfaceVariant: Colors.white,
+            ),
+            datePickerTheme: const DatePickerThemeData(
+              backgroundColor: Colors.white,
+              headerBackgroundColor: Colors.white,
+              headerForegroundColor: Color(0xFF2C2C2C),
+              weekdayStyle: TextStyle(color: Color(0xFF8E8E93)),
+              dayStyle: TextStyle(color: Color(0xFF2C2C2C)),
+              cancelButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+              confirmButtonStyle: ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(Color(0xFFFF6A00)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && mounted) {
       setState(() => _selectedDate = picked);
@@ -762,7 +488,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              size: 20, color: Colors.black87),
           onPressed: () {
             // Always return to main dashboard/home when leaving history.
             Navigator.of(context).pushNamedAndRemoveUntil(
@@ -782,39 +509,47 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
         foregroundColor: Colors.black87,
         elevation: 0,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildDateSelector(),
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
-                    ),
-                  )
-                : _error != null
-                    ? TabLoadErrorView(
-                        title: 'Unable to load progress',
-                        onRetry: _loadProgressForDate,
-                      )
-                    : _buildBarList(),
-          ),
-        ],
+      body: DefaultTextStyle.merge(
+        // Bold is the default weight for all text on this page for
+        // legibility. Text widgets that pin their own fontWeight (chart
+        // labels, tooltips, etc.) override this merge and must set
+        // FontWeight.bold explicitly, since an Overlay-rendered tooltip
+        // in particular sits outside this widget's DefaultTextStyle scope.
+        style: const TextStyle(fontWeight: FontWeight.bold),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!_isNewUserFirstDayEmpty) _buildDateSelector(),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
+                      ),
+                    )
+                  : _error != null
+                      ? TabLoadErrorView(
+                          title: 'Unable to load progress',
+                          onRetry: _loadProgressForDate,
+                        )
+                      : _buildBarList(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDateSelector() {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayStart = _appToday;
     final maxSelectableDate = todayStart.subtract(const Duration(days: 1));
     final canGoForward = _selectedDate.isBefore(maxSelectableDate);
 
     final minSelectableDate = widget.accountCreatedAt != null
-        ? DateTime(widget.accountCreatedAt!.year, widget.accountCreatedAt!.month, widget.accountCreatedAt!.day)
+        ? _etCalendarDay(widget.accountCreatedAt!)
         : DateTime(2020);
-    final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final selectedDay = _selectedDate;
     final canGoBack = selectedDay.isAfter(minSelectableDate);
 
     return Container(
@@ -826,7 +561,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
               ? IconButton(
                   onPressed: () {
                     setState(() {
-                      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+                      _selectedDate =
+                          _selectedDate.subtract(const Duration(days: 1));
                     });
                     _loadProgressForDate();
                   },
@@ -846,7 +582,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                     _dateLabel(_selectedDate),
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
                       color: Color(0xFF333333),
                     ),
                   ),
@@ -900,11 +636,41 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return null;
   }
 
+  bool get _isAccountCreatedToday {
+    final createdAt = widget.accountCreatedAt;
+    if (createdAt == null) return false;
+    final createdDay = _etCalendarDay(createdAt);
+    final today = _appToday;
+    return createdDay.year == today.year &&
+        createdDay.month == today.month &&
+        createdDay.day == today.day;
+  }
+
+  /// True when there's no historical data to browse at all yet — the account
+  /// was created today, so the only selectable (pre-today) date predates it.
+  bool get _isNewUserFirstDayEmpty =>
+      _todayTrackers == null &&
+      _progressList.isEmpty &&
+      _lastLoggedDateForSelected == null &&
+      _isAccountCreatedToday;
+
   Widget _buildBarList() {
     final useTodayTrackers = _todayTrackers != null;
-    final bool showLastLoggedHeader =
-        !useTodayTrackers && _progressList.isEmpty && _lastLoggedDateForSelected != null;
-    final bool hasDataForSelectedDate = !useTodayTrackers && _progressList.isNotEmpty;
+    final bool showLastLoggedHeader = !useTodayTrackers &&
+        _progressList.isEmpty &&
+        _lastLoggedDateForSelected != null;
+    final bool hasDataForSelectedDate =
+        !useTodayTrackers && _progressList.isNotEmpty;
+
+    if (_isNewUserFirstDayEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: _buildNewUserEmptyState(),
+        ),
+      );
+    }
+
     final String headerText;
     if (useTodayTrackers) {
       headerText = 'Current goals for ${_dateLabel(_selectedDate)}';
@@ -942,12 +708,60 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
           'Weekly Summary',
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.bold,
             color: Color(0xFF333333),
           ),
         ),
         const SizedBox(height: 12),
         _buildWeeklyGraphCarousel(),
+      ],
+    );
+  }
+
+  Widget _buildNewUserEmptyState() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Text(
+          'Your journey starts today!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF333333),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          "Keep logging today's meals and your progress will appear here tomorrow.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[600],
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 28),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/home', (route) => false);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFF6A00),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: const Text('Continue Tracking Today'),
+        ),
       ],
     );
   }
@@ -966,7 +780,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
             goalValue: target,
           )
         : Colors.grey;
-    final unit = tracker != null ? tracker.unitString : _defaultUnit(categoryKey);
+    final unit =
+        tracker != null ? tracker.unitString : _defaultUnit(categoryKey);
     final valueText = hasData
         ? '${_formatNum(achieved)}/${_formatNum(target)} $unit'
         : 'No data';
@@ -981,13 +796,13 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
             _buildCategoryIcon(category),
             const SizedBox(width: 12),
             Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     name,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Color(0xFF333333),
                     ),
@@ -1005,9 +820,9 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                   const SizedBox(height: 4),
                   Text(
                     valueText,
-              style: TextStyle(
-                fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
                       color: color,
                     ),
                   ),
@@ -1038,7 +853,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     final progressRatio = target > 0 ? (achieved / target) : 0.0;
     final hasData = progress != null && target > 0;
     final color = hasData
-                    ? TrackerCard.getProgressColor(
+        ? TrackerCard.getProgressColor(
             progressRatio,
             category,
             goalValue: target,
@@ -1054,20 +869,20 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
             _buildCategoryIcon(category),
             const SizedBox(width: 12),
             Expanded(
-                    child: Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                children: [
                   Text(
                     name,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Color(0xFF333333),
                     ),
@@ -1083,66 +898,67 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                        Text(
+                  Text(
                     valueText,
-                          style: TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                       color: color,
                     ),
                   ),
                 ],
               ),
             ),
-            if (hasData)
-                        Text(
-                'Logged',
-                          style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                          ),
-              )
-            else
-              const SizedBox.shrink(),
-                      ],
-                    ),
-                  ),
-                );
+          ],
+        ),
+      ),
+    );
   }
 
-  /// Returns closest point index (0-6) if local position is near a point, else null.
-  int? _getVeggiesChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    const chartPadding = 4.0;
-    final axisGoal = _veggiesGoalValue ?? 5.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _veggiesWeekServings.length;
-    if (n < 2) return null;
+  // ---- Weekly Summary charts: shared hit-testing, tooltip and Y-axis ----
 
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, axisGoal) / axisGoal;
-      return chartRect.bottom - ratio * chartRect.height;
+  double _weeklyChartMax(List<double?> values, double goal) {
+    double maxLogged = 0.0;
+    for (final v in values) {
+      if (v != null && v > maxLogged) maxLogged = v;
     }
+    final base = goal > maxLogged ? goal : maxLogged;
+    return base > 0 ? base * 1.15 : 1.0;
+  }
 
+  /// Rounds a Y-axis step to a "nice" 1/2/5×10^n number, so a goal of 8
+  /// yields ticks 0,2,4,6,8 and a goal of 5 yields 0,1,2,3,4,5.
+  double _niceAxisStep(double max, {int targetTicks = 4}) {
+    if (max <= 0) return 1;
+    final raw = max / targetTicks;
+    double mag = 1;
+    while (mag * 10 <= raw) {
+      mag *= 10;
+    }
+    while (mag > raw) {
+      mag /= 10;
+    }
+    final norm = raw / mag;
+    final step = norm < 1.5
+        ? 1.0
+        : norm < 3
+            ? 2.0
+            : norm < 7
+                ? 5.0
+                : 10.0;
+    return step * mag;
+  }
+
+  /// Which day-slot (bar or gap) was tapped — pure X-proximity, so tapping
+  /// anywhere in a day's column (including above a short bar, or a gap with
+  /// no bar at all) registers as tapping that day.
+  int? _getWeeklyBarIndexAt(Offset localPos, List<double> labelCenterXs) {
+    const chartPadding = 4.0;
     int? closest;
-    double minDist = 40.0; // max hit radius
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_veggiesWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
+    double minDist = 26.0;
+    for (int i = 0; i < labelCenterXs.length; i++) {
+      final x = chartPadding + labelCenterXs[i];
+      final d = (x - localPos.dx).abs();
       if (d < minDist) {
         minDist = d;
         closest = i;
@@ -1151,1117 +967,163 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return closest;
   }
 
-  /// Returns the local offset of the data point at index (for tooltip positioning).
-  Offset _getVeggiesChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    const chartPadding = 4.0;
-    final axisGoal = _veggiesGoalValue ?? 5.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _veggiesWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, axisGoal) / axisGoal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_veggiesWeekServings[index]);
-    return Offset(x, y);
+  String _weeklyStatusLabel(Color color) {
+    if (color == const Color(0xFF2CCC87)) return 'On Track';
+    if (color == const Color(0xFFFFA800)) return 'Moderate';
+    if (color == const Color(0xFFFF6A00)) return 'Low';
+    return 'Over';
   }
 
-  void _showVeggiesPointTooltip(
+  void _showWeeklyBarTooltip(
     BuildContext context,
     int index,
     Size chartSize,
     List<double> labelCenterXs,
-  ) {
-    _showVeggiesTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    // On tap (mobile), auto-dismiss after 2.5s
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeVeggiesHoverOverlay();
-    });
-  }
-
-  void _showVeggiesTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
+    List<double?> values,
+    double goal,
+    TrackerCategory category,
+    DateTime start,
   ) {
     final overlay = Overlay.of(context);
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
-    final pointLocal = _getVeggiesChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
 
-    final val = _veggiesWeekServings[index];
-    final axisGoal = _veggiesGoalValue ?? 5.0;
-    final text = '${_formatNum(val)}/${_formatNum(axisGoal)}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.veggies,
-      goalValue: axisGoal,
-    );
+    const chartPadding = 4.0;
+    final chartMax = _weeklyChartMax(values, goal);
+    final x = chartPadding +
+        (labelCenterXs.length > index ? labelCenterXs[index] : 0);
+    final v = values[index];
+    final date = start.add(Duration(days: index));
+    if (v == null && !date.isBefore(_appToday)) return;
 
-    _veggiesHoverOverlay?.remove();
-    _veggiesHoverOverlay = OverlayEntry(
+    final chartRectBottom = chartSize.height - chartPadding;
+    final chartRectHeight = chartSize.height - chartPadding * 2;
+    final y = v != null
+        ? chartRectBottom -
+            (v.clamp(0.0, chartMax) / chartMax) * chartRectHeight
+        : chartRectBottom;
+    final globalPos = box.localToGlobal(Offset(x, y));
+
+    final dateLabel = '${date.month}/${date.day}';
+
+    String text;
+    Color textColor;
+    if (v == null) {
+      text = '$dateLabel · not logged';
+      textColor = Colors.grey[600]!;
+    } else {
+      final progress = goal > 0 ? v / goal : 0.0;
+      final color =
+          TrackerCard.getProgressColor(progress, category, goalValue: goal);
+      final status = _weeklyStatusLabel(color);
+      text = '${_formatNum(v)}/${_formatNum(goal)} · $status';
+      textColor = color;
+    }
+
+    _weeklyBarHoverOverlay?.remove();
+    _weeklyBarHoverOverlay = OverlayEntry(
       builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
+        left: globalPos.dx - 70,
         top: globalPos.dy - 40,
         child: Material(
           elevation: 4,
           borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
+          color: Colors.white,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Text(
               text,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
             ),
           ),
         ),
       ),
     );
-    overlay.insert(_veggiesHoverOverlay!);
-  }
+    overlay.insert(_weeklyBarHoverOverlay!);
 
-  void _removeVeggiesHoverOverlay() {
-    _veggiesHoverOverlay?.remove();
-    _veggiesHoverOverlay = null;
-  }
-
-  int? _getFruitsChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _fruitsGoalValue ?? 4.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _fruitsWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_fruitsWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getFruitsChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _fruitsGoalValue ?? 4.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _fruitsWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_fruitsWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showFruitsPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showFruitsTooltipAtPoint(context, index, chartSize, labelCenterXs);
     Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeFruitsHoverOverlay();
+      if (mounted) _removeWeeklyBarHoverOverlay();
     });
   }
 
-  void _showFruitsTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getFruitsChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-
-    final val = _fruitsWeekServings[index];
-    final axisGoal = _fruitsGoalValue ?? 4.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.fruits,
-      goalValue: axisGoal,
-    );
-
-    _fruitsHoverOverlay?.remove();
-    _fruitsHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_fruitsHoverOverlay!);
+  void _removeWeeklyBarHoverOverlay() {
+    _weeklyBarHoverOverlay?.remove();
+    _weeklyBarHoverOverlay = null;
   }
 
-  void _removeFruitsHoverOverlay() {
-    _fruitsHoverOverlay?.remove();
-    _fruitsHoverOverlay = null;
-  }
+  /// Dynamic Y-axis ticks, positioned by actual value (not evenly spaced by
+  /// index) so they land at the same pixel the painter draws them at — and
+  /// the goal/limit itself is always one of the labels, so the dashed
+  /// reference line never falls between two unrelated "nice" numbers.
+  Widget _buildDynamicYAxisLabels(double chartMax, double goal) {
+    final step = _niceAxisStep(chartMax);
+    final ticks = <double>[];
+    for (double t = 0; t <= chartMax + 0.0001; t += step) {
+      ticks.add(t);
+    }
+    final minGap = chartMax * 0.12;
+    ticks.removeWhere((t) => t != 0 && (t - goal).abs() < minGap);
+    ticks.add(goal);
+    ticks.sort();
 
-  int? _getWaterChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _waterGoalValue ?? 8.0;
     const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _waterWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_waterWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getWaterChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _waterGoalValue ?? 8.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _waterWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_waterWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showWaterPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showWaterTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeWaterHoverOverlay();
-    });
-  }
-
-  void _showWaterTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getWaterChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-
-    final val = _waterWeekServings[index];
-    final axisGoal = _waterGoalValue ?? 8.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.water,
-      goalValue: axisGoal,
-    );
-
-    _waterHoverOverlay?.remove();
-    _waterHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_waterHoverOverlay!);
-  }
-
-  void _removeWaterHoverOverlay() {
-    _waterHoverOverlay?.remove();
-    _waterHoverOverlay = null;
-  }
-
-  int? _getProteinChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _proteinGoalValue ?? 6.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _proteinWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_proteinWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getProteinChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _proteinGoalValue ?? 6.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _proteinWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_proteinWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showProteinPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showProteinTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeProteinHoverOverlay();
-    });
-  }
-
-  void _showProteinTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getProteinChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-
-    final val = _proteinWeekServings[index];
-    final axisGoal = _proteinGoalValue ?? 6.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.protein,
-      goalValue: axisGoal,
-    );
-
-    _proteinHoverOverlay?.remove();
-    _proteinHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_proteinHoverOverlay!);
-  }
-
-  void _removeProteinHoverOverlay() {
-    _proteinHoverOverlay?.remove();
-    _proteinHoverOverlay = null;
-  }
-
-  int? _getGrainsChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _grainsGoalValue ?? 6.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _grainsWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_grainsWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getGrainsChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _grainsGoalValue ?? 6.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _grainsWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_grainsWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showGrainsPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showGrainsTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeGrainsHoverOverlay();
-    });
-  }
-
-  void _showGrainsTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getGrainsChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-    final val = _grainsWeekServings[index];
-    final axisGoal = _grainsGoalValue ?? 6.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.grains,
-      goalValue: axisGoal,
-    );
-    _grainsHoverOverlay?.remove();
-    _grainsHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_grainsHoverOverlay!);
-  }
-
-  void _removeGrainsHoverOverlay() {
-    _grainsHoverOverlay?.remove();
-    _grainsHoverOverlay = null;
-  }
-
-  int? _getDairyChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _dairyGoalValue ?? 3.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _dairyWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_dairyWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getDairyChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _dairyGoalValue ?? 3.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _dairyWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_dairyWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showDairyPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showDairyTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeDairyHoverOverlay();
-    });
-  }
-
-  void _showDairyTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getDairyChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-    final val = _dairyWeekServings[index];
-    final axisGoal = _dairyGoalValue ?? 3.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.dairy,
-      goalValue: axisGoal,
-    );
-    _dairyHoverOverlay?.remove();
-    _dairyHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_dairyHoverOverlay!);
-  }
-
-  void _removeDairyHoverOverlay() {
-    _dairyHoverOverlay?.remove();
-    _dairyHoverOverlay = null;
-  }
-
-  int? _getFatsOilsChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _fatsOilsGoalValue ?? 2.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _fatsOilsWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_fatsOilsWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getFatsOilsChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _fatsOilsGoalValue ?? 2.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _fatsOilsWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_fatsOilsWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showFatsOilsPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showFatsOilsTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeFatsOilsHoverOverlay();
-    });
-  }
-
-  void _showFatsOilsTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getFatsOilsChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-    final val = _fatsOilsWeekServings[index];
-    final axisGoal = _fatsOilsGoalValue ?? 2.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.fatsOils,
-      goalValue: axisGoal,
-    );
-    _fatsOilsHoverOverlay?.remove();
-    _fatsOilsHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_fatsOilsHoverOverlay!);
-  }
-
-  void _removeFatsOilsHoverOverlay() {
-    _fatsOilsHoverOverlay?.remove();
-    _fatsOilsHoverOverlay = null;
-  }
-
-  int? _getSodiumChartClosestPointIndex(
-    Offset localPos,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _sodiumGoalValue ?? 2300.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _sodiumWeekServings.length;
-    if (n < 2) return null;
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    int? closest;
-    double minDist = 40.0;
-    for (int i = 0; i < n; i++) {
-      final x = labelCenterXs.length > i
-          ? innerLeft + labelCenterXs[i]
-          : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(_sodiumWeekServings[i]);
-      final d = (Offset(x, y) - localPos).distance;
-      if (d < minDist) {
-        minDist = d;
-        closest = i;
-      }
-    }
-    return closest;
-  }
-
-  Offset _getSodiumChartPointOffset(
-    int index,
-    double width,
-    double height,
-    List<double> labelCenterXs,
-  ) {
-    final goal = _sodiumGoalValue ?? 2300.0;
-    const chartPadding = 4.0;
-    final chartRect = Rect.fromLTWH(
-      chartPadding,
-      chartPadding,
-      width - chartPadding * 2,
-      height - chartPadding * 2,
-    );
-    final innerWidth = chartRect.width * 0.98;
-    final innerLeft = chartRect.left;
-    final n = _sodiumWeekServings.length;
-    if (n < 2 || index < 0 || index >= n) return Offset.zero;
-    final x = labelCenterXs.length > index
-        ? innerLeft + labelCenterXs[index]
-        : innerLeft + (innerWidth / n) * (index + 0.5);
-    double valueToY(double v) {
-      final ratio = v.clamp(0.0, goal) / goal;
-      return chartRect.bottom - ratio * chartRect.height;
-    }
-    final y = valueToY(_sodiumWeekServings[index]);
-    return Offset(x, y);
-  }
-
-  void _showSodiumPointTooltip(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    _showSodiumTooltipAtPoint(context, index, chartSize, labelCenterXs);
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _removeSodiumHoverOverlay();
-    });
-  }
-
-  void _showSodiumTooltipAtPoint(
-    BuildContext context,
-    int index,
-    Size chartSize,
-    List<double> labelCenterXs,
-  ) {
-    final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final pointLocal = _getSodiumChartPointOffset(
-      index,
-      chartSize.width,
-      chartSize.height,
-      labelCenterXs,
-    );
-    final globalPos = box.localToGlobal(pointLocal);
-    final val = _sodiumWeekServings[index];
-    final axisGoal = _sodiumGoalValue ?? 2300.0;
-    final text = '${_formatNum(val)}/${axisGoal.toInt()}';
-    final progress = axisGoal > 0 ? val / axisGoal : 0.0;
-    final valueColor = TrackerCard.getProgressColor(
-      progress,
-      TrackerCategory.sodium,
-      goalValue: axisGoal,
-    );
-    _sodiumHoverOverlay?.remove();
-    _sodiumHoverOverlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: globalPos.dx - 35,
-        top: globalPos.dy - 40,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFE8E8E8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(_sodiumHoverOverlay!);
-  }
-
-  void _removeSodiumHoverOverlay() {
-    _sodiumHoverOverlay?.remove();
-    _sodiumHoverOverlay = null;
-  }
-
-  /// Y-axis labels positioned beside the threshold lines (matches painter coordinate system).
-  static const double _chartHeight = 160.0;
-  static const double _chartPadding = 4.0;
-
-  Widget _buildYAxisLabels(double goal, double halfGoal, {double? yellowThreshold}) {
-    final nearGoal = yellowThreshold ?? (goal - 0.5).clamp(0.0, goal);
-    final chartRectHeight = _chartHeight - _chartPadding * 2;
-    final chartRectBottom = _chartHeight - _chartPadding;
-
+    const chartHeight = 200.0;
+    const chartRectBottom = chartHeight - chartPadding;
+    const chartRectHeight = chartHeight - chartPadding * 2;
     double valueToY(double v) =>
-        chartRectBottom - (v / goal) * chartRectHeight;
+        chartRectBottom - (chartMax > 0 ? v / chartMax : 0.0) * chartRectHeight;
 
-    const fontSize = 11.0;
-    const halfTextHeight = fontSize / 2;
+    const fontSize = 10.0;
+    // A fixed label-box height, centered on the tick's Y — more reliable
+    // than estimating an offset from fontSize, since actual rendered line
+    // height (with bold weight/leading) is taller than the raw font size.
+    const labelBoxHeight = 16.0;
 
     return SizedBox(
       width: 28,
-      height: _chartHeight,
+      height: chartHeight,
       child: Stack(
         clipBehavior: Clip.none,
-        children: [
-          Positioned(
+        children: ticks.map((t) {
+          return Positioned(
             right: 0,
-            top: valueToY(goal) - halfTextHeight,
-            child: Text(
-              _formatNum(goal),
-              style: const TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF09B26B),
+            top: valueToY(t) - labelBoxHeight / 2,
+            height: labelBoxHeight,
+            child: Center(
+              child: Text(
+                t == t.roundToDouble()
+                    ? t.toStringAsFixed(0)
+                    : t.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
               ),
             ),
-          ),
-          if (nearGoal > halfGoal && nearGoal < goal)
-            Positioned(
-              right: 0,
-              top: valueToY(nearGoal) - halfTextHeight,
-            child: Text(
-              _formatNum(nearGoal),
-              style: const TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFFFA000),
-              ),
-            ),
-            ),
-          Positioned(
-            right: 0,
-            top: valueToY(halfGoal) - halfTextHeight,
-            child: Text(
-              _formatNum(halfGoal),
-              style: const TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFFF6A00),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            top: valueToY(0) - halfTextHeight,
-            child: const Text(
-              '0',
-              style: TextStyle(fontSize: fontSize, color: Colors.black),
-            ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
 
-  /// Empty-state card for weekly graph when no data.
   Widget _buildEmptyWeeklyGraphCard(String title) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
         child: Column(
@@ -2271,7 +1133,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
               title,
               style: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
                 color: Color(0xFF333333),
               ),
             ),
@@ -2281,8 +1143,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: 12),
-                SizedBox(
-              height: 160,
+            SizedBox(
+              height: 200,
               child: Center(
                 child: Text(
                   'No data for this week',
@@ -2293,9 +1155,9 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                 ),
               ),
             ),
-                    ],
-                  ),
-                ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2305,15 +1167,24 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
   Widget _buildWeeklyGraphCarousel() {
     final cards = _effectiveCategoryOrder.map((catKey) {
       switch (catKey) {
-        case 'veggies': return _buildVeggiesWeeklyGraphCard();
-        case 'fruits': return _buildFruitsWeeklyGraphCard();
-        case 'protein': return _buildProteinWeeklyGraphCard();
-        case 'grains': return _buildGrainsWeeklyGraphCard();
-        case 'dairy': return _buildDairyWeeklyGraphCard();
-        case 'fatsOils': return _buildFatsOilsWeeklyGraphCard();
-        case 'water': return _buildWaterWeeklyGraphCard();
-        case 'sodium': return _buildSodiumWeeklyGraphCard();
-        default: return const SizedBox.shrink();
+        case 'veggies':
+          return _buildVeggiesWeeklyGraphCard();
+        case 'fruits':
+          return _buildFruitsWeeklyGraphCard();
+        case 'protein':
+          return _buildProteinWeeklyGraphCard();
+        case 'grains':
+          return _buildGrainsWeeklyGraphCard();
+        case 'dairy':
+          return _buildDairyWeeklyGraphCard();
+        case 'fatsOils':
+          return _buildFatsOilsWeeklyGraphCard();
+        case 'water':
+          return _buildWaterWeeklyGraphCard();
+        case 'sodium':
+          return _buildSodiumWeeklyGraphCard();
+        default:
+          return const SizedBox.shrink();
       }
     }).toList();
     final showPrev = _weeklyGraphPageIndex > 0;
@@ -2322,18 +1193,20 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return MouseRegion(
       onEnter: (_) {
         _carouselArrowsHideTimer?.cancel();
-        if (!_showCarouselArrows && mounted) setState(() => _showCarouselArrows = true);
+        if (!_showCarouselArrows && mounted)
+          setState(() => _showCarouselArrows = true);
       },
       onExit: (_) {
         _carouselArrowsHideTimer?.cancel();
-        if (_showCarouselArrows && mounted) setState(() => _showCarouselArrows = false);
+        if (_showCarouselArrows && mounted)
+          setState(() => _showCarouselArrows = false);
       },
       child: GestureDetector(
         onTapDown: (_) => _showCarouselArrowsTemporarily(),
         child: SizedBox(
-          height: 295,
+          height: 330,
           child: Stack(
-                            children: [
+            children: [
               PageView.builder(
                 controller: _weeklyGraphPageController,
                 itemCount: _weeklyGraphCount,
@@ -2350,7 +1223,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                   bottom: 0,
                   child: Center(
                     child: Material(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white,
                       shape: const CircleBorder(),
                       elevation: 2,
                       child: InkWell(
@@ -2358,18 +1231,19 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                         onTap: () {
                           if (_weeklyGraphPageIndex > 0) {
                             _weeklyGraphPageController.previousPage(
-                                    duration: const Duration(milliseconds: 300),
+                              duration: const Duration(milliseconds: 300),
                               curve: Curves.easeInOut,
                             );
                           }
                         },
                         child: const Padding(
                           padding: EdgeInsets.all(8),
-                          child: Icon(Icons.chevron_left, color: Color(0xFF4294FF), size: 28),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                          child: Icon(Icons.chevron_left,
+                              color: Color(0xFFFF6A00), size: 28),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               if (_showCarouselArrows && showNext)
                 Positioned(
@@ -2378,7 +1252,7 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                   bottom: 0,
                   child: Center(
                     child: Material(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white,
                       shape: const CircleBorder(),
                       elevation: 2,
                       child: InkWell(
@@ -2393,10 +1267,11 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
                         },
                         child: const Padding(
                           padding: EdgeInsets.all(8),
-                          child: Icon(Icons.chevron_right, color: Color(0xFF4294FF), size: 28),
+                          child: Icon(Icons.chevron_right,
+                              color: Color(0xFFFF6A00), size: 28),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
                   ),
                 ),
             ],
@@ -2406,772 +1281,391 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     );
   }
 
-  /// Veggies weekly line graph (this week) shown at the bottom of the history page.
   Widget _buildVeggiesWeeklyGraphCard() {
     final goal = _veggiesGoalValue;
-    // Show graph if we have a goal; otherwise show empty-state card.
-    if (goal == null || goal <= 0) {
-      return _buildEmptyWeeklyGraphCard('Veggies');
-    }
-
-    // Use user's diet plan goal for axis and threshold lines
-    final axisGoal = goal;
-    final halfAxisGoal = axisGoal / 2;
-    final end =
-        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Veggies',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Servings per day',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Chart + date labels (same width)
-                Expanded(
-                          child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(
-                              7,
-                              chartInnerWidth,
-                            );
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = _getVeggiesChartClosestPointIndex(
-                                  details.localPosition,
-                                  w,
-                                  h,
-                                  labelCenterXs,
-                                );
-                                if (index != null && context.mounted) {
-                                  _showVeggiesPointTooltip(
-                                    context,
-                                    index,
-                                    Size(w, h),
-                                    labelCenterXs,
-                                  );
-                                }
-                              },
-                              child: CustomPaint(
-                                  painter: _VeggiesWeekLineChartPainter(
-                                    values: _veggiesWeekServings,
-                                    goal: axisGoal,
-                                    halfGoal: halfAxisGoal,
-                                    labelCenterXs: labelCenterXs,
-                                  ),
-                                ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // X-axis: 7 days spread across 98% to match chart inner area
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final chartWidth = constraints.maxWidth;
-                          final innerWidth = (chartWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                              child: Row(
-                                children: List.generate(7, (index) {
-                                  final d = start.add(Duration(days: index));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text(
-                                        '${d.month}/${d.day}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          );
-                        },
-                ),
-              ],
-            ),
-                ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(axisGoal, halfAxisGoal),
-              ],
-            ),
-          ],
-        ),
-      ),
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Veggies');
+    return _buildWeeklyGraphCards(
+      title: 'Veggies',
+      subtitle: 'Servings per day',
+      values: _veggiesWeekServings,
+      goal: goal,
+      category: TrackerCategory.veggies,
     );
   }
 
-  /// Fruits weekly line graph (this week).
   Widget _buildFruitsWeeklyGraphCard() {
     final goal = _fruitsGoalValue;
-    if (goal == null || goal <= 0) {
-      return _buildEmptyWeeklyGraphCard('Fruits');
-    }
-
-    final halfGoalValue = goal / 2;
-    final end =
-        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Fruits',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Servings per day',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                    children: [
-                              SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(
-                              7,
-                              chartInnerWidth,
-                            );
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = _getFruitsChartClosestPointIndex(
-                                  details.localPosition,
-                                  w,
-                                  h,
-                                  labelCenterXs,
-                                );
-                                if (index != null && context.mounted) {
-                                  _showFruitsPointTooltip(
-                                    context,
-                                    index,
-                                    Size(w, h),
-                                    labelCenterXs,
-                                  );
-                                }
-                              },
-                              child: CustomPaint(
-                                painter: _VeggiesWeekLineChartPainter(
-                                  values: _fruitsWeekServings,
-                                  goal: goal,
-                                  halfGoal: halfGoalValue,
-                                  labelCenterXs: labelCenterXs,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final chartWidth = constraints.maxWidth;
-                          final innerWidth = (chartWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                  child: Row(
-                                children: List.generate(7, (index) {
-                                  final d = start.add(Duration(days: index));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text(
-                                        '${d.month}/${d.day}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black,
-                                ),
-                              ),
-                            ),
-                                  );
-                                }),
-                          ),
-                          ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(goal, halfGoalValue),
-              ],
-            ),
-          ],
-        ),
-      ),
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Fruits');
+    return _buildWeeklyGraphCards(
+      title: 'Fruits',
+      subtitle: 'Servings per day',
+      values: _fruitsWeekServings,
+      goal: goal,
+      category: TrackerCategory.fruits,
     );
   }
 
-  /// Water weekly line graph (this week).
   Widget _buildWaterWeeklyGraphCard() {
     final goal = _waterGoalValue;
-    if (goal == null || goal <= 0) {
-      return _buildEmptyWeeklyGraphCard('Water');
-    }
-
-    final halfGoalValue = goal / 2;
-    final end =
-        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Water',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Cups per day',
-                style: TextStyle(
-                  fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(
-                              7,
-                              chartInnerWidth,
-                            );
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = _getWaterChartClosestPointIndex(
-                                  details.localPosition,
-                                  w,
-                                  h,
-                                  labelCenterXs,
-                                );
-                                if (index != null && context.mounted) {
-                                  _showWaterPointTooltip(
-                                    context,
-                                    index,
-                                    Size(w, h),
-                                    labelCenterXs,
-                                  );
-                                }
-                              },
-                              child: CustomPaint(
-                                painter: _VeggiesWeekLineChartPainter(
-                                  values: _waterWeekServings,
-                                  goal: goal,
-                                  halfGoal: halfGoalValue,
-                                  labelCenterXs: labelCenterXs,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final chartWidth = constraints.maxWidth;
-                          final innerWidth = (chartWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                              child: Row(
-                                children: List.generate(7, (index) {
-                                  final d = start.add(Duration(days: index));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text(
-                                        '${d.month}/${d.day}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(goal, halfGoalValue),
-              ],
-            ),
-          ],
-        ),
-      ),
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Water');
+    return _buildWeeklyGraphCards(
+      title: 'Water',
+      subtitle: 'Cups per day',
+      values: _waterWeekServings,
+      goal: goal,
+      category: TrackerCategory.water,
     );
   }
 
-  /// Protein weekly line graph (this week).
   Widget _buildProteinWeeklyGraphCard() {
     final goal = _proteinGoalValue;
     if (goal == null || goal <= 0) {
       return _buildEmptyWeeklyGraphCard('Protein');
     }
+    return _buildWeeklyGraphCards(
+      title: 'Protein',
+      subtitle: 'oz per day',
+      values: _proteinWeekServings,
+      goal: goal,
+      category: TrackerCategory.protein,
+    );
+  }
 
-    final halfGoalValue = goal / 2;
-    final end =
-        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
+  Widget _buildGrainsWeeklyGraphCard() {
+    final goal = _grainsGoalValue;
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Grains');
+    return _buildWeeklyGraphCards(
+      title: 'Grains',
+      subtitle: 'oz per day',
+      values: _grainsWeekServings,
+      goal: goal,
+      category: TrackerCategory.grains,
+    );
+  }
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _buildDairyWeeklyGraphCard() {
+    final goal = _dairyGoalValue;
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Dairy');
+    return _buildWeeklyGraphCards(
+      title: 'Dairy',
+      subtitle: 'Cups per day',
+      values: _dairyWeekServings,
+      goal: goal,
+      category: TrackerCategory.dairy,
+    );
+  }
+
+  Widget _buildFatsOilsWeeklyGraphCard() {
+    final goal = _fatsOilsGoalValue;
+    if (goal == null || goal <= 0) {
+      return _buildEmptyWeeklyGraphCard('Fats/Oils');
+    }
+    return _buildWeeklyGraphCards(
+      title: 'Fats/Oils',
+      subtitle: 'Servings per day',
+      values: _fatsOilsWeekServings,
+      goal: goal,
+      category: TrackerCategory.fatsOils,
+    );
+  }
+
+  Widget _buildSodiumWeeklyGraphCard() {
+    final goal = _sodiumGoalValue;
+    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Sodium');
+    return _buildWeeklyGraphCards(
+      title: 'Sodium',
+      subtitle: 'mg per day',
+      values: _sodiumWeekServings,
+      goal: goal,
+      category: TrackerCategory.sodium,
+    );
+  }
+
+  static const double _lineChartHeight = 200.0;
+
+  /// One card per category with a line/bar chart-type toggle in the header.
+  /// Both chart bodies read the exact same `values`/`goal`/`category` and
+  /// share date range, tooltip and status-color logic — the toggle only
+  /// swaps which painter is shown, it never touches the underlying data.
+  Widget _buildWeeklyGraphCards({
+    required String title,
+    required String subtitle,
+    required List<double?> values,
+    required double goal,
+    required TrackerCategory category,
+  }) {
+    final isLowerBetter = category == TrackerCategory.sodium;
+    final goalText =
+        '${isLowerBetter ? "Limit" : "Goal"} ${_formatNum(goal)}${isLowerBetter ? " mg" : ""}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-            const Text(
-              'Protein',
-          style: TextStyle(
-            fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'oz per day',
-              style: TextStyle(
-                fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-            const SizedBox(height: 12),
+          children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(
-                              7,
-                              chartInnerWidth,
-                            );
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = _getProteinChartClosestPointIndex(
-                                  details.localPosition,
-                                  w,
-                                  h,
-                                  labelCenterXs,
-                                );
-                                if (index != null && context.mounted) {
-                                  _showProteinPointTooltip(
-                                    context,
-                                    index,
-                                    Size(w, h),
-                                    labelCenterXs,
-                                  );
-                                }
-                              },
-                              child: CustomPaint(
-                                painter: _VeggiesWeekLineChartPainter(
-                                  values: _proteinWeekServings,
-                                  goal: goal,
-                                  halfGoal: halfGoalValue,
-                                  labelCenterXs: labelCenterXs,
-                                ),
-                              ),
-                            );
-                          },
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final chartWidth = constraints.maxWidth;
-                          final innerWidth = (chartWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                              child: Row(
-                                children: List.generate(7, (index) {
-                                  final d = start.add(Duration(days: index));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text(
-                                        '${d.month}/${d.day}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                      const SizedBox(height: 4),
+                      Text('$subtitle · $goalText',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[600])),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(goal, halfGoalValue),
+                _buildChartTypeToggle(),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Grains weekly line graph (this week). Same color logic as Protein (orange/yellow/green/red).
-  Widget _buildGrainsWeeklyGraphCard() {
-    final goal = _grainsGoalValue;
-    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Grains');
-    final halfGoalValue = goal / 2;
-    final end = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-    return _buildWeeklyGraphCard(
-      title: 'Grains',
-      subtitle: 'oz per day',
-      values: _grainsWeekServings,
-      goal: goal,
-      halfGoalValue: halfGoalValue,
-      start: start,
-      getClosestIndex: _getGrainsChartClosestPointIndex,
-      showTooltip: _showGrainsPointTooltip,
-    );
-  }
-
-  /// Dairy weekly line graph (this week). Same color logic as Protein.
-  Widget _buildDairyWeeklyGraphCard() {
-    final goal = _dairyGoalValue;
-    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Dairy');
-    final halfGoalValue = goal / 2;
-    final end = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-    return _buildWeeklyGraphCard(
-      title: 'Dairy',
-      subtitle: 'Cups per day',
-      values: _dairyWeekServings,
-      goal: goal,
-      halfGoalValue: halfGoalValue,
-      start: start,
-      getClosestIndex: _getDairyChartClosestPointIndex,
-      showTooltip: _showDairyPointTooltip,
-    );
-  }
-
-  /// Sodium weekly line graph (this week). Special logic: Orange <50%, Yellow 50-75%, Green 75-100%, Red >100%.
-  Widget _buildSodiumWeeklyGraphCard() {
-    final goal = _sodiumGoalValue;
-    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Sodium');
-    final halfGoalValue = goal / 2;
-    final yellowThreshold = goal * 0.75; // Sodium: yellow at 75%, not nearGoal
-    final end = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Sodium',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333)),
-            ),
-            const SizedBox(height: 4),
-            Text('mg per day', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Expanded(
-              child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                children: [
-                      SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(7, chartInnerWidth);
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = _getSodiumChartClosestPointIndex(
-                                  details.localPosition, w, h, labelCenterXs);
-                                if (index != null && context.mounted) {
-                                  _showSodiumPointTooltip(context, index, Size(w, h), labelCenterXs);
-                                }
-                              },
-                              child: CustomPaint(
-                                painter: _VeggiesWeekLineChartPainter(
-                                  values: _sodiumWeekServings,
-                                  goal: goal,
-                                  halfGoal: halfGoalValue,
-                                  labelCenterXs: labelCenterXs,
-                                  yellowThresholdValue: yellowThreshold,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final innerWidth = (constraints.maxWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                              child: Row(
-                                children: List.generate(7, (i) {
-                                  final d = start.add(Duration(days: i));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text('${d.month}/${d.day}',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black)),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          );
-                        },
-                  ),
-                ],
-              ),
-            ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(goal, halfGoalValue, yellowThreshold: yellowThreshold),
-              ],
-            ),
+            _weeklyChartType == _WeeklyChartType.line
+                ? _buildLineChartBody(
+                    values: values, goal: goal, category: category)
+                : _buildBarChartBody(
+                    values: values, goal: goal, category: category),
           ],
         ),
       ),
     );
   }
 
-  /// Fats/Oils weekly line graph (this week). Same color logic as Protein.
-  Widget _buildFatsOilsWeeklyGraphCard() {
-    final goal = _fatsOilsGoalValue;
-    if (goal == null || goal <= 0) return _buildEmptyWeeklyGraphCard('Fats/Oils');
-    final halfGoalValue = goal / 2;
-    final end = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final start = end.subtract(const Duration(days: 6));
-    return _buildWeeklyGraphCard(
-      title: 'Fats/Oils',
-      subtitle: 'Servings per day',
-      values: _fatsOilsWeekServings,
-      goal: goal,
-      halfGoalValue: halfGoalValue,
-      start: start,
-      getClosestIndex: _getFatsOilsChartClosestPointIndex,
-      showTooltip: _showFatsOilsPointTooltip,
+  /// Small segmented control for switching chart type: line and bar icons
+  /// side by side, active one filled solid in the app's accent orange (same
+  /// color as the carousel arrows).
+  Widget _buildChartTypeToggle() {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildChartTypeToggleButton(Icons.show_chart, _WeeklyChartType.line),
+          _buildChartTypeToggleButton(Icons.bar_chart, _WeeklyChartType.bar),
+        ],
+      ),
     );
   }
 
-  Widget _buildWeeklyGraphCard({
-    required String title,
-    required String subtitle,
-    required List<double> values,
+  Widget _buildChartTypeToggleButton(IconData icon, _WeeklyChartType type) {
+    final selected = _weeklyChartType == type;
+    return GestureDetector(
+      onTap: () {
+        if (_weeklyChartType != type) {
+          setState(() => _weeklyChartType = type);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFF6A00) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: selected ? Colors.white : Colors.grey[500],
+        ),
+      ),
+    );
+  }
+
+  /// Date row shared by the line-chart and bar-chart cards: `count` equal
+  /// slots starting from `start`, each centered under its chart point.
+  Widget _buildWeeklyDateLabelsRow(DateTime start, int count) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final innerWidth = (constraints.maxWidth - 8) * 0.98;
+        final slotWidth = innerWidth / count;
+        return Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: SizedBox(
+            width: innerWidth,
+            child: Row(
+              children: List.generate(count, (i) {
+                final d = start.add(Duration(days: i));
+                return SizedBox(
+                  width: slotWidth,
+                  child: Text(
+                    '${d.month}/${d.day}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Line-chart body: dynamic Y-axis shared with the bar chart, a smoothed
+  /// line through the week's values with each point colored by status, and
+  /// gaps (not zeros) for days with no snapshot.
+  Widget _buildLineChartBody({
+    required List<double?> values,
     required double goal,
-    required double halfGoalValue,
-    required DateTime start,
-    required int? Function(Offset, double, double, List<double>) getClosestIndex,
-    required void Function(BuildContext, int, Size, List<double>) showTooltip,
+    required TrackerCategory category,
   }) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
-            const SizedBox(height: 4),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Expanded(
-              child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                children: [
-                      SizedBox(
-                        height: 160,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            const h = 160.0;
-                            final chartInnerWidth = (w - 8) * 0.98;
-                            final labelCenterXs = _MealGoalsHistoryPageState._computeDateLabelCenterXs(7, chartInnerWidth);
-                            return GestureDetector(
-                              onTapUp: (details) {
-                                final index = getClosestIndex(details.localPosition, w, h, labelCenterXs);
-                                if (index != null && context.mounted) {
-                                  showTooltip(context, index, Size(w, h), labelCenterXs);
-                                }
-                              },
-                              child: CustomPaint(
-                                painter: _VeggiesWeekLineChartPainter(
-                                  values: values,
-                                  goal: goal,
-                                  halfGoal: halfGoalValue,
-                                  labelCenterXs: labelCenterXs,
-                                ),
-                              ),
-                            );
-                          },
+    final start = _weeklyGraphStart;
+    final chartMax = _weeklyChartMax(values, goal);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDynamicYAxisLabels(chartMax, goal),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: _lineChartHeight,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final w = constraints.maxWidth;
+                    const h = _lineChartHeight;
+                    final chartInnerWidth = (w - 8) * 0.98;
+                    final labelCenterXs = _MealGoalsHistoryPageState
+                        ._computeDateLabelCenterXs(
+                            values.length, chartInnerWidth);
+                    return GestureDetector(
+                      onTapUp: (details) {
+                        final index = _getWeeklyBarIndexAt(
+                            details.localPosition, labelCenterXs);
+                        if (index != null && context.mounted) {
+                          _showWeeklyBarTooltip(
+                            context,
+                            index,
+                            Size(w, h),
+                            labelCenterXs,
+                            values,
+                            goal,
+                            category,
+                            start,
+                          );
+                        }
+                      },
+                      child: CustomPaint(
+                        painter: _WeeklyLineChartPainter(
+                          values: values,
+                          goal: goal,
+                          category: category,
+                          labelCenterXs: labelCenterXs,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final innerWidth = (constraints.maxWidth - 8) * 0.98;
-                          final slotWidth = innerWidth / 7;
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: SizedBox(
-                              width: innerWidth,
-                              child: Row(
-                                children: List.generate(7, (i) {
-                                  final d = start.add(Duration(days: i));
-                                  return SizedBox(
-                                    width: slotWidth,
-                                    child: Center(
-                                      child: Text('${d.month}/${d.day}',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.black)),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          );
-                        },
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
-            ),
-                const SizedBox(width: 8),
-                _buildYAxisLabels(goal, halfGoalValue),
-              ],
-            ),
-          ],
+              const SizedBox(height: 8),
+              _buildWeeklyDateLabelsRow(start, values.length),
+            ],
+          ),
         ),
-      ),
+      ],
+    );
+  }
+
+  /// Shared bar-chart body for every category — status color comes from
+  /// TrackerCard.getProgressColor (same rule as the Home tracker cards), the
+  /// Y-axis is a dynamic "nice" scale and there is exactly one reference
+  /// line (Goal, or Limit for sodium where lower is better).
+  Widget _buildBarChartBody({
+    required List<double?> values,
+    required double goal,
+    required TrackerCategory category,
+  }) {
+    final chartMax = _weeklyChartMax(values, goal);
+    final start = _weeklyGraphStart;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDynamicYAxisLabels(chartMax, goal),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 200,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final w = constraints.maxWidth;
+                    const h = 200.0;
+                    final chartInnerWidth = (w - 8) * 0.98;
+                    final labelCenterXs = _MealGoalsHistoryPageState
+                        ._computeDateLabelCenterXs(
+                            values.length, chartInnerWidth);
+                    return GestureDetector(
+                      onTapUp: (details) {
+                        final index = _getWeeklyBarIndexAt(
+                            details.localPosition, labelCenterXs);
+                        if (index != null && context.mounted) {
+                          _showWeeklyBarTooltip(
+                            context,
+                            index,
+                            Size(w, h),
+                            labelCenterXs,
+                            values,
+                            goal,
+                            category,
+                            start,
+                          );
+                        }
+                      },
+                      child: CustomPaint(
+                        painter: _WeeklyBarChartPainter(
+                          values: values,
+                          goal: goal,
+                          category: category,
+                          labelCenterXs: labelCenterXs,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildWeeklyDateLabelsRow(start, values.length),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -3216,7 +1710,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   String _defaultUnit(String key) {
     if (key == 'sodium') return 'mg';
-    if (key == 'water' || key == 'veggies' || key == 'fruits' || key == 'dairy') return 'Cups';
+    if (key == 'water' || key == 'veggies' || key == 'fruits' || key == 'dairy')
+      return 'Cups';
     if (key == 'protein' || key == 'grains') return 'oz';
     if (key == 'fatsOils') return 'Servings';
     return '';
@@ -3228,7 +1723,8 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return v.toStringAsFixed(2);
   }
 
-  /// Center X of each date label when using 7 equal slots (matches date row with Center).
+  /// Center X of each date label across `count` equal-width slots, matching
+  /// the slot centers used by _buildWeeklyDateLabelsRow.
   static List<double> _computeDateLabelCenterXs(int count, double innerWidth) {
     if (count <= 0) return [];
     final slotWidth = innerWidth / count;
@@ -3236,30 +1732,144 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
   }
 }
 
-/// Painter for the weekly veggies line chart with dotted goal/threshold lines.
-class _VeggiesWeekLineChartPainter extends CustomPainter {
-  final List<double> values;
+/// Bar-chart painter for the Weekly Summary — one rounded bar per day,
+/// colored by the same status rule as the Home tracker cards
+/// (TrackerCard.getProgressColor), a gap (no bar) for days with no data, and
+/// a single dashed reference line at the goal/limit value.
+class _WeeklyBarChartPainter extends CustomPainter {
+  final List<double?> values;
   final double goal;
-  final double halfGoal;
-  /// Center X of each date label (0..innerWidth); when provided, dots align with dates.
+  final TrackerCategory category;
   final List<double>? labelCenterXs;
-  /// When provided (e.g. for sodium), use this for yellow line instead of (goal-0.5).clamp().
-  final double? yellowThresholdValue;
 
-  _VeggiesWeekLineChartPainter({
+  _WeeklyBarChartPainter({
     required this.values,
     required this.goal,
-    required this.halfGoal,
+    required this.category,
     this.labelCenterXs,
-    this.yellowThresholdValue,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (goal <= 0 || values.isEmpty) return;
 
-    final maxY = goal;
-    final chartPadding = 4.0;
+    const chartPadding = 4.0;
+    final chartRect = Rect.fromLTWH(
+      chartPadding,
+      chartPadding,
+      size.width - chartPadding * 2,
+      size.height - chartPadding * 2,
+    );
+    final innerWidth = chartRect.width * 0.98;
+    final innerLeft = chartRect.left;
+    final n = values.length;
+
+    double maxLogged = 0.0;
+    for (final v in values) {
+      if (v != null && v > maxLogged) maxLogged = v;
+    }
+    final chartMax = (goal > maxLogged ? goal : maxLogged) * 1.15;
+
+    double valueToY(double v) {
+      final ratio = chartMax > 0 ? v.clamp(0.0, chartMax) / chartMax : 0.0;
+      return chartRect.bottom - ratio * chartRect.height;
+    }
+
+    // X-axis.
+    final axisPaint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 1.0;
+    canvas.drawLine(
+      Offset(chartRect.left, chartRect.bottom),
+      Offset(chartRect.right, chartRect.bottom),
+      axisPaint,
+    );
+
+    // Single dashed reference line at the goal/limit value.
+    final goalY = valueToY(goal);
+    final refPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    const dashWidth = 4.0, dashSpace = 3.0;
+    double dashX = chartRect.left;
+    while (dashX < chartRect.right) {
+      final endX = (dashX + dashWidth).clamp(chartRect.left, chartRect.right);
+      canvas.drawLine(Offset(dashX, goalY), Offset(endX, goalY), refPaint);
+      dashX += dashWidth + dashSpace;
+    }
+
+    const barWidth = 16.0;
+    for (int i = 0; i < n; i++) {
+      final v = values[i];
+      final x = labelCenterXs != null && i < labelCenterXs!.length
+          ? innerLeft + labelCenterXs![i]
+          : innerLeft + (innerWidth / n) * (i + 0.5);
+
+      if (v == null) {
+        // No data logged that day: no bar, no tick — just the gap.
+        continue;
+      }
+
+      final progress = goal > 0 ? v / goal : 0.0;
+      final color =
+          TrackerCard.getProgressColor(progress, category, goalValue: goal);
+      var top = valueToY(v);
+      // An explicit 0 still needs to be visibly different from "no bar".
+      if (top > chartRect.bottom - 3) top = chartRect.bottom - 3;
+      final rect = Rect.fromLTRB(
+          x - barWidth / 2, top, x + barWidth / 2, chartRect.bottom);
+      final rrect = RRect.fromRectAndCorners(
+        rect,
+        topLeft: const Radius.circular(4),
+        topRight: const Radius.circular(4),
+      );
+      canvas.drawRRect(
+          rrect,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.fill);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeeklyBarChartPainter oldDelegate) {
+    if (oldDelegate.goal != goal || oldDelegate.category != category) {
+      return true;
+    }
+    if (oldDelegate.values.length != values.length) return true;
+    for (int i = 0; i < values.length; i++) {
+      if (oldDelegate.values[i] != values[i]) return true;
+    }
+    return false;
+  }
+}
+
+/// Line-chart painter for the Weekly Summary — a smoothed solid line through
+/// the week's values, with each point colored by the same status rule as
+/// the bar chart (TrackerCard.getProgressColor) and a single dashed
+/// reference line at the goal/limit value. A null value (no snapshot for
+/// that day) breaks the line into a gap rather than being drawn as zero.
+class _WeeklyLineChartPainter extends CustomPainter {
+  final List<double?> values;
+  final double goal;
+  final TrackerCategory category;
+
+  /// Center X of each date label (0..innerWidth); when provided, dots align with dates.
+  final List<double>? labelCenterXs;
+
+  _WeeklyLineChartPainter({
+    required this.values,
+    required this.goal,
+    required this.category,
+    this.labelCenterXs,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (goal <= 0 || values.isEmpty) return;
+
+    const chartPadding = 4.0;
     final chartRect = Rect.fromLTWH(
       chartPadding,
       chartPadding,
@@ -3267,138 +1877,150 @@ class _VeggiesWeekLineChartPainter extends CustomPainter {
       size.height - chartPadding * 2,
     );
 
+    // Dynamic scale — same rule as the bar chart, so a value that exceeds
+    // goal draws above the goal line instead of being capped at it.
+    double maxLogged = 0.0;
+    for (final v in values) {
+      if (v != null && v > maxLogged) maxLogged = v;
+    }
+    final chartMax = (goal > maxLogged ? goal : maxLogged) * 1.15;
+
     // Use a slightly narrower inner width for points/curve so the last point
     // does not sit directly on the Y-axis.
     final innerWidth = chartRect.width * 0.98;
     final innerLeft = chartRect.left;
 
     double valueToY(double v) {
-      final clamped = v.clamp(0.0, maxY);
-      final ratio = clamped / maxY;
+      final ratio = chartMax > 0 ? v.clamp(0.0, chartMax) / chartMax : 0.0;
       return chartRect.bottom - ratio * chartRect.height;
     }
 
-    // Helper to draw a horizontal dashed line with a given color.
-    void drawDashedLine(double y, Color color) {
-      const dashWidth = 4.0;
-      const dashSpace = 3.0;
-      final paint = Paint()
-        ..color = color
-        ..strokeWidth = 1.8
-        ..style = PaintingStyle.stroke;
-      double startX = chartRect.left;
-      while (startX < chartRect.right) {
-        final endX = (startX + dashWidth).clamp(chartRect.left, chartRect.right);
-        canvas.drawLine(Offset(startX, y), Offset(endX, y), paint);
-        startX += dashWidth + dashSpace;
-      }
-    }
-
-    // Draw X and Y axes in black.
+    // X-axis (bottom) — no vertical Y-axis line, matching the bar chart;
+    // the axis numbers themselves mark the scale.
     final axisPaint = Paint()
       ..color = Colors.black
       ..strokeWidth = 1.0;
-    // X-axis (bottom)
     canvas.drawLine(
       Offset(chartRect.left, chartRect.bottom),
       Offset(chartRect.right, chartRect.bottom),
       axisPaint,
     );
-    // Y-axis (right)
-    canvas.drawLine(
-      Offset(chartRect.right, chartRect.top),
-      Offset(chartRect.right, chartRect.bottom),
-      axisPaint,
-    );
 
-    // Dotted threshold lines:
-    // - Orange at 50% (orange/yellow boundary)
-    // - Yellow: at yellowThresholdValue if provided (sodium 75%), else nearGoal = goal-0.5
-    // - Green at 100% (green/red boundary)
-    if (halfGoal > 0) {
-      drawDashedLine(valueToY(halfGoal), const Color(0xFFFF6A00)); // orange
+    // Single dashed reference line at the goal/limit value — same style as
+    // the bar chart's reference line.
+    final goalY = valueToY(goal);
+    final refPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    const dashWidth = 4.0, dashSpace = 3.0;
+    double dashX = chartRect.left;
+    while (dashX < chartRect.right) {
+      final endX = (dashX + dashWidth).clamp(chartRect.left, chartRect.right);
+      canvas.drawLine(Offset(dashX, goalY), Offset(endX, goalY), refPaint);
+      dashX += dashWidth + dashSpace;
     }
-    final yellowValue = yellowThresholdValue ?? (goal - 0.5).clamp(0.0, goal);
-    if (yellowValue > halfGoal && yellowValue < goal) {
-      drawDashedLine(valueToY(yellowValue), const Color(0xFFFFA800)); // yellow
-    }
-    drawDashedLine(valueToY(goal), const Color(0xFF2CCC87)); // green
 
-    // Build points for all 7 days (null = 0)
-    // Use labelCenterXs when provided (spaceBetween dates) so dots align with date centers
+    // Build points for all days with data — index preserved, gaps (null)
+    // simply have no entry, so the line breaks around them instead of
+    // dipping to a false zero.
     final n = values.length;
-    if (n < 2) return;
-    final points = <Offset>[];
+    final points = <int, Offset>{};
     for (int i = 0; i < n; i++) {
       final v = values[i];
+      if (v == null) continue;
       final x = labelCenterXs != null && i < labelCenterXs!.length
           ? innerLeft + labelCenterXs![i]
           : innerLeft + (innerWidth / n) * (i + 0.5);
-      final y = valueToY(v);
-      points.add(Offset(x, y));
+      points[i] = Offset(x, valueToY(v));
     }
+    if (points.isEmpty) return;
 
-    // Draw path: straight line when adjacent points have same value, else smooth curve
-    final path = Path();
-    path.moveTo(points[0].dx, points[0].dy);
-    for (int i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final v1 = values[i];
-      final v2 = values[i + 1];
-      // Straight line when both points have the same value (e.g. both zero)
-      if ((v1 - v2).abs() < 0.001) {
-        path.lineTo(p2.dx, p2.dy);
+    // Group consecutive indices (no gap between them) into runs and draw
+    // each run as its own smoothed dashed path.
+    final sortedIndices = points.keys.toList()..sort();
+    final runs = <List<int>>[];
+    for (final i in sortedIndices) {
+      if (runs.isNotEmpty && runs.last.last == i - 1) {
+        runs.last.add(i);
       } else {
-        final p0 = i > 0 ? points[i - 1] : points[i];
-        final p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
-        // Catmull-Rom to cubic bezier
-        final cp1 = Offset(
-          p1.dx + (p2.dx - p0.dx) / 6,
-          p1.dy + (p2.dy - p0.dy) / 6,
-        );
-        final cp2 = Offset(
-          p2.dx - (p3.dx - p1.dx) / 6,
-          p2.dy - (p3.dy - p1.dy) / 6,
-        );
-        path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
-      }
-    }
-
-    // Convert to dashed path for dotted effect
-    const dashLength = 4.0;
-    const gapLength = 3.0;
-    final dashedPath = Path();
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final nextDistance = (distance + dashLength).clamp(0.0, metric.length);
-        dashedPath.addPath(
-          metric.extractPath(distance, nextDistance),
-          Offset.zero,
-        );
-        distance = nextDistance + gapLength;
+        runs.add([i]);
       }
     }
 
     final linePaint = Paint()
-      ..color = const Color(0xFF007AFF) // brighter blue for stronger contrast
-      ..strokeWidth = 2.5
+      ..color = Colors.grey.shade500 // neutral structure — status lives on the dots
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
-    canvas.drawPath(dashedPath, linePaint);
 
-    final pointPaint = Paint()
-      ..color = const Color(0xFF007AFF)
-      ..style = PaintingStyle.fill;
-    for (final p in points) {
-      canvas.drawCircle(p, 4.0, pointPaint);
+    // Dot color follows the same status rule the bar chart uses — the
+    // connecting line stays neutral grey, it's just structure. A dark
+    // outline keeps lighter fills (yellow especially) legible on white.
+    Color dotColorFor(int index) {
+      final v = values[index]!;
+      final progress = goal > 0 ? v / goal : 0.0;
+      return TrackerCard.getProgressColor(progress, category, goalValue: goal);
+    }
+
+    void drawDot(Offset p, Color color) {
+      canvas.drawCircle(p, 4.0, Paint()..color = color);
+      canvas.drawCircle(
+        p,
+        4.0,
+        Paint()
+          ..color = Colors.black.withOpacity(0.3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+    }
+
+    for (final run in runs) {
+      final runPoints = run.map((i) => points[i]!).toList();
+      if (runPoints.length < 2) {
+        // Single isolated day of data: draw just the dot.
+        drawDot(runPoints[0], dotColorFor(run[0]));
+        continue;
+      }
+
+      final path = Path();
+      path.moveTo(runPoints[0].dx, runPoints[0].dy);
+      for (int i = 0; i < runPoints.length - 1; i++) {
+        final p1 = runPoints[i];
+        final p2 = runPoints[i + 1];
+        final v1 = values[run[i]]!;
+        final v2 = values[run[i + 1]]!;
+        // Straight line when both points have the same value (e.g. both zero)
+        if ((v1 - v2).abs() < 0.001) {
+          path.lineTo(p2.dx, p2.dy);
+        } else {
+          final p0 = i > 0 ? runPoints[i - 1] : runPoints[i];
+          final p3 =
+              i + 2 < runPoints.length ? runPoints[i + 2] : runPoints[i + 1];
+          // Catmull-Rom to cubic bezier
+          final cp1 = Offset(
+            p1.dx + (p2.dx - p0.dx) / 6,
+            p1.dy + (p2.dy - p0.dy) / 6,
+          );
+          final cp2 = Offset(
+            p2.dx - (p3.dx - p1.dx) / 6,
+            p2.dy - (p3.dy - p1.dy) / 6,
+          );
+          path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
+        }
+      }
+
+      canvas.drawPath(path, linePaint);
+
+      for (int i = 0; i < runPoints.length; i++) {
+        drawDot(runPoints[i], dotColorFor(run[i]));
+      }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _VeggiesWeekLineChartPainter oldDelegate) {
-    if (oldDelegate.goal != goal || oldDelegate.halfGoal != halfGoal) return true;
-    if (oldDelegate.yellowThresholdValue != yellowThresholdValue) return true;
+  bool shouldRepaint(covariant _WeeklyLineChartPainter oldDelegate) {
+    if (oldDelegate.goal != goal) return true;
+    if (oldDelegate.category != category) return true;
     if (oldDelegate.labelCenterXs?.length != labelCenterXs?.length) return true;
     if (labelCenterXs != null && oldDelegate.labelCenterXs != null) {
       for (int i = 0; i < labelCenterXs!.length; i++) {

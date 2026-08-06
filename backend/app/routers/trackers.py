@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from bson import ObjectId
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
@@ -9,6 +10,18 @@ from app.deps import get_current_user_id
 router = APIRouter(prefix="/trackers", tags=["trackers"])
 TRACKERS = "user_trackers"
 PROGRESS = "tracker_progress"
+
+# PRODUCT DECISION: Tracker days use a single global calendar anchored to
+# America/New_York, not each user's device timezone. The daily/weekly Cloud
+# Scheduler jobs (tracker-reset-daily / tracker-reset-weekly) run once for
+# all users at the ET calendar boundary, so snapshots must represent the
+# period being closed, not the cron execution timestamp. The Flutter client
+# (see _appLocation in meal_goals_history_page.dart) uses the same timezone
+# when determining calendar days and querying progress history.
+#
+# Do not replace this with datetime.now(timezone.utc) or device-local dates;
+# doing so can shift snapshots and history by a day.
+_APP_TZ = ZoneInfo("America/New_York")
 
 
 def _user_match(user_id: str) -> dict:
@@ -59,10 +72,23 @@ def _tracker_period_value(is_weekly: bool) -> str:
 
 
 async def _save_progress_snapshot_for_docs(db, trackers: list[dict], is_weekly: bool) -> int:
-    """Persist tracker snapshots to tracker_progress before reset."""
+    """Persist tracker snapshots to tracker_progress before reset.
+
+    progressDate is stamped as the ET calendar day/week being closed (i.e.
+    "now" minus one day), not the cron's raw execution time — the reset
+    fires a few minutes after local midnight specifically to close out the
+    period that just ended, so using the execution timestamp would mislabel
+    every snapshot as belonging to the day after it actually covers.
+    """
     if not trackers:
         return 0
-    now = datetime.now(timezone.utc).isoformat()
+    closed_day = (datetime.now(_APP_TZ) - timedelta(days=1)).date()
+    progress_date = (
+        datetime(closed_day.year, closed_day.month, closed_day.day, tzinfo=_APP_TZ)
+        .astimezone(timezone.utc)
+        .isoformat()
+    )
+    created_at = datetime.now(timezone.utc).isoformat()
     period = _tracker_period_value(is_weekly)
     docs = []
     for t in trackers:
@@ -79,11 +105,11 @@ async def _save_progress_snapshot_for_docs(db, trackers: list[dict], is_weekly: 
                 "trackerCategory": t.get("category") or "",
                 "targetValue": float(t.get("goalValue") or 0.0),
                 "achievedValue": achieved,
-                "progressDate": now,
+                "progressDate": progress_date,
                 "periodType": period,
                 "dietType": t.get("dietType") or "",
                 "unit": t.get("unit") or "",
-                "createdAt": now,
+                "createdAt": created_at,
             }
         )
     if docs:

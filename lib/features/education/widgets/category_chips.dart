@@ -102,7 +102,7 @@ class CategoryChips extends StatelessWidget {
                   style: TextStyle(
                     color: isSelected ? Colors.white : Colors.grey.shade600,
                     fontSize: 14 * clampedScale,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.bold,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

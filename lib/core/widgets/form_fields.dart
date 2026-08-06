@@ -20,6 +20,9 @@ class AppFormField extends StatelessWidget {
   final bool enableSuggestions;
   final bool autocorrect;
   final TextCapitalization textCapitalization;
+  final Iterable<String>? autofillHints;
+  final GlobalKey<FormFieldState<String>>? formFieldKey;
+  final EdgeInsets scrollPadding;
 
   const AppFormField({
     super.key,
@@ -39,6 +42,9 @@ class AppFormField extends StatelessWidget {
     this.enableSuggestions = true,
     this.autocorrect = true,
     this.textCapitalization = TextCapitalization.sentences,
+    this.autofillHints,
+    this.formFieldKey,
+    this.scrollPadding = const EdgeInsets.all(20),
   });
 
   @override
@@ -54,6 +60,7 @@ class AppFormField extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         TextFormField(
+          key: formFieldKey,
           controller: controller,
           validator: validator,
           keyboardType: keyboardType,
@@ -70,6 +77,8 @@ class AppFormField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           onFieldSubmitted: onFieldSubmitted,
+          scrollPadding: scrollPadding,
+          autofillHints: autofillHints,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: AppTypography.bg_14_r.copyWith(
@@ -88,8 +97,10 @@ class AppFormField extends StatelessWidget {
             suffixIcon: suffixIcon,
             errorMaxLines: 3,
             errorStyle: const TextStyle(
+              color: Colors.red,
               fontSize: 12,
               height: 1.3,
+              fontFamily: 'BricolageGrotesque',
             ),
           ),
         ),
@@ -267,6 +278,18 @@ class AppChipGroup extends StatelessWidget {
   }
 }
 
+/// Displays up to the first two [values] by name, then collapses the rest
+/// into a `+N` suffix so the label doesn't grow unbounded.
+String _nestedOptionLabel(String option, List<String> values) {
+  const shownCount = 2;
+  if (values.length <= shownCount) {
+    return '$option: ${values.join(', ')}';
+  }
+  final shown = values.take(shownCount).join(', ');
+  final overflow = values.length - shownCount;
+  return '$option: $shown +$overflow';
+}
+
 class AppDropdownField extends StatefulWidget {
   final String? label;
   final String? value;
@@ -278,6 +301,14 @@ class AppDropdownField extends StatefulWidget {
   final bool multiSelect;
   final List<String>? selectedValues;
   final ValueChanged<List<String>>? onChangedMulti;
+  final String? exclusiveOption;
+  final String? nestedOption;
+  final List<String> nestedOptionValues;
+  final Future<List<String>?> Function()? onNestedOptionTap;
+
+  /// Called when the nested option is unchecked so parents can clear
+  /// associated state (e.g. excluded ingredients for "Other").
+  final VoidCallback? onNestedOptionCleared;
 
   const AppDropdownField({
     super.key,
@@ -291,6 +322,11 @@ class AppDropdownField extends StatefulWidget {
     this.multiSelect = false,
     this.selectedValues,
     this.onChangedMulti,
+    this.exclusiveOption,
+    this.nestedOption,
+    this.nestedOptionValues = const [],
+    this.onNestedOptionTap,
+    this.onNestedOptionCleared,
   });
 
   @override
@@ -396,8 +432,11 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
   Future<void> _openBottomSheet() async {
     List<String> localFiltered = List<String>.from(widget.options);
     final controller = TextEditingController();
+    final searchFocusNode = FocusNode();
     final Set<String> tempSelected =
         Set<String>.from(widget.selectedValues ?? const <String>[]);
+    List<String> nestedOptionValues =
+        List<String>.from(widget.nestedOptionValues);
 
     final result = await showModalBottomSheet<dynamic>(
       context: context,
@@ -405,117 +444,168 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setModalState) {
-          return Container(
-            height: MediaQuery.of(sheetContext).size.height * 0.7,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.label ?? 'Select',
-                          style: AppTypography.bg_16_m,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () {
-                          if (widget.multiSelect) {
-                            Navigator.pop(sheetContext, tempSelected.toList());
-                          } else {
-                            Navigator.pop(sheetContext);
-                          }
-                        },
-                        child: const Text(
-                          'Done',
-                          style: TextStyle(
-                            color: Colors.deepOrange,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'BricolageGrotesque',
+          return GestureDetector(
+            onTap: () => searchFocusNode.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Container(
+              height: MediaQuery.of(sheetContext).size.height * 0.7,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.label ?? 'Select',
+                            style: AppTypography.bg_16_m,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: () {
+                            if (widget.multiSelect) {
+                              Navigator.pop(
+                                  sheetContext, tempSelected.toList());
+                            } else {
+                              Navigator.pop(sheetContext);
+                            }
+                          },
+                          child: const Text(
+                            'Done',
+                            style: TextStyle(
+                              color: Colors.deepOrange,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'BricolageGrotesque',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                if (widget.showSearchBar)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: TextField(
-                      controller: controller,
-                      decoration: InputDecoration(
-                        hintText: 'Search here',
-                        hintStyle: AppTypography.bg_14_r
-                            .copyWith(color: const Color(0xFF90909A)),
-                        prefixIcon:
-                            const Icon(Icons.search, color: Color(0xFF90909A)),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none,
+                  const Divider(height: 1),
+                  if (widget.showSearchBar)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: TextField(
+                        controller: controller,
+                        focusNode: searchFocusNode,
+                        decoration: InputDecoration(
+                          hintText: 'Search here',
+                          hintStyle: AppTypography.bg_14_r
+                              .copyWith(color: const Color(0xFF90909A)),
+                          prefixIcon: const Icon(Icons.search,
+                              color: Color(0xFF90909A)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF7F7F8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                         ),
-                        filled: true,
-                        fillColor: const Color(0xFFF7F7F8),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
+                        onChanged: (q) {
+                          localFiltered = widget.options
+                              .where((o) =>
+                                  o.toLowerCase().contains(q.toLowerCase()))
+                              .toList();
+                          setModalState(() {});
+                        },
                       ),
-                      onChanged: (q) {
-                        localFiltered = widget.options
-                            .where((o) =>
-                                o.toLowerCase().contains(q.toLowerCase()))
-                            .toList();
-                        setModalState(() {});
+                    ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: localFiltered.length,
+                      itemBuilder: (itemContext, index) {
+                        final option = localFiltered[index];
+                        if (widget.multiSelect) {
+                          final isNestedOption = option == widget.nestedOption;
+                          final isChecked = isNestedOption
+                              ? nestedOptionValues.isNotEmpty
+                              : tempSelected.contains(option);
+                          return CheckboxListTile(
+                            title: Text(
+                              isNestedOption && nestedOptionValues.isNotEmpty
+                                  ? _nestedOptionLabel(
+                                      option, nestedOptionValues)
+                                  : option,
+                              style: AppTypography.bg_14_r,
+                            ),
+                            value: isChecked,
+                            onChanged: (v) async {
+                              if (isNestedOption) {
+                                // "Other" is a managed collection, not a
+                                // boolean toggle — every tap opens the
+                                // picker; the checked state is purely
+                                // derived from nestedOptionValues, and
+                                // clearing (with confirmation) happens
+                                // inside the picker itself.
+                                final updatedValues =
+                                    await widget.onNestedOptionTap?.call();
+                                if (updatedValues != null) {
+                                  nestedOptionValues = updatedValues;
+                                  if (updatedValues.isNotEmpty) {
+                                    tempSelected.remove(widget.exclusiveOption);
+                                  } else {
+                                    widget.onNestedOptionCleared?.call();
+                                  }
+                                  setModalState(() {});
+                                }
+                                return;
+                              }
+                              if (v == true) {
+                                if (widget.exclusiveOption != null &&
+                                    option == widget.exclusiveOption) {
+                                  // Selecting the exclusive option clears everything else
+                                  tempSelected
+                                    ..clear()
+                                    ..add(option);
+                                  if (nestedOptionValues.isNotEmpty) {
+                                    nestedOptionValues = [];
+                                    widget.onNestedOptionCleared?.call();
+                                  }
+                                } else {
+                                  // Selecting any other option removes the exclusive option
+                                  tempSelected
+                                    ..remove(widget.exclusiveOption)
+                                    ..add(option);
+                                }
+                              } else {
+                                tempSelected.remove(option);
+                              }
+                              setModalState(() {});
+                            },
+                            activeColor: const Color(0xFFFF6A00),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          );
+                        } else {
+                          return ListTile(
+                            title: Text(option, style: AppTypography.bg_14_r),
+                            onTap: () => Navigator.pop(sheetContext, option),
+                          );
+                        }
                       },
                     ),
                   ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: localFiltered.length,
-                    itemBuilder: (itemContext, index) {
-                      final option = localFiltered[index];
-                      if (widget.multiSelect) {
-                        final isChecked = tempSelected.contains(option);
-                        return CheckboxListTile(
-                          title: Text(option, style: AppTypography.bg_14_r),
-                          value: isChecked,
-                          onChanged: (v) {
-                            if (v == true) {
-                              tempSelected.add(option);
-                            } else {
-                              tempSelected.remove(option);
-                            }
-                            setModalState(() {});
-                          },
-                          activeColor: const Color(0xFFFF6A00),
-                          controlAffinity: ListTileControlAffinity.leading,
-                        );
-                      } else {
-                        return ListTile(
-                          title: Text(option, style: AppTypography.bg_14_r),
-                          onTap: () => Navigator.pop(sheetContext, option),
-                        );
-                      }
-                    },
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
       ),
     );
 
+    searchFocusNode.dispose();
     if (!mounted) return;
     if (result != null) {
       if (widget.multiSelect) {
@@ -706,48 +796,60 @@ class _HeightDropdownFieldState extends State<HeightDropdownField> {
     final size = renderBox.size;
 
     return OverlayEntry(
-      builder: (context) => Positioned(
-        width: size.width,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: Offset(0, size.height + 4),
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              decoration: BoxDecoration(
-                color: Colors.white,
+      builder: (context) => Stack(
+        children: [
+          // Tap-away barrier
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _removeOverlay,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 4),
+              child: Material(
+                elevation: 4,
                 borderRadius: BorderRadius.circular(8),
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                itemCount: widget.options.length,
-                itemBuilder: (context, index) {
-                  final option = widget.options[index];
-                  return InkWell(
-                    onTap: () {
-                      widget.onChanged?.call(option);
-                      _removeOverlay();
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: widget.options.length,
+                    itemBuilder: (context, index) {
+                      final option = widget.options[index];
+                      return InkWell(
+                        onTap: () {
+                          widget.onChanged?.call(option);
+                          _removeOverlay();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            option,
+                            style: AppTypography.bg_14_r,
+                          ),
+                        ),
+                      );
                     },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Text(
-                        option,
-                        style: AppTypography.bg_14_r,
-                      ),
-                    ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -865,6 +967,10 @@ class AppSearchField extends StatelessWidget {
   final FocusNode? focusNode;
   final bool autocorrect;
   final bool enableSuggestions;
+  final double? height;
+  final double? fontSize;
+  final bool tightPrefix;
+  final bool unfocusOnTapOutside;
 
   const AppSearchField({
     super.key,
@@ -875,12 +981,24 @@ class AppSearchField extends StatelessWidget {
     this.focusNode,
     this.autocorrect = true,
     this.enableSuggestions = true,
+    this.height,
+    this.fontSize,
+    this.tightPrefix = false,
+    this.unfocusOnTapOutside = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final h = height ?? 50;
+    final fs = fontSize ?? 16;
+    final iconSize = (fs + 4).clamp(18.0, 24.0);
+    // Tight prefix: icon left-aligned so typed text sits close to the glass.
+    final double prefixLeftInset = tightPrefix ? 8.0 : 0;
+    final double gapIconToText = tightPrefix ? 4.0 : 0;
+    final double prefixSlotWidth =
+        tightPrefix ? prefixLeftInset + iconSize + gapIconToText : 0;
     return Container(
-      height: 50,
+      height: h,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -891,26 +1009,60 @@ class AppSearchField extends StatelessWidget {
         onChanged: onChanged,
         autocorrect: autocorrect,
         enableSuggestions: enableSuggestions,
+        textAlignVertical: TextAlignVertical.center,
+        strutStyle: tightPrefix
+            ? StrutStyle(
+                fontSize: fs,
+                height: 1.05,
+                leading: 0,
+                forceStrutHeight: true,
+              )
+            : null,
+        onTapOutside: unfocusOnTapOutside
+            ? (_) => FocusManager.instance.primaryFocus?.unfocus()
+            : null,
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(
             color: Colors.grey[400],
-            fontSize: 16,
+            fontSize: fs,
           ),
-          prefixIcon: Icon(
-            Icons.search,
-            color: Colors.grey[400],
-          ),
+          prefixIcon: tightPrefix
+              ? SizedBox(
+                  width: prefixSlotWidth,
+                  height: h,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: prefixLeftInset),
+                      child: Icon(
+                        Icons.search,
+                        color: Colors.grey[400],
+                        size: iconSize,
+                      ),
+                    ),
+                  ),
+                )
+              : Icon(
+                  Icons.search,
+                  color: Colors.grey[400],
+                ),
+          prefixIconConstraints: tightPrefix
+              ? BoxConstraints.tightFor(width: prefixSlotWidth, height: h)
+              : null,
           suffixIcon: suffixIcon,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 15, // Adjusted for vertical centering
+          isDense: tightPrefix,
+          contentPadding: EdgeInsets.fromLTRB(
+            tightPrefix ? 0 : 16,
+            tightPrefix ? 0 : 15,
+            tightPrefix ? 8 : 16,
+            tightPrefix ? 0 : 15,
           ),
         ),
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.black,
-          fontSize: 16,
+          fontSize: fs,
         ),
       ),
     );

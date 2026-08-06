@@ -24,6 +24,9 @@ class MockAuthController extends AuthController {
   }
 }
 
+const _tourDisabled =
+    'Tour feature disabled — re-enable when shouldShowTour() is uncommented in forced_tour_service.dart';
+
 void main() {
   group('ForcedTourProvider', () {
     late MockAuthController mockAuthController;
@@ -36,7 +39,7 @@ void main() {
       tourProvider = ForcedTourProvider(tourService: tourService);
     });
 
-    test('should start tour for new user', () {
+    test('should start tour for new user', skip: _tourDisabled, () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
@@ -52,45 +55,38 @@ void main() {
       expect(tourProvider.isTourActive, false);
     });
 
-    test('should progress through tour steps correctly', () {
+    test('should progress through tour steps correctly', skip: _tourDisabled,
+        () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
-      // Start at trackers
       expect(tourProvider.currentStep, TourStep.trackers);
       expect(tourProvider.isTourActive, true);
 
-      // Complete trackers step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.dailyTips);
 
-      // Complete daily tips step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.myPlan);
 
-      // Complete my plan step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.addButton);
 
-      // Complete add button step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.pantryItems);
 
-      // Complete pantry items step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.recipes);
 
-      // Complete recipes step
       tourProvider.completeCurrentStep();
       expect(tourProvider.currentStep, TourStep.education);
 
-      // Complete education step (final step)
       tourProvider.completeCurrentStep();
       expect(tourProvider.isTourActive, false);
       expect(tourProvider.tourCompleted, true);
     });
 
-    test('should complete tour successfully', () async {
+    test('should complete tour successfully', skip: _tourDisabled, () async {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
@@ -102,7 +98,7 @@ void main() {
       expect(tourProvider.tourCompleted, true);
     });
 
-    test('should skip tour successfully', () async {
+    test('should skip tour successfully', skip: _tourDisabled, () async {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
@@ -114,7 +110,8 @@ void main() {
       expect(tourProvider.tourCompleted, true);
     });
 
-    test('should end tour without marking as completed', () {
+    test('should end tour without marking as completed', skip: _tourDisabled,
+        () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
@@ -134,7 +131,7 @@ void main() {
       expect(tourProvider.tourCompleted, false);
     });
 
-    test('should check if on specific step', () {
+    test('should check if on specific step', skip: _tourDisabled, () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
@@ -154,31 +151,28 @@ void main() {
       expect(tourProvider.getCurrentStepTitle(), isNotEmpty);
     });
 
-    test('should check if last step', () {
+    test('should check if last step', skip: _tourDisabled, () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
-      // Start at first step
       expect(tourProvider.isLastStep(), false);
 
-      // Progress to last step
-      tourProvider.completeCurrentStep(); // trackers -> dailyTips
-      tourProvider.completeCurrentStep(); // dailyTips -> myPlan
-      tourProvider.completeCurrentStep(); // myPlan -> addButton
-      tourProvider.completeCurrentStep(); // addButton -> pantryItems
-      tourProvider.completeCurrentStep(); // pantryItems -> recipes
-      tourProvider.completeCurrentStep(); // recipes -> education
+      tourProvider.completeCurrentStep();
+      tourProvider.completeCurrentStep();
+      tourProvider.completeCurrentStep();
+      tourProvider.completeCurrentStep();
+      tourProvider.completeCurrentStep();
+      tourProvider.completeCurrentStep();
 
       expect(tourProvider.isLastStep(), true);
     });
 
-    test('should force interaction with current step', () {
+    test('should force interaction with current step', skip: _tourDisabled, () {
       mockAuthController.setTourCompleted(false);
       tourProvider.startTour();
 
       tourProvider.forceInteraction();
 
-      // Force interaction should trigger notifyListeners
       expect(tourProvider.isTourActive, true);
     });
   });

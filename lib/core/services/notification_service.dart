@@ -6,10 +6,53 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
+
+const String _dailyReminderChannelId = 'daily_meal_reminders';
+const String _dailyReminderChannelName = 'Daily Meal Reminders';
+const String _dailyReminderChannelDesc =
+    'Daily reminders to log your meals and track nutrition';
+
+// Exactly one of these id groups is ever scheduled at a time — the generic
+// reminder, or the three per-meal ones — never both. See
+// applyMealLoggingReminderPreferences().
+const int _genericReminderId = 1004;
+const int _breakfastReminderId = 1001;
+const int _lunchReminderId = 1002;
+const int _dinnerReminderId = 1003;
+
+const int _genericReminderHour = 18; // 6 PM local — staggered ahead of the ~7pm GCP tracker-milestone push
+const int _genericReminderMinute = 0;
+
+const int _defaultBreakfastHour = 9;
+const int _defaultBreakfastMinute = 0;
+const int _defaultLunchHour = 13;
+const int _defaultLunchMinute = 0;
+const int _defaultDinnerHour = 20;
+const int _defaultDinnerMinute = 0;
+
+// New accounts get zero non-Welcome notifications for their first 24h
+// (mirrors NEW_ACCOUNT_GRACE_HOURS on the backend/Cloud Functions).
+const int _newAccountGraceHours = 24;
+
+class _ScheduledReminder {
+  final int id;
+  final String title;
+  final String body;
+  final int hour;
+  final int minute;
+  const _ScheduledReminder({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.hour,
+    required this.minute,
+  });
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -270,14 +313,17 @@ class NotificationService {
   // Sync stored FCM token to database (call this after user login/registration)
   Future<void> syncFCMTokenToDatabase() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
+      // Read userId from secure storage (SessionStorage), not SharedPreferences.
+      // SharedPreferences previously held 'user_id' but that key is removed after
+      // the migration to FlutterSecureStorage, so it would always return null.
+      final userId = await ApiClient.userId;
 
       if (userId == null) {
         debugPrint('⚠️ No user ID found, cannot sync FCM token');
         return;
       }
 
+      final prefs = await SharedPreferences.getInstance();
       // Use stored token if available, otherwise try to get current token
       String? tokenToSync = prefs.getString('fcm_token') ?? _fcmToken;
 
@@ -347,6 +393,26 @@ class NotificationService {
     } catch (e) {
       debugPrint('❌ Error syncing FCM token to database: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
+    }
+
+    await syncTimezoneOffsetToDatabase();
+  }
+
+  /// Sync the device's local UTC offset (minutes) so the backend/Cloud
+  /// Functions can compute per-user quiet hours and "today" boundaries in
+  /// the user's local time instead of server/UTC time.
+  Future<void> syncTimezoneOffsetToDatabase() async {
+    try {
+      final userId = await ApiClient.userId;
+      if (userId == null) return;
+      final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
+      await ApiClient.patch(
+        '/auth/profile',
+        body: {'timezoneOffsetMinutes': offsetMinutes},
+      );
+      debugPrint('✅ Timezone offset synced for user ($offsetMinutes min)');
+    } catch (e) {
+      debugPrint('❌ Error syncing timezone offset to database: $e');
     }
   }
 
@@ -556,6 +622,199 @@ class NotificationService {
     }
   }
 
+  /// Reminder(s) currently scheduled — either the single generic one, or
+  /// all three per-meal ones, never both. Drives the fan-out in
+  /// [suppressTodaysMealReminder] and [cancelDailyReminders].
+  List<_ScheduledReminder> _activeReminders = const [];
+
+  /// Decides and schedules the correct meal-reminder set for this user in
+  /// one shot: the three custom breakfast/lunch/dinner reminders if
+  /// [prefs] has opted in, otherwise the single generic reminder. Never
+  /// schedules the generic reminder and then immediately cancels it.
+  /// Safe to call multiple times — cancels whichever set was active first.
+  ///
+  /// If [accountCreatedAt] is provided and the account is still within its
+  /// first [_newAccountGraceHours], each reminder's first occurrence is
+  /// pushed forward to the next slot at/after that grace period ends —
+  /// reaching the 24h mark becomes *eligible*, it does not itself trigger
+  /// a notification.
+  Future<void> applyMealLoggingReminderPreferences(
+    Map<String, dynamic>? prefs, {
+    DateTime? accountCreatedAt,
+  }) async {
+    await cancelDailyReminders();
+    final notBefore = accountCreatedAt?.add(
+      const Duration(hours: _newAccountGraceHours),
+    );
+
+    final reminders = (prefs != null && prefs['enabled'] == true)
+        ? _customMealReminders(prefs)
+        : const [
+            _ScheduledReminder(
+              id: _genericReminderId,
+              title: "Don't forget to log today",
+              body:
+                  'Log your meals to keep your nutrition tracking on target.',
+              hour: _genericReminderHour,
+              minute: _genericReminderMinute,
+            ),
+          ];
+
+    for (final r in reminders) {
+      await _scheduleDailyReminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        hour: r.hour,
+        minute: r.minute,
+        notBefore: notBefore,
+      );
+    }
+    _activeReminders = reminders;
+    debugPrint(reminders.length == 1
+        ? '✅ Generic daily meal reminder scheduled (6 PM)'
+        : '✅ Custom meal reminders scheduled (breakfast/lunch/dinner)');
+  }
+
+  List<_ScheduledReminder> _customMealReminders(Map<String, dynamic> prefs) {
+    return [
+      _ScheduledReminder(
+        id: _breakfastReminderId,
+        title: 'Good morning! Start your day with MyFoodRx',
+        body: 'Log your breakfast and check your nutrition targets for today.',
+        hour: _timeField(prefs['breakfast'], 'hour', _defaultBreakfastHour),
+        minute:
+            _timeField(prefs['breakfast'], 'minute', _defaultBreakfastMinute),
+      ),
+      _ScheduledReminder(
+        id: _lunchReminderId,
+        title: 'Lunchtime check-in',
+        body:
+            'Log your lunch and keep making progress toward your nutrition goals.',
+        hour: _timeField(prefs['lunch'], 'hour', _defaultLunchHour),
+        minute: _timeField(prefs['lunch'], 'minute', _defaultLunchMinute),
+      ),
+      _ScheduledReminder(
+        id: _dinnerReminderId,
+        title: 'End your day strong',
+        body: "Log your dinner and complete today's nutrition record.",
+        hour: _timeField(prefs['dinner'], 'hour', _defaultDinnerHour),
+        minute: _timeField(prefs['dinner'], 'minute', _defaultDinnerMinute),
+      ),
+    ];
+  }
+
+  static int _timeField(dynamic mealPrefs, String key, int fallback) {
+    if (mealPrefs is Map && mealPrefs[key] is int) return mealPrefs[key] as int;
+    return fallback;
+  }
+
+  /// Cancel any scheduled meal reminder(s) — generic or per-meal.
+  Future<void> cancelDailyReminders() async {
+    await _localNotifications.cancel(_genericReminderId);
+    await _localNotifications.cancel(_breakfastReminderId);
+    await _localNotifications.cancel(_lunchReminderId);
+    await _localNotifications.cancel(_dinnerReminderId);
+    _activeReminders = const [];
+    debugPrint('✅ Meal reminder(s) cancelled');
+  }
+
+  /// Call after a successful meal-log save: cancels today's occurrence of
+  /// every currently-active reminder (the generic one, or all three
+  /// per-meal ones) and reschedules each for tomorrow, so the user isn't
+  /// nudged again the same day they already logged.
+  ///
+  /// Cancel remaining reminders for today by re-anchoring each active
+  /// daily reminder to its next valid occurrence (tomorrow). This does
+  /// not create a deferred chain; scheduling always recalculates from the
+  /// current time, so calling this on consecutive days independently
+  /// skips only that day's remaining occurrences — nothing accumulates.
+  Future<void> suppressTodaysMealReminder() async {
+    if (_activeReminders.isEmpty) return;
+    final now = tz.TZDateTime.now(tz.local);
+    for (final r in _activeReminders) {
+      final tomorrow = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        r.hour,
+        r.minute,
+      ).add(const Duration(days: 1));
+      await _scheduleDailyReminder(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        hour: r.hour,
+        minute: r.minute,
+        notBefore: tomorrow,
+      );
+    }
+    debugPrint('✅ Today\'s meal reminder(s) suppressed; rescheduled for tomorrow');
+  }
+
+  Future<void> _scheduleDailyReminder({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    DateTime? notBefore,
+  }) async {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+    // If the time already passed today, start from tomorrow.
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+    // Keep pushing forward a day at a time until the floor is cleared —
+    // this only shifts which day the first occurrence lands on; the daily
+    // repeat cadence (via matchDateTimeComponents.time below) is unaffected.
+    if (notBefore != null) {
+      final floor = tz.TZDateTime.from(notBefore, tz.local);
+      while (scheduledDate.isBefore(floor)) {
+        scheduledDate = scheduledDate.add(const Duration(days: 1));
+      }
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      _dailyReminderChannelId,
+      _dailyReminderChannelName,
+      channelDescription: _dailyReminderChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: false,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledDate,
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexact,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: 'meal_reminder',
+    );
+  }
+
   // Dispose resources
   void dispose() {
     // No subscriptions to cancel in simplified version
@@ -571,7 +830,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 // Navigation helpers
 void _navigateFromPayload(String? payload) {
-  // If payload is a JSON string you could parse here. We currently rely on FCM data route.
+  if (payload == 'meal_reminder') {
+    _navigateByType('tracker_reminder');
+  }
 }
 
 void _navigateByType(dynamic type) {

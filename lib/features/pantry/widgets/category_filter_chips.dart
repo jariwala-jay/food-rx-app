@@ -93,7 +93,7 @@ class CategoryFilterChips extends StatelessWidget {
             style: TextStyle(
               color: isSelected ? Colors.white : Colors.grey[700],
               fontSize: 14 * clampedScale,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: FontWeight.bold,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -108,34 +108,30 @@ class CategoryFilterChips extends StatelessWidget {
     switch (category.toLowerCase()) {
       case 'fresh_fruits':
         return 'Fresh Fruits';
+      case 'frozen_fruits':
+        return 'Frozen Fruits';
       case 'canned_fruits':
         return 'Canned Fruits';
       case 'fresh_veggies':
-        return 'Fresh Veggies';
+        return 'Fresh Vegetables';
+      case 'frozen_veggies':
+        return 'Frozen Vegetables';
       case 'canned_veggies':
-        return 'Canned Veggies';
+        return 'Canned Vegetables';
       case 'grains':
         return 'Grains';
-      case 'protein':
-        return 'Protein';
+      case 'meat':
+        return 'Meat';
+      case 'beans':
+        return 'Beans';
       case 'dairy':
-        return 'Dairy';
-      case 'seasonings':
-        return 'Seasonings';
-      case 'fresh_produce':
-        return 'Fresh Produce';
-      case 'dairy_eggs':
         return 'Dairy & Eggs';
-      case 'protein_meat':
-        return 'Protein & Meat';
-      case 'pantry_staples':
-        return 'Pantry Staples';
-      case 'frozen_foods':
-        return 'Frozen Foods';
+      case 'nuts_seeds':
+        return 'Nuts';
+      case 'seasonings':
+        return 'Spices';
       case 'snacks_beverages':
         return 'Snacks & Beverages';
-      case 'essentials_condiments':
-        return 'Essentials & Condiments';
       default:
         // Convert snake_case to Title Case
         return category

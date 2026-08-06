@@ -12,10 +12,13 @@ import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
 import 'package:flutter_app/features/tracking/models/tracker_goal.dart';
+import 'package:flutter_app/features/tracking/notifications/goal_limit_notification_service.dart';
+import 'package:flutter_app/features/recipes/utils/recipe_ingredient_pantry_counts.dart';
 import 'package:flutter_app/features/recipes/widgets/servings_consumed_modal.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/core/utils/kitchen_quantity_formatter.dart';
 import 'package:provider/provider.dart';
 
 class RecipeDetailPage extends StatefulWidget {
@@ -39,6 +42,9 @@ class RecipeDetailPage extends StatefulWidget {
 }
 
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
+  static const KitchenQuantityFormatter _kitchenFormatter =
+      KitchenQuantityFormatter();
+
   late Recipe _adjustedRecipe;
   late RecipeScalingService _scalingService;
   late PantryDeductionService _pantryService;
@@ -93,6 +99,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       );
 
       _scalingResult = result;
+
+      if (kDebugMode) {
+        _logScaledSpringOnionIngredient(result);
+      }
 
       // Convert back to Recipe object
       return Recipe.fromJson(result);
@@ -304,6 +314,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       }
 
       // Update tracker for each category
+      final goalLimitSnapshot = GoalLimitNotificationService.instance.snapshot(
+        [...trackerProvider.dailyTrackers, ...trackerProvider.weeklyTrackers],
+      );
       for (final entry in categoryServings.entries) {
         final category = entry.key;
         final servings = entry.value;
@@ -315,6 +328,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           await trackerProvider.incrementTracker(matchingTracker.id, servings);
         }
       }
+      GoalLimitNotificationService.instance.checkAndNotify(
+        before: goalLimitSnapshot,
+        trackers: [...trackerProvider.dailyTrackers, ...trackerProvider.weeklyTrackers],
+      );
 
       if (kDebugMode) {
         print('\n✅ RECIPE DETAIL PAGE COOKING COMPLETE');
@@ -429,6 +446,18 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           const SizedBox(height: 24),
                           _buildSectionTitle(
                               'Ingredients for ${_adjustedRecipe.servings} servings'),
+                          if (_adjustedRecipe.optionalIngredientLineCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '${_adjustedRecipe.requiredIngredientLineCount} required · '
+                                '${_adjustedRecipe.optionalIngredientLineCount} optional',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
                           const SizedBox(height: 8),
                           if (_scalingResult != null &&
                               widget.targetServings != widget.recipe.servings &&
@@ -506,6 +535,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       children: [
         RecipeImage(
           imageUrl: _adjustedRecipe.image,
+          imageUrlCandidates: _adjustedRecipe.imageUrlCandidates,
           width: double.infinity,
           height: 250,
         ),
@@ -587,31 +617,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
-  String _ingredientMatchName(RecipeIngredient ingredient) {
-    final n = ingredient.nameClean.trim();
-    return n.isNotEmpty ? n : ingredient.name;
-  }
+  RecipeIngredientPantryCounts get _pantryCounts =>
+      RecipeIngredientPantryCounts(_pantryService);
 
   bool _ingredientInPantry(RecipeIngredient ingredient, List<PantryItem> pantry) {
-    return _pantryService.hasPantryMatchForIngredient(
-      _ingredientMatchName(ingredient),
-      pantry,
-    );
-  }
-
-  /// In-pantry vs still-to-buy, aligned with [extendedIngredients] and optional lines.
-  int _liveInPantryCount(List<PantryItem> pantry) {
-    return _adjustedRecipe.extendedIngredients
-        .where((i) => _ingredientInPantry(i, pantry))
-        .length;
-  }
-
-  int _liveRequiredMissingCount(List<PantryItem> pantry) {
-    return _adjustedRecipe.extendedIngredients
-        .where(
-          (i) => !i.isOptionalIngredient && !_ingredientInPantry(i, pantry),
-        )
-        .length;
+    return _pantryCounts.isInPantry(ingredient, pantry);
   }
 
   Widget _buildIngredientTags(List<PantryItem> pantry) {
@@ -619,13 +629,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       children: [
         _buildTag(
           icon: Icons.kitchen,
-          label: '+${_liveInPantryCount(pantry)}',
+          label: '+${_pantryCounts.inPantryCount(_adjustedRecipe, pantry)}',
           color: Colors.green,
         ),
         const SizedBox(width: 12),
         _buildTag(
           icon: Icons.shopping_cart,
-          label: '+${_liveRequiredMissingCount(pantry)}',
+          label:
+              '+${_pantryCounts.requiredMissingCount(_adjustedRecipe, pantry)}',
           color: Colors.orange,
         ),
       ],
@@ -759,19 +770,19 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             final original = entry.value;
             final scaled = _adjustedRecipe.extendedIngredients[index];
             final expectedAmount = original.amount * scaleFactor;
-            final wasOptimized =
-                scaled.amount != expectedAmount || scaled.unit != original.unit;
+            final wasScaled = scaled.amount != expectedAmount ||
+                scaled.unit != original.unit;
 
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: wasOptimized
+                color: wasScaled
                     ? Colors.orange.withValues(alpha: 0.1)
                     : Colors.green.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: wasOptimized
+                  color: wasScaled
                       ? Colors.orange.withValues(alpha: 0.3)
                       : Colors.green.withValues(alpha: 0.3),
                 ),
@@ -787,7 +798,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   Row(
                     children: [
                       Text(
-                        '${_formatDisplayAmount(original.amount)} ${original.unit}',
+                        _kitchenFormatter.formatIngredientLine(
+                          amount: original.amount,
+                          unit: original.unit,
+                          ingredientName: original.nameClean,
+                        ),
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                       const SizedBox(width: 8),
@@ -795,12 +810,16 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                           size: 16, color: Colors.grey),
                       const SizedBox(width: 8),
                       Text(
-                        '${_formatDisplayAmount(scaled.amount)} ${scaled.unit}',
+                        _kitchenFormatter.formatIngredientLine(
+                          amount: scaled.amount,
+                          unit: scaled.unit,
+                          ingredientName: scaled.nameClean,
+                        ),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  if (wasOptimized) ...[
+                  if (wasScaled) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -811,7 +830,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Optimized from ${expectedAmount.toStringAsFixed(2)} ${original.unit}',
+                          'Exact scaled amount: ${expectedAmount.toStringAsFixed(4)} ${original.unit}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.orange[700],
@@ -910,17 +929,22 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   }
 
   Widget _buildIngredientsList(List<PantryItem> pantry) {
-    if (_adjustedRecipe.extendedIngredients.isEmpty) {
+    final ingredients = RecipeIngredient.mergeDuplicateLines(
+      _adjustedRecipe.extendedIngredients,
+    );
+    if (ingredients.isEmpty) {
       return const Text('No ingredients listed.');
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: _adjustedRecipe.extendedIngredients.map((ingredient) {
+      children: ingredients.map((ingredient) {
         final bool isAvailable = _ingredientInPantry(ingredient, pantry);
 
-        // Build the display text with scaled amounts
-        String displayText = _buildScaledIngredientText(ingredient);
+        final isOptional = ingredient.isOptionalIngredient;
+        final displayText = ingredient.formatDisplayLine(
+          _buildScaledIngredientText(ingredient),
+        );
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -930,10 +954,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 2.0),
                 child: Icon(
-                  isAvailable
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: isAvailable ? Colors.green : Colors.grey[400],
+                  isOptional
+                      ? Icons.remove_circle_outline
+                      : (isAvailable
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked),
+                  color: isOptional
+                      ? Colors.grey[400]
+                      : (isAvailable ? Colors.green : Colors.grey[400]),
                   size: 18,
                 ),
               ),
@@ -943,8 +971,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   displayText,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[800],
+                    color: isOptional ? Colors.grey[600] : Colors.grey[800],
                     height: 1.4,
+                    fontStyle:
+                        isOptional ? FontStyle.italic : FontStyle.normal,
                   ),
                 ),
               ),
@@ -955,178 +985,51 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     );
   }
 
-  String _formatDisplayAmount(double amount) {
-    // Handle whole numbers
-    if (amount == amount.roundToDouble()) {
-      return amount.toInt().toString();
-    }
-
-    // Handle common fractions with readable display
-    const tolerance = 0.01;
-
-    // Check for halves
-    if ((amount - 0.5).abs() < tolerance) return '1/2';
-    if ((amount - 1.5).abs() < tolerance) return '1 1/2';
-    if ((amount - 2.5).abs() < tolerance) return '2 1/2';
-    if ((amount - 3.5).abs() < tolerance) return '3 1/2';
-
-    // Check for thirds
-    if ((amount - 1 / 3).abs() < tolerance) return '1/3';
-    if ((amount - 2 / 3).abs() < tolerance) return '2/3';
-    if ((amount - 1.33).abs() < tolerance) return '1 1/3';
-    if ((amount - 1.67).abs() < tolerance) return '1 2/3';
-    if ((amount - 2.33).abs() < tolerance) return '2 1/3';
-    if ((amount - 2.67).abs() < tolerance) return '2 2/3';
-
-    // Check for quarters
-    if ((amount - 0.25).abs() < tolerance) return '1/4';
-    if ((amount - 0.75).abs() < tolerance) return '3/4';
-    if ((amount - 1.25).abs() < tolerance) return '1 1/4';
-    if ((amount - 1.75).abs() < tolerance) return '1 3/4';
-    if ((amount - 2.25).abs() < tolerance) return '2 1/4';
-    if ((amount - 2.75).abs() < tolerance) return '2 3/4';
-    if ((amount - 3.25).abs() < tolerance) return '3 1/4';
-    if ((amount - 3.75).abs() < tolerance) return '3 3/4';
-
-    // Check for eighths
-    if ((amount - 0.125).abs() < tolerance) return '1/8';
-    if ((amount - 0.375).abs() < tolerance) return '3/8';
-    if ((amount - 0.625).abs() < tolerance) return '5/8';
-    if ((amount - 0.875).abs() < tolerance) return '7/8';
-
-    // For other amounts, use reasonable precision
-    if (amount < 1) {
-      return amount.toStringAsFixed(2);
-    } else if (amount < 10) {
-      return amount.toStringAsFixed(1);
-    } else {
-      return amount.toStringAsFixed(0);
-    }
-  }
-
-  Map<String, dynamic> _optimizeUnits(double amount, String unit) {
-    // Handle count-based ingredients that shouldn't be fractional
-    final countBasedUnits = ['', 'whole', 'piece', 'pieces', 'item', 'items'];
-    if (countBasedUnits.contains(unit.toLowerCase())) {
-      // Smart rounding for count-based items to nearest practical fraction
-      if (amount <= 0.25) {
-        return {'amount': 0.25, 'unit': unit}; // 1/4
-      } else if (amount <= 0.375) {
-        return {'amount': 0.5, 'unit': unit}; // 1/2
-      } else if (amount <= 0.625) {
-        return {'amount': 0.5, 'unit': unit}; // 1/2
-      } else if (amount <= 0.875) {
-        return {'amount': 0.75, 'unit': unit}; // 3/4
-      } else if (amount < 1.25) {
-        return {'amount': 1.0, 'unit': unit}; // 1
-      } else if (amount < 1.75) {
-        return {'amount': 1.5, 'unit': unit}; // 1 1/2
-      } else if (amount < 2.25) {
-        return {'amount': 2.0, 'unit': unit}; // 2
-      } else {
-        // For larger amounts, round to nearest half
-        return {'amount': (amount * 2).round() / 2, 'unit': unit};
-      }
-    }
-
-    // Convert small tablespoon amounts to teaspoons
-    if ((unit == 'tablespoon' || unit == 'tablespoons' || unit == 'tbsp') &&
-        amount < 1) {
-      final tspAmount = amount * 3;
-      return {
-        'amount': tspAmount,
-        'unit': tspAmount == 1 ? 'teaspoon' : 'teaspoons'
-      };
-    }
-
-    // Convert large teaspoon amounts to tablespoons
-    if ((unit == 'teaspoon' || unit == 'teaspoons' || unit == 'tsp') &&
-        amount >= 3) {
-      final tbspAmount = amount / 3;
-      return {
-        'amount': tbspAmount,
-        'unit': tbspAmount == 1 ? 'tablespoon' : 'tablespoons'
-      };
-    }
-
-    // Convert large tablespoon amounts to cups
-    if ((unit == 'tablespoon' || unit == 'tablespoons' || unit == 'tbsp') &&
-        amount >= 16) {
-      final cupAmount = amount / 16;
-      return {'amount': cupAmount, 'unit': cupAmount == 1 ? 'cup' : 'cups'};
-    }
-
-    // Convert small cup amounts to tablespoons for better readability
-    if ((unit == 'cup' || unit == 'cups') && amount < 0.25) {
-      final tbspAmount = amount * 16;
-      return {
-        'amount': tbspAmount,
-        'unit': tbspAmount == 1 ? 'tablespoon' : 'tablespoons'
-      };
-    }
-
-    // Convert large ounce amounts to pounds
-    if ((unit == 'ounce' || unit == 'ounces' || unit == 'oz') && amount >= 16) {
-      final lbAmount = amount / 16;
-      return {'amount': lbAmount, 'unit': lbAmount == 1 ? 'pound' : 'pounds'};
-    }
-
-    // Convert small pound amounts to ounces
-    if ((unit == 'pound' ||
-            unit == 'pounds' ||
-            unit == 'lb' ||
-            unit == 'lbs') &&
-        amount < 0.5) {
-      final ozAmount = amount * 16;
-      return {'amount': ozAmount, 'unit': ozAmount == 1 ? 'ounce' : 'ounces'};
-    }
-
-    // Convert large gram amounts to kilograms
-    if ((unit == 'gram' || unit == 'grams' || unit == 'g') && amount >= 1000) {
-      final kgAmount = amount / 1000;
-      return {
-        'amount': kgAmount,
-        'unit': kgAmount == 1 ? 'kilogram' : 'kilograms'
-      };
-    }
-
-    // Convert large milliliter amounts to liters
-    if ((unit == 'milliliter' || unit == 'milliliters' || unit == 'ml') &&
-        amount >= 1000) {
-      final lAmount = amount / 1000;
-      return {'amount': lAmount, 'unit': lAmount == 1 ? 'liter' : 'liters'};
-    }
-
-    // Return original if no optimization needed
-    return {'amount': amount, 'unit': unit};
-  }
-
   String _buildScaledIngredientText(dynamic ingredient) {
-    var amount = ingredient.amount;
-    var unit = ingredient.unit ?? '';
-    final nameClean = ingredient.nameClean ?? ingredient.name ?? '';
+    final amount = ingredient.amount;
+    final rawUnit = (ingredient.unit ?? '').toString();
+    final rawName = (ingredient.name ?? '').toString();
+    final rawNameClean = (ingredient.nameClean ?? '').toString();
+    final rawOriginal = (ingredient.original ?? '').toString();
+    final rawOriginalName = (ingredient.originalName ?? '').toString();
+    final traceFormat = kDebugMode &&
+        _shouldTraceIngredientFormat(rawNameClean, rawName);
 
-    // Apply intelligent unit optimization for better readability
-    final optimizedMeasurement = _optimizeUnits(amount, unit);
-    amount = optimizedMeasurement['amount'];
-    unit = optimizedMeasurement['unit'];
+    if (traceFormat) {
+      debugPrint('''
+[Ingredient BEFORE FORMAT]
+name=$rawName
+nameClean=$rawNameClean
+originalName=$rawOriginalName
+original=$rawOriginal
+unit(raw)=$rawUnit
+amount=$amount
+''');
+    }
 
-    // Get any additional descriptors from the original text
-    String originalText = ingredient.original ?? '';
+    final nameClean = RecipeIngredient.resolveDisplayName(
+      rawNameClean,
+      rawName,
+    );
+    final unit = RecipeIngredient.sanitizeUnit(
+      rawUnit,
+      nameClean,
+    );
 
-    // Extract descriptors (text in parentheses, adjectives, etc.)
-    String descriptors = '';
+    // Extract prep descriptors and parenthetical notes from the original line.
+    String originalText = rawOriginal;
+    String prepDescriptors = '';
+    String parentheticalNotes = '';
+
     if (originalText.isNotEmpty) {
-      // Look for parentheses content
       final parenRegex = RegExp(r'\([^)]*\)');
       final parenMatches = parenRegex.allMatches(originalText);
       for (final match in parenMatches) {
-        descriptors += ' ${match.group(0)}';
+        parentheticalNotes += ' ${match.group(0)}';
       }
 
-      // Look for common descriptors before the ingredient name
       final words = originalText.toLowerCase().split(' ');
-      final descriptorWords = [
+      const descriptorWords = [
         'fresh',
         'dried',
         'ground',
@@ -1146,83 +1049,131 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       ];
       for (final word in words) {
         if (descriptorWords.contains(word) &&
-            !descriptors.toLowerCase().contains(word)) {
-          descriptors = ' $word$descriptors';
+            !prepDescriptors.toLowerCase().contains(word) &&
+            !nameClean.toLowerCase().contains(word)) {
+          prepDescriptors = ' $word$prepDescriptors';
         }
       }
     }
 
-    // Build the display text
-    String formattedAmount = _formatDisplayAmount(amount);
+    final displayName = RecipeIngredient.composeIngredientDisplayName(
+      nameClean,
+      prepDescriptors,
+    );
 
-    if (unit.isEmpty) {
-      return '$formattedAmount $nameClean$descriptors';
-    } else {
-      // Handle unit pluralization
-      String displayUnit = unit;
-      if (amount != 1.0) {
-        // Simple pluralization rules
-        if (unit == 'cup' && amount != 1.0) {
-          displayUnit = 'cups';
-        } else if (unit == 'tablespoon' && amount != 1.0)
-          displayUnit = 'tablespoons';
-        else if (unit == 'teaspoon' && amount != 1.0)
-          displayUnit = 'teaspoons';
-        else if (unit == 'ounce' && amount != 1.0)
-          displayUnit = 'ounces';
-        else if (unit == 'pound' && amount != 1.0)
-          displayUnit = 'pounds';
-        else if (unit == 'gram' && amount != 1.0)
-          displayUnit = 'grams';
-        else if (unit == 'kilogram' && amount != 1.0)
-          displayUnit = 'kilograms';
-        else if (unit == 'liter' && amount != 1.0)
-          displayUnit = 'liters';
-        else if (unit == 'milliliter' && amount != 1.0)
-          displayUnit = 'milliliters';
-        else if (unit == 'serving' && amount != 1.0)
-          displayUnit = 'servings';
-        else if (unit == 'clove' && amount != 1.0)
-          displayUnit = 'cloves';
-        else if (unit == 'sprig' && amount != 1.0)
-          displayUnit = 'sprigs';
-        else if (unit == 'slice' && amount != 1.0)
-          displayUnit = 'slices';
-        else if (unit == 'piece' && amount != 1.0)
-          displayUnit = 'pieces';
-        else if (unit == 'packet' && amount != 1.0)
-          displayUnit = 'packets';
-        // Add abbreviated forms
-        else if (unit == 'tsp' && amount != 1.0)
-          displayUnit = 'tsp';
-        else if (unit == 'tbsp' && amount != 1.0)
-          displayUnit = 'tbsp';
-        else if (unit == 'oz' && amount != 1.0)
-          displayUnit = 'oz';
-        else if (unit == 'lb' && amount != 1.0)
-          displayUnit = 'lbs';
-        else if (unit == 'g' && amount != 1.0)
-          displayUnit = 'g';
-        else if (unit == 'kg' && amount != 1.0)
-          displayUnit = 'kg';
-        else if (unit == 'ml' && amount != 1.0)
-          displayUnit = 'ml';
-        else if (unit == 'l' && amount != 1.0) displayUnit = 'l';
-      }
+    if (traceFormat) {
+      debugPrint('''
+[Ingredient FORMAT INPUT]
+unit(sanitized)=$unit
+displayName=$displayName
+prepDescriptors=$prepDescriptors
+parentheticalNotes=$parentheticalNotes
+''');
+    }
 
-      return '$formattedAmount $displayUnit $nameClean$descriptors';
+    final formatted = _kitchenFormatter.formatIngredientLineWithPath(
+      amount: amount,
+      unit: unit,
+      ingredientName: displayName,
+      descriptors: parentheticalNotes,
+    );
+
+    final displayText = RecipeIngredient.dedupeConsecutiveWords(formatted.display);
+
+    if (traceFormat) {
+      debugPrint('''
+[Ingredient AFTER FORMAT]
+path=${formatted.path.label}
+formatterOutput=${formatted.display}
+output=$displayText
+''');
+    }
+
+    return displayText;
+  }
+
+  bool _shouldTraceIngredientFormat(String nameClean, String? rawName) {
+    final lower = '${nameClean.toLowerCase()} ${(rawName ?? '').toLowerCase()}';
+    return lower.contains('spring onion') ||
+        lower.contains('scallion') ||
+        lower.contains('green onion') ||
+        lower.contains('juice') ||
+        lower.contains('lemon') ||
+        lower.contains('lime');
+  }
+
+  void _logScaledSpringOnionIngredient(Map<String, dynamic> scaledRecipe) {
+    final ingredients = scaledRecipe['extendedIngredients'] as List<dynamic>?;
+    if (ingredients == null) return;
+
+    for (final raw in ingredients) {
+      final ingredient = raw as Map<String, dynamic>;
+      final name = (ingredient['name'] ?? '').toString();
+      final nameClean = (ingredient['nameClean'] ?? '').toString();
+      if (!_shouldTraceIngredientFormat(nameClean, name)) continue;
+
+      final scalingMetadata =
+          ingredient['scalingMetadata'] as Map<String, dynamic>?;
+
+      debugPrint('''
+[Ingredient AFTER SCALING]
+name=$name
+nameClean=$nameClean
+original=${ingredient['original']}
+originalAmount=${scalingMetadata?['originalAmount']}
+originalUnit=${scalingMetadata?['originalUnit']}
+scaleFactor=${scalingMetadata?['scaleFactor']}
+unit=${ingredient['unit']}
+amount=${ingredient['amount']}
+servings=${scaledRecipe['servings']}
+''');
     }
   }
 
+  Widget _buildInstructionsUnavailable() {
+    final source = _adjustedRecipe.sourceUrl.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Step-by-step instructions are not available in the app for this recipe.',
+          style: TextStyle(fontSize: 15, height: 1.5, color: Colors.grey[800]),
+        ),
+        if (source.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'View the original recipe:',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            source,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFFFF6A00),
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildInstructionsList() {
-    if (_adjustedRecipe.analyzedInstructions.isEmpty ||
-        _adjustedRecipe.analyzedInstructions.first.steps.isEmpty) {
-      return const Text('No instructions available.');
+    if (_adjustedRecipe.analyzedInstructions.isEmpty) {
+      return _buildInstructionsUnavailable();
+    }
+
+    final steps = _adjustedRecipe.analyzedInstructions.first.cookingSteps;
+    if (steps.isEmpty) {
+      return _buildInstructionsUnavailable();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: _adjustedRecipe.analyzedInstructions.first.steps.map((step) {
+      children: steps.asMap().entries.map((entry) {
+        final displayNumber = entry.key + 1;
+        final step = entry.value;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Row(
@@ -1237,7 +1188,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                 ),
                 child: Center(
                   child: Text(
-                    '${step.number}',
+                    '$displayNumber',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

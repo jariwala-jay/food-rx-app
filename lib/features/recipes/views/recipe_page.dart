@@ -154,86 +154,177 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPreparedAndSearchRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PreparedRecipesPage(),
-                ),
-              );
-            },
-            child: Container(
-              height: 50,
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6A00),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'Prepared recipes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                softWrap: false,
-              ),
+  bool _usesLargeTextForRecipeActions(BuildContext context) {
+    return MediaQuery.textScalerOf(context).scale(1.0) > 1.05;
+  }
+
+  TextStyle _recipeActionPillTextStyle(BuildContext context) {
+    final systemScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final usesLargeText = systemScale > 1.05;
+    // Scale pill label when [TextScaler] exceeds 1.05× (paired with two-line layout).
+    final fontSize = usesLargeText
+        ? (15 * systemScale).clamp(16.0, 20.0)
+        : 15.0;
+
+    return TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w500,
+      color: Colors.white,
+      height: 1.15,
+    );
+  }
+
+  double _recipeActionPillMinHeight(BuildContext context) {
+    if (!_usesLargeTextForRecipeActions(context)) return 50;
+
+    final style = _recipeActionPillTextStyle(context);
+    // minHeight = two lines × line height + 20px vertical padding.
+    return style.fontSize! * 2 * (style.height ?? 1.15) + 20;
+  }
+
+  Widget _buildRecipeActionPillLabel({
+    required BuildContext context,
+    required String singleLineLabel,
+    required String firstLine,
+    IconData? leadingIcon,
+  }) {
+    final textStyle = _recipeActionPillTextStyle(context);
+
+    if (!_usesLargeTextForRecipeActions(context)) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (leadingIcon != null) ...[
+            Icon(leadingIcon, color: Colors.white, size: 18),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Text(
+              singleLineLabel,
+              style: textStyle,
+              textScaler: TextScaler.noScaling,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
+        ],
+      );
+    }
+
+    final textColumn = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          firstLine,
+          style: textStyle,
+          textScaler: TextScaler.noScaling,
+          textAlign: TextAlign.center,
         ),
-        const SizedBox(width: 8),
-        if (!_recipeSearchMode)
+        Text(
+          'recipes',
+          style: textStyle,
+          textScaler: TextScaler.noScaling,
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+
+    if (leadingIcon != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            leadingIcon,
+            color: Colors.white,
+            size: (textStyle.fontSize ?? 16) + 4,
+          ),
+          const SizedBox(width: 6),
+          textColumn,
+        ],
+      );
+    }
+
+    return textColumn;
+  }
+
+  Widget _buildRecipeActionPill({
+    required BuildContext context,
+    required VoidCallback onTap,
+    required String singleLineLabel,
+    required String firstLine,
+    IconData? leadingIcon,
+  }) {
+    final usesLargeText = _usesLargeTextForRecipeActions(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        constraints: BoxConstraints(
+          minHeight: _recipeActionPillMinHeight(context),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: usesLargeText ? 12 : 0,
+        ),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6A00),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: _buildRecipeActionPillLabel(
+          context: context,
+          singleLineLabel: singleLineLabel,
+          firstLine: firstLine,
+          leadingIcon: leadingIcon,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreparedAndSearchRow() {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Expanded(
-            child: GestureDetector(
+            child: _buildRecipeActionPill(
+              context: context,
+              singleLineLabel: 'Prepared recipes',
+              firstLine: 'Prepared',
               onTap: () {
-                setState(() => _recipeSearchMode = true);
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    _recipeSearchFocusNode.requestFocus();
-                  }
-                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PreparedRecipesPage(),
+                  ),
+                );
               },
-              child: Container(
-                height: 50,
-                width: double.infinity,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6A00),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.search, color: Colors.white, size: 22),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Search recipes',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
-          )
+          ),
+          const SizedBox(width: 8),
+          if (!_recipeSearchMode)
+            Expanded(
+              child: _buildRecipeActionPill(
+                context: context,
+                singleLineLabel: 'Search recipes',
+                firstLine: 'Search',
+                leadingIcon: Icons.search,
+                onTap: () {
+                  setState(() => _recipeSearchMode = true);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      _recipeSearchFocusNode.requestFocus();
+                    }
+                  });
+                },
+              ),
+            )
         else
           Expanded(
             child: AppSearchField(
@@ -250,7 +341,8 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               ),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -282,7 +374,6 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
-                  // Chatbot icon temporarily disabled
                   // IconButton(
                   //   icon: const Icon(Icons.chat_bubble_outline),
                   //   iconSize: 24,
@@ -693,10 +784,17 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   );
                 }
+                final servings = Provider.of<RecipeController>(context,
+                        listen: false)
+                    .currentFilter
+                    .servings;
                 return ListView.builder(
                   itemCount: visible.length,
                   itemBuilder: (context, index) {
-                    return RecipeCard(recipe: visible[index]);
+                    return RecipeCard(
+                      recipe: visible[index],
+                      targetServings: servings,
+                    );
                   },
                 );
               },
@@ -778,11 +876,10 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                 'Prepared recipes',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
-                maxLines: 1,
-                softWrap: false,
+                textAlign: TextAlign.center,
               ),
             ),
           ),
@@ -909,7 +1006,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
             // Prepared recipes button (matches FoodRx Items pill style)
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -920,8 +1017,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                   );
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFF6A00),
                     borderRadius: BorderRadius.circular(12),
@@ -930,11 +1026,10 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     'Prepared recipes',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
-                    maxLines: 1,
-                    softWrap: false,
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -946,7 +1041,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               key: TourKeys.generateRecipeButtonKey,
               title: 'Generate Recipes',
               description:
-                  'Tap to set cuisine preferences, meal type, servings, and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
+                  'Tap to set cuisine preferences, meal type, servings and cooking time, then generate personalized recipes from your pantry.\n\n Tap the highlighted area to continue',
               targetShapeBorder: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(24)),
               ),
@@ -993,18 +1088,18 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
     if (pantryItems.isEmpty) {
       return 'Start by adding ingredients to your pantry.\nThen we can suggest personalized recipes based on your dietary needs and preferences.';
     } else if (controller.error != null) {
-      return 'We encountered an issue loading recipes.\nPlease check your connection and try again.';
+      return controller.error!;
     } else {
       return 'No recipes met all your dietary constraints and pantry requirements.\nThis can happen when recipes don’t match your health conditions or available ingredients.\nTry adding more ingredients or generate custom recipes with relaxed filters.';
     }
   }
 
   Widget _buildErrorState(BuildContext context) {
+    final controller = Provider.of<RecipeController>(context, listen: false);
     return TabLoadErrorView(
       title: 'Unable to load recipes',
+      message: controller.error ?? TabLoadErrorView.standardMessage,
       onRetry: () {
-        final controller =
-            Provider.of<RecipeController>(context, listen: false);
         controller.clearError();
         if (!_hasInitialized) {
           _hasInitialized = true;

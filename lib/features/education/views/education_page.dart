@@ -143,10 +143,10 @@ class _EducationPageState extends State<EducationPage> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Chatbot icon temporarily disabled
                       // IconButton(
                       //   icon: const Icon(Icons.chat_bubble_outline),
-                      //   onPressed: () => Navigator.pushNamed(context, '/chatbot'),
+                      //   onPressed: () =>
+                      //       Navigator.pushNamed(context, '/chatbot'),
                       // ),
                       IconButton(
                         icon: const Icon(Icons.tune),

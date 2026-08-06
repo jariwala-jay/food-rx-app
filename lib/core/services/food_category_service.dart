@@ -8,7 +8,8 @@ class FoodCategoryService {
 
   FoodCategoryService({required UnitConversionService conversionService})
       : _conversionService = conversionService,
-        _dietServingService = DietServingService(conversionService: conversionService);
+        _dietServingService =
+            DietServingService(conversionService: conversionService);
 
   // --- Data for Mapping Ingredients to Categories ---
 
@@ -148,9 +149,11 @@ class FoodCategoryService {
 
   /// Maps an ingredient name to a list of relevant tracker categories.
   /// Uses enhanced DietServingService for more accurate categorization.
-  List<TrackerCategory> getCategoriesForIngredient(String ingredientName, {String? dietType}) {
+  List<TrackerCategory> getCategoriesForIngredient(String ingredientName,
+      {String? dietType}) {
     // Use the enhanced diet serving service for better categorization
-    return _dietServingService.getCategoriesForIngredient(ingredientName, dietType: dietType);
+    return _dietServingService.getCategoriesForIngredient(ingredientName,
+        dietType: dietType);
   }
 
   /// Calculates the number of servings for a given ingredient based on diet.

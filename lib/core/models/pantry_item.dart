@@ -46,6 +46,21 @@ class PantryItem {
   DateTime? get expiryDate => expirationDate;
   String get legacyQuantityString => quantity.toString();
 
+  /// Calendar-day aware: expired if expiry date is before today.
+  bool get isExpired {
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final expiryDay = DateTime(
+      expirationDate.year,
+      expirationDate.month,
+      expirationDate.day,
+    );
+    return expiryDay.isBefore(today);
+  }
+
   PantryItem copyWith({
     String? id,
     String? name,
@@ -252,17 +267,24 @@ class PantryItem {
     switch (category.toLowerCase()) {
       case 'fresh_fruits':
         return UnitType.piece;
+      case 'frozen_fruits':
       case 'canned_fruits':
         return UnitType.ounces;
       case 'fresh_veggies':
         return UnitType.pound;
+      case 'frozen_veggies':
       case 'canned_veggies':
         return UnitType.ounces;
       case 'grains':
         return UnitType.pound;
-      case 'protein':
+      case 'meat':
+      case 'protein': // legacy FoodRx key
         return UnitType.pound;
+      case 'beans':
+        return UnitType.ounces;
       case 'dairy':
+        return UnitType.ounces;
+      case 'nuts_seeds':
         return UnitType.ounces;
       case 'seasonings':
         return UnitType.ounces;
@@ -284,26 +306,27 @@ class PantryItem {
     switch (category.toLowerCase()) {
       case 'fresh_fruits':
         return now.add(const Duration(days: 5));
+      case 'frozen_fruits':
+        return now.add(const Duration(days: 90));
       case 'canned_fruits':
         return now.add(const Duration(days: 365));
       case 'fresh_veggies':
         return now.add(const Duration(days: 7));
+      case 'frozen_veggies':
+        return now.add(const Duration(days: 90));
       case 'canned_veggies':
         return now.add(const Duration(days: 365));
       case 'grains':
         return now.add(const Duration(days: 180));
-      case 'protein':
-        if (category.contains('fish') || category.contains('seafood')) {
-          return now.add(const Duration(days: 2));
-        }
-        if (category.contains('beef') ||
-            category.contains('pork') ||
-            category.contains('chicken')) {
-          return now.add(const Duration(days: 3));
-        }
+      case 'meat':
+      case 'protein': // legacy FoodRx key
         return now.add(const Duration(days: 5));
+      case 'beans':
+        return now.add(const Duration(days: 365));
       case 'dairy':
         return now.add(const Duration(days: 7));
+      case 'nuts_seeds':
+        return now.add(const Duration(days: 180));
       case 'seasonings':
         return now.add(const Duration(days: 365));
       case 'oils':

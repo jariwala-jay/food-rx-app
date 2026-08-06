@@ -38,12 +38,15 @@ class _ProfilePageState extends State<ProfilePage> {
           _profilePhotoData = Uint8List.fromList(photoData);
         });
       }
+    } else if (mounted) {
+      setState(() {
+        _profilePhotoData = authProvider.localProfilePhotoData;
+      });
     }
   }
 
   Future<void> _pickAndUpdateProfilePhoto() async {
     try {
-      // Show picker options
       final ImageSource? source = await showModalBottomSheet<ImageSource>(
         context: context,
         builder: (context) => Container(
@@ -73,11 +76,17 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (source == null) return;
 
+      // Wait for the bottom sheet route to finish closing before presenting the
+      // system picker; opening PHPicker immediately after pop can hang on iOS.
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      if (!mounted) return;
+
       final pickedFile = await _imagePicker.pickImage(
         source: source,
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
+        requestFullMetadata: false,
       );
 
       if (pickedFile != null && mounted) {
@@ -91,7 +100,6 @@ class _ProfilePageState extends State<ProfilePage> {
         await authController.updateProfilePhoto(photoFile);
 
         if (mounted) {
-          // Reload photo to show the new one
           await _loadProfilePhoto();
 
           setState(() {
@@ -139,10 +147,6 @@ class _ProfilePageState extends State<ProfilePage> {
       default:
         planName = myPlan;
     }
-    // Note: We don't show the target calories in the profile page
-    // if (user.targetCalories != null) {
-    //   return '$planName - ${user.targetCalories} Calorie Plan';
-    // }
     return planName;
   }
 
@@ -277,7 +281,6 @@ class _ProfilePageState extends State<ProfilePage> {
       final authController = context.read<AuthController>();
       await authController.logout();
       if (context.mounted) {
-        // Clear navigation stack and go to login
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/login',
           (route) => false,
@@ -313,7 +316,6 @@ class _ProfilePageState extends State<ProfilePage> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
-                  // Profile Header Section
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 32),
@@ -390,8 +392,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Diet Plan Card
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Container(
@@ -422,8 +422,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Personal Information Section
                   _buildSection(
                     context: context,
                     title: 'Personal Information',
@@ -475,10 +473,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Physical Information Section
                   _buildSection(
                     context: context,
                     title: 'Physical Information',
@@ -525,10 +520,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Health Goals Section
                   _buildSection(
                     context: context,
                     title: 'Diet-related Health Goals',
@@ -545,12 +537,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Health Goals',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Health Goals',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -593,10 +587,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Medical Information Section
                   _buildSection(
                     context: context,
                     title: 'Medical Information',
@@ -613,12 +604,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Diet-related Chronic Condition',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Diet-related Chronic Condition',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -673,12 +666,14 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Food Allergies & Intolerances',
-                                    style: AppTypography.bg_16_m,
+                                  Expanded(
+                                    child: Text(
+                                      'Food Allergies & Intolerances',
+                                      style: AppTypography.bg_16_m,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   const Icon(
                                     Icons.chevron_right,
@@ -686,13 +681,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ],
                               ),
-                              if (user.allergies != null &&
-                                  user.allergies!.isNotEmpty) ...[
+                              if ((user.allergies?.isNotEmpty ?? false) ||
+                                  (user.excludedIngredients?.isNotEmpty ??
+                                      false)) ...[
                                 const SizedBox(height: 12),
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
-                                  children: user.allergies!
+                                  children: [
+                                    ...?user.allergies,
+                                    ...?user.excludedIngredients
+                                        ?.map((item) => item.displayName),
+                                  ]
                                       .map((allergy) => Chip(
                                             label: Text(allergy),
                                             backgroundColor:
@@ -722,10 +722,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Settings Section
                   _buildSection(
                     context: context,
                     title: 'Settings',
@@ -759,6 +756,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       _buildDivider(),
+                      _BiometricToggleRow(onChanged: () => setState(() {})),
+                      _buildDivider(),
                       _buildInfoRow(
                         context: context,
                         label: 'Log Out',
@@ -768,7 +767,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 32),
                 ],
               ),
@@ -873,6 +871,198 @@ class _ProfilePageState extends State<ProfilePage> {
           fieldType: fieldType,
           currentValue: currentValue,
         ),
+      ),
+    );
+  }
+}
+
+// ── Biometric toggle row ────────────────────────────────────────────────────
+
+class _BiometricToggleRow extends StatefulWidget {
+  final VoidCallback onChanged;
+
+  const _BiometricToggleRow({required this.onChanged});
+
+  @override
+  State<_BiometricToggleRow> createState() => _BiometricToggleRowState();
+}
+
+class _BiometricToggleRowState extends State<_BiometricToggleRow> {
+  bool? _isEnabled;
+  bool _isSupported = false;
+  String _label = 'Sign in with Face ID / Fingerprint';
+  bool _isBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final auth = context.read<AuthController>();
+    final supported = await auth.canUseBiometricLogin();
+    final enabled = await auth.isBiometricEnabled();
+    String label = 'Sign in with Face ID / Fingerprint';
+    if (supported) {
+      final labels = await auth.getBiometricSignInLabels();
+      label = labels.saveLoginCheckbox;
+    }
+    if (!mounted) return;
+    setState(() {
+      _isSupported = supported;
+      _isEnabled = enabled;
+      _label = label;
+    });
+  }
+
+  Future<void> _toggle(bool value) async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    final auth = context.read<AuthController>();
+
+    if (value) {
+      final ok = await auth.enableBiometricLogin();
+      if (mounted) {
+        setState(() {
+          _isEnabled = ok ? true : _isEnabled;
+          _isBusy = false;
+        });
+        if (!ok && auth.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(auth.error!)),
+          );
+        } else if (ok) {
+          widget.onChanged();
+        }
+      }
+    } else {
+      await _confirmDisable(auth);
+    }
+  }
+
+  Future<void> _confirmDisable(AuthController auth) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Turn off biometric sign-in?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "You'll need to sign in manually next time.",
+                style: TextStyle(fontSize: 15, color: Color(0xFF444444)),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF5F5F6E),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6A00),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Turn off'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await auth.disableBiometricLogin();
+      setState(() {
+        _isEnabled = false;
+        _isBusy = false;
+      });
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Biometric sign-in turned off')),
+        );
+      }
+    } else if (mounted) {
+      setState(() => _isBusy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isSupported || _isEnabled == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _isEnabled!
+                      ? 'Sign in without a password'
+                      : 'Enable for faster sign-in',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF90909A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _isEnabled!,
+            onChanged: _isBusy ? null : _toggle,
+            activeColor: const Color(0xFFFF6A00),
+          ),
+        ],
       ),
     );
   }

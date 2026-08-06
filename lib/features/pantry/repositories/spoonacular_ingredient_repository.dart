@@ -7,11 +7,31 @@ import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/features/pantry/repositories/ingredient_repository.dart';
 
 class SpoonacularIngredientRepository implements IngredientRepository {
-  final String _baseUrl =
-      'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  static const String _host =
+      'spoonacular-recipe-food-nutrition-v1.p.rapidapi.com';
+  final String _baseUrl = 'https://$_host';
   final String? _apiKey = dotenv.env['RAPID_API_KEY'];
   bool _isRateLimited = false;
   DateTime? _rateLimitUntil;
+
+  Map<String, String> get _headers => {
+        'X-RapidAPI-Key': _apiKey!,
+        'X-RapidAPI-Host': _host,
+      };
+
+  /// Parses each entry independently so one malformed row (missing/odd
+  /// fields) doesn't throw away the rest of an otherwise-good batch.
+  List<Ingredient> _parseIngredients(List<dynamic> rawResults) {
+    final parsed = <Ingredient>[];
+    for (final item in rawResults) {
+      try {
+        parsed.add(Ingredient.fromJson(item as Map<String, dynamic>));
+      } catch (e) {
+        developer.log('Skipping unparsable ingredient entry: $e');
+      }
+    }
+    return parsed;
+  }
 
   @override
   Future<List<Ingredient>> searchIngredients(
@@ -49,11 +69,13 @@ class SpoonacularIngredientRepository implements IngredientRepository {
       queryParams['intolerances'] = intolerances.join(',');
     }
 
+    // Use RapidAPI headers (same as recipe repo). Query-param auth alone
+    // is unreliable and can fail for free-text search outside category browse.
     final uri = Uri.parse('$_baseUrl/food/ingredients/search')
-        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
+        .replace(queryParameters: queryParams);
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: _headers);
       if (response.statusCode == 200) {
         // Reset rate limit status on successful request
         _isRateLimited = false;
@@ -61,7 +83,7 @@ class SpoonacularIngredientRepository implements IngredientRepository {
 
         final data = json.decode(response.body);
         final results = data['results'] as List;
-        return results.map((item) => Ingredient.fromJson(item)).toList();
+        return _parseIngredients(results);
       } else if (response.statusCode == 429) {
         // Rate limited - set flag and wait 60 seconds before retrying
         _isRateLimited = true;
@@ -107,17 +129,17 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     };
 
     final uri = Uri.parse('$_baseUrl/food/ingredients/autocomplete')
-        .replace(queryParameters: {...queryParams, 'rapidapi-key': _apiKey!});
+        .replace(queryParameters: queryParams);
 
     try {
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: _headers);
       if (response.statusCode == 200) {
         // Reset rate limit status on successful request
         _isRateLimited = false;
         _rateLimitUntil = null;
 
         final data = json.decode(response.body) as List;
-        return data.map((item) => Ingredient.fromJson(item)).toList();
+        return _parseIngredients(data);
       } else if (response.statusCode == 429) {
         // Rate limited - set flag and wait 60 seconds before retrying
         _isRateLimited = true;

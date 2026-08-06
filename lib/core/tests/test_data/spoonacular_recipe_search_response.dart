@@ -1,5 +1,5 @@
 // Test data containing real Spoonacular recipe search response
-// This data can be used for testing recipe scaling, pantry deduction, and other services
+// This data can be used for testing recipe scaling, pantry deduction and other services
 
 class SpoonacularTestData {
   static const Map<String, dynamic> recipeSearchResponse = {
@@ -157,8 +157,8 @@ class SpoonacularTestData {
             "unitShort": "slice",
             "aisle": "Produce",
             "name": "lettuce",
-            "original": "lettuce, tomato slices, paper-thin red onion, and additional everything spice blend, for topping",
-            "originalName": "lettuce, tomato paper-thin red onion, and additional everything spice blend, for topping",
+            "original": "lettuce, tomato slices, paper-thin red onion and additional everything spice blend, for topping",
+            "originalName": "lettuce, tomato paper-thin red onion and additional everything spice blend, for topping",
             "meta": ["paper-thin", "red", "for topping "],
             "extendedName": "red paper-thin lettuce",
             "image": "https://img.spoonacular.com/ingredients_100x100/iceberg-lettuce.jpg"

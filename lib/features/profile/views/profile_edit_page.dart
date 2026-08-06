@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+import 'package:flutter_app/core/widgets/additional_foods_to_avoid_field.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
@@ -31,6 +33,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   double? _heightInches;
   double? _weight;
   List<String> _selectedMultiValues = [];
+  List<ExcludedIngredient> _selectedExcludedIngredients = [];
   bool _isLoading = false;
 
   @override
@@ -83,6 +86,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         }
         break;
       case 'allergies':
+        _selectedExcludedIngredients = List.from(
+          context.read<AuthController>().currentUser?.excludedIngredients ??
+              const [],
+        );
         if (widget.currentValue is List) {
           _selectedMultiValues = List<String>.from(widget.currentValue);
           // Convert legacy "None" to "No allergies" for consistency
@@ -135,6 +142,33 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         _textController.text = DateFormat('MM/dd/yyyy').format(picked);
       });
     }
+  }
+
+  Future<List<String>?> _openAdditionalFoodsPicker() async {
+    final values = await AdditionalFoodsToAvoidField.showPicker(
+      context,
+      initialSelection: _selectedExcludedIngredients,
+    );
+    if (!mounted || values == null) return null;
+    setState(() {
+      _selectedExcludedIngredients = values;
+    });
+    return values.map((ingredient) => ingredient.displayName).toList();
+  }
+
+  void _updateSelectedAllergies(List<String> values) {
+    setState(() {
+      final hadNoAllergies = _selectedMultiValues.contains('No allergies');
+      final hasNoAllergies = values.contains('No allergies');
+      if (hasNoAllergies && !hadNoAllergies) {
+        _selectedMultiValues = ['No allergies'];
+      } else if (hadNoAllergies && hasNoAllergies && values.length > 1) {
+        _selectedMultiValues =
+            values.where((value) => value != 'No allergies').toList();
+      } else {
+        _selectedMultiValues = values;
+      }
+    });
   }
 
   Future<void> _saveChanges() async {
@@ -223,6 +257,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           break;
         case 'allergies':
           updates['allergies'] = _selectedMultiValues;
+          updates['excludedIngredients'] = _selectedExcludedIngredients
+              .map((ingredient) => ingredient.toJson())
+              .toList();
           break;
       }
 
@@ -670,6 +707,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       'Wheat',
       'Fish',
       'Shellfish',
+      'Sesame',
+      'Other',
     ];
 
     return Container(
@@ -689,32 +728,61 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             hintText: 'Select Allergies & Intolerances',
             showSearchBar: true,
             multiSelect: true,
-            selectedValues: _selectedMultiValues,
-            onChangedMulti: (values) {
+            exclusiveOption: 'No allergies',
+            nestedOption: 'Other',
+            nestedOptionValues: _selectedExcludedIngredients
+                .map((ingredient) => ingredient.displayName)
+                .toList(),
+            onNestedOptionTap: _openAdditionalFoodsPicker,
+            onNestedOptionCleared: () {
               setState(() {
-                // Allow explicit 'No allergies' as a value but not with others
-                if (values.contains('No allergies')) {
-                  _selectedMultiValues = ['No allergies'];
-                } else {
-                  _selectedMultiValues = values;
-                }
+                _selectedExcludedIngredients = [];
               });
             },
+            selectedValues: _selectedMultiValues,
+            onChangedMulti: _updateSelectedAllergies,
           ),
-          if (_selectedMultiValues.isNotEmpty) ...[
+          if (_selectedMultiValues.isNotEmpty ||
+              _selectedExcludedIngredients.isNotEmpty) ...[
             const SizedBox(height: 16),
-            AppChipGroup(
-              values: _selectedMultiValues,
-              onChanged: (values) {
-                setState(() {
-                  // Respect 'No allergies' exclusivity
-                  if (values.contains('No allergies') && values.length > 1) {
-                    _selectedMultiValues = ['No allergies'];
-                  } else {
-                    _selectedMultiValues = values;
-                  }
-                });
-              },
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ..._selectedMultiValues.map(
+                  (value) => Chip(
+                    label: Text(value),
+                    deleteIcon: const Icon(Icons.close, size: 18),
+                    onDeleted: () => _updateSelectedAllergies(
+                      _selectedMultiValues
+                          .where((item) => item != value)
+                          .toList(),
+                    ),
+                    backgroundColor: const Color(0xFFFFEFE7),
+                    labelStyle: const TextStyle(color: Color(0xFFFF6A00)),
+                    deleteIconColor: const Color(0xFFFF6A00),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  ),
+                ),
+                ..._selectedExcludedIngredients.map(
+                  (ingredient) => Chip(
+                    label: Text(ingredient.displayName),
+                    deleteIcon: const Icon(Icons.close, size: 18),
+                    onDeleted: () => setState(() {
+                      _selectedExcludedIngredients =
+                          _selectedExcludedIngredients
+                              .where((item) => item != ingredient)
+                              .toList();
+                    }),
+                    backgroundColor: const Color(0xFFFFEFE7),
+                    labelStyle: const TextStyle(color: Color(0xFFFF6A00)),
+                    deleteIconColor: const Color(0xFFFF6A00),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

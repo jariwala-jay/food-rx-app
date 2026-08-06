@@ -27,6 +27,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Uint8List? _profilePhotoData;
+
+  /// `profilePhotoId` that `_profilePhotoData` was last loaded for (or synced as none).
+  String? _loadedProfilePhotoId;
+  bool _profilePhotoLoadInFlight = false;
+  bool _profilePhotoSyncScheduled = false;
   String? _lastDietType; // Track last diet type to detect changes
   bool _isDisposed = false;
 
@@ -185,7 +190,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ? Map<String, dynamic>.from(user!.selectedDietPlan!)
             : null;
         _loadDataForRefresh(); // Initial data load
-        _loadProfilePhoto(); // Profile photo loads once
+        _loadProfilePhoto(); // Initial avatar load (server photo or local signup fallback)
         _initializeNotificationManager(); // Initialize notification manager
         // If first load failed (e.g. connection), retry once after a short delay
         if (user != null && user.id != null) {
@@ -308,10 +313,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // Existing method for initial profile photo load (doesn't need frequent refresh)
+  /// Fetches bytes for [AuthController.currentUser.profilePhotoId] and updates state.
   Future<void> _loadProfilePhoto() async {
     final authProvider = Provider.of<AuthController>(context, listen: false);
     final photoId = authProvider.currentUser?.profilePhotoId;
+    final localPhotoData = authProvider.localProfilePhotoData;
 
     if (photoId != null) {
       try {
@@ -320,6 +326,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (photoData != null && mounted) {
           setState(() {
             _profilePhotoData = Uint8List.fromList(photoData);
+            _loadedProfilePhotoId = photoId;
+          });
+        } else if (mounted) {
+          setState(() {
+            _profilePhotoData = null;
+            _loadedProfilePhotoId = photoId;
           });
         }
       } catch (e) {
@@ -329,14 +341,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           // Optionally show a placeholder or error icon
           setState(() {
             _profilePhotoData = null; // Clear photo on error
+            _loadedProfilePhotoId = photoId;
           });
         }
       }
     } else {
       if (mounted) {
         setState(() {
-          _profilePhotoData = null; // Clear if no photo ID
+          // Fall back to locally selected signup/profile image when remote id
+          // is not available yet.
+          _profilePhotoData = localPhotoData;
+          _loadedProfilePhotoId = null;
         });
+      }
+    }
+  }
+
+  Future<void> _syncProfilePhotoIfNeeded() async {
+    if (!mounted || _isDisposed) return;
+    final authProvider = Provider.of<AuthController>(context, listen: false);
+    final want = authProvider.currentUser?.profilePhotoId;
+    final needsLocalFallbackLoad = want == null &&
+        authProvider.localProfilePhotoData != null &&
+        _profilePhotoData == null;
+    if (want == _loadedProfilePhotoId && !needsLocalFallbackLoad) return;
+    if (_profilePhotoLoadInFlight) return;
+    _profilePhotoLoadInFlight = true;
+    try {
+      await _loadProfilePhoto();
+    } finally {
+      if (mounted) {
+        _profilePhotoLoadInFlight = false;
       }
     }
   }
@@ -580,7 +615,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             description,
                             style: TextStyle(
                               fontSize: 12 * clampedScale,
-                              color: Colors.grey[600],
+                              color: const Color(0xFF2C2C2C),
+                              fontWeight: FontWeight.bold,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -603,6 +639,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Consumer<AuthController>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
+        final profilePhotoId = user?.profilePhotoId;
+        if (profilePhotoId != _loadedProfilePhotoId &&
+            !_profilePhotoSyncScheduled) {
+          _profilePhotoSyncScheduled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _profilePhotoSyncScheduled = false;
+            if (!mounted || _isDisposed) return;
+            _syncProfilePhotoIfNeeded();
+          });
+        }
         // Use plan key so each plan (MyPlate, DASH, DiabetesPlate) has its own saved data
         final dietType = _planKeyForTrackers(user?.myPlanType, user?.dietType);
 
@@ -693,300 +739,310 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             Widget content = Scaffold(
               backgroundColor: const Color(0xFFF7F7F8),
               body: SafeArea(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Profile Header
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                // Block navigation during tour
-                                if (tourProvider.isTourActive) return;
-                                Navigator.pushNamed(context, '/profile');
-                              },
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundImage: _profilePhotoData != null
-                                        ? MemoryImage(_profilePhotoData!)
-                                        : const AssetImage(
-                                                'assets/images/profile_pic.png')
-                                            as ImageProvider,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _timeBasedGreeting(),
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 12 *
-                                              MediaQuery.textScaleFactorOf(
-                                                      context)
-                                                  .clamp(1.0, 1.0),
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        user?.name ?? 'Guest',
-                                        style: TextStyle(
-                                          fontSize: 14 *
-                                              MediaQuery.textScaleFactorOf(
-                                                      context)
-                                                  .clamp(1.0, 1.0),
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                // Chatbot icon temporarily disabled
-                                // IconButton(
-                                //   icon: const Icon(Icons.chat_bubble_outline),
-                                //   onPressed: () {
-                                //     if (tourProvider.isTourActive) return;
-                                //     Navigator.pushNamed(context, '/chatbot');
-                                //   },
-                                // ),
-                                Consumer<NotificationManager>(
-                                  builder:
-                                      (context, notificationManager, child) {
-                                    final unreadCount =
-                                        notificationManager.unreadCount;
-                                    return Stack(
+                child: DefaultTextStyle.merge(
+                  style: const TextStyle(
+                    fontFamily: 'BricolageGrotesque',
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Profile Header
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  // Block navigation during tour
+                                  if (tourProvider.isTourActive) return;
+                                  Navigator.pushNamed(context, '/profile');
+                                },
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundImage: _profilePhotoData != null
+                                          ? MemoryImage(_profilePhotoData!)
+                                          : const AssetImage(
+                                                  'assets/images/profile_pic.png')
+                                              as ImageProvider,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        IconButton(
-                                          icon: const Icon(
-                                              Icons.notifications_outlined),
-                                          onPressed: () {
-                                            // Block navigation during tour
-                                            if (tourProvider.isTourActive)
-                                              return;
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    const NotificationCenterPage(),
-                                              ),
-                                            );
-                                          },
-                                          onLongPress: () {
-                                            // NotificationTestingPage removed - simplified notification system
-                                          },
-                                        ),
-                                        if (unreadCount > 0)
-                                          Positioned(
-                                            right: 8,
-                                            top: 8,
-                                            child: Container(
-                                              padding: const EdgeInsets.all(2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange,
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              constraints: const BoxConstraints(
-                                                minWidth: 16,
-                                                minHeight: 16,
-                                              ),
-                                              child: Text(
-                                                unreadCount > 99
-                                                    ? '99+'
-                                                    : unreadCount.toString(),
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
+                                        Text(
+                                          _timeBasedGreeting(),
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12 *
+                                                MediaQuery.textScaleFactorOf(
+                                                        context)
+                                                    .clamp(1.0, 1.0),
+                                            fontWeight: FontWeight.bold,
                                           ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          user?.name ?? 'Guest',
+                                          style: TextStyle(
+                                            fontSize: 14 *
+                                                MediaQuery.textScaleFactorOf(
+                                                        context)
+                                                    .clamp(1.0, 1.0),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ],
-                                    );
-                                  },
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Trackers section
-                      if (user != null && user.id != null)
-                        Consumer<TrackerProvider>(
-                          builder: (context, trackerProvider, child) {
-                            final weeklyTrackers =
-                                trackerProvider.weeklyTrackers;
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Daily trackers section wrapped in Showcase
-                                Showcase(
-                                  key: TourKeys.trackersKey,
-                                  title: 'Track Your Nutrition',
-                                  description: TourDescriptions.trackers,
-                                  tooltipPosition: TooltipPosition.bottom,
-                                  targetShapeBorder:
-                                      const RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(12)),
-                                  ),
-                                  tooltipBackgroundColor:
-                                      TourTooltipStyle.tooltipBackgroundColor,
-                                  textColor: TourTooltipStyle.textColor,
-                                  overlayColor: TourTooltipStyle.overlayColor,
-                                  overlayOpacity:
-                                      TourTooltipStyle.overlayOpacity,
-                                  toolTipMargin: TourTooltipStyle.toolTipMargin,
-                                  titleTextStyle: TourTooltipStyle.titleStyle,
-                                  descTextStyle:
-                                      TourTooltipStyle.descriptionStyle,
-                                  onTargetClick: () {
-                                    _handleTrackersShowcase(context);
-                                  },
-                                  onToolTipClick: () {
-                                    _handleTrackersShowcase(context);
-                                  },
-                                  disposeOnTap: false,
-                                  child: TrackerGrid(
-                                    userId: user.id!,
-                                    dietType: dietType,
-                                    showWeeklyTrackers: false,
-                                  ),
-                                ),
-                                // Weekly trackers section (outside showcase)
-                                if (weeklyTrackers.isNotEmpty)
-                                  TrackerGrid(
-                                    userId: user.id!,
-                                    dietType: dietType,
-                                    showDailyTrackers: false,
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-
-                      // Activity section could go here
-
-                      // Daily Tips Section - horizontal scrollable view
-                      Builder(
-                        builder: (context) {
-                          return Showcase(
-                            key: TourKeys.dailyTipsKey,
-                            title: 'Daily Health Tips',
-                            description: TourDescriptions.dailyTips,
-                            targetShapeBorder: const RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(12)),
-                            ),
-                            tooltipBackgroundColor:
-                                TourTooltipStyle.tooltipBackgroundColor,
-                            textColor: TourTooltipStyle.textColor,
-                            overlayColor: TourTooltipStyle.overlayColor,
-                            overlayOpacity: TourTooltipStyle.overlayOpacity,
-                            toolTipMargin: TourTooltipStyle.toolTipMargin,
-                            titleTextStyle: TourTooltipStyle.titleStyle,
-                            descTextStyle: TourTooltipStyle.descriptionStyle,
-                            onTargetClick: () {
-                              _handleDailyTipsShowcase(context);
-                            },
-                            onToolTipClick: () {
-                              _handleDailyTipsShowcase(context);
-                            },
-                            disposeOnTap: false,
-                            child: Consumer<TipProvider>(
-                              builder: (context, tipProvider, child) {
-                                return Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Daily tips',
-                                        style: TextStyle(
-                                          fontSize: 20 *
-                                              MediaQuery.textScaleFactorOf(
-                                                      context)
-                                                  .clamp(0.8, 1.0),
-                                          fontWeight: FontWeight.bold,
-                                          color: const Color(0xFF333333),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      if (tipProvider.isLoading)
-                                        const SizedBox(
-                                          height: 201,
-                                          child: Center(
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Color(0xFFFF6A00)),
-                                            ),
-                                          ),
-                                        )
-                                      else if (tipProvider.shownTips.isEmpty)
-                                        const SizedBox(
-                                          height: 201,
-                                          child: Center(
-                                            child: Text('No tips available'),
-                                          ),
-                                        )
-                                      else
-                                        SizedBox(
-                                          height: 201,
-                                          child: ListView.separated(
-                                            scrollDirection: Axis.horizontal,
-                                            itemCount:
-                                                tipProvider.shownTips.length,
-                                            separatorBuilder:
-                                                (context, index) =>
-                                                    const SizedBox(width: 16),
-                                            itemBuilder: (context, index) {
-                                              final tip =
-                                                  tipProvider.shownTips[index];
-                                              return SizedBox(
-                                                width: 216,
-                                                child: _buildTipCard(
-                                                  context,
-                                                  tip.title,
-                                                  tip.description,
-                                                  tip.imageUrl,
-                                                  onTap: () =>
-                                                      _handleTipTap(tip),
-                                                  blockDuringTour:
-                                                      tourProvider.isTourActive,
+                              ),
+                              Row(
+                                children: [
+                                  // IconButton(
+                                  //   icon: const Icon(Icons.chat_bubble_outline),
+                                  //   onPressed: () {
+                                  //     if (tourProvider.isTourActive) return;
+                                  //     Navigator.pushNamed(context, '/chatbot');
+                                  //   },
+                                  // ),
+                                  Consumer<NotificationManager>(
+                                    builder:
+                                        (context, notificationManager, child) {
+                                      final unreadCount =
+                                          notificationManager.unreadCount;
+                                      return Stack(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.notifications_outlined),
+                                            onPressed: () {
+                                              // Block navigation during tour
+                                              if (tourProvider.isTourActive)
+                                                return;
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      const NotificationCenterPage(),
                                                 ),
                                               );
                                             },
+                                            onLongPress: () {
+                                              // NotificationTestingPage removed - simplified notification system
+                                            },
+                                          ),
+                                          if (unreadCount > 0)
+                                            Positioned(
+                                              right: 8,
+                                              top: 8,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  minWidth: 16,
+                                                  minHeight: 16,
+                                                ),
+                                                child: Text(
+                                                  unreadCount > 99
+                                                      ? '99+'
+                                                      : unreadCount.toString(),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Trackers section
+                        if (user != null && user.id != null)
+                          Consumer<TrackerProvider>(
+                            builder: (context, trackerProvider, child) {
+                              final weeklyTrackers =
+                                  trackerProvider.weeklyTrackers;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Daily trackers section wrapped in Showcase
+                                  Showcase(
+                                    key: TourKeys.trackersKey,
+                                    title: 'Track Your Nutrition',
+                                    description: TourDescriptions.trackers,
+                                    tooltipPosition: TooltipPosition.bottom,
+                                    targetShapeBorder:
+                                        const RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(12)),
+                                    ),
+                                    tooltipBackgroundColor:
+                                        TourTooltipStyle.tooltipBackgroundColor,
+                                    textColor: TourTooltipStyle.textColor,
+                                    overlayColor: TourTooltipStyle.overlayColor,
+                                    overlayOpacity:
+                                        TourTooltipStyle.overlayOpacity,
+                                    toolTipMargin:
+                                        TourTooltipStyle.toolTipMargin,
+                                    titleTextStyle: TourTooltipStyle.titleStyle,
+                                    descTextStyle:
+                                        TourTooltipStyle.descriptionStyle,
+                                    onTargetClick: () {
+                                      _handleTrackersShowcase(context);
+                                    },
+                                    onToolTipClick: () {
+                                      _handleTrackersShowcase(context);
+                                    },
+                                    disposeOnTap: false,
+                                    child: TrackerGrid(
+                                      userId: user.id!,
+                                      dietType: dietType,
+                                      showWeeklyTrackers: false,
+                                    ),
+                                  ),
+                                  // Weekly trackers section (outside showcase)
+                                  if (weeklyTrackers.isNotEmpty)
+                                    TrackerGrid(
+                                      userId: user.id!,
+                                      dietType: dietType,
+                                      showDailyTrackers: false,
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+
+                        // Activity section could go here
+
+                        // Daily Tips Section - horizontal scrollable view
+                        Builder(
+                          builder: (context) {
+                            return Showcase(
+                              key: TourKeys.dailyTipsKey,
+                              title: 'Daily Health Tips',
+                              description: TourDescriptions.dailyTips,
+                              targetShapeBorder: const RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(12)),
+                              ),
+                              tooltipBackgroundColor:
+                                  TourTooltipStyle.tooltipBackgroundColor,
+                              textColor: TourTooltipStyle.textColor,
+                              overlayColor: TourTooltipStyle.overlayColor,
+                              overlayOpacity: TourTooltipStyle.overlayOpacity,
+                              toolTipMargin: TourTooltipStyle.toolTipMargin,
+                              titleTextStyle: TourTooltipStyle.titleStyle,
+                              descTextStyle: TourTooltipStyle.descriptionStyle,
+                              onTargetClick: () {
+                                _handleDailyTipsShowcase(context);
+                              },
+                              onToolTipClick: () {
+                                _handleDailyTipsShowcase(context);
+                              },
+                              disposeOnTap: false,
+                              child: Consumer<TipProvider>(
+                                builder: (context, tipProvider, child) {
+                                  return Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Daily tips',
+                                          style: TextStyle(
+                                            fontSize: 20 *
+                                                MediaQuery.textScaleFactorOf(
+                                                        context)
+                                                    .clamp(0.8, 1.0),
+                                            fontWeight: FontWeight.bold,
+                                            color: const Color(0xFF333333),
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                                        const SizedBox(height: 16),
+                                        if (tipProvider.isLoading)
+                                          const SizedBox(
+                                            height: 201,
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                            Color>(
+                                                        Color(0xFFFF6A00)),
+                                              ),
+                                            ),
+                                          )
+                                        else if (tipProvider.shownTips.isEmpty)
+                                          const SizedBox(
+                                            height: 201,
+                                            child: Center(
+                                              child: Text('No tips available'),
+                                            ),
+                                          )
+                                        else
+                                          SizedBox(
+                                            height: 201,
+                                            child: ListView.separated(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount:
+                                                  tipProvider.shownTips.length,
+                                              separatorBuilder:
+                                                  (context, index) =>
+                                                      const SizedBox(width: 16),
+                                              itemBuilder: (context, index) {
+                                                final tip = tipProvider
+                                                    .shownTips[index];
+                                                return SizedBox(
+                                                  width: 216,
+                                                  child: _buildTipCard(
+                                                    context,
+                                                    tip.title,
+                                                    tip.description,
+                                                    tip.imageUrl,
+                                                    onTap: () =>
+                                                        _handleTipTap(tip),
+                                                    blockDuringTour:
+                                                        tourProvider
+                                                            .isTourActive,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

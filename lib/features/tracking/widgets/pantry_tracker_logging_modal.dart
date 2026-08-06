@@ -58,6 +58,16 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     super.dispose();
   }
 
+  /// Fixed list viewport height for Quick Log / From Pantry tabs (220 or 260).
+  double get _pantryListHeight {
+    // 260 for empty list or more than two items; 220 for one–two items.
+    if (_filteredItems.isEmpty) return 260.0;
+    return _filteredItems.length <= 2 ? 220.0 : 260.0;
+  }
+
+  /// [_pantryListHeight] plus 64px search bar row.
+  double get _tabContentHeight => 64.0 + _pantryListHeight;
+
   // ==================== MANUAL ENTRY METHODS ====================
 
   void _incrementManualValue() {
@@ -496,40 +506,48 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
 
   @override
   Widget build(BuildContext context) {
+    final isQuickLog = _selectedTab == 0;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Container(
-        width: double.infinity,
-        height: MediaQuery.of(context).size.height * 0.85,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-        child: Column(
-          children: [
-            // Header with close button
-            _buildHeader(),
-            const SizedBox(height: 20),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 460,
+          maxHeight: screenHeight * 0.85,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header with close button
+              _buildHeader(),
+              const SizedBox(height: 14),
 
-            // Tab selector
-            _buildTabSelector(),
-            const SizedBox(height: 20),
+              // Tab selector
+              _buildTabSelector(),
+              const SizedBox(height: 8),
 
-            // Error message
-            if (_error != null) _buildErrorMessage(),
+              // Error message
+              if (_error != null) _buildErrorMessage(),
 
-            // Content based on selected tab
-            Expanded(
-              child: _selectedTab == 0
-                  ? _buildQuickLogContent()
-                  : _buildPantryContent(),
-            ),
+              // Content based on selected tab
+              if (isQuickLog)
+                _buildQuickLogContent()
+              else
+                _buildPantryContent(),
 
-            // Action button
-            const SizedBox(height: 20),
-            _buildActionButton(),
-          ],
+              // Action button
+              const SizedBox(height: 16),
+              _buildActionButton(),
+            ],
+          ),
         ),
       ),
     );
@@ -620,6 +638,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: _buildTabButton(
@@ -662,6 +681,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        constraints: const BoxConstraints(minHeight: 104),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
@@ -677,6 +697,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
               : null,
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
@@ -754,185 +775,192 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-
-          // Description
-          Text(
-            'How many servings did you have?',
-            style: TextStyle(
-              fontSize: 16 * clampedScale,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'BricolageGrotesque',
-              color: const Color(0xFF2C2C2C),
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Perfect for meals eaten outside or when\nyou don\'t have ingredients in your pantry',
-            style: TextStyle(
-              fontSize: 13 * clampedScale,
-              fontFamily: 'BricolageGrotesque',
-              color: const Color(0xFF8E8E93),
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-
-          // Quantity selector
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F7F8),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Decrement button
-                GestureDetector(
-                  onTap: _isLoading ? null : _decrementManualValue,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: _manualValue > 0
-                          ? const Color(0xFFFF5275).withOpacity(0.15)
-                          : const Color(0xFFE5E5EA),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Icon(
-                      Icons.remove,
-                      size: 24,
-                      color: _manualValue > 0
-                          ? const Color(0xFFFF5275)
-                          : const Color(0xFFC7C7CC),
-                    ),
+    return SizedBox(
+      height: _tabContentHeight,
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _tabContentHeight),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+                // Description
+                Text(
+                  'How many servings did you have?',
+                  style: TextStyle(
+                    fontSize: 16 * clampedScale,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'BricolageGrotesque',
+                    color: const Color(0xFF2C2C2C),
                   ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(height: 8),
+                Text(
+                  'Perfect for meals eaten outside or when\nyou don\'t have ingredients in your pantry',
+                  style: TextStyle(
+                    fontSize: 13 * clampedScale,
+                    fontFamily: 'BricolageGrotesque',
+                    color: const Color(0xFF8E8E93),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
 
-                // Value display
-                SizedBox(
-                  width: 100,
-                  child: Column(
+                // Quantity selector
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F7F8),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      TextField(
-                        controller: _manualValueController,
-                        enabled: !_isLoading,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 32 * clampedScale,
-                          fontFamily: 'BricolageGrotesque',
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF2C2C2C),
+                      // Decrement button
+                      GestureDetector(
+                        onTap: _isLoading ? null : _decrementManualValue,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _manualValue > 0
+                                ? const Color(0xFFFF5275).withOpacity(0.15)
+                                : const Color(0xFFE5E5EA),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Icon(
+                            Icons.remove,
+                            size: 24,
+                            color: _manualValue > 0
+                                ? const Color(0xFFFF5275)
+                                : const Color(0xFFC7C7CC),
+                          ),
                         ),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d*$')),
-                        ],
-                        onChanged: (value) {
-                          if (value.isNotEmpty) {
-                            setState(() {
-                              _manualValue =
-                                  double.tryParse(value) ?? _manualValue;
-                            });
-                          } else {
-                            setState(() {
-                              _manualValue = 0;
-                            });
-                          }
-                        },
                       ),
-                      Text(
-                        widget.tracker.unitString,
-                        style: TextStyle(
-                          fontSize: 14 * clampedScale,
-                          fontFamily: 'BricolageGrotesque',
-                          color: const Color(0xFF8E8E93),
+                      const SizedBox(width: 24),
+
+                      // Value display
+                      SizedBox(
+                        width: 100,
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: _manualValueController,
+                              enabled: !_isLoading,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 32 * clampedScale,
+                                fontFamily: 'BricolageGrotesque',
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF2C2C2C),
+                              ),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d*$')),
+                              ],
+                              onChanged: (value) {
+                                if (value.isNotEmpty) {
+                                  setState(() {
+                                    _manualValue =
+                                        double.tryParse(value) ?? _manualValue;
+                                  });
+                                } else {
+                                  setState(() {
+                                    _manualValue = 0;
+                                  });
+                                }
+                              },
+                            ),
+                            Text(
+                              widget.tracker.unitString,
+                              style: TextStyle(
+                                fontSize: 14 * clampedScale,
+                                fontFamily: 'BricolageGrotesque',
+                                color: const Color(0xFF8E8E93),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+
+                      // Increment button
+                      GestureDetector(
+                        onTap: _isLoading ? null : _incrementManualValue,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6A00).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            size: 24,
+                            color: Color(0xFFFF6A00),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(height: 12),
 
-                // Increment button
-                GestureDetector(
-                  onTap: _isLoading ? null : _incrementManualValue,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6A00).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      size: 24,
-                      color: Color(0xFFFF6A00),
-                    ),
-                  ),
+                // Quick add buttons
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [0.5, 1.0, 1.5, 2.0].map((value) {
+                    return GestureDetector(
+                      onTap: _isLoading
+                          ? null
+                          : () {
+                              setState(() {
+                                _manualValue = value;
+                                _manualValueController.text = _formatValue(value);
+                              });
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _manualValue == value
+                              ? const Color(0xFFFF6A00)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _manualValue == value
+                                ? const Color(0xFFFF6A00)
+                                : const Color(0xFFE5E5EA),
+                          ),
+                        ),
+                        child: Text(
+                          '${_formatValue(value)} ${widget.tracker.unitString}',
+                          style: TextStyle(
+                            fontSize: 13 * clampedScale,
+                            fontFamily: 'BricolageGrotesque',
+                            fontWeight: FontWeight.w500,
+                            color: _manualValue == value
+                                ? Colors.white
+                                : const Color(0xFF2C2C2C),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              ],
-            ),
+            ],
           ),
-          const SizedBox(height: 24),
-
-          // Quick add buttons
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [0.5, 1.0, 1.5, 2.0].map((value) {
-              return GestureDetector(
-                onTap: _isLoading
-                    ? null
-                    : () {
-                        setState(() {
-                          _manualValue = value;
-                          _manualValueController.text = _formatValue(value);
-                        });
-                      },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _manualValue == value
-                        ? const Color(0xFFFF6A00)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _manualValue == value
-                          ? const Color(0xFFFF6A00)
-                          : const Color(0xFFE5E5EA),
-                    ),
-                  ),
-                  child: Text(
-                    '${_formatValue(value)} ${widget.tracker.unitString}',
-                    style: TextStyle(
-                      fontSize: 13 * clampedScale,
-                      fontFamily: 'BricolageGrotesque',
-                      fontWeight: FontWeight.w500,
-                      color: _manualValue == value
-                          ? Colors.white
-                          : const Color(0xFF2C2C2C),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -940,7 +968,9 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
   // ==================== PANTRY TAB ====================
 
   Widget _buildPantryContent() {
-    return Column(
+    return SizedBox(
+      height: _tabContentHeight,
+      child: Column(
       children: [
         // Search bar
         Container(
@@ -1027,10 +1057,11 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
             ),
           ),
 
-        // Items list
         Expanded(
           child: _filteredItems.isEmpty
-              ? _buildEmptyPantryState()
+              ? SingleChildScrollView(
+                  child: _buildEmptyPantryState(),
+                )
               : ListView.builder(
                   itemCount: _filteredItems.length,
                   itemBuilder: (context, index) {
@@ -1040,6 +1071,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
                 ),
         ),
       ],
+      ),
     );
   }
 
@@ -1047,24 +1079,26 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
     final textScaleFactor = MediaQuery.textScaleFactorOf(context);
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
 
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 80,
-            height: 80,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
               color: const Color(0xFFF7F7F8),
-              borderRadius: BorderRadius.circular(40),
+              borderRadius: BorderRadius.circular(36),
             ),
             child: const Icon(
               Icons.inventory_2_outlined,
-              size: 40,
+              size: 36,
               color: Color(0xFF8E8E93),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             'No matching items in pantry',
             style: TextStyle(

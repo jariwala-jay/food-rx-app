@@ -4,6 +4,7 @@ import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/services/simple_notification_service.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
 import 'package:flutter_app/core/services/api_client.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -19,6 +20,77 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   static final SimpleNotificationService _expiringService =
       SimpleNotificationService();
   bool _sortNewestFirst = true;
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _enterSelectionMode() {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<AppNotification> notifications) {
+    setState(() {
+      if (_selectedIds.length == notifications.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds
+          ..clear()
+          ..addAll(notifications.map((n) => n.id));
+      }
+    });
+  }
+
+  Future<void> _deleteSelected(NotificationManager notificationManager) async {
+    if (_selectedIds.isEmpty) return;
+    final ids = List<String>.from(_selectedIds);
+    await notificationManager.dismissNotifications(ids);
+    if (!mounted) return;
+    _exitSelectionMode();
+  }
+
+  Widget _buildSelectionLeading(NotificationManager notificationManager) {
+    final count = notificationManager.notifications.length;
+    final allSelected = count > 0 && _selectedIds.length == count;
+    final someSelected = _selectedIds.isNotEmpty && !allSelected;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.black87),
+          onPressed: _exitSelectionMode,
+          tooltip: 'Cancel selection',
+        ),
+        Checkbox(
+          value: allSelected ? true : (someSelected ? null : false),
+          tristate: true,
+          activeColor: const Color(0xFFFF6A00),
+          onChanged: count == 0
+              ? null
+              : (_) => _toggleSelectAll(notificationManager.notifications),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -32,6 +104,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       notificationManager.loadNotifications();
       _ensureExpiringNotificationThenReload(notificationManager);
       _ensureExpiredNotificationThenReload(notificationManager);
+      _ensureTrackerReminderThenReload(notificationManager);
     });
   }
 
@@ -63,6 +136,29 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     }
   }
 
+  /// Ensures a tracker_reminder notification exists for today if the user
+  /// hasn't logged anything yet, then reloads. New accounts (&lt; 24h old)
+  /// are gated server-side in POST /notifications.
+  Future<void> _ensureTrackerReminderThenReload(
+      NotificationManager notificationManager) async {
+    try {
+      final mealRemindersEnabled =
+          Provider.of<AuthController>(context, listen: false)
+                  .currentUser
+                  ?.mealLoggingReminderPrefs?['enabled'] ==
+              true;
+      final userId = await ApiClient.userId;
+      if (userId == null || userId.isEmpty) return;
+      await _expiringService.checkTrackerReminder(
+        userId,
+        mealRemindersEnabled: mealRemindersEnabled,
+      );
+      await notificationManager.loadNotifications();
+    } catch (_) {
+      // Ignore; list already loaded
+    }
+  }
+
   void _goBackToHome() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -80,107 +176,135 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: _goBackToHome,
-          tooltip: 'Back to Home',
-        ),
-        title: const Text('Notifications'),
+        leadingWidth: _selectionMode ? 104 : null,
+        leading: _selectionMode
+            ? Consumer<NotificationManager>(
+                builder: (context, notificationManager, child) =>
+                    _buildSelectionLeading(notificationManager),
+              )
+            : IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                onPressed: _goBackToHome,
+                tooltip: 'Back to Home',
+              ),
+        title: Text(_selectionMode
+            ? (_selectedIds.isEmpty
+                ? 'Select notifications'
+                : '${_selectedIds.length} selected')
+            : 'Notifications'),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
-          Consumer<NotificationManager>(
-            builder: (context, notificationManager, child) {
-              return Theme(
-                data: Theme.of(context).copyWith(
-                  popupMenuTheme: PopupMenuThemeData(
-                    color: Colors.white,
-                    textStyle: const TextStyle(color: Colors.black87),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+          if (_selectionMode)
+            Consumer<NotificationManager>(
+              builder: (context, notificationManager, child) {
+                return IconButton(
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: _selectedIds.isEmpty
+                        ? Colors.grey
+                        : Colors.black87,
                   ),
-                  iconTheme: const IconThemeData(color: Colors.white),
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.black87),
-                  onSelected: (value) async {
-                    switch (value) {
-                      case 'sort_newest':
-                        if (!mounted) return;
-                        setState(() => _sortNewestFirst = true);
-                        break;
-                      case 'sort_oldest':
-                        if (!mounted) return;
-                        setState(() => _sortNewestFirst = false);
-                        break;
-                      case 'mark_all_read':
-                        await notificationManager.markAllAsRead();
-                        break;
-                      case 'clear_all':
-                        await notificationManager.clearAllNotifications();
-                        break;
-                      case 'refresh':
-                        await notificationManager.loadNotifications();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'sort_newest',
-                      child: Row(
-                        children: [
-                          Icon(Icons.south, color: Colors.black87),
-                          SizedBox(width: 8),
-                          Text('Sort: Newest to Oldest'),
-                        ],
+                  tooltip: 'Delete selected',
+                  onPressed: _selectedIds.isEmpty
+                      ? null
+                      : () => _deleteSelected(notificationManager),
+                );
+              },
+            )
+          else
+            Consumer<NotificationManager>(
+              builder: (context, notificationManager, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    popupMenuTheme: PopupMenuThemeData(
+                      color: Colors.white,
+                      textStyle: const TextStyle(color: Colors.black87),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    PopupMenuItem(
-                      value: 'sort_oldest',
-                      child: Row(
-                        children: [
-                          Icon(Icons.north, color: Colors.black87),
-                          SizedBox(width: 8),
-                          Text('Sort: Oldest to Newest'),
-                        ],
+                    iconTheme: const IconThemeData(color: Colors.white),
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.black87),
+                    onSelected: (value) async {
+                      switch (value) {
+                        case 'sort_newest':
+                          if (!mounted) return;
+                          setState(() => _sortNewestFirst = true);
+                          break;
+                        case 'sort_oldest':
+                          if (!mounted) return;
+                          setState(() => _sortNewestFirst = false);
+                          break;
+                        case 'mark_all_read':
+                          await notificationManager.markAllAsRead();
+                          break;
+                        case 'select_to_delete':
+                          _enterSelectionMode();
+                          break;
+                        case 'refresh':
+                          await notificationManager.loadNotifications();
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'sort_newest',
+                        child: Row(
+                          children: [
+                            Icon(Icons.south, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('Sort: Newest to Oldest'),
+                          ],
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'refresh',
-                      child: Row(
-                        children: [
-                          Icon(Icons.refresh, color: Colors.black87),
-                          SizedBox(width: 8),
-                          Text('Refresh'),
-                        ],
+                      PopupMenuItem(
+                        value: 'sort_oldest',
+                        child: Row(
+                          children: [
+                            Icon(Icons.north, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('Sort: Oldest to Newest'),
+                          ],
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'mark_all_read',
-                      child: Row(
-                        children: [
-                          Icon(Icons.mark_email_read, color: Colors.black87),
-                          SizedBox(width: 8),
-                          Text('Mark all as read'),
-                        ],
+                      PopupMenuItem(
+                        value: 'refresh',
+                        child: Row(
+                          children: [
+                            Icon(Icons.refresh, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('Refresh'),
+                          ],
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'clear_all',
-                      child: Row(
-                        children: [
-                          Icon(Icons.clear_all, color: Colors.black87),
-                          SizedBox(width: 8),
-                          Text('Clear all'),
-                        ],
+                      PopupMenuItem(
+                        value: 'mark_all_read',
+                        child: Row(
+                          children: [
+                            Icon(Icons.mark_email_read, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('Mark all as read'),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                      PopupMenuItem(
+                        value: 'select_to_delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.checklist, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('Select to delete'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
       body: Consumer<NotificationManager>(
@@ -248,7 +372,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'You\'ll see your health progress updates, pantry alerts, and personalized tips here.',
+                    'You\'ll see your health progress updates, pantry alerts and personalized tips here.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.grey[600],
@@ -266,9 +390,29 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
               padding: const EdgeInsets.only(
                   top: 12, bottom: 16, left: 16, right: 16),
               separatorBuilder: (_, __) => const SizedBox(height: 0),
-              itemCount: notifications.length,
+              itemCount: notifications.length + (_selectionMode ? 0 : 1),
               itemBuilder: (context, index) {
+                if (!_selectionMode && index == notifications.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      'Swipe left on a notification to delete it quickly.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  );
+                }
+
                 final notification = notifications[index];
+                final card = _buildNotificationCard(
+                  notification,
+                  notificationManager,
+                );
+
+                if (_selectionMode) {
+                  return card;
+                }
+
                 return Dismissible(
                   key: ValueKey(notification.id),
                   direction: DismissDirection.endToStart,
@@ -291,8 +435,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         .dismissNotification(notification.id);
                     return true;
                   },
-                  child:
-                      _buildNotificationCard(notification, notificationManager),
+                  child: card,
                 );
               },
             ),
@@ -306,29 +449,48 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       AppNotification notification, NotificationManager notificationManager) {
     final isRead = notification.isRead;
     final timeAgo = _getTimeAgo(notification.createdAt);
+    final isSelected = _selectedIds.contains(notification.id);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: _selectionMode && isSelected
+            ? Border.all(color: const Color(0xFFFF6A00), width: 1.5)
+            : null,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
+          if (_selectionMode) {
+            _toggleSelection(notification.id);
+            return;
+          }
           if (!isRead) {
             await notificationManager.markAsRead(notification.id);
           }
           _handleNotificationAction(notification);
         },
-        onLongPress: () async {
-          await _showNotificationOptions(notification, notificationManager);
-        },
+        onLongPress: _selectionMode
+            ? null
+            : () async {
+                await _showNotificationOptions(
+                    notification, notificationManager);
+              },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_selectionMode) ...[
+                Checkbox(
+                  value: isSelected,
+                  activeColor: const Color(0xFFFF6A00),
+                  onChanged: (_) => _toggleSelection(notification.id),
+                ),
+                const SizedBox(width: 4),
+              ],
               Container(
                 decoration: BoxDecoration(
                   color: _getTypeColor(notification.type).withOpacity(0.12),

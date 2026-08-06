@@ -1,7 +1,10 @@
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+
 class SignupData {
   String? name;
   String? email;
   String? password;
+  String? profilePhotoUrl;
   DateTime? dateOfBirth;
   String? sex;
   double? heightFeet;
@@ -9,17 +12,16 @@ class SignupData {
   double? weight;
   List<String> medicalConditions;
   List<String> foodAllergies;
+  List<ExcludedIngredient> excludedIngredients;
   String? activityLevel;
   List<String> healthGoals;
   String? dietType;
   String? myPlanType;
   bool showGlycemicIndex = false;
-  // New fields for preferences step
   List<String> favoriteCuisines;
   String? dailyFruitIntake;
   String? dailyVegetableIntake;
   String? dailyWaterIntake;
-  // New fields for other details step
   String? preferredMealPrepTime;
   String? cookingForPeople;
   String? cookingSkill;
@@ -31,6 +33,7 @@ class SignupData {
     this.name,
     this.email,
     this.password,
+    this.profilePhotoUrl,
     this.dateOfBirth,
     this.sex,
     this.heightFeet,
@@ -38,6 +41,7 @@ class SignupData {
     this.weight,
     this.medicalConditions = const [],
     this.foodAllergies = const [],
+    this.excludedIngredients = const [],
     this.activityLevel,
     this.healthGoals = const [],
     this.dietType,
@@ -64,9 +68,10 @@ class SignupData {
       'heightInches': heightInches,
       'weight': weight,
       'medicalConditions': medicalConditions,
-      // Persist allergies under keys the backend and UserModel accept
       'allergies': foodAllergies,
       'foodRestrictions': foodAllergies,
+      'excludedIngredients':
+          excludedIngredients.map((ingredient) => ingredient.toJson()).toList(),
       'activityLevel': activityLevel,
       'healthGoals': healthGoals,
       'dietType': dietType,
@@ -84,12 +89,13 @@ class SignupData {
       'diagnostics': diagnostics,
     };
 
-    // Only add dateOfBirth if it's not null and convert it to ISO string
     if (dateOfBirth != null) {
       data['dateOfBirth'] = dateOfBirth!.toIso8601String();
     }
+    if (profilePhotoUrl != null) {
+      data['profilePhotoUrl'] = profilePhotoUrl;
+    }
 
-    // Remove null values
     data.removeWhere((key, value) => value == null);
 
     return data;

@@ -117,8 +117,16 @@ class TrackerGoal {
 
   /// Get the formatted current value with unit (e.g., "1/3 Cups")
   String get formattedProgress {
-    return "${_formatValue(currentValue)}/${_formatValue(goalValue)} $unitString";
+    final unit = unitString;
+    if (unit.isEmpty) {
+      return formattedProgressFraction;
+    }
+    return '$formattedProgressFraction $unit';
   }
+
+  /// Progress counts only (e.g., "0/6") for stacked card layout.
+  String get formattedProgressFraction =>
+      '${_formatValue(currentValue)}/${_formatValue(goalValue)}';
 
   /// Helper method to format values with sensible decimal places
   String _formatValue(double value) {

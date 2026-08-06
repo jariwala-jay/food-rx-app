@@ -151,13 +151,15 @@ class CustomNavBar extends StatelessWidget {
                                     if (tp.isOnStep(TourStep.pantryItems)) {
                                       ShowcaseView.get().dismiss();
                                       Future.delayed(
-                                          const Duration(milliseconds: 300), () {
+                                          const Duration(milliseconds: 300),
+                                          () {
                                         if (!context.mounted) return;
                                         final tp2 =
                                             Provider.of<ForcedTourProvider>(
                                                 context,
                                                 listen: false);
-                                        if (tp2.isOnStep(TourStep.pantryItems)) {
+                                        if (tp2
+                                            .isOnStep(TourStep.pantryItems)) {
                                           ShowcaseView.get().startShowCase(
                                               [TourKeys.pantryTabToggleKey]);
                                           print(
@@ -187,13 +189,15 @@ class CustomNavBar extends StatelessWidget {
                                     if (tp.isOnStep(TourStep.pantryItems)) {
                                       ShowcaseView.get().dismiss();
                                       Future.delayed(
-                                          const Duration(milliseconds: 300), () {
+                                          const Duration(milliseconds: 300),
+                                          () {
                                         if (!context.mounted) return;
                                         final tp2 =
                                             Provider.of<ForcedTourProvider>(
                                                 context,
                                                 listen: false);
-                                        if (tp2.isOnStep(TourStep.pantryItems)) {
+                                        if (tp2
+                                            .isOnStep(TourStep.pantryItems)) {
                                           ShowcaseView.get().startShowCase(
                                               [TourKeys.pantryTabToggleKey]);
                                           print(
@@ -230,88 +234,93 @@ class CustomNavBar extends StatelessWidget {
                         children: [
                           Showcase(
                             key: TourKeys.recipesTabKey,
-                      title: 'Recipes',
-                      description: TourDescriptions.recipes,
-                      targetShapeBorder: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      tooltipBackgroundColor:
-                          TourTooltipStyle.tooltipBackgroundColor,
-                      textColor: TourTooltipStyle.textColor,
-                      overlayColor: TourTooltipStyle.overlayColor,
-                      overlayOpacity: TourTooltipStyle.overlayOpacity,
-                      toolTipMargin: TourTooltipStyle.toolTipMargin,
-                      titleTextStyle: TourTooltipStyle.titleStyle,
-                      descTextStyle: TourTooltipStyle.descriptionStyle,
-                      onTargetClick: () {
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        print(
-                            '🎯 CustomNavBar: User clicked on Recipe tab showcase');
-                        print(
-                            '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
-                        // Don't complete step here - let RecipePage handle it
-                        onRecipeTap();
+                            title: 'Recipes',
+                            description: TourDescriptions.recipes,
+                            targetShapeBorder: const RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(12)),
+                            ),
+                            tooltipBackgroundColor:
+                                TourTooltipStyle.tooltipBackgroundColor,
+                            textColor: TourTooltipStyle.textColor,
+                            overlayColor: TourTooltipStyle.overlayColor,
+                            overlayOpacity: TourTooltipStyle.overlayOpacity,
+                            toolTipMargin: TourTooltipStyle.toolTipMargin,
+                            titleTextStyle: TourTooltipStyle.titleStyle,
+                            descTextStyle: TourTooltipStyle.descriptionStyle,
+                            onTargetClick: () {
+                              final tourProvider =
+                                  Provider.of<ForcedTourProvider>(context,
+                                      listen: false);
+                              print(
+                                  '🎯 CustomNavBar: User clicked on Recipe tab showcase');
+                              print(
+                                  '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
+                              // Don't complete step here - let RecipePage handle it
+                              onRecipeTap();
 
-                        // Trigger Generate Recipes button showcase after navigation
-                        // Only if we're on the recipes step
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            Future.delayed(const Duration(milliseconds: 300),
-                                () {
-                              if (!context.mounted) return;
-                              try {
-                                final tp = Provider.of<ForcedTourProvider>(
-                                    context,
-                                    listen: false);
-                                // Double-check step hasn't changed
-                                if (tp.isOnStep(TourStep.recipes)) {
-                                  ShowcaseView.get().startShowCase(
-                                      [TourKeys.generateRecipeButtonKey]);
-                                  print(
-                                      '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
-                                }
-                              } catch (e) {
-                                print(
-                                    '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                              // Trigger Generate Recipes button showcase after navigation
+                              // Only if we're on the recipes step
+                              if (tourProvider.isOnStep(TourStep.recipes)) {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  Future.delayed(
+                                      const Duration(milliseconds: 300), () {
+                                    if (!context.mounted) return;
+                                    try {
+                                      final tp =
+                                          Provider.of<ForcedTourProvider>(
+                                              context,
+                                              listen: false);
+                                      // Double-check step hasn't changed
+                                      if (tp.isOnStep(TourStep.recipes)) {
+                                        ShowcaseView.get().startShowCase(
+                                            [TourKeys.generateRecipeButtonKey]);
+                                        print(
+                                            '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
+                                      }
+                                    } catch (e) {
+                                      print(
+                                          '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                                    }
+                                  });
+                                });
                               }
-                            });
-                          });
-                        }
-                      },
-                      onToolTipClick: () {
-                        print(
-                            '🎯 CustomNavBar: User clicked on Recipe tab tooltip');
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        onRecipeTap();
-                        // Only trigger if we're on the recipes step
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            Future.delayed(const Duration(milliseconds: 300),
-                                () {
-                              if (!context.mounted) return;
-                              try {
-                                final tp = Provider.of<ForcedTourProvider>(
-                                    context,
-                                    listen: false);
-                                // Double-check step hasn't changed
-                                if (tp.isOnStep(TourStep.recipes)) {
-                                  ShowcaseView.get().startShowCase(
-                                      [TourKeys.generateRecipeButtonKey]);
-                                  print(
-                                      '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
-                                }
-                              } catch (e) {
-                                print(
-                                    '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                            },
+                            onToolTipClick: () {
+                              print(
+                                  '🎯 CustomNavBar: User clicked on Recipe tab tooltip');
+                              final tourProvider =
+                                  Provider.of<ForcedTourProvider>(context,
+                                      listen: false);
+                              onRecipeTap();
+                              // Only trigger if we're on the recipes step
+                              if (tourProvider.isOnStep(TourStep.recipes)) {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  Future.delayed(
+                                      const Duration(milliseconds: 300), () {
+                                    if (!context.mounted) return;
+                                    try {
+                                      final tp =
+                                          Provider.of<ForcedTourProvider>(
+                                              context,
+                                              listen: false);
+                                      // Double-check step hasn't changed
+                                      if (tp.isOnStep(TourStep.recipes)) {
+                                        ShowcaseView.get().startShowCase(
+                                            [TourKeys.generateRecipeButtonKey]);
+                                        print(
+                                            '🎯 CustomNavBar: Triggered Generate Recipes button showcase');
+                                      }
+                                    } catch (e) {
+                                      print(
+                                          '🎯 CustomNavBar: Error triggering Generate Recipes showcase: $e');
+                                    }
+                                  });
+                                });
                               }
-                            });
-                          });
-                        }
-                      },
+                            },
                             disposeOnTap: true,
                             child: _buildNavItem(
                               svgPath: 'assets/icons/recipe.svg',
@@ -325,88 +334,91 @@ class CustomNavBar extends StatelessWidget {
                           ),
                           Showcase(
                             key: TourKeys.educationTabKey,
-                      title: 'Education',
-                      description: TourDescriptions.education,
-                      targetShapeBorder: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      tooltipBackgroundColor:
-                          TourTooltipStyle.tooltipBackgroundColor,
-                      textColor: TourTooltipStyle.textColor,
-                      overlayColor: TourTooltipStyle.overlayColor,
-                      overlayOpacity: TourTooltipStyle.overlayOpacity,
-                      toolTipMargin: TourTooltipStyle.toolTipMargin,
-                      titleTextStyle: TourTooltipStyle.titleStyle,
-                      descTextStyle: TourTooltipStyle.descriptionStyle,
-                      onTargetClick: () {
-                        print(
-                            '🎯 CustomNavBar: User clicked on Education tab showcase');
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
-                        print(
-                            '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
+                            title: 'Education',
+                            description: TourDescriptions.education,
+                            targetShapeBorder: const RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(12)),
+                            ),
+                            tooltipBackgroundColor:
+                                TourTooltipStyle.tooltipBackgroundColor,
+                            textColor: TourTooltipStyle.textColor,
+                            overlayColor: TourTooltipStyle.overlayColor,
+                            overlayOpacity: TourTooltipStyle.overlayOpacity,
+                            toolTipMargin: TourTooltipStyle.toolTipMargin,
+                            titleTextStyle: TourTooltipStyle.titleStyle,
+                            descTextStyle: TourTooltipStyle.descriptionStyle,
+                            onTargetClick: () {
+                              print(
+                                  '🎯 CustomNavBar: User clicked on Education tab showcase');
+                              final tourProvider =
+                                  Provider.of<ForcedTourProvider>(context,
+                                      listen: false);
+                              print(
+                                  '🎯 CustomNavBar: Current step: ${tourProvider.currentStep}');
 
-                        // Complete the recipes step (if we're coming from recipes)
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          tourProvider.completeCurrentStep();
-                        }
+                              // Complete the recipes step (if we're coming from recipes)
+                              if (tourProvider.isOnStep(TourStep.recipes)) {
+                                tourProvider.completeCurrentStep();
+                              }
 
-                        // Navigate to Education page - let EducationPage initState handle showcase trigger
-                        onEducationTap();
+                              // Navigate to Education page - let EducationPage initState handle showcase trigger
+                              onEducationTap();
 
-                        // Trigger appropriate showcase after navigation
-                        Future.delayed(const Duration(milliseconds: 500), () {
-                          try {
-                            final articleController =
-                                Provider.of<ArticleController>(context,
-                                    listen: false);
+                              // Trigger appropriate showcase after navigation
+                              Future.delayed(const Duration(milliseconds: 500),
+                                  () {
+                                try {
+                                  final articleController =
+                                      Provider.of<ArticleController>(context,
+                                          listen: false);
 
-                            if (articleController
-                                .recommendedArticles.isNotEmpty) {
-                              ShowcaseView.get().startShowCase(
-                                  [TourKeys.recommendedArticlesKey]);
-                            }
-                          } catch (e) {}
-                        });
-                      },
-                      onToolTipClick: () {
-                        print(
-                            '🎯 CustomNavBar: User clicked on Education tab tooltip');
-                        final tourProvider = Provider.of<ForcedTourProvider>(
-                            context,
-                            listen: false);
+                                  if (articleController
+                                      .recommendedArticles.isNotEmpty) {
+                                    ShowcaseView.get().startShowCase(
+                                        [TourKeys.recommendedArticlesKey]);
+                                  }
+                                } catch (e) {}
+                              });
+                            },
+                            onToolTipClick: () {
+                              print(
+                                  '🎯 CustomNavBar: User clicked on Education tab tooltip');
+                              final tourProvider =
+                                  Provider.of<ForcedTourProvider>(context,
+                                      listen: false);
 
-                        // Complete the recipes step (if we're coming from recipes)
-                        if (tourProvider.isOnStep(TourStep.recipes)) {
-                          tourProvider.completeCurrentStep();
-                        }
+                              // Complete the recipes step (if we're coming from recipes)
+                              if (tourProvider.isOnStep(TourStep.recipes)) {
+                                tourProvider.completeCurrentStep();
+                              }
 
-                        // Navigate to Education page - let EducationPage initState handle showcase trigger
-                        onEducationTap();
+                              // Navigate to Education page - let EducationPage initState handle showcase trigger
+                              onEducationTap();
 
-                        // Trigger appropriate showcase after navigation
-                        Future.delayed(const Duration(milliseconds: 500), () {
-                          try {
-                            final articleController =
-                                Provider.of<ArticleController>(context,
-                                    listen: false);
+                              // Trigger appropriate showcase after navigation
+                              Future.delayed(const Duration(milliseconds: 500),
+                                  () {
+                                try {
+                                  final articleController =
+                                      Provider.of<ArticleController>(context,
+                                          listen: false);
 
-                            if (articleController
-                                .recommendedArticles.isNotEmpty) {
-                              ShowcaseView.get().startShowCase(
-                                  [TourKeys.recommendedArticlesKey]);
-                            }
-                          } catch (e) {}
-                        });
-                      },
+                                  if (articleController
+                                      .recommendedArticles.isNotEmpty) {
+                                    ShowcaseView.get().startShowCase(
+                                        [TourKeys.recommendedArticlesKey]);
+                                  }
+                                } catch (e) {}
+                              });
+                            },
                             disposeOnTap: true,
                             child: _buildNavItem(
                               svgPath: 'assets/icons/education.svg',
                               label: 'Education',
                               isSelected: currentIndex == 3,
-                              onTap:
-                                  _wrapWithTourCheck('education', onEducationTap),
+                              onTap: _wrapWithTourCheck(
+                                  'education', onEducationTap),
                               isDisabledDuringTour: isTourActive &&
                                   !_isTabAllowedDuringTour(
                                       currentStep, 'education'),
@@ -422,126 +434,126 @@ class CustomNavBar extends StatelessWidget {
               Positioned(
                 top: -20,
                 child: Showcase(
-                    key: TourKeys.addButtonKey,
-                    title: 'Add Items & Recipes',
-                    description: TourDescriptions.addButton,
-                    targetShapeBorder: const CircleBorder(),
-                    tooltipBackgroundColor:
-                        TourTooltipStyle.tooltipBackgroundColor,
-                    textColor: TourTooltipStyle.textColor,
-                    overlayColor: TourTooltipStyle.overlayColor,
-                    overlayOpacity: TourTooltipStyle.overlayOpacity,
-                    toolTipMargin: TourTooltipStyle.toolTipMargin,
-                    titleTextStyle: TourTooltipStyle.titleStyle,
-                    descTextStyle: TourTooltipStyle.descriptionStyle,
-                    onTargetClick: () {
-                      // Don't complete the step here - let MainScreen._handleAddTap complete it
-                      // after the action sheet closes. This prevents premature step completion
-                      // and ensures the pantry showcase triggers at the right time.
+                  key: TourKeys.addButtonKey,
+                  title: 'Add Items & Recipes',
+                  description: TourDescriptions.addButton,
+                  targetShapeBorder: const CircleBorder(),
+                  tooltipBackgroundColor:
+                      TourTooltipStyle.tooltipBackgroundColor,
+                  textColor: TourTooltipStyle.textColor,
+                  overlayColor: TourTooltipStyle.overlayColor,
+                  overlayOpacity: TourTooltipStyle.overlayOpacity,
+                  toolTipMargin: TourTooltipStyle.toolTipMargin,
+                  titleTextStyle: TourTooltipStyle.titleStyle,
+                  descTextStyle: TourTooltipStyle.descriptionStyle,
+                  onTargetClick: () {
+                    // Don't complete the step here - let MainScreen._handleAddTap complete it
+                    // after the action sheet closes. This prevents premature step completion
+                    // and ensures the pantry showcase triggers at the right time.
 
-                      // Open the action sheet
-                      onAddTap();
+                    // Open the action sheet
+                    onAddTap();
 
-                      // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!context.mounted) return;
-                        try {
-                          ShowcaseView.get().dismiss();
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!context.mounted) return;
-                            final tp = Provider.of<ForcedTourProvider>(context,
-                                listen: false);
-                            // Only trigger if we're still on the addButton step
-                            // (step will be completed after action sheet closes)
-                            if (tp.isOnStep(TourStep.addButton)) {
-                              ShowcaseView.get()
-                                  .startShowCase([TourKeys.addFoodRxItemsKey]);
-                            }
-                          });
-                        } catch (e) {
-                          debugPrint(
-                              '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
-                        }
-                      });
-                    },
-                    onToolTipClick: () {
-                      // Don't complete the step here - let MainScreen._handleAddTap complete it
-                      // after the action sheet closes.
+                    // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!context.mounted) return;
+                      try {
+                        ShowcaseView.get().dismiss();
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!context.mounted) return;
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Only trigger if we're still on the addButton step
+                          // (step will be completed after action sheet closes)
+                          if (tp.isOnStep(TourStep.addButton)) {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.addFoodRxItemsKey]);
+                          }
+                        });
+                      } catch (e) {
+                        debugPrint(
+                            '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                      }
+                    });
+                  },
+                  onToolTipClick: () {
+                    // Don't complete the step here - let MainScreen._handleAddTap complete it
+                    // after the action sheet closes.
 
-                      // Open the action sheet
-                      onAddTap();
+                    // Open the action sheet
+                    onAddTap();
 
-                      // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!context.mounted) return;
-                        try {
-                          ShowcaseView.get().dismiss();
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!context.mounted) return;
-                            final tp = Provider.of<ForcedTourProvider>(context,
-                                listen: false);
-                            // Only trigger if we're still on the addButton step
-                            // (step will be completed after action sheet closes)
-                            if (tp.isOnStep(TourStep.addButton)) {
-                              ShowcaseView.get()
-                                  .startShowCase([TourKeys.addFoodRxItemsKey]);
-                            }
-                          });
-                        } catch (e) {
-                          debugPrint(
-                              '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
-                        }
-                      });
-                    },
-                    disposeOnTap: false,
-                    child: GestureDetector(
-                      onTap: () {
-                        // During tour, only allow add button on specific steps
-                        if (isTourActive && currentStep != TourStep.addButton) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Please complete the current tour step first'),
-                              duration: Duration(seconds: 2),
-                              backgroundColor: Color(0xFFFF6A00),
-                            ),
-                          );
-                          return;
-                        }
-                        onAddTap();
-                      },
-                      child: AnimatedRotation(
-                        turns: isAddActive ? 0.125 : 0.0, // 45deg = 1/8 turn
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        child: Container(
-                          width: 55,
-                          height: 55,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFF6A00),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
+                    // Dismiss current showcase and trigger the next showcase step (Add FoodRx Items) after action sheet opens
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!context.mounted) return;
+                      try {
+                        ShowcaseView.get().dismiss();
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!context.mounted) return;
+                          final tp = Provider.of<ForcedTourProvider>(context,
+                              listen: false);
+                          // Only trigger if we're still on the addButton step
+                          // (step will be completed after action sheet closes)
+                          if (tp.isOnStep(TourStep.addButton)) {
+                            ShowcaseView.get()
+                                .startShowCase([TourKeys.addFoodRxItemsKey]);
+                          }
+                        });
+                      } catch (e) {
+                        debugPrint(
+                            '🎯 CustomNavBar: Error triggering addFoodRxItems showcase: $e');
+                      }
+                    });
+                  },
+                  disposeOnTap: false,
+                  child: GestureDetector(
+                    onTap: () {
+                      // During tour, only allow add button on specific steps
+                      if (isTourActive && currentStep != TourStep.addButton) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Please complete the current tour step first'),
+                            duration: Duration(seconds: 2),
+                            backgroundColor: Color(0xFFFF6A00),
                           ),
-                          child: Center(
-                            child: SvgPicture.asset(
-                              'assets/icons/add.svg',
-                              width: 32,
-                              height: 32,
-                              colorFilter: const ColorFilter.mode(
-                                Colors.white,
-                                BlendMode.srcIn,
-                              ),
+                        );
+                        return;
+                      }
+                      onAddTap();
+                    },
+                    child: AnimatedRotation(
+                      turns: isAddActive ? 0.125 : 0.0, // 45deg = 1/8 turn
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      child: Container(
+                        width: 55,
+                        height: 55,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF6A00),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: SvgPicture.asset(
+                            'assets/icons/add.svg',
+                            width: 32,
+                            height: 32,
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
                             ),
                           ),
                         ),
                       ),
                     ),
+                  ),
                 ),
               ),
             ],
@@ -591,12 +603,12 @@ class CustomNavBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: TextStyle(
+                    fontFamily: 'BricolageGrotesque',
                     fontSize: 12,
                     color: isDisabledDuringTour
                         ? disabledColor
                         : (isSelected ? activeColor : Colors.grey),
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),

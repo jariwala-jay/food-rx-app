@@ -1,3 +1,5 @@
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
+
 class UserModel {
   final String? id;
   final String email;
@@ -24,7 +26,7 @@ class UserModel {
   final String? dietType; // DASH or MyPlate
   final String? myPlanType; // "DASH", "MyPlate", "DiabetesPlate"
   final bool? showGlycemicIndex; // true if diabetes detected
-  final List<String>? excludedIngredients;
+  final List<ExcludedIngredient>? excludedIngredients;
   final List<String>? foodRestrictions;
   final List<String>? favoriteCuisines;
   final String? dailyFruitIntake;
@@ -42,6 +44,9 @@ class UserModel {
   final bool? requiresGroceryList;
   final Map<String, dynamic>?
       diagnostics; // Personalization diagnostics including diet rule
+
+  // Opt-in per-meal reminder preferences: {enabled, breakfast: {hour, minute}, lunch: {...}, dinner: {...}}
+  final Map<String, dynamic>? mealLoggingReminderPrefs;
 
   // System Fields
   final DateTime? createdAt;
@@ -96,6 +101,7 @@ class UserModel {
     this.mealTimings,
     this.requiresGroceryList,
     this.diagnostics,
+    this.mealLoggingReminderPrefs,
     // System Fields
     this.createdAt,
     this.updatedAt,
@@ -133,9 +139,9 @@ class UserModel {
       // allergies, legacy foodAllergies, or foodRestrictions (signup/API)
       allergies: List<String>.from(
         (json['allergies'] ??
-                json['foodAllergies'] ??
-                json['foodRestrictions'] ??
-                []) as List,
+            json['foodAllergies'] ??
+            json['foodRestrictions'] ??
+            []) as List,
       ),
       // Diet Preferences
       dietType: json['dietType'],
@@ -147,7 +153,9 @@ class UserModel {
               : json['showGlycemicIndex'] == true ||
                   json['showGlycemicIndex'] == 'true' ||
                   json['showGlycemicIndex'] == 1,
-      excludedIngredients: List<String>.from(json['excludedIngredients'] ?? []),
+      excludedIngredients: (json['excludedIngredients'] as List? ?? const [])
+          .map(ExcludedIngredient.fromJson)
+          .toList(),
       foodRestrictions: List<String>.from(json['foodRestrictions'] ?? []),
       favoriteCuisines: List<String>.from(json['favoriteCuisines'] ?? []),
       dailyFruitIntake: json['dailyFruitIntake'],
@@ -163,6 +171,7 @@ class UserModel {
       mealTimings: Map<String, String>.from(json['mealTimings'] ?? {}),
       requiresGroceryList: json['requiresGroceryList'],
       diagnostics: json['diagnostics'],
+      mealLoggingReminderPrefs: json['mealLoggingReminderPrefs'],
       // System Fields
       createdAt: json['createdAt'] is String
           ? DateTime.parse(json['createdAt'])
@@ -208,7 +217,9 @@ class UserModel {
       'dietType': dietType,
       'myPlanType': myPlanType,
       'showGlycemicIndex': showGlycemicIndex,
-      'excludedIngredients': excludedIngredients,
+      'excludedIngredients': excludedIngredients
+          ?.map((ingredient) => ingredient.toJson())
+          .toList(),
       'foodRestrictions': foodRestrictions,
       // Diet Plan
       'selectedDietPlan': selectedDietPlan,
@@ -217,6 +228,7 @@ class UserModel {
       'mealTimings': mealTimings,
       'requiresGroceryList': requiresGroceryList,
       'diagnostics': diagnostics,
+      'mealLoggingReminderPrefs': mealLoggingReminderPrefs,
       // System Fields
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -254,7 +266,7 @@ class UserModel {
     String? dietType,
     String? myPlanType,
     bool? showGlycemicIndex,
-    List<String>? excludedIngredients,
+    List<ExcludedIngredient>? excludedIngredients,
     List<String>? foodRestrictions,
     // Diet Plan
     Map<String, dynamic>? selectedDietPlan,
@@ -263,6 +275,7 @@ class UserModel {
     Map<String, String>? mealTimings,
     bool? requiresGroceryList,
     Map<String, dynamic>? diagnostics,
+    Map<String, dynamic>? mealLoggingReminderPrefs,
     // System Fields
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -307,6 +320,8 @@ class UserModel {
       mealTimings: mealTimings ?? this.mealTimings,
       requiresGroceryList: requiresGroceryList ?? this.requiresGroceryList,
       diagnostics: diagnostics ?? this.diagnostics,
+      mealLoggingReminderPrefs:
+          mealLoggingReminderPrefs ?? this.mealLoggingReminderPrefs,
       // System Fields
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

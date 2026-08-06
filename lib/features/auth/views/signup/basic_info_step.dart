@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:flutter_app/features/auth/providers/signup_provider.dart';
 import 'package:flutter_app/core/widgets/form_fields.dart';
+import 'package:flutter_app/core/utils/email_validation.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
@@ -39,7 +40,9 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   File? _profilePhoto;
   String? _profilePhotoPath;
   final FocusNode _emailFocusNode = FocusNode();
+  final _emailFormFieldKey = GlobalKey<FormFieldState<String>>();
   String? _emailExistsError;
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
   @override
   void initState() {
@@ -50,7 +53,6 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _passwordController.text = signupData.password ?? '';
     _confirmPasswordController.text = signupData.password ?? '';
 
-    // Clear email error when user types
     _emailController.addListener(() {
       if (_emailExistsError != null) {
         setState(() {
@@ -58,6 +60,8 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         });
       }
     });
+
+    _emailFocusNode.addListener(_validateEmailOnBlur);
   }
 
   @override
@@ -69,6 +73,12 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     _confirmPasswordController.dispose();
     _emailFocusNode.dispose();
     super.dispose();
+  }
+
+  void _validateEmailOnBlur() {
+    if (_emailFocusNode.hasFocus) return;
+    if (_emailController.text.trim().isEmpty) return;
+    _emailFormFieldKey.currentState?.validate();
   }
 
   Future<void> _scrollToKey(GlobalKey key) async {
@@ -89,6 +99,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
+        requestFullMetadata: false,
       );
 
       if (pickedFile != null) {
@@ -105,12 +116,10 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
   }
 
   Future<void> _handleNext() async {
-    // Clear email error before validation
     setState(() {
       _emailExistsError = null;
     });
 
-    // Validate form fields first
     final isFormValid = _formKey.currentState!.validate();
 
     final hasMissingFields = _nameController.text.trim().isEmpty ||
@@ -118,14 +127,17 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         _passwordController.text.trim().isEmpty ||
         _confirmPasswordController.text.trim().isEmpty;
 
-    // If form validation failed or there are missing fields, move to first missing field.
     if (!isFormValid || hasMissingFields) {
-      // Move user to the first missing required field.
+      setState(() {
+        _autovalidateMode = AutovalidateMode.onUserInteraction;
+      });
+
       if (_nameController.text.trim().isEmpty) {
         await _scrollToKey(_nameFieldKey);
         return;
       }
-      if (_emailController.text.trim().isEmpty) {
+      if (_emailController.text.trim().isEmpty ||
+          !isAcceptableEmail(_emailController.text)) {
         await _scrollToKey(_emailFieldKey);
         _emailFocusNode.requestFocus();
         return;
@@ -147,8 +159,6 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
     });
 
     try {
-      // Check if email already exists in database
-      // Clear any previous email error first
       setState(() {
         _emailExistsError = null;
       });
@@ -162,20 +172,18 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
           _emailExistsError =
               'This email is already registered. Please use a different email or try logging in.';
         });
-        // Focus on email field and show error
         _emailFocusNode.requestFocus();
-        // Trigger form validation to show error
         _formKey.currentState?.validate();
         return;
       }
 
-      // Store the data in SignupProvider instead of registering
-      context.read<SignupProvider>().updateBasicInfo(
-            name: _nameController.text,
-            email: _emailController.text,
-            password: _passwordController.text,
-            profilePhoto: _profilePhoto,
-          );
+      final signupProvider = context.read<SignupProvider>();
+      signupProvider.updateBasicInfo(
+        name: _nameController.text,
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        profilePhoto: _profilePhoto,
+      );
 
       widget.onNext();
     } catch (e) {
@@ -199,281 +207,300 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  if (_error != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade200),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: _autovalidateMode,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    if (_error != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline,
+                                color: Colors.red.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: TextStyle(color: Colors.red.shade700),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
+                    Center(
+                      child: Stack(
                         children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade700),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: TextStyle(color: Colors.red.shade700),
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7F7F8),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFE7E9EC),
+                                width: 1,
+                              ),
+                              image: _profilePhotoPath != null
+                                  ? DecorationImage(
+                                      image:
+                                          FileImage(File(_profilePhotoPath!)),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: _profilePhotoPath == null
+                                ? const Center(
+                                    child: Icon(
+                                      Icons.person_outline,
+                                      size: 48,
+                                      color: Color(0xFF90909A),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: InkWell(
+                              onTap: _pickImage,
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF6A00),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_outlined,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  Center(
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF7F7F8),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFFE7E9EC),
-                              width: 1,
-                            ),
-                            image: _profilePhotoPath != null
-                                ? DecorationImage(
-                                    image: FileImage(File(_profilePhotoPath!)),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: _profilePhotoPath == null
-                              ? const Center(
-                                  child: Icon(
-                                    Icons.person_outline,
-                                    size: 48,
-                                    color: Color(0xFF90909A),
-                                  ),
-                                )
-                              : null,
+                    const SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: ShapeDecoration(
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: InkWell(
-                            onTap: _pickImage,
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF6A00),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt_outlined,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            key: _nameFieldKey,
+                            child: AppFormField(
+                              label: 'Name',
+                              hintText: 'Enter your name',
+                              controller: _nameController,
+                              scrollPadding: const EdgeInsets.only(bottom: 120),
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              textCapitalization: TextCapitalization.words,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your name';
+                                }
+                                return null;
+                              },
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 16),
+                          Container(
+                            key: _emailFieldKey,
+                            child: AppFormField(
+                              formFieldKey: _emailFormFieldKey,
+                              label: 'Email',
+                              hintText: 'Enter your email',
+                              controller: _emailController,
+                              scrollPadding: const EdgeInsets.only(bottom: 120),
+                              autofillHints: const [
+                                AutofillHints.username,
+                                AutofillHints.email,
+                              ],
+                              keyboardType: TextInputType.emailAddress,
+                              focusNode: _emailFocusNode,
+                              enableSuggestions: false,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.none,
+                              validator: (value) {
+                                final formatError = emailFormatValidator(value);
+                                if (formatError != null) return formatError;
+                                if (_emailExistsError != null) {
+                                  return _emailExistsError;
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            key: _passwordFieldKey,
+                            child: AppFormField(
+                              label: 'Password',
+                              hintText: 'Enter your password',
+                              controller: _passwordController,
+                              scrollPadding: const EdgeInsets.only(bottom: 120),
+                              autofillHints: const [AutofillHints.newPassword],
+                              obscureText: _obscurePassword,
+                              enableSuggestions: false,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.none,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your password';
+                                }
+                                if (value.length < 8) {
+                                  return 'Password must be at least 8 characters';
+                                }
+                                if (!value.contains(RegExp(r'[A-Z]'))) {
+                                  return 'Password must contain at least one uppercase letter';
+                                }
+                                if (!value.contains(RegExp(r'[a-z]'))) {
+                                  return 'Password must contain at least one lowercase letter';
+                                }
+                                if (!value.contains(RegExp(r'[0-9]'))) {
+                                  return 'Password must contain at least one number';
+                                }
+                                if (!value.contains(
+                                    RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+                                  return 'Password must contain at least one special character';
+                                }
+                                return null;
+                              },
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFF90909A),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _passwordController,
+                            builder: (context, value, child) {
+                              return _buildPasswordRequirements();
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            key: _confirmPasswordFieldKey,
+                            child: AppFormField(
+                              label: 'Confirm Password',
+                              hintText: 'Re-Enter your password',
+                              controller: _confirmPasswordController,
+                              scrollPadding: const EdgeInsets.only(bottom: 120),
+                              autofillHints: const [AutofillHints.newPassword],
+                              obscureText: _obscureConfirmPassword,
+                              enableSuggestions: false,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.none,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please confirm your password';
+                                }
+                                if (value != _passwordController.text) {
+                                  return 'Passwords do not match';
+                                }
+                                return null;
+                              },
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFF90909A),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscureConfirmPassword =
+                                        !_obscureConfirmPassword;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          key: _nameFieldKey,
-                          child: AppFormField(
-                          label: 'Name',
-                          hintText: 'Enter your name',
-                          controller: _nameController,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your name';
-                            }
-                            return null;
-                          },
-                        ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          key: _emailFieldKey,
-                          child: AppFormField(
-                          label: 'Email',
-                          hintText: 'Enter your email',
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          focusNode: _emailFocusNode,
-                          enableSuggestions: false,
-                          autocorrect: false,
-                          textCapitalization: TextCapitalization.none,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your email';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Please enter a valid email';
-                            }
-                            if (_emailExistsError != null) {
-                              return _emailExistsError;
-                            }
-                            return null;
-                          },
-                        ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          key: _passwordFieldKey,
-                          child: AppFormField(
-                          label: 'Password',
-                          hintText: 'Enter your password',
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          enableSuggestions: false,
-                          autocorrect: false,
-                          textCapitalization: TextCapitalization.none,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your password';
-                            }
-                            if (value.length < 8) {
-                              return 'Password must be at least 8 characters';
-                            }
-                            if (!value.contains(RegExp(r'[A-Z]'))) {
-                              return 'Password must contain at least one uppercase letter';
-                            }
-                            if (!value.contains(RegExp(r'[a-z]'))) {
-                              return 'Password must contain at least one lowercase letter';
-                            }
-                            if (!value.contains(RegExp(r'[0-9]'))) {
-                              return 'Password must contain at least one number';
-                            }
-                            if (!value
-                                .contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
-                              return 'Password must contain at least one special character';
-                            }
-                            return null;
-                          },
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: const Color(0xFF90909A),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                        ),
-                        const SizedBox(height: 8),
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _passwordController,
-                          builder: (context, value, child) {
-                            return _buildPasswordRequirements();
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          key: _confirmPasswordFieldKey,
-                          child: AppFormField(
-                          label: 'Confirm Password',
-                          hintText: 'Re-Enter your password',
-                          controller: _confirmPasswordController,
-                          obscureText: _obscureConfirmPassword,
-                          enableSuggestions: false,
-                          autocorrect: false,
-                          textCapitalization: TextCapitalization.none,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please confirm your password';
-                            }
-                            if (value != _passwordController.text) {
-                              return 'Passwords do not match';
-                            }
-                            return null;
-                          },
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureConfirmPassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: const Color(0xFF90909A),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscureConfirmPassword =
-                                    !_obscureConfirmPassword;
-                              });
-                            },
-                          ),
-                        ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6A00),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  elevation: 0,
+                  ],
                 ),
-                onPressed: _isLoading ? null : _handleNext,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Next',
-                        style: AppTypography.bg_16_sb,
-                      ),
               ),
             ),
           ),
-        ),
-      ],
+          ColoredBox(
+            color: Colors.white,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6A00),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _isLoading ? null : _handleNext,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Next',
+                            style: AppTypography.bg_16_sb,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

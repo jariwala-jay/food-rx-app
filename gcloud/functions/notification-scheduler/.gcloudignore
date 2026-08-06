@@ -14,3 +14,6 @@
 .gitignore
 
 node_modules
+# Dev-only regression script (see package.json "test"); never invoked by
+# the deployed Cloud Function, no reason to ship it.
+scripts

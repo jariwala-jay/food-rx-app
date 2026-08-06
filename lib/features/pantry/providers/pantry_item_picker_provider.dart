@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_app/core/services/pantry_api_service.dart';
+import 'package:flutter_app/core/services/allergy_filtering_service.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,15 @@ class PantryItemPickerProvider extends ChangeNotifier {
   List<Ingredient> searchResults = [];
   String _currentCategoryKey = '';
 
+  /// True when aisle search returned nothing and results come from global
+  /// Spoonacular autocomplete (Phase A: communicate browse → search mode).
+  bool isShowingGlobalIngredientSearch = false;
+
+  /// True when the last global search came back empty because the
+  /// Spoonacular API was rate-limited, not because there were no matches.
+  /// Lets the UI show "try again in a moment" instead of "not found".
+  bool isRateLimitedSearch = false;
+
   // Track which items have been selected and their quantities
   final Map<String, PantryItem> _selectedItems = {};
 
@@ -30,106 +40,22 @@ class PantryItemPickerProvider extends ChangeNotifier {
   bool get hasSelectedItems => _selectedItems.isNotEmpty;
   List<PantryItem> get selectedItemsList => _selectedItems.values.toList();
 
-  PantryItemPickerProvider(
-      this._ingredientRepository, this._authProvider,
+  PantryItemPickerProvider(this._ingredientRepository, this._authProvider,
       {this.isFoodPantryItem = true});
 
   List<String> _mapUserAllergiesToIntolerances() {
     final allergies = _authProvider.currentUser?.allergies ?? [];
-    return allergies
-        .map((a) {
-          switch (a.toLowerCase()) {
-            case 'dairy':
-              return 'dairy';
-            case 'egg':
-            case 'eggs':
-              return 'egg';
-            case 'gluten':
-              return 'gluten';
-            case 'wheat':
-              return 'wheat';
-            case 'peanut':
-            case 'peanuts':
-              return 'peanut';
-            case 'tree nuts':
-            case 'tree nut':
-              return 'tree nut';
-            case 'soy':
-              return 'soy';
-            case 'fish':
-              return 'seafood';
-            case 'shellfish':
-              return 'shellfish';
-            case 'sesame':
-              return 'sesame';
-            case 'sulfite':
-            case 'sulfites':
-              return 'sulfite';
-            case 'grain':
-            case 'grains':
-              return 'grain';
-            default:
-              return '';
-          }
-        })
-        .where((s) => s.isNotEmpty)
-        .toList();
+    return AllergyFilteringService.intoleranceApiNamesFor(allergies);
   }
 
   bool _isAllergyItemName(String itemName) {
     final allergies = _authProvider.currentUser?.allergies ?? [];
-    if (allergies.isEmpty) return false;
-    final name = itemName.toLowerCase();
-    for (final allergy in allergies) {
-      final a = allergy.toLowerCase();
-      // Simple keyword checks for common allergens in prefilled items
-      if (a.contains('dairy')) {
-        if (name.contains('milk') ||
-            name.contains('cheese') ||
-            name.contains('yogurt') ||
-            name.contains('butter') ||
-            name.contains('cream')) return true;
-      }
-      if (a.contains('egg')) {
-        if (name.contains('egg')) return true;
-      }
-      if (a.contains('gluten') || a.contains('wheat')) {
-        if (name.contains('wheat') ||
-            name.contains('bread') ||
-            name.contains('pasta') ||
-            name.contains('flour')) return true;
-      }
-      if (a.contains('peanut')) {
-        if (name.contains('peanut')) return true;
-      }
-      if (a.contains('tree nut')) {
-        if (name.contains('almond') ||
-            name.contains('walnut') ||
-            name.contains('pecan') ||
-            name.contains('hazelnut') ||
-            name.contains('cashew') ||
-            name.contains('pistachio')) return true;
-      }
-      if (a.contains('soy')) {
-        if (name.contains('soy') ||
-            name.contains('tofu') ||
-            name.contains('edamame')) return true;
-      }
-      if (a.contains('fish') ||
-          a.contains('shellfish') ||
-          a.contains('seafood')) {
-        if (name.contains('fish') ||
-            name.contains('shrimp') ||
-            name.contains('crab') ||
-            name.contains('lobster') ||
-            name.contains('salmon') ||
-            name.contains('tuna')) return true;
-      }
-      if (a.contains('sesame')) {
-        if (name.contains('sesame')) return true;
-      }
-    }
-    return false;
+    final excluded = _authProvider.currentUser?.excludedIngredients ?? const [];
+    return AllergyFilteringService.conflictsWithRestrictions(
+      itemName,
+      allergies: allergies,
+      excludedIngredients: excluded,
+    );
   }
 
   Future<void> loadItems(String categoryKey) async {
@@ -143,6 +69,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
     items = [];
     searchResults = [];
     commonItems = [];
+    isShowingGlobalIngredientSearch = false;
 
     notifyListeners();
 
@@ -187,10 +114,16 @@ class PantryItemPickerProvider extends ChangeNotifier {
   }
 
   Future<void> _loadAdditionalItemsInBackground(String categoryKey) async {
+    final aisle = spoonacularAisleForFoodRxCategory(categoryKey);
+    if (aisle == null) {
+      // No reliable Spoonacular aisle (e.g. 'miscellaneous') — an unfiltered
+      // fetch would return arbitrary ingredients unrelated to the category.
+      return;
+    }
     try {
-      // Fetch additional ingredients from API
+      // Fetch additional ingredients from API using a real Spoonacular aisle
       final apiResults = await _ingredientRepository.searchIngredients(
-          aisle: categoryKey,
+          aisle: aisle,
           number: 30,
           intolerances: _mapUserAllergiesToIntolerances());
 
@@ -226,6 +159,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
   }
 
   void searchItems(String query) {
+    isShowingGlobalIngredientSearch = false;
     if (query.isEmpty) {
       // Show all items (common + API results)
       searchResults = List<Ingredient>.from(items);
@@ -245,80 +179,106 @@ class PantryItemPickerProvider extends ChangeNotifier {
     // Increased minimum to 3 characters to reduce API calls
     if (query.length < 3) return;
 
+    isRateLimitedSearch = false;
+
+    // Prefer curated / already-loaded items in this category first.
+    // e.g. "Frozen Peas" from Vegetables → Frozen should stay in-category,
+    // not show "not found in Frozen Vegetables" via global search.
+    searchItems(query);
+    if (searchResults.isNotEmpty) {
+      developer.log('In-category match for "$query" in $_currentCategoryKey '
+          '(${searchResults.length} results) — skipping global search');
+      return;
+    }
+
     isLoading = true;
     error = null;
+    // No local category hits — search the global ingredient DB and label UI.
+    isShowingGlobalIngredientSearch = true;
     notifyListeners();
 
     try {
       developer.log(
-          'Searching Spoonacular for "$query" in category $_currentCategoryKey');
+          'Global ingredient search for "$query" (opened from category $_currentCategoryKey)');
 
-      // Check if repository is rate limited before making calls
       final repository = _ingredientRepository;
       if (repository is SpoonacularIngredientRepository &&
           repository.isRateLimited) {
         developer.log('Repository is rate limited, skipping API calls');
-        // Fall back to local search
+        isRateLimitedSearch = true;
         searchItems(query);
+        isShowingGlobalIngredientSearch = false;
         return;
       }
 
-      // Search specifically within the current category/aisle
-      final results = await _ingredientRepository.searchIngredients(
+      // Search is primary (supports server-side `intolerances` filtering,
+      // unlike autocomplete) but never returns `aisle`; resolved lazily
+      // in resolveAisleForAdd() only for the item the user actually adds.
+      var results = await _ingredientRepository.searchIngredients(
         query: query,
-        aisle: _currentCategoryKey,
         number: 20,
         intolerances: _mapUserAllergiesToIntolerances(),
       );
 
-      if (results.isEmpty) {
-        // Only try autocomplete if we're not rate limited
-        if (repository is SpoonacularIngredientRepository &&
-            !repository.isRateLimited) {
-          developer.log(
-              'No search results found for "$query" in aisle $_currentCategoryKey, trying autocomplete...');
-          // If no results in search, try autocomplete as a fallback
-          final autocompleteResults =
-              await _ingredientRepository.autocompleteIngredient(query: query);
+      final rateLimitedAfterSearch =
+          repository is SpoonacularIngredientRepository &&
+              repository.isRateLimited;
 
-          searchResults = autocompleteResults;
-        } else {
-          // Rate limited or autocomplete failed, fall back to local search
-          developer.log(
-              'No search results found and rate limited, falling back to local search');
-          searchItems(query);
-        }
-      } else {
-        // Merge search results with existing items to avoid losing common items
-        final mergedResults = <Ingredient>[...results];
-
-        // Add relevant common items that match the search
-        final matchingCommonItems = commonItems
-            .where((commonItem) =>
-                commonItem.name.toLowerCase().contains(query.toLowerCase()))
-            .toList();
-
-        for (final commonItem in matchingCommonItems) {
-          final isDuplicate = mergedResults.any((result) =>
-              result.name.toLowerCase().trim() ==
-              commonItem.name.toLowerCase().trim());
-
-          if (!isDuplicate) {
-            mergedResults.insert(0, commonItem); // Add common items at the top
-          }
-        }
-
-        searchResults = mergedResults;
+      if (results.isEmpty && !rateLimitedAfterSearch) {
+        developer.log('No search results for "$query", trying autocomplete...');
+        results =
+            await _ingredientRepository.autocompleteIngredient(query: query);
       }
 
-      developer
-          .log('Spoonacular search returned ${searchResults.length} results');
+      final rateLimitedAfterAutocomplete =
+          repository is SpoonacularIngredientRepository &&
+              repository.isRateLimited;
+
+      if (results.isEmpty) {
+        // A 429 masquerades as an empty result — tell the UI apart from a
+        // genuine "no matches" so it doesn't claim the ingredient isn't found.
+        isRateLimitedSearch =
+            rateLimitedAfterSearch || rateLimitedAfterAutocomplete;
+        searchItems(query);
+        isShowingGlobalIngredientSearch = false;
+      } else {
+        isRateLimitedSearch = false;
+        searchResults = results;
+        isShowingGlobalIngredientSearch = true;
+      }
+
+      developer.log(
+          'Global ingredient search returned ${searchResults.length} results '
+          '(isShowingGlobalIngredientSearch=$isShowingGlobalIngredientSearch, '
+          'isRateLimitedSearch=$isRateLimitedSearch)');
     } catch (e) {
       developer.log('Spoonacular search error: $e');
       error = userFacingErrorMessage(e);
+      isShowingGlobalIngredientSearch = false;
     } finally {
       isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Global-search results never carry `aisle`, so this does one autocomplete
+  /// lookup by exact name to resolve it for correct category filing on add.
+  Future<String?> resolveAisleForAdd(Ingredient item) async {
+    if (item.aisle != null && item.aisle!.isNotEmpty) return item.aisle;
+
+    final repository = _ingredientRepository;
+    if (repository is SpoonacularIngredientRepository &&
+        repository.isRateLimited) {
+      return null;
+    }
+
+    try {
+      final results = await _ingredientRepository.autocompleteIngredient(
+          query: item.name, number: 1);
+      return results.isNotEmpty ? results.first.aisle : null;
+    } catch (e) {
+      developer.log('Error resolving aisle for "${item.name}": $e');
+      return null;
     }
   }
 
@@ -331,7 +291,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
       return;
     }
     if (_isAllergyItemName(item.name)) {
-      error = "Cannot add item due to your allergy settings.";
+      error =
+          "${item.name} can't be added because it matches a food you marked as an allergy or intolerance.";
       notifyListeners();
       developer.log(error!);
       return;

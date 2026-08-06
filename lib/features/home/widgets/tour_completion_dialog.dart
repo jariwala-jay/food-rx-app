@@ -80,7 +80,7 @@ class TourCompletionDialog extends StatelessWidget {
                         ),
                         SizedBox(height: 8 * textScaleFactor),
                         Text(
-                          'Now you know how to use the app! You can move forward and track your nutrition, manage your pantry, generate recipes, and use all the features on your own.',
+                          'Now you know how to use the app! You can move forward and track your nutrition, manage your pantry, generate recipes and use all the features on your own.',
                           style: TextStyle(
                             fontSize: 14 * textScaleFactor,
                             color: const Color(0xFF666666),
