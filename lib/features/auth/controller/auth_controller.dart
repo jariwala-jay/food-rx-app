@@ -22,6 +22,11 @@ import 'package:flutter_app/core/services/gmail_smtp_email_service.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:http/http.dart' show ClientException;
 
+// Top-level (not private, not a method) so it's directly unit-testable
+// without needing to construct an AuthController or mock ApiClient.
+bool isSameLocalDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
 class AuthController with ChangeNotifier {
   final EmailService _emailService = GmailSMTPEmailService();
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -56,6 +61,25 @@ class AuthController with ChangeNotifier {
         'lastActiveAt': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {}
+  }
+
+  // Cold starts and logins already call _markUserActive directly. This
+  // covers the far more common case — resuming an already-live session
+  // from the background — which resumeSessionIfNeeded otherwise no-ops on,
+  // leaving lastActiveAt (and the app-inactivity reminder it drives) stale
+  // for users who open the app daily without ever force-quitting it.
+  // Throttled to once per local calendar day so routine foreground/
+  // background switching doesn't spam the profile endpoint.
+  DateTime? _lastActiveHeartbeatAt;
+
+  Future<void> _recordAppOpenHeartbeat() async {
+    final now = DateTime.now();
+    final last = _lastActiveHeartbeatAt;
+    if (last != null && isSameLocalDay(last, now)) {
+      return;
+    }
+    _lastActiveHeartbeatAt = now;
+    await _markUserActive();
   }
 
   UserModel? get currentUser => _currentUser;
@@ -479,7 +503,10 @@ class AuthController with ChangeNotifier {
   }
 
   Future<void> resumeSessionIfNeeded() async {
-    if (_currentUser != null) return;
+    if (_currentUser != null) {
+      unawaited(_recordAppOpenHeartbeat());
+      return;
+    }
     final hasRefresh = await ApiClient.hasRefreshToken();
     final token = await ApiClient.getToken();
     if (!hasRefresh && (token == null || token.isEmpty)) return;

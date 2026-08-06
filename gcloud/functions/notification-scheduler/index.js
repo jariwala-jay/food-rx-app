@@ -174,18 +174,38 @@ function bucketLabel(bucketKey) {
   const kind = bucketKey[0];
   const value = parseInt(bucketKey.slice(1), 10);
   if (Number.isNaN(value)) return "";
-  if (kind === "d") return `${value} day${value > 1 ? "s" : ""}`;
-  if (kind === "w") return `${value} week${value > 1 ? "s" : ""}`;
-  if (kind === "m") return `${value} month${value > 1 ? "s" : ""}`;
+  // Singular reads as prose ("a day"), plural as a numeral ("2 days") --
+  // matches how the milestone count is actually meant to be read.
+  if (kind === "d") return value === 1 ? "a day" : `${value} days`;
+  if (kind === "w") return value === 1 ? "a week" : `${value} weeks`;
+  if (kind === "m") return value === 1 ? "a month" : `${value} months`;
   return "";
 }
 
-// Leads with the "why" (time since sincePhrase) before the call to action,
-// so the reminder reads as personalized rather than generic.
-function formatReasonFirstMessage(sincePhrase, callToAction, bucketKey) {
+// Leads with the call to action, then names the "why" (time since
+// sincePhrase) last, so the reminder still reads as personalized instead of
+// a generic "It's been 1 day." with no context of what that's since.
+function formatMessageWithReason(callToAction, sincePhrase, bucketKey) {
   const label = bucketLabel(bucketKey);
   if (!label) return callToAction;
-  return `It's been ${label} since ${sincePhrase}. ${callToAction}`;
+  return `${callToAction} It's been ${label} since ${sincePhrase}.`;
+}
+
+// Picks the more recent of several raw date-like values (e.g.
+// tracker_progress's progressDate and user_trackers' lastUpdated),
+// tolerating any of them being missing or unparseable. Extracted out of
+// checkMealLoggingInactivityReminders so the "use whichever activity
+// signal is fresher" rule has one unit-testable home instead of living
+// inline in the per-user loop.
+function resolveLatestActivityDate(...rawDates) {
+  let latest = null;
+  for (const raw of rawDates) {
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) continue;
+    if (!latest || d > latest) latest = d;
+  }
+  return latest;
 }
 
 function isWithinNewAccountGracePeriod(now, user) {
@@ -364,6 +384,7 @@ async function checkMealLoggingInactivityReminders() {
   try {
     db = await connectToMongo();
     const progressCollection = db.collection("tracker_progress");
+    const trackersCollection = db.collection("user_trackers");
     const notificationsCollection = db.collection("notifications");
     const usersCollection = db.collection("users");
 
@@ -425,12 +446,28 @@ async function checkMealLoggingInactivityReminders() {
           .limit(1)
           .toArray();
 
-        if (latestProgress.length === 0) {
-          continue;
-        }
+        // tracker_progress only gains a row once a day, when that day's
+        // trackers reset -- so on any given day, before tonight's reset
+        // runs, its latest row is always ~1 day stale by construction, even
+        // for a user actively logging meals right now. user_trackers is
+        // updated live on every log (see PATCH /trackers/{id} -> lastUpdated
+        // in trackers.py), so check it too and use whichever signal is more
+        // recent as "last logged" -- otherwise every active user trips the
+        // d1 bucket daily regardless of same-day logging.
+        const latestTrackerUpdate = await trackersCollection
+          .find({
+            userId: userId,
+          })
+          .sort({ lastUpdated: -1 })
+          .limit(1)
+          .toArray();
 
-        const latestDate = new Date(latestProgress[0].progressDate);
-        if (Number.isNaN(latestDate.getTime())) {
+        const latestDate = resolveLatestActivityDate(
+          latestProgress[0]?.progressDate,
+          latestTrackerUpdate[0]?.lastUpdated
+        );
+
+        if (!latestDate) {
           continue;
         }
 
@@ -448,7 +485,7 @@ async function checkMealLoggingInactivityReminders() {
         }
 
         // Day 1 is already covered by the user's own meal reminders when
-        // enabled; days 2-6, weekly, and monthly milestones still fire
+        // enabled; days 2-6, weekly and monthly milestones still fire
         // regardless, since a user ignoring meal reminders for that long
         // is a distinct "fell out of the habit" signal worth surfacing.
         if (bucket.key === "d1" && user?.mealLoggingReminderPrefs?.enabled === true) {
@@ -470,9 +507,9 @@ async function checkMealLoggingInactivityReminders() {
           userId: userId,
           type: "tracker_reminder",
           title: "Don't forget to log your meals",
-          message: formatReasonFirstMessage(
-            "your last meal log",
+          message: formatMessageWithReason(
             "Log your food to stay on track with your nutrition goals.",
+            "you last logged your meals",
             bucket.key
           ),
           bucketKey: bucket.key,
@@ -588,9 +625,9 @@ async function checkAppInactivityReminders() {
           userId: userId,
           type: "app_inactivity_reminder",
           title: "We miss you at MyFoodRx",
-          message: formatReasonFirstMessage(
-            "your last visit",
-            "Open MyFoodRx to review your pantry, trackers, and recommendations.",
+          message: formatMessageWithReason(
+            "Open MyFoodRx to review your pantry, trackers and recommendations.",
+            "you last opened MyFoodRx",
             bucket.key
           ),
           bucketKey: bucket.key,
@@ -631,13 +668,16 @@ async function runAllNotificationChecks() {
   };
 }
 
-// Exposed only for scripts/test_inactivity_bucket.js so the regression
-// check exercises the real production logic instead of a reimplementation
-// that could silently drift from it. Not used by the Cloud Function
-// runtime itself, which only invokes exports.notificationScheduler.
+// Exposed only for the scripts/test_*.js regression checks so they exercise
+// the real production logic instead of a reimplementation that could
+// silently drift from it. Not used by the Cloud Function runtime itself,
+// which only invokes exports.notificationScheduler.
 exports.__testables = {
   localDayStartUtc,
   dayDiffFloor,
   addMonthsLocalDayStartUtc,
   getInactivityBucket,
+  bucketLabel,
+  formatMessageWithReason,
+  resolveLatestActivityDate,
 };
