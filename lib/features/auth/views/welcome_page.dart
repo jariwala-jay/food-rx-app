@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/auth/biometric_sign_in_labels.dart';
 import 'package:flutter_app/core/utils/app_colors.dart';
 import 'package:flutter_app/core/utils/typography.dart';
+import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/core/widgets/app_outlined_icon_button.dart';
+import 'package:flutter_app/core/widgets/google_sign_in_button.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:provider/provider.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -12,6 +18,94 @@ class WelcomePage extends StatefulWidget {
 class _WelcomePageState extends State<WelcomePage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isGoogleLoading = false;
+  bool _isBiometricLoading = false;
+  bool _hasSavedLogin = false;
+  BiometricSignInLabels? _biometricLabels;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadBiometricLoginOption();
+      _showPendingAuthError();
+    });
+  }
+
+  Future<void> _loadBiometricLoginOption() async {
+    final authController = context.read<AuthController>();
+    final saved = await authController.hasSavedLogin();
+    BiometricSignInLabels? labels;
+    if (saved) {
+      labels = await authController.getBiometricSignInLabels();
+    }
+    if (!mounted) return;
+    setState(() {
+      _hasSavedLogin = saved;
+      _biometricLabels = labels;
+    });
+  }
+
+  void _showPendingAuthError() {
+    if (!mounted) return;
+    final authController = context.read<AuthController>();
+    final error = authController.error;
+    if (error == null) return;
+    authController.clearError();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error),
+      backgroundColor: Colors.red,
+    ));
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    if (_isBiometricLoading || _isGoogleLoading) return;
+    setState(() => _isBiometricLoading = true);
+    try {
+      final authController = context.read<AuthController>();
+      final success = await authController.loginWithSavedCredentials();
+      if (!mounted) return;
+      setState(() => _isBiometricLoading = false);
+
+      if (!success && authController.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(authController.error!),
+          backgroundColor: Colors.red,
+        ));
+      }
+      // Routing is handled by the root Consumer<AuthController> in main.dart.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBiometricLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(userFacingErrorMessage(e)),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleLoading) return;
+    setState(() => _isGoogleLoading = true);
+    try {
+      final authController = context.read<AuthController>();
+      final success = await authController.loginWithGoogle();
+      if (!mounted) return;
+      setState(() => _isGoogleLoading = false);
+
+      if (!success && authController.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(authController.error!),
+          backgroundColor: Colors.red,
+        ));
+      }
+      // Routing is handled by the root Consumer<AuthController> in main.dart:
+      // new users → SignupPage (step 2), returning users → MainScreen.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isGoogleLoading = false);
+    }
+  }
 
   // Total pages: 1 intro + 5 features = 6
   final int _totalPages = 6;
@@ -168,7 +262,7 @@ class _WelcomePageState extends State<WelcomePage> {
 
             // Second paragraph
             Text(
-              'As you use this app, you will receive a personalized meal plan and recipes tailored to your health conditions, health goals, and food and cooking preferences.',
+              'As you use this app, you will receive a personalized meal plan and recipes tailored to your health conditions, health goals and food and cooking preferences.',
               textAlign: TextAlign.center,
               style: AppTypography.bg_14_r.copyWith(
                 color: AppColors.textTertiary,
@@ -360,7 +454,9 @@ class _WelcomePageState extends State<WelcomePage> {
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
-            onPressed: () => Navigator.pushNamed(context, '/signup'),
+            onPressed: _isBiometricLoading || _isGoogleLoading
+                ? null
+                : () => Navigator.pushNamed(context, '/signup'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
               foregroundColor: Colors.white,
@@ -380,7 +476,9 @@ class _WelcomePageState extends State<WelcomePage> {
           width: double.infinity,
           height: 52,
           child: OutlinedButton(
-            onPressed: () => Navigator.pushNamed(context, '/login'),
+            onPressed: _isBiometricLoading || _isGoogleLoading
+                ? null
+                : () => Navigator.pushNamed(context, '/login'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primaryOrange,
               side:
@@ -395,6 +493,36 @@ class _WelcomePageState extends State<WelcomePage> {
                   .copyWith(color: AppColors.primaryOrange),
             ),
           ),
+        ),
+        if (_hasSavedLogin && _biometricLabels != null) ...[
+          const SizedBox(height: 12),
+          AppOutlinedIconButton(
+            onPressed: _isBiometricLoading || _isGoogleLoading
+                ? null
+                : _handleBiometricLogin,
+            icon: _biometricLabels!.continueIcon,
+            label: _biometricLabels!.continueButton,
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          children: const [
+            Expanded(child: Divider()),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                'or',
+                style: TextStyle(color: Color(0xFF90909A), fontSize: 13),
+              ),
+            ),
+            Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 12),
+        GoogleSignInButton(
+          isLoading: _isGoogleLoading,
+          onPressed:
+              _isBiometricLoading ? null : _handleGoogleSignIn,
         ),
       ],
     );

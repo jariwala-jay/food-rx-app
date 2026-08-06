@@ -315,22 +315,30 @@ class TrackerService {
         if (dietType.toLowerCase() == 'dash' ||
             dietType.toLowerCase() == 'diabetesplate') {
           if (categoryName == 'vegetables' || categoryName == 'veggies') {
-            newGoal = _safeToDouble(personalizedDietPlan['vegetablesMax'], t.goalValue);
+            newGoal = _safeToDouble(
+                personalizedDietPlan['vegetablesMax'], t.goalValue);
           } else if (categoryName == 'fruits') {
-            newGoal = _safeToDouble(personalizedDietPlan['fruitsMax'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['fruitsMax'], t.goalValue);
           } else if (categoryName == 'grains') {
-            newGoal = _safeToDouble(personalizedDietPlan['grainsMax'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['grainsMax'], t.goalValue);
           } else if (categoryName == 'dairy') {
-            newGoal = _safeToDouble(personalizedDietPlan['dairyMax'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['dairyMax'], t.goalValue);
           } else if (categoryName == 'leanmeat' || categoryName == 'protein') {
-            newGoal = _safeToDouble(personalizedDietPlan['leanMeatsMax'], t.goalValue);
+            newGoal = _safeToDouble(
+                personalizedDietPlan['leanMeatsMax'], t.goalValue);
           } else if (categoryName == 'fatsoils') {
-            newGoal = _safeToDouble(personalizedDietPlan['oilsMax'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['oilsMax'], t.goalValue);
           } else if (categoryName == 'water') {
-            newGoal = _safeToDouble(personalizedDietPlan['waterCups'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['waterCups'], t.goalValue);
           } else if (categoryName == 'sodium') {
             newGoal = _safeToDouble(
-                personalizedDietPlan['sodium_mg_per_day_max'] ?? personalizedDietPlan['sodium'],
+                personalizedDietPlan['sodium_mg_per_day_max'] ??
+                    personalizedDietPlan['sodium'],
                 t.goalValue);
           } else if (categoryName == 'sweets') {
             newGoal = _safeToDouble(
@@ -344,17 +352,22 @@ class TrackerService {
               continue;
             }
           } else if (categoryName == 'nutslegumes') {
-            newGoal = _safeToDouble(personalizedDietPlan['nutsLegumesPerWeek'], t.goalValue);
+            newGoal = _safeToDouble(
+                personalizedDietPlan['nutsLegumesPerWeek'], t.goalValue);
           }
         } else if (dietType.toLowerCase() == 'myplate') {
           if (categoryName == 'vegetables' || categoryName == 'veggies') {
-            newGoal = _safeToDouble(personalizedDietPlan['vegetables'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['vegetables'], t.goalValue);
           } else if (categoryName == 'fruits') {
-            newGoal = _safeToDouble(personalizedDietPlan['fruits'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['fruits'], t.goalValue);
           } else if (categoryName == 'grains') {
-            newGoal = _safeToDouble(personalizedDietPlan['grains'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['grains'], t.goalValue);
           } else if (categoryName == 'protein') {
-            newGoal = _safeToDouble(personalizedDietPlan['protein'], t.goalValue);
+            newGoal =
+                _safeToDouble(personalizedDietPlan['protein'], t.goalValue);
           } else if (categoryName == 'dairy') {
             newGoal = _safeToDouble(personalizedDietPlan['dairy'], t.goalValue);
           }
@@ -803,7 +816,8 @@ class TrackerService {
 
   // Default trackers for DASH diet (and Diabetes Plate - same structure, different store key)
   List<TrackerGoal> _getDefaultDashTrackers(String userId,
-      {Map<String, dynamic>? personalizedDietPlan, String storeAsDietType = 'DASH'}) {
+      {Map<String, dynamic>? personalizedDietPlan,
+      String storeAsDietType = 'DASH'}) {
     // Use personalized values if available, otherwise fall back to defaults
     final grains = _safeToDouble(personalizedDietPlan?['grainsMax'], 6.0);
     final vegetables =
@@ -817,9 +831,8 @@ class TrackerService {
     final sweets =
         _safeToDouble(personalizedDietPlan?['sweetsMaxPerWeek'], 5.0);
 
-    // Sweets is always a weekly goal (same as Nuts). Daily "sweetsMaxPerDay" was
-    // incorrectly moving this card to Daily Meal Goals; keep weekly UX consistent.
-    // Check both possible keys for sodium: 'sodium_mg_per_day_max' (from personalization) or 'sodium' (legacy)
+    // Sweets is always a weekly goal (like Nuts) — don't read a daily key here.
+    // Sodium: prefer the personalization key, fall back to the legacy one.
     final sodium = _safeToDouble(
         personalizedDietPlan?['sodium_mg_per_day_max'] ??
             personalizedDietPlan?['sodium'],

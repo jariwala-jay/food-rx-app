@@ -455,7 +455,16 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer>
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                // In signup mode the video screen is an inline step, not a
+                // pushed route — popping the navigator leaves a black screen.
+                // Call onFinish to skip the video and advance to the next step.
+                if (widget.isSignupMode && widget.onFinish != null) {
+                  widget.onFinish!();
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFF6B35),
                 foregroundColor: Colors.white,
@@ -465,7 +474,7 @@ class _PlanVideoPlayerState extends State<PlanVideoPlayer>
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              child: const Text('Go Back'),
+              child: Text(widget.isSignupMode ? 'Continue' : 'Go Back'),
             ),
           ],
         ),

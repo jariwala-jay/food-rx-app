@@ -40,7 +40,8 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
 
   void _incrementValue() {
     setState(() {
-      _currentValue += _getIncrementStep();
+      _currentValue =
+          (_currentValue + _getIncrementStep()).clamp(0, _getMaxValue());
       _valueController.text = _formatValue(_currentValue);
     });
   }
@@ -70,10 +71,23 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
     }
   }
 
+  double _getMaxValue() {
+    switch (widget.tracker.category) {
+      case TrackerCategory.sodium:
+        return 5000.0; // 5,000 mg max per single entry
+      case TrackerCategory.fatsOils:
+        return 10.0; // 10 servings max per single entry
+      case TrackerCategory.water:
+        return 16.0; // 16 cups (1 gallon) max per single entry
+      default:
+        return double.infinity; // No cap for other categories
+    }
+  }
+
   String _getCategorySpecificHint() {
     switch (widget.tracker.category) {
       case TrackerCategory.sodium:
-        return 'Enter sodium servings (e.g., 2 servings)';
+        return 'Enter amount in mg';
       case TrackerCategory.fatsOils:
         return 'Enter fat/oil servings (e.g., 2 servings)';
       case TrackerCategory.water:
@@ -88,11 +102,11 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
   String _getCategorySpecificExamples() {
     switch (widget.tracker.category) {
       case TrackerCategory.sodium:
-        return 'Examples: 1 tsp salt ≈ 1 serving, 1 slice bread ≈ 0.1 serving';
+        return 'Examples:\n1 cup milk ≈ 110 mg\n1 slice bread ≈ 120-210 mg';
       case TrackerCategory.fatsOils:
-        return 'Examples: 1 tbsp olive oil ≈ 1 serving, 1 pat butter ≈ 1 serving';
+        return 'Examples:\n1 tbsp olive oil ≈ 1 serving\n1 pat butter ≈ 1 serving';
       case TrackerCategory.water:
-        return 'Examples: 1 glass ≈ 1 serving, 1 bottle ≈ 2 servings';
+        return 'Examples:\n1 glass ≈ 1 serving\n1 bottle ≈ 2 servings';
       case TrackerCategory.other:
         return 'Enter the servings you consumed';
       default:
@@ -106,6 +120,14 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
     if (_currentValue <= 0) {
       setState(() {
         _error = 'Please enter a value greater than 0';
+      });
+      return;
+    }
+
+    if (_currentValue > _getMaxValue()) {
+      setState(() {
+        _error =
+            'Value exceeds the maximum allowed (${_formatValue(_getMaxValue())} ${widget.tracker.unitString})';
       });
       return;
     }
@@ -328,7 +350,8 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                           onChanged: (value) {
                             if (value.isNotEmpty) {
                               setState(() {
-                                _currentValue = double.parse(value);
+                                _currentValue = double.parse(value)
+                                    .clamp(0, _getMaxValue());
                               });
                             }
                           },

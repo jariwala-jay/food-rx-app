@@ -37,7 +37,13 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
   void initState() {
     super.initState();
     _itemName = widget.foodItem['name'] ?? 'Unknown Item';
-    _imageUrl = ImageUrlHelper.getValidImageUrl(widget.foodItem['image']);
+    final bundled = widget.foodItem['localAssetPath'] as String?;
+    if (bundled != null && bundled.isNotEmpty) {
+      _imageUrl = 'asset:$bundled';
+    } else {
+      _imageUrl =
+          ImageUrlHelper.getValidImageUrl(widget.foodItem['image'] as String?);
+    }
 
     // Determine default unit and calculate smart expiration using public static methods
     _selectedUnit = PantryItem.getDefaultUnitForCategory(widget.category);

@@ -73,10 +73,7 @@ class PantryDeductionService {
       updatedItems: updatedPantryItems,
       itemsToRemove: itemsToRemove,
       totalIngredientsProcessed: scaledIngredients.length,
-      // Count an ingredient as "deducted" if we matched at least one pantry
-      // item and removed some quantity, even if we couldn't satisfy the full
-      // required amount. This makes the UI summary (e.g. "3/7 deducted")
-      // reflect partial matches instead of only fully-covered ingredients.
+      // Counts partial matches too, not just fully-covered ingredients.
       successfulDeductions:
           deductionResults.where((r) => r.pantryDeductions.isNotEmpty).length,
       averageConfidence: _calculateAverageConfidence(deductionResults),
@@ -202,7 +199,18 @@ class PantryDeductionService {
     String ingredientName,
     List<PantryItem> pantryItems,
   ) {
-    return _findMatchingPantryItems(ingredientName, pantryItems).isNotEmpty;
+    return findMatchingPantryItems(ingredientName, pantryItems).isNotEmpty;
+  }
+
+  /// Pantry rows that match [ingredientName] (direct name or substitution map).
+  /// Sorted FIFO by expiration date (soonest first), same as deduction logic.
+  List<PantryItem> findMatchingPantryItems(
+    String ingredientName,
+    List<PantryItem> pantryItems,
+  ) {
+    final matches = _findMatchingPantryItems(ingredientName, pantryItems);
+    matches.sort((a, b) => a.expirationDate.compareTo(b.expirationDate));
+    return matches;
   }
 
   /// Finds all pantry items that match the ingredient (including substitutes)
@@ -244,7 +252,7 @@ class PantryDeductionService {
       return true;
     }
 
-    // Remove common prefixes/suffixes, sizes, and descriptors, then check again
+    // Remove common prefixes/suffixes, sizes and descriptors, then check again
     final cleanRequired = _cleanIngredientName(requiredLower);
     final cleanAvailable = _cleanIngredientName(availableLower);
 

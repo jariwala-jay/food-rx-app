@@ -106,16 +106,17 @@ class TrackerServingInfoModal extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              '1 Serving of $categoryDisplayName counts as:',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+            if (category != TrackerCategory.sodium)
+              Text(
+                '1 Serving of $categoryDisplayName counts as:',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
+            if (category != TrackerCategory.sodium) const SizedBox(height: 16),
             // Serving examples
             ...examples
                 .map((example) => Padding(
@@ -139,6 +140,7 @@ class TrackerServingInfoModal extends StatelessWidget {
                               example.toString(),
                               style: const TextStyle(
                                 fontSize: 14,
+                                fontWeight: FontWeight.bold,
                                 color: AppColors.textSecondary,
                               ),
                             ),
@@ -153,6 +155,7 @@ class TrackerServingInfoModal extends StatelessWidget {
                 servingDefinition['notes'] as String,
                 style: const TextStyle(
                   fontSize: 14,
+                  fontWeight: FontWeight.bold,
                   color: AppColors.textSecondary,
                 ),
               ),

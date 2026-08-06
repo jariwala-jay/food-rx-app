@@ -12,7 +12,20 @@
           "package_name": "com.shield.myfoodrx"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "609996001749-dvbq9k9no2fmrba2rvgd32tkug77258f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shield.myfoodrx",
+            "certificate_hash": "8f6b6e4011a5cc5f9670232602961bc2ec054f6f"
+          }
+        },
+        {
+          "client_id": "609996001749-8hsat17p0d38d5m7buel45t639e59jt8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDe8iNW8gsQaq49B-5_RGcs9zw74sQxGfs"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "609996001749-8hsat17p0d38d5m7buel45t639e59jt8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "609996001749-rnhqhjpga61ghu4ein71ogrg7pmfoss7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shield.myfoodrx"
+              }
+            }
+          ]
         }
       }
     }

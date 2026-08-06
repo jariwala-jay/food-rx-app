@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "functions-framework --target=notificationScheduler",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/test_inactivity_bucket.js && node scripts/test_notification_content.js"
   },
   "keywords": ["notifications", "food-rx", "health"],
   "author": "",

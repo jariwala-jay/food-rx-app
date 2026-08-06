@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// Enhanced Universal Conversion Service (UCS) for Food Rx
 /// Provides comprehensive unit conversion with density-based transformations
-/// Supports recipe scaling, pantry deduction, and diet serving calculations
+/// Supports recipe scaling, pantry deduction and diet serving calculations
 class UnitConversionService {
   // --- Ratio-based Converters ---
 

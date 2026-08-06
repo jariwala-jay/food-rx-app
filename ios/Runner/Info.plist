@@ -51,6 +51,12 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyFoodRx needs access to your photo library so you can choose a profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MyFoodRx needs access to your camera so you can take a profile picture.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MyFoodRx uses Face ID to sign you in with your saved login on this device.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -61,6 +67,14 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>foodrx</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.609996001749-rnhqhjpga61ghu4ein71ogrg7pmfoss7</string>
 			</array>
 		</dict>
 	</array>

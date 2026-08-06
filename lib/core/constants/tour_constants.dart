@@ -21,6 +21,8 @@ class TourKeys {
       GlobalKey(debugLabel: 'add_foodrx_items');
   static final GlobalKey pantryCategoryListKey =
       GlobalKey(debugLabel: 'pantry_category_list');
+  static final GlobalKey pantryFreshStorageKey =
+      GlobalKey(debugLabel: 'pantry_fresh_storage');
   static final GlobalKey recipesKey = GlobalKey(debugLabel: 'recipes');
   static final GlobalKey recipeListKey = GlobalKey(debugLabel: 'recipe_list');
   static final GlobalKey generateRecipeButtonKey =
@@ -77,7 +79,10 @@ class TourDescriptions {
   static const String addButton = "Add food items to your pantry.$_tap";
 
   static const String selectCategory =
-      "Let's add an item. Tap 'Fresh Fruits' to continue.$_tap";
+      "Let's add an item. Tap 'Fruits' to continue.$_tap";
+
+  static const String selectFreshStorage =
+      "Tap 'Fresh' to browse fresh fruits.$_tap";
 
   static const String selectItem =
       "Tap the + button to add the first item.$_tap";

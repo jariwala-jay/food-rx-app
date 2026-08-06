@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/core/models/excluded_ingredient.dart';
 import 'package:flutter_app/features/auth/models/signup_data.dart';
 import 'dart:io';
 
@@ -6,10 +7,29 @@ class SignupProvider extends ChangeNotifier {
   final SignupData _data = SignupData();
   int _currentStep = 0;
   File? _profilePhoto;
+  bool _saveBiometricLogin = false;
 
   SignupData get data => _data;
   int get currentStep => _currentStep;
   File? get profilePhoto => _profilePhoto;
+  bool get saveBiometricLogin => _saveBiometricLogin;
+
+  void setSaveBiometricLogin(bool value) {
+    if (_saveBiometricLogin == value) return;
+    _saveBiometricLogin = value;
+    notifyListeners();
+  }
+
+  void prefillForGoogle({
+    String? name,
+    String? email,
+    String? profilePhotoUrl,
+  }) {
+    _data.name = name ?? _data.name;
+    _data.email = email ?? _data.email;
+    _data.profilePhotoUrl = profilePhotoUrl ?? _data.profilePhotoUrl;
+    notifyListeners();
+  }
 
   void updateBasicInfo({
     String? name,
@@ -43,6 +63,7 @@ class SignupProvider extends ChangeNotifier {
 
   void updatePreferences({
     List<String>? foodAllergies,
+    List<ExcludedIngredient>? excludedIngredients,
     String? activityLevel,
     List<String>? healthGoals,
     List<String>? favoriteCuisines,
@@ -51,6 +72,8 @@ class SignupProvider extends ChangeNotifier {
     String? dailyWaterIntake,
   }) {
     _data.foodAllergies = foodAllergies ?? _data.foodAllergies;
+    _data.excludedIngredients =
+        excludedIngredients ?? _data.excludedIngredients;
     _data.activityLevel = activityLevel ?? _data.activityLevel;
     _data.healthGoals = healthGoals ?? _data.healthGoals;
     _data.favoriteCuisines = favoriteCuisines ?? _data.favoriteCuisines;
@@ -123,6 +146,7 @@ class SignupProvider extends ChangeNotifier {
     _data.weight = null;
     _data.medicalConditions = [];
     _data.foodAllergies = [];
+    _data.excludedIngredients = [];
     _data.activityLevel = null;
     _data.healthGoals = [];
     _data.dietType = null;
@@ -136,7 +160,9 @@ class SignupProvider extends ChangeNotifier {
     _data.targetCalories = null;
     _data.selectedDietPlan = null;
     _data.diagnostics = null;
+    _data.profilePhotoUrl = null;
     _profilePhoto = null;
+    _saveBiometricLogin = false;
     notifyListeners();
   }
 }

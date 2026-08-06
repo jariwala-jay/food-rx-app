@@ -46,6 +46,15 @@ exports.notificationScheduler = async (req, res) => {
 
     let result;
 
+    // Deliberately no "expired_items" case here. expiring_ingredient needs a
+    // server-side cron because it's a preventive nudge with a closing
+    // window (use it before it's gone) that must reach the user even if
+    // they haven't opened the app in days. expired_items is the opposite:
+    // the window already closed, so there's no benefit to catching it the
+    // instant it happens — it's a "review your pantry" trigger that's
+    // naturally and cheaply detected the next time the client already has
+    // pantry state loaded (see SimpleNotificationService.checkExpiredItems),
+    // with no separate server-side check needed.
     switch (type) {
       case "expiring_ingredients":
         result = await checkExpiringIngredients();
@@ -88,33 +97,53 @@ const APP_OPEN_WEEK_MILESTONES = [7, 14, 21, 28];
 const APP_OPEN_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const NEW_ACCOUNT_GRACE_HOURS = 24;
 
-function toStartOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function dayDiffFloor(later, earlier) {
+// Milestone day-count, using the user's LOCAL calendar day (localDayStartUtc,
+// defined below) rather than the server runtime's timezone. Cloud Functions
+// run in UTC, so without this every user's "days since last log" would
+// silently be computed against UTC calendar-day boundaries instead of their
+// own -- the same bug class localDayStartUtc already exists to prevent for
+// same-day dedupe checks elsewhere in this file.
+//
+// Returns the number of LOCAL CALENDAR DAY boundaries crossed between
+// `earlier` and `later` -- not elapsed 24-hour periods. Do not simplify
+// this to Math.floor((later - earlier) / DAY_MS); that reintroduces the
+// timezone bug this function exists to fix.
+function dayDiffFloor(later, earlier, timezoneOffsetMinutes) {
   const msPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor(
-    (toStartOfDay(later).getTime() - toStartOfDay(earlier).getTime()) / msPerDay
-  );
+  const laterStart = localDayStartUtc(later, timezoneOffsetMinutes);
+  const earlierStart = localDayStartUtc(earlier, timezoneOffsetMinutes);
+  return Math.floor((laterStart.getTime() - earlierStart.getTime()) / msPerDay);
 }
 
-function addMonths(date, months) {
-  const d = new Date(date);
-  const originalDay = d.getDate();
-  d.setMonth(d.getMonth() + months);
-  if (d.getDate() < originalDay) {
-    d.setDate(0);
+// Adds `months` to `date`'s LOCAL calendar day, clamping day-of-month
+// overflow to the last day of the target month (e.g. Jan 31 + 1 month ->
+// Feb 28/29, not Mar 3 -- the standard setMonth() overflow idiom), but
+// anchored to the user's local calendar instead of the server's. Returns
+// that target day's local midnight, expressed back in UTC, so it can be
+// compared directly against another localDayStartUtc() value.
+function addMonthsLocalDayStartUtc(date, months, timezoneOffsetMinutes) {
+  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
+  const local = new Date(date.getTime() + offsetMs);
+  const originalDay = local.getUTCDate();
+  local.setUTCMonth(local.getUTCMonth() + months);
+  if (local.getUTCDate() < originalDay) {
+    local.setUTCDate(0);
   }
-  return d;
+  const localMidnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  return new Date(localMidnightUtc - offsetMs);
 }
 
-function getInactivityBucket(now, referenceDate, dayMilestones, weekMilestones, monthMilestones) {
+function getInactivityBucket(
+  now,
+  referenceDate,
+  dayMilestones,
+  weekMilestones,
+  monthMilestones,
+  timezoneOffsetMinutes
+) {
   if (!referenceDate) return null;
 
-  const days = dayDiffFloor(now, referenceDate);
+  const days = dayDiffFloor(now, referenceDate, timezoneOffsetMinutes);
   if (days <= 0) return null;
 
   for (const d of dayMilestones) {
@@ -129,11 +158,10 @@ function getInactivityBucket(now, referenceDate, dayMilestones, weekMilestones, 
     }
   }
 
+  const todayLocalStart = localDayStartUtc(now, timezoneOffsetMinutes);
   for (const m of monthMilestones) {
-    const target = addMonths(toStartOfDay(referenceDate), m);
-    const targetDay = toStartOfDay(target).getTime();
-    const todayDay = toStartOfDay(now).getTime();
-    if (targetDay === todayDay) {
+    const targetLocalStart = addMonthsLocalDayStartUtc(referenceDate, m, timezoneOffsetMinutes);
+    if (targetLocalStart.getTime() === todayLocalStart.getTime()) {
       return { key: `m${m}`, days };
     }
   }
@@ -146,16 +174,38 @@ function bucketLabel(bucketKey) {
   const kind = bucketKey[0];
   const value = parseInt(bucketKey.slice(1), 10);
   if (Number.isNaN(value)) return "";
-  if (kind === "d") return `${value} day${value > 1 ? "s" : ""}`;
-  if (kind === "w") return `${value} week${value > 1 ? "s" : ""}`;
-  if (kind === "m") return `${value} month${value > 1 ? "s" : ""}`;
+  // Singular reads as prose ("a day"), plural as a numeral ("2 days") --
+  // matches how the milestone count is actually meant to be read.
+  if (kind === "d") return value === 1 ? "a day" : `${value} days`;
+  if (kind === "w") return value === 1 ? "a week" : `${value} weeks`;
+  if (kind === "m") return value === 1 ? "a month" : `${value} months`;
   return "";
 }
 
-function formatBucketMessage(prefix, bucketKey) {
+// Leads with the call to action, then names the "why" (time since
+// sincePhrase) last, so the reminder still reads as personalized instead of
+// a generic "It's been 1 day." with no context of what that's since.
+function formatMessageWithReason(callToAction, sincePhrase, bucketKey) {
   const label = bucketLabel(bucketKey);
-  if (!label) return prefix;
-  return `${prefix} It's been ${label}.`;
+  if (!label) return callToAction;
+  return `${callToAction} It's been ${label} since ${sincePhrase}.`;
+}
+
+// Picks the more recent of several raw date-like values (e.g.
+// tracker_progress's progressDate and user_trackers' lastUpdated),
+// tolerating any of them being missing or unparseable. Extracted out of
+// checkMealLoggingInactivityReminders so the "use whichever activity
+// signal is fresher" rule has one unit-testable home instead of living
+// inline in the per-user loop.
+function resolveLatestActivityDate(...rawDates) {
+  let latest = null;
+  for (const raw of rawDates) {
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) continue;
+    if (!latest || d > latest) latest = d;
+  }
+  return latest;
 }
 
 function isWithinNewAccountGracePeriod(now, user) {
@@ -165,6 +215,18 @@ function isWithinNewAccountGracePeriod(now, user) {
   if (Number.isNaN(createdAt.getTime())) return false;
   const ageMs = now.getTime() - createdAt.getTime();
   return ageMs >= 0 && ageMs < NEW_ACCOUNT_GRACE_HOURS * 60 * 60 * 1000;
+}
+
+// Start of the user's local calendar day, expressed back in UTC.
+// `timezoneOffsetMinutes` follows the Dart `DateTime.timeZoneOffset` /
+// JS `-Date.getTimezoneOffset()` convention: minutes to ADD to UTC to get
+// local time. Mirrors `notification_eligibility.local_day_start_utc` on
+// the Python side (same semantics, same default of 0/UTC when unset).
+function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
+  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
+  const localNow = new Date(nowUtc.getTime() + offsetMs);
+  const localMidnightUtc = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate());
+  return new Date(localMidnightUtc - offsetMs);
 }
 
 /**
@@ -213,6 +275,11 @@ async function checkExpiringIngredients() {
       for (const user of users) {
         const userId = user._id.toHexString();
 
+        // Skip alerts for very new accounts to avoid noisy first-day nudges.
+        if (isWithinNewAccountGracePeriod(now, user)) {
+          continue;
+        }
+
         // Get expiring items for this user (next 3 days)
         // expiryDate may be stored as ISO string; convert to Date for comparison
         const expiringItems = await pantryCollection
@@ -248,15 +315,14 @@ async function checkExpiringIngredients() {
         const title =
           names.length === 1
             ? `${names[0]} expires soon`
-            : `${names.length} food items expiring soon`;
+            : `${names.length} ingredients expire soon`;
         const message =
           names.length === 1
             ? "Use it in a recipe today so it doesn't go to waste."
             : `Expiring soon: ${itemsSummary}`;
 
-        // If a digest exists today, update it; otherwise insert new
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // If a digest exists today (in the user's local timezone), update it; otherwise insert new
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
 
         const existing = await notificationsCollection.findOne({
           userId: userId,
@@ -318,6 +384,7 @@ async function checkMealLoggingInactivityReminders() {
   try {
     db = await connectToMongo();
     const progressCollection = db.collection("tracker_progress");
+    const trackersCollection = db.collection("user_trackers");
     const notificationsCollection = db.collection("notifications");
     const usersCollection = db.collection("users");
 
@@ -360,9 +427,8 @@ async function checkMealLoggingInactivityReminders() {
           continue;
         }
 
-        // Only one tracker reminder notification per user per day.
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Only one tracker reminder notification per user per local day.
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
         const existingToday = await notificationsCollection.findOne({
           userId: userId,
           type: "tracker_reminder",
@@ -380,12 +446,28 @@ async function checkMealLoggingInactivityReminders() {
           .limit(1)
           .toArray();
 
-        if (latestProgress.length === 0) {
-          continue;
-        }
+        // tracker_progress only gains a row once a day, when that day's
+        // trackers reset -- so on any given day, before tonight's reset
+        // runs, its latest row is always ~1 day stale by construction, even
+        // for a user actively logging meals right now. user_trackers is
+        // updated live on every log (see PATCH /trackers/{id} -> lastUpdated
+        // in trackers.py), so check it too and use whichever signal is more
+        // recent as "last logged" -- otherwise every active user trips the
+        // d1 bucket daily regardless of same-day logging.
+        const latestTrackerUpdate = await trackersCollection
+          .find({
+            userId: userId,
+          })
+          .sort({ lastUpdated: -1 })
+          .limit(1)
+          .toArray();
 
-        const latestDate = new Date(latestProgress[0].progressDate);
-        if (Number.isNaN(latestDate.getTime())) {
+        const latestDate = resolveLatestActivityDate(
+          latestProgress[0]?.progressDate,
+          latestTrackerUpdate[0]?.lastUpdated
+        );
+
+        if (!latestDate) {
           continue;
         }
 
@@ -394,10 +476,19 @@ async function checkMealLoggingInactivityReminders() {
           latestDate,
           MEAL_LOGGING_DAY_MILESTONES,
           MEAL_LOGGING_WEEK_MILESTONES,
-          MEAL_LOGGING_MONTH_MILESTONES
+          MEAL_LOGGING_MONTH_MILESTONES,
+          user.timezoneOffsetMinutes
         );
 
         if (!bucket) {
+          continue;
+        }
+
+        // Day 1 is already covered by the user's own meal reminders when
+        // enabled; days 2-6, weekly and monthly milestones still fire
+        // regardless, since a user ignoring meal reminders for that long
+        // is a distinct "fell out of the habit" signal worth surfacing.
+        if (bucket.key === "d1" && user?.mealLoggingReminderPrefs?.enabled === true) {
           continue;
         }
 
@@ -416,8 +507,9 @@ async function checkMealLoggingInactivityReminders() {
           userId: userId,
           type: "tracker_reminder",
           title: "Don't forget to log your meals",
-          message: formatBucketMessage(
-            "It's time to log your food and stay on track with your nutrition goals.",
+          message: formatMessageWithReason(
+            "Log your food to stay on track with your nutrition goals.",
+            "you last logged your meals",
             bucket.key
           ),
           bucketKey: bucket.key,
@@ -495,9 +587,8 @@ async function checkAppInactivityReminders() {
           continue;
         }
 
-        // Only one app inactivity reminder notification per user per day.
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Only one app inactivity reminder notification per user per local day.
+        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
         const existingToday = await notificationsCollection.findOne({
           userId: userId,
           type: "app_inactivity_reminder",
@@ -516,7 +607,8 @@ async function checkAppInactivityReminders() {
           lastActiveDate,
           APP_OPEN_DAY_MILESTONES,
           APP_OPEN_WEEK_MILESTONES,
-          APP_OPEN_MONTH_MILESTONES
+          APP_OPEN_MONTH_MILESTONES,
+          user.timezoneOffsetMinutes
         );
 
         if (!bucket) continue;
@@ -533,8 +625,9 @@ async function checkAppInactivityReminders() {
           userId: userId,
           type: "app_inactivity_reminder",
           title: "We miss you at MyFoodRx",
-          message: formatBucketMessage(
-            "Open the app to review your pantry, trackers, and recommendations.",
+          message: formatMessageWithReason(
+            "Open MyFoodRx to review your pantry, trackers and recommendations.",
+            "you last opened MyFoodRx",
             bucket.key
           ),
           bucketKey: bucket.key,
@@ -574,3 +667,17 @@ async function runAllNotificationChecks() {
     appInactivityReminders: app.notificationsCreated || 0,
   };
 }
+
+// Exposed only for the scripts/test_*.js regression checks so they exercise
+// the real production logic instead of a reimplementation that could
+// silently drift from it. Not used by the Cloud Function runtime itself,
+// which only invokes exports.notificationScheduler.
+exports.__testables = {
+  localDayStartUtc,
+  dayDiffFloor,
+  addMonthsLocalDayStartUtc,
+  getInactivityBucket,
+  bucketLabel,
+  formatMessageWithReason,
+  resolveLatestActivityDate,
+};

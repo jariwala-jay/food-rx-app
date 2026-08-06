@@ -14,11 +14,20 @@ class SavedRecipesPage extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Saved Recipes'),
-            backgroundColor: const Color(0xFFF7F7F8),
+            backgroundColor: Colors.white,
             elevation: 0,
-            foregroundColor: Colors.black87,
-            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: const Text(
+              'Saved recipes',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF333333),
+              ),
+            ),
           ),
           backgroundColor: const Color(0xFFF7F7F8),
           body: savedRecipes.isEmpty

@@ -149,8 +149,7 @@ void main() {
         expect(cinnamon['amount'], lessThan(2.5)); // 0.5 * 5 = 2.5, but should be less
       });
 
-      test('Optimizes units after scaling', () {
-        // Create a recipe with small tablespoon amounts that should convert to cups
+      test('Keeps exact scaled amounts without unit optimization', () {
         final testRecipe = {
           "id": 1,
           "title": "Test Recipe",
@@ -171,15 +170,51 @@ void main() {
 
         final scaledRecipe = scalingService.scaleRecipe(
           originalRecipe: testRecipe,
-          targetServings: 16, // 2 tbsp * 16 = 32 tbsp = 2 cups
+          targetServings: 16,
         );
 
         final scaledIngredients = scaledRecipe['extendedIngredients'] as List<dynamic>;
         final flour = scaledIngredients.first;
-        
-        expect(flour['amount'], equals(2.0)); // Should be optimized to 2 cups
-        expect(flour['unit'], equals('cups')); // Should be converted from tablespoons
-        expect(flour['scalingMetadata']['optimized'], isTrue);
+
+        expect(flour['amount'], equals(32.0));
+        expect(flour['unit'], equals('tablespoon'));
+        expect(flour['scalingMetadata']['optimized'], isFalse);
+      });
+
+      test('Preserves exact downscaled amounts for pantry calculations', () {
+        final testRecipe = {
+          "id": 1,
+          "title": "Frittata",
+          "servings": 6,
+          "extendedIngredients": [
+            {
+              "id": 1,
+              "name": "basil dried",
+              "amount": 0.5,
+              "unit": "teaspoon",
+            },
+            {
+              "id": 2,
+              "name": "asparagus",
+              "amount": 1.0,
+              "unit": "bunch",
+            }
+          ]
+        };
+
+        final scaledRecipe = scalingService.scaleRecipe(
+          originalRecipe: testRecipe,
+          targetServings: 1,
+        );
+
+        final scaledIngredients = scaledRecipe['extendedIngredients'] as List<dynamic>;
+        final basil = scaledIngredients.firstWhere((ing) => ing['name'] == 'basil dried');
+        final asparagus = scaledIngredients.firstWhere((ing) => ing['name'] == 'asparagus');
+
+        expect(basil['amount'], closeTo(0.5 / 6, 0.0001));
+        expect(basil['unit'], equals('teaspoon'));
+        expect(asparagus['amount'], closeTo(1.0 / 6, 0.0001));
+        expect(asparagus['unit'], equals('bunch'));
       });
     });
 

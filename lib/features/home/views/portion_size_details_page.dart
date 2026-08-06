@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_app/core/widgets/zoomable_asset_image.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
 /// Page that displays portion size guide images with title "Portion Size Details".
@@ -104,38 +105,44 @@ class _PortionSizeDetailsPageState extends State<PortionSizeDetailsPage> {
       body: Column(
         children: [
           Expanded(
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  item.path,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      height: 400,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                children: [
+                  ZoomableAssetImage.pinchToZoomHint,
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ZoomableAssetImage(
+                        assetPath: item.path,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 400,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.image_not_supported,
+                                    size: 64, color: Colors.grey),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Image not found: ${item.label}',
+                                  style: const TextStyle(
+                                      fontSize: 16, color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.image_not_supported,
-                              size: 64, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Image not found: ${item.label}',
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.grey),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

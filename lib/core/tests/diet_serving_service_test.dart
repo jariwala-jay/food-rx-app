@@ -55,13 +55,15 @@ void main() {
       });
 
       test('should handle multiple categories', () {
-        final categories = dietService.getCategoriesForIngredient('peanut butter');
+        final categories =
+            dietService.getCategoriesForIngredient('peanut butter');
         expect(categories, contains(TrackerCategory.nutsLegumes));
         expect(categories, contains(TrackerCategory.fatsOils));
       });
 
       test('should handle case insensitive matching', () {
-        final categories = dietService.getCategoriesForIngredient('CHICKEN BREAST');
+        final categories =
+            dietService.getCategoriesForIngredient('CHICKEN BREAST');
         expect(categories, contains(TrackerCategory.protein));
       });
     });
@@ -291,7 +293,8 @@ void main() {
           servings: 2, // Recipe serves 2 people
         );
 
-        expect(servings[TrackerCategory.leanMeat], greaterThan(0.0)); // DASH uses leanMeat
+        expect(servings[TrackerCategory.leanMeat],
+            greaterThan(0.0)); // DASH uses leanMeat
         expect(servings[TrackerCategory.veggies], greaterThan(0.0));
         expect(servings[TrackerCategory.grains], greaterThan(0.0));
         expect(servings[TrackerCategory.fatsOils], greaterThan(0.0));
@@ -389,12 +392,14 @@ void main() {
         expect(recommendations[TrackerCategory.veggies], equals(4.5));
         expect(recommendations[TrackerCategory.fruits], equals(4.5));
         expect(recommendations[TrackerCategory.grains], equals(7.0));
-        expect(recommendations[TrackerCategory.leanMeat], equals(6.0)); // DASH uses leanMeat, not protein
+        expect(recommendations[TrackerCategory.leanMeat],
+            equals(6.0)); // DASH uses leanMeat, not protein
         expect(recommendations[TrackerCategory.dairy], equals(2.5));
       });
 
       test('should get MyPlate recommended servings', () {
-        final recommendations = dietService.getRecommendedDailyServings('myplate');
+        final recommendations =
+            dietService.getRecommendedDailyServings('myplate');
 
         expect(recommendations[TrackerCategory.veggies], equals(2.5));
         expect(recommendations[TrackerCategory.fruits], equals(2.0));
@@ -404,7 +409,8 @@ void main() {
       });
 
       test('should return empty map for unsupported diet', () {
-        final recommendations = dietService.getRecommendedDailyServings('unsupported');
+        final recommendations =
+            dietService.getRecommendedDailyServings('unsupported');
         expect(recommendations, isEmpty);
       });
     });
@@ -461,7 +467,7 @@ void main() {
           category: TrackerCategory.veggies,
           dietType: 'dash',
         );
-        
+
         // Should be exactly 1.0 serving with ≤5% variance
         expect(servings, closeTo(1.0, 0.05));
       });
@@ -475,7 +481,7 @@ void main() {
           category: TrackerCategory.grains,
           dietType: 'dash',
         );
-        
+
         expect(servings, closeTo(1.0, 0.05));
       });
 
@@ -488,7 +494,7 @@ void main() {
           category: TrackerCategory.dairy,
           dietType: 'myplate',
         );
-        
+
         expect(servings, closeTo(1.0, 0.05));
       });
 
@@ -501,7 +507,7 @@ void main() {
           category: TrackerCategory.protein,
           dietType: 'myplate',
         );
-        
+
         expect(servings, closeTo(1.0, 0.05));
       });
 
@@ -543,7 +549,7 @@ void main() {
     group('Performance Tests', () {
       test('should meet PRD performance requirements (<150ms)', () {
         final stopwatch = Stopwatch()..start();
-        
+
         // Perform multiple conversions
         for (int i = 0; i < 100; i++) {
           dietService.getServingsForTracker(
@@ -554,32 +560,34 @@ void main() {
             dietType: 'dash',
           );
         }
-        
+
         stopwatch.stop();
         final avgTime = stopwatch.elapsedMilliseconds / 100;
-        
+
         expect(avgTime, lessThan(150.0)); // PRD requirement: <150ms
       });
 
       test('should handle batch recipe calculations efficiently', () {
-        final ingredients = List.generate(50, (i) => {
-          'name': 'ingredient_$i',
-          'amount': 100.0,
-          'unit': 'gram',
-        });
+        final ingredients = List.generate(
+            50,
+            (i) => {
+                  'name': 'ingredient_$i',
+                  'amount': 100.0,
+                  'unit': 'gram',
+                });
 
         final stopwatch = Stopwatch()..start();
-        
+
         dietService.calculateRecipeServings(
           ingredients: ingredients,
           dietType: 'dash',
           servings: 4,
         );
-        
+
         stopwatch.stop();
-        
+
         expect(stopwatch.elapsedMilliseconds, lessThan(150));
       });
     });
   });
-} 
+}
