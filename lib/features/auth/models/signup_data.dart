@@ -5,6 +5,16 @@ class SignupData {
   String? email;
   String? password;
   String? profilePhotoUrl;
+  /// Google Sign-In ID token (JWT), held only for a brand-new Google account
+  /// that hasn't finished onboarding yet — sent to /auth/google/complete at
+  /// the final step to atomically create the account. Never serialized via
+  /// toJson(); passed separately, like [password].
+  ///
+  /// This must be the ID token (`GoogleSignInAuthentication.idToken`), not
+  /// the OAuth access token: the backend verifies its signature and audience
+  /// against MyFoodRx's own OAuth client IDs, which an access token cannot
+  /// be checked against.
+  String? googleIdToken;
   DateTime? dateOfBirth;
   String? sex;
   double? heightFeet;
@@ -34,6 +44,7 @@ class SignupData {
     this.email,
     this.password,
     this.profilePhotoUrl,
+    this.googleIdToken,
     this.dateOfBirth,
     this.sex,
     this.heightFeet,

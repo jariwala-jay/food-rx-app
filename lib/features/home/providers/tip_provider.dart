@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter_app/features/home/models/tip.dart';
 import 'package:flutter_app/features/home/services/tip_service.dart';
@@ -100,24 +101,24 @@ class TipProvider with ChangeNotifier {
         selectedTips.add(remainingTips[randomIndex]);
       }
 
-      // Update last shown date and view count for selected tips
+      // Record last-shown date and view count for selected tips. This is
+      // server-side engagement bookkeeping only — it doesn't affect what's
+      // rendered, so fire it off in the background instead of making the
+      // user wait on up to 4 sequential PATCH round trips before tips appear.
       for (var tip in selectedTips) {
-        try {
-          final updatedTip = tip.copyWith(
-            lastShownToUsers: {
-              ...tip.lastShownToUsers,
-              userId: now,
-            },
-            viewCountByUser: {
-              ...tip.viewCountByUser,
-              userId: (tip.getViewCountForUser(userId) + 1),
-            },
-          );
-          await _tipService.updateTip(updatedTip, userId);
-        } catch (e) {
+        final updatedTip = tip.copyWith(
+          lastShownToUsers: {
+            ...tip.lastShownToUsers,
+            userId: now,
+          },
+          viewCountByUser: {
+            ...tip.viewCountByUser,
+            userId: (tip.getViewCountForUser(userId) + 1),
+          },
+        );
+        unawaited(_tipService.updateTip(updatedTip, userId).catchError((e) {
           print('Failed to update tip ${tip.id}: $e');
-          // Continue with other tips even if one fails
-        }
+        }));
       }
 
       _shownTips = selectedTips;

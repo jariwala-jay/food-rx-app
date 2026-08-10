@@ -8,6 +8,7 @@ import 'package:flutter_app/core/utils/email_validation.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
+import 'package:flutter_app/core/utils/image_crop_helper.dart';
 
 class BasicInfoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -94,8 +95,42 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
 
   Future<void> _pickImage() async {
     try {
+      final ImageSource? source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (context) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from Gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take Photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.cancel),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (source == null) return;
+
+      // Wait for the bottom sheet route to finish closing before presenting the
+      // system picker; opening PHPicker immediately after pop can hang on iOS.
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      if (!mounted) return;
+
       final pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
@@ -103,12 +138,17 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       );
 
       if (pickedFile != null) {
+        if (!mounted) return;
+        final croppedFile = await cropProfilePhoto(context, pickedFile.path);
+        if (croppedFile == null || !mounted) return;
+
         setState(() {
-          _profilePhoto = File(pickedFile.path);
-          _profilePhotoPath = pickedFile.path;
+          _profilePhoto = croppedFile;
+          _profilePhotoPath = croppedFile.path;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = userFacingErrorMessage(e);
       });
@@ -249,33 +289,37 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
                     Center(
                       child: Stack(
                         children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF7F7F8),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color(0xFFE7E9EC),
-                                width: 1,
+                          InkWell(
+                            onTap: _pickImage,
+                            customBorder: const CircleBorder(),
+                            child: Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7F7F8),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFFE7E9EC),
+                                  width: 1,
+                                ),
+                                image: _profilePhotoPath != null
+                                    ? DecorationImage(
+                                        image: FileImage(
+                                            File(_profilePhotoPath!)),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              image: _profilePhotoPath != null
-                                  ? DecorationImage(
-                                      image:
-                                          FileImage(File(_profilePhotoPath!)),
-                                      fit: BoxFit.cover,
+                              child: _profilePhotoPath == null
+                                  ? const Center(
+                                      child: Icon(
+                                        Icons.person_outline,
+                                        size: 48,
+                                        color: Color(0xFF90909A),
+                                      ),
                                     )
                                   : null,
                             ),
-                            child: _profilePhotoPath == null
-                                ? const Center(
-                                    child: Icon(
-                                      Icons.person_outline,
-                                      size: 48,
-                                      color: Color(0xFF90909A),
-                                    ),
-                                  )
-                                : null,
                           ),
                           Positioned(
                             bottom: 0,

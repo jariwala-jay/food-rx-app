@@ -322,18 +322,27 @@ class _LoginPageState extends State<LoginPage> {
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
                                   onTap: () {
                                     FocusScope.of(context).unfocus();
                                     Navigator.pushNamed(
                                         context, '/forgot-password');
                                   },
-                                  child: const Text(
-                                    'Forgot Password?',
-                                    style: TextStyle(
-                                      color: Color(0xFF545454),
-                                      fontSize: 12,
-                                      fontFamily: 'Bricolage Grotesque',
-                                      fontWeight: FontWeight.w400,
+                                  child: const Padding(
+                                    // GestureDetector only hit-tests its child's painted
+                                    // bounds by default — at 12px text that's a sliver too
+                                    // small to tap reliably. Pad the tap target out without
+                                    // changing how the text looks.
+                                    padding: EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 8),
+                                    child: Text(
+                                      'Forgot Password?',
+                                      style: TextStyle(
+                                        color: Color(0xFF545454),
+                                        fontSize: 12,
+                                        fontFamily: 'Bricolage Grotesque',
+                                        fontWeight: FontWeight.w400,
+                                      ),
                                     ),
                                   ),
                                 ),

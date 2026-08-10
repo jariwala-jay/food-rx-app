@@ -1,11 +1,13 @@
 package com.shield.myfoodrx
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import me.leolin.shortcutbadger.ShortcutBadger
 
-class MainActivity : FlutterActivity() {
+// local_auth requires a FlutterFragmentActivity host (not plain FlutterActivity)
+// to show the biometric/fingerprint/Face ID system prompt.
+class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

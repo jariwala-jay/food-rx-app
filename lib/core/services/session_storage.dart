@@ -118,26 +118,38 @@ class SessionStorage {
   }
 
   // ── Login count + suggestion tracking (non-sensitive, SharedPreferences) ───
+  //
+  // Keyed per-user (by user ID), not global to the device/install. Two
+  // different accounts signing into the same phone must each get their own
+  // "have I seen the biometric suggestion yet" state — a global flag means
+  // whichever account dismisses it first silently hides it forever for
+  // every other account on that device.
 
-  static Future<int> getLoginCount() async {
+  static String _loginCountKey(String userId) => '$_prefKeyLoginCount:$userId';
+
+  static String _biometricSuggestionShownKey(String userId) =>
+      '$_prefKeyBiometricSuggestionShown:$userId';
+
+  static Future<int> getLoginCount(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_prefKeyLoginCount) ?? 0;
+    return prefs.getInt(_loginCountKey(userId)) ?? 0;
   }
 
-  static Future<void> incrementLoginCount() async {
+  static Future<void> incrementLoginCount(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    final count = prefs.getInt(_prefKeyLoginCount) ?? 0;
-    await prefs.setInt(_prefKeyLoginCount, count + 1);
+    final key = _loginCountKey(userId);
+    final count = prefs.getInt(key) ?? 0;
+    await prefs.setInt(key, count + 1);
   }
 
-  static Future<bool> isBiometricSuggestionShown() async {
+  static Future<bool> isBiometricSuggestionShown(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefKeyBiometricSuggestionShown) ?? false;
+    return prefs.getBool(_biometricSuggestionShownKey(userId)) ?? false;
   }
 
-  static Future<void> markBiometricSuggestionShown() async {
+  static Future<void> markBiometricSuggestionShown(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyBiometricSuggestionShown, true);
+    await prefs.setBool(_biometricSuggestionShownKey(userId), true);
   }
 
   static Future<bool> hasRefreshToken() async {
