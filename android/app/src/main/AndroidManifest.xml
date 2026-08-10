@@ -31,12 +31,28 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Deep link intent filter for password reset -->
+            <!-- Verified App Link for password reset. autoVerify checks domain
+                 ownership via /.well-known/assetlinks.json (see
+                 backend/app/routers/well_known.py) before Android routes this
+                 straight to the app, no chooser. Requires
+                 ANDROID_SHA256_CERT_FINGERPRINTS server-side (see
+                 backend/.env.example); falls back to foodrx:// below until set. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="foodrx-api-609996001749.us-central1.run.app"
+                    android:pathPrefix="/auth/reset-password/open"/>
+            </intent-filter>
+            <!-- foodrx:// fallback: mail clients/devices that don't resolve
+                 the App Link above, and the bridge page's redirect target. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data 
+                <data
                     android:scheme="foodrx"
                     android:host="reset-password"/>
             </intent-filter>

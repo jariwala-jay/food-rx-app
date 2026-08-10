@@ -4,5 +4,15 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Universal Links for password reset (verified via
+	     /.well-known/apple-app-site-association, see
+	     backend/app/routers/well_known.py). Also requires enabling
+	     "Associated Domains" under Xcode -> Runner -> Signing & Capabilities
+	     and APPLE_TEAM_ID set server-side (backend/.env.example) — falls back
+	     to foodrx:// until both are done. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:foodrx-api-609996001749.us-central1.run.app</string>
+	</array>
 </dict>
 </plist>

@@ -10,6 +10,7 @@ pydantic-settings==2.6.1
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.17
 firebase-admin==6.6.0
+google-auth>=2.29.0  # Google Sign-In ID token verification (app.firebase_admin_app)
 google-genai>=1.0.0
 numpy>=1.26
 chromadb>=0.6.0

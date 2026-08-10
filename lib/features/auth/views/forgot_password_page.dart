@@ -108,16 +108,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Forgot Password?', style: AppTypography.bg_24_b),
-                  const SizedBox(height: 8),
-                  Text(
-                    _emailSent
-                        ? 'We\'ve sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.'
-                        : 'Enter your email address and we\'ll send you a link to reset your password.',
-                    style: AppTypography.bg_14_r
-                        .copyWith(color: const Color(0xFF90909A)),
-                  ),
                   if (!_emailSent) ...[
+                    const Text('Forgot Password?', style: AppTypography.bg_24_b),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter your email address and we\'ll send you a link to reset your password.',
+                      style: AppTypography.bg_14_r
+                          .copyWith(color: const Color(0xFF90909A)),
+                    ),
                     const SizedBox(height: 40),
                     Container(
                       width: double.infinity,
@@ -221,13 +219,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             size: 64,
                           ),
                           const SizedBox(height: 16),
-                          Text(
-                            'Email Sent!',
+                          const Text(
+                            'Check Your Email',
                             style: AppTypography.bg_18_b,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Please check your email inbox and follow the instructions to reset your password.',
+                            'If you have a MyFoodRx account with this email address, check your inbox or spam folder for instructions.',
                             style: AppTypography.bg_14_r.copyWith(
                               color: const Color(0xFF90909A),
                             ),
@@ -252,6 +250,45 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         onPressed: () => Navigator.of(context).pop(),
                         child: const Text('Back to Login',
                             style: AppTypography.bg_16_sb),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          Navigator.of(context)
+                              .pushReplacementNamed('/signup');
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 8),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: "Don't have an account? ",
+                                  style: TextStyle(
+                                    color: Color(0xFF545454),
+                                    fontSize: 14,
+                                    fontFamily: 'Bricolage Grotesque',
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Create one',
+                                  style: TextStyle(
+                                    color: Color(0xFFFF6A00),
+                                    fontSize: 14,
+                                    fontFamily: 'Bricolage Grotesque',
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                   ],

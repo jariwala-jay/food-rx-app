@@ -280,14 +280,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           trackerProvider.weeklyTrackers.isEmpty &&
           _isInitialLoadComplete;
 
-      await trackerProvider.loadUserTrackers(user.id!, dietType,
-          personalizedDietPlan: personalizedDietPlan, forceReload: forceReload);
+      // Load trackers and tips in parallel — they're independent network
+      // calls and don't need to block on each other.
+      await Future.wait([
+        trackerProvider.loadUserTrackers(user.id!, dietType,
+            personalizedDietPlan: personalizedDietPlan,
+            forceReload: forceReload),
+        tipProvider.initializeTips(user.medicalConditions ?? [], user.id!),
+      ]);
 
-      // Check mounted again before loading tips
       if (!mounted || _isDisposed) return;
-
-      // Load Tips (can be run in parallel or after trackers)
-      await tipProvider.initializeTips(user.medicalConditions ?? [], user.id!);
     } else {
       print('User not logged in, cannot load trackers or tips.');
       // Optionally, clear existing data if user logs out or session expires

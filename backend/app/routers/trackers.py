@@ -182,7 +182,10 @@ async def create_tracker(body: dict, user_id: str = Depends(get_current_user_id)
     db = await get_database()
     tid = ObjectId()
     now = datetime.now(timezone.utc).isoformat()
-    doc = {"_id": tid, "userId": user_id, **body, "lastUpdated": now, "createdAt": now}
+    # userId must come after **body, not before — a dict literal keeps the
+    # last occurrence of a repeated key, so this stops a client-supplied
+    # "userId" in the body from overriding the authenticated user.
+    doc = {**body, "_id": tid, "userId": user_id, "lastUpdated": now, "createdAt": now}
     await db[TRACKERS].insert_one(doc)
     return _serialize_doc(doc)
 
@@ -236,7 +239,7 @@ async def get_progress(
 
 
 @router.post("/progress")
-async def save_progress(body: dict | list, user_id: str = Depends(get_current_user_id)):
+async def save_progress(body: dict | list = Body(...), user_id: str = Depends(get_current_user_id)):
     """Body: single progress doc or list of progress docs (snapshot)."""
     db = await get_database()
     now = datetime.now(timezone.utc)
@@ -244,7 +247,8 @@ async def save_progress(body: dict | list, user_id: str = Depends(get_current_us
     docs = []
     for item in items:
         item = dict(item)
-        item.setdefault("userId", user_id)
+        # Force-set, not setdefault — a client-supplied "userId" must not survive.
+        item["userId"] = user_id
         item["_id"] = ObjectId()
         if "progressDate" not in item:
             item["progressDate"] = now.isoformat()

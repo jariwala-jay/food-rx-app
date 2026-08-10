@@ -26,11 +26,19 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
   int _currentPage = 0;
   List<String> _imagePaths = [];
   bool _isLoading = true;
+  bool _isCurrentPageZoomed = false;
+  final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
     _loadImages();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<List<String>> _loadImagesFromFolder(
@@ -116,18 +124,68 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
 
   void _nextPage() {
     if (_currentPage < _imagePaths.length - 1) {
-      setState(() {
-        _currentPage++;
-      });
+      _pageController.animateToPage(
+        _currentPage + 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
   void _previousPage() {
     if (_currentPage > 0) {
-      setState(() {
-        _currentPage--;
-      });
+      _pageController.animateToPage(
+        _currentPage - 1,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentPage = index;
+      // A freshly swiped-to page always starts at its default zoom.
+      _isCurrentPageZoomed = false;
+    });
+  }
+
+  Widget _buildImageError(String assetPath) {
+    return Container(
+      height: 400,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.image_not_supported,
+            size: 64,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Image not found',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            assetPath,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -185,43 +243,30 @@ class _ScreenshotViewerWidgetState extends State<ScreenshotViewerWidget> {
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: ZoomableAssetImage(
-                      assetPath: _imagePaths[_currentPage],
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 400,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.image_not_supported,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Image not found',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _imagePaths[_currentPage],
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: _imagePaths.length,
+                      onPageChanged: _onPageChanged,
+                      // While the current page is pinch-zoomed, hand control
+                      // fully to ZoomableAssetImage's own pan handling so a
+                      // one-finger drag doesn't get mistaken for a swipe.
+                      physics: _isCurrentPageZoomed
+                          ? const NeverScrollableScrollPhysics()
+                          : const PageScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        final assetPath = _imagePaths[index];
+                        return ZoomableAssetImage(
+                          assetPath: assetPath,
+                          onZoomChanged: index == _currentPage
+                              ? (isZoomed) {
+                                  if (isZoomed != _isCurrentPageZoomed) {
+                                    setState(
+                                        () => _isCurrentPageZoomed = isZoomed);
+                                  }
+                                }
+                              : null,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _buildImageError(assetPath),
                         );
                       },
                     ),

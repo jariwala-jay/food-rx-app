@@ -11,11 +11,15 @@ import 'package:intl/intl.dart';
 class HealthInfoStep extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onPrevious;
+  final bool isGoogleOnboarding;
+  final VoidCallback? onSwitchAccount;
 
   const HealthInfoStep({
     super.key,
     required this.onNext,
     required this.onPrevious,
+    this.isGoogleOnboarding = false,
+    this.onSwitchAccount,
   });
 
   @override
@@ -456,9 +460,13 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               borderRadius: BorderRadius.circular(24),
                             ),
                           ),
-                          onPressed: widget.onPrevious,
+                          onPressed: widget.isGoogleOnboarding
+                              ? widget.onSwitchAccount
+                              : widget.onPrevious,
                           child: Text(
-                            'Previous',
+                            widget.isGoogleOnboarding
+                                ? 'Switch account'
+                                : 'Previous',
                             style: AppTypography.bg_16_sb
                                 .copyWith(color: const Color(0xFFFF6A00)),
                           ),

@@ -24,10 +24,12 @@ class SignupProvider extends ChangeNotifier {
     String? name,
     String? email,
     String? profilePhotoUrl,
+    String? googleIdToken,
   }) {
     _data.name = name ?? _data.name;
     _data.email = email ?? _data.email;
     _data.profilePhotoUrl = profilePhotoUrl ?? _data.profilePhotoUrl;
+    _data.googleIdToken = googleIdToken ?? _data.googleIdToken;
     notifyListeners();
   }
 

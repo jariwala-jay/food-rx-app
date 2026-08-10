@@ -220,6 +220,53 @@ void main() async {
   }
 }
 
+/// Extracts the reset token from a password-reset deep link, or null if
+/// [uri] isn't one. Handles two forms:
+///  - the verified App Link / Universal Link
+///    (https://<verifiedResetHost>/auth/reset-password/open#token=...) —
+///    token is in the URL *fragment*, which browsers never send to the
+///    server (see backend/app/routers/auth.py forgot_password()).
+///  - the foodrx:// fallback (?token=... query string — fine there, since
+///    it's an OS-level intent, not an HTTP request), used until App Link
+///    verification is configured (backend/.env.example).
+///
+/// Top-level so it's directly unit-testable — see isSameLocalDay in
+/// auth_controller.dart for the same pattern.
+String? extractPasswordResetToken(
+  Uri uri, {
+  required String verifiedResetHost,
+}) {
+  final isVerifiedResetLink = uri.scheme == 'https' &&
+      uri.host == verifiedResetHost &&
+      uri.path == '/auth/reset-password/open';
+  final isCustomSchemeLink = uri.scheme == 'foodrx';
+
+  if (!isVerifiedResetLink && !isCustomSchemeLink) return null;
+
+  final token = isVerifiedResetLink
+      ? _tokenFromFragment(uri.fragment)
+      : uri.queryParameters['token'];
+
+  final isResetPassword = isVerifiedResetLink ||
+      uri.host == 'reset-password' ||
+      uri.path.contains('reset-password') ||
+      token != null; // If token exists, assume it's reset password
+
+  if (!isResetPassword || token == null || token.isEmpty) return null;
+  return token;
+}
+
+/// Unlike uri.queryParameters, Dart doesn't auto-parse uri.fragment as
+/// key=value pairs, so this does it manually.
+String? _tokenFromFragment(String fragment) {
+  if (fragment.isEmpty) return null;
+  try {
+    return Uri.splitQueryString(fragment)['token'];
+  } catch (_) {
+    return null;
+  }
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -284,53 +331,55 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
+  // Must match android:host in the App Links intent-filter
+  // (AndroidManifest.xml) and the applinks: entry in Runner.entitlements.
+  static const _resetPasswordApiHost =
+      'foodrx-api-609996001749.us-central1.run.app';
+
   void _handleDeepLink(Uri uri) {
-    debugPrint('Deep link received: $uri');
+    // Never log uri/uri.query or uri.fragment as-is — for password-reset
+    // links one of them carries the raw reset token. Log only non-sensitive
+    // shape (scheme/host/path).
     debugPrint(
-        'Scheme: ${uri.scheme}, Host: ${uri.host}, Path: ${uri.path}, Query: ${uri.query}');
+        'Deep link received — scheme: ${uri.scheme}, host: ${uri.host}, path: ${uri.path}');
 
-    // Check if it's a reset password link
-    // Format: foodrx://reset-password?token=... or foodrx://?token=...
-    if (uri.scheme == 'foodrx') {
-      final token = uri.queryParameters['token'];
+    final token = extractPasswordResetToken(
+      uri,
+      verifiedResetHost: _resetPasswordApiHost,
+    );
 
-      // Check if it's a reset password link by host or path
-      final isResetPassword = uri.host == 'reset-password' ||
-          uri.path.contains('reset-password') ||
-          token != null; // If token exists, assume it's reset password
+    if (token == null) {
+      debugPrint('Reset password link missing token or invalid format');
+      return;
+    }
 
-      if (isResetPassword && token != null && token.isNotEmpty) {
-        debugPrint('Navigating to reset password page with token');
-        // Navigate to reset password page with token
-        // Use addPostFrameCallback to ensure navigation happens after build
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            final navigator = NavigationService.navigatorKey.currentState;
-            if (navigator != null) {
-              // Clear navigation stack and go to login first, then to reset password
-              // This ensures proper navigation stack
-              navigator.pushNamedAndRemoveUntil(
-                '/login',
-                (route) => false, // Remove all previous routes
+    debugPrint('Navigating to reset password page with token');
+    // Navigate to reset password page with token
+    // Use addPostFrameCallback to ensure navigation happens after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        final navigator = NavigationService.navigatorKey.currentState;
+        if (navigator != null) {
+          // Clear navigation stack and go to login first, then to reset password
+          // This ensures proper navigation stack
+          navigator.pushNamedAndRemoveUntil(
+            '/login',
+            (route) => false, // Remove all previous routes
+          );
+          // Then navigate to reset password after a short delay
+          Future.delayed(const Duration(milliseconds: 100), () {
+            final currentNavigator =
+                NavigationService.navigatorKey.currentState;
+            if (currentNavigator != null) {
+              currentNavigator.pushNamed(
+                '/reset-password',
+                arguments: {'token': token},
               );
-              // Then navigate to reset password after a short delay
-              Future.delayed(const Duration(milliseconds: 100), () {
-                final currentNavigator =
-                    NavigationService.navigatorKey.currentState;
-                if (currentNavigator != null) {
-                  currentNavigator.pushNamed(
-                    '/reset-password',
-                    arguments: {'token': token},
-                  );
-                }
-              });
             }
           });
-        });
-      } else {
-        debugPrint('Reset password link missing token or invalid format');
-      }
-    }
+        }
+      });
+    });
   }
 
   ThemeData _buildTheme() {
@@ -389,16 +438,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             );
           }
 
+          // Google user mid-onboarding — health-profile steps before home.
+          // Checked before isAuthenticated: a brand-new account has no
+          // session yet at all (it's only created at the final "Let's get
+          // started" step), only an existing one resuming interrupted
+          // onboarding does.
+          final onboarding = authController.pendingGoogleOnboarding;
+          if (onboarding != null) {
+            return SignupPage(
+              initialStep: 1,
+              prefillData: onboarding,
+              isGoogleOnboarding: true,
+            );
+          }
+
           if (authController.isAuthenticated) {
-            // New Google user — show health-profile onboarding before home.
-            final onboarding = authController.pendingGoogleOnboarding;
-            if (onboarding != null) {
-              return SignupPage(
-                initialStep: 1,
-                prefillData: onboarding,
-                isGoogleOnboarding: true,
-              );
-            }
             // Show one-time biometric suggestion after the user's second login.
             if (authController.shouldSuggestBiometric) {
               return _BiometricSuggestionWrapper(

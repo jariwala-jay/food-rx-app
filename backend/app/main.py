@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from bson import ObjectId
@@ -7,7 +8,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pymongo.errors import AutoReconnect, ConnectionFailure, ServerSelectionTimeoutError
 
 from app.database import ensure_database_indexes, get_database, close_database, reset_database
-from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips
+from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips, well_known
 from app.services.rag_service import rag_service
 
 logging.basicConfig(
@@ -27,7 +28,11 @@ _DB_UNAVAILABLE_DETAIL = (
 async def lifespan(app: FastAPI):
     await get_database()
     await ensure_database_indexes()
-    await rag_service.initialize()
+    # Loading chromadb + embeddings is slow (multi-second) and only the chatbot
+    # needs it — run it in the background so auth/pantry/tracker requests aren't
+    # blocked behind it on a cold start. rag_service.chat() already degrades
+    # gracefully (self._ready check) if hit before this finishes.
+    asyncio.create_task(rag_service.initialize())
     yield
     await close_database()
 
@@ -80,6 +85,7 @@ app.include_router(trackers.router)
 app.include_router(notifications.router)
 app.include_router(tips.router)
 app.include_router(chatbot.router)
+app.include_router(well_known.router)
 
 
 @app.get("/")
