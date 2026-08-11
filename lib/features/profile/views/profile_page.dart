@@ -607,7 +607,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              const Row(
                                 children: [
                                   Expanded(
                                     child: Text(
@@ -617,7 +617,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right,
                                     color: Color(0xFF90909A),
                                   ),
@@ -674,7 +674,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              const Row(
                                 children: [
                                   Expanded(
                                     child: Text(
@@ -684,7 +684,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right,
                                     color: Color(0xFF90909A),
                                   ),
@@ -736,7 +736,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              const Row(
                                 children: [
                                   Expanded(
                                     child: Text(
@@ -746,7 +746,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right,
                                     color: Color(0xFF90909A),
                                   ),

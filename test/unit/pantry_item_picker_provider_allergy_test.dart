@@ -47,7 +47,7 @@ void main() {
       // Arrange
       // Set a user with peanut and dairy allergies
       // ignore: invalid_use_of_visible_for_testing_member
-      auth..initialize();
+      auth.initialize();
       // Directly set current user via reflection-like approach is not available; instead, we rely on
       // the provider reading from currentUser; we simulate by creating a provider after assigning.
       // For testing, we create a UserModel and assign to auth through private field is not possible,

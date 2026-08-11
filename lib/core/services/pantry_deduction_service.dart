@@ -264,12 +264,14 @@ class PantryDeductionService {
 
     // Final loose check: singular/plural forms after cleaning
     String singularize(String s) {
-      if (s.endsWith('ses'))
+      if (s.endsWith('ses')) {
         return s.substring(
             0, s.length - 2); // e.g. "dresses" → "dres" (best-effort)
-      if (s.endsWith('ies')) return s.substring(0, s.length - 3) + 'y';
-      if (s.endsWith('s') && !s.endsWith('ss'))
+      }
+      if (s.endsWith('ies')) return '${s.substring(0, s.length - 3)}y';
+      if (s.endsWith('s') && !s.endsWith('ss')) {
         return s.substring(0, s.length - 1);
+      }
       return s;
     }
 

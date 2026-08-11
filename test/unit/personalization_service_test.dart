@@ -17,15 +17,15 @@ void main() {
     group('Height Conversion Tests', () {
       test('should convert feet and inches to cm correctly', () {
         // Test case 1: 5 feet 6 inches = 167.64 cm
-        final heightCm1 = (5.0 * 12 + 6.0) * 2.54;
+        const heightCm1 = (5.0 * 12 + 6.0) * 2.54;
         expect(heightCm1, closeTo(167.64, 0.1));
 
         // Test case 2: 6 feet 0 inches = 182.88 cm
-        final heightCm2 = (6.0 * 12 + 0.0) * 2.54;
+        const heightCm2 = (6.0 * 12 + 0.0) * 2.54;
         expect(heightCm2, closeTo(182.88, 0.1));
 
         // Test case 3: 5 feet 3 inches = 160.02 cm
-        final heightCm3 = (5.0 * 12 + 3.0) * 2.54;
+        const heightCm3 = (5.0 * 12 + 3.0) * 2.54;
         expect(heightCm3, closeTo(160.02, 0.1));
       });
     });

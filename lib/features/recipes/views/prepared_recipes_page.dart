@@ -424,10 +424,10 @@ class _PreparedRecipeCard extends StatelessWidget {
                                 ),
                                 if (remaining > 0) ...[
                                   const SizedBox(width: 4),
-                                  Icon(
+                                  const Icon(
                                     Icons.add_circle_outline,
                                     size: 16,
-                                    color: const Color(0xFFFF6A00),
+                                    color: Color(0xFFFF6A00),
                                   ),
                                 ],
                               ],

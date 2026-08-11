@@ -163,8 +163,8 @@ class _NotificationPreferencesPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                       child: Text(
                         'Notification Types',
                         style: AppTypography.bg_18_b,
@@ -252,7 +252,7 @@ class _NotificationPreferencesPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Note',
                       style: AppTypography.bg_16_sb,
                     ),

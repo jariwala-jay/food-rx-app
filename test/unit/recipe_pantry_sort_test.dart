@@ -136,8 +136,8 @@ void main() {
 
   group('RecipePantryMatchScore (legacy)', () {
     test('orders by fewest need first', () {
-      final need5 = RecipePantryMatchScore(inPantry: 4, requiredMissing: 5);
-      final need1 = RecipePantryMatchScore(inPantry: 2, requiredMissing: 1);
+      const need5 = RecipePantryMatchScore(inPantry: 4, requiredMissing: 5);
+      const need1 = RecipePantryMatchScore(inPantry: 2, requiredMissing: 1);
 
       final ordered = [need5, need1]..sort((a, b) => a.compareEaseTo(b));
       expect(ordered, [need1, need5]);

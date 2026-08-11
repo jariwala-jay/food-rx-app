@@ -17,7 +17,7 @@ void main() {
     });
 
     test('reads and writes structured values', () {
-      final ingredient = ExcludedIngredient.fromJson({
+      final ingredient = ExcludedIngredient.fromJson(const {
         'id': 9236,
         'name': 'peach',
         'displayName': 'Peach',

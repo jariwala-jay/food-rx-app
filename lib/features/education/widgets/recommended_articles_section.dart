@@ -36,7 +36,7 @@ class RecommendedArticlesSection extends StatelessWidget {
 
     // Calculate dynamic height based on text scaling
     // Base: 120 (image) + 24 (padding) + ~40 (text) = ~184, add buffer for scaling
-    final baseHeight = 220.0;
+    const baseHeight = 220.0;
     final sectionHeight = baseHeight * clampedScale.clamp(1.0, 1.15);
 
     final hasVideoCard = myPlanType != null &&

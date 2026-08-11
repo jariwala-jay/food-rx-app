@@ -250,7 +250,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             size: 64,
                           ),
                           const SizedBox(height: 16),
-                          Text(
+                          const Text(
                             'Password Reset!',
                             style: AppTypography.bg_18_b,
                           ),
@@ -498,12 +498,12 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Password must contain:',
             style: TextStyle(
               fontSize: 12,
               fontFamily: 'BricolageGrotesque',
-              color: const Color(0xFF8E8E93),
+              color: Color(0xFF8E8E93),
               fontWeight: FontWeight.w500,
             ),
           ),

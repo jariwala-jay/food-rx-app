@@ -146,7 +146,7 @@ class _EditPantryItemSheetState extends State<EditPantryItemSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update item. Please try again.'),
+          content: const Text('Failed to update item. Please try again.'),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -1421,9 +1421,9 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.swipe_left,
-                                      color: const Color(0xFFFF6A00),
+                                      color: Color(0xFFFF6A00),
                                       size: 16,
                                     ),
                                     const SizedBox(width: 4),

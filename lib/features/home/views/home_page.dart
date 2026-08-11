@@ -827,8 +827,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 Icons.notifications_outlined),
                                             onPressed: () {
                                               // Block navigation during tour
-                                              if (tourProvider.isTourActive)
+                                              if (tourProvider.isTourActive) {
                                                 return;
+                                              }
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(

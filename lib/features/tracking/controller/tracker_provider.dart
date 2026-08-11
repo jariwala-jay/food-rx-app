@@ -834,7 +834,7 @@ class TrackerProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      print('Error reloading tracker ${trackerId}: $e');
+      print('Error reloading tracker $trackerId: $e');
       _setError(userFacingErrorMessage(e));
     }
   }

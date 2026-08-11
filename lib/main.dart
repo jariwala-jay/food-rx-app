@@ -171,7 +171,7 @@ void main() async {
               } else {
                 pantry!.resetUser();
               }
-              return pantry!;
+              return pantry;
             },
           ),
 
@@ -455,8 +455,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           if (authController.isAuthenticated) {
             // Show one-time biometric suggestion after the user's second login.
             if (authController.shouldSuggestBiometric) {
-              return _BiometricSuggestionWrapper(
-                child: const MainScreen(),
+              return const _BiometricSuggestionWrapper(
+                child: MainScreen(),
               );
             }
             return const MainScreen();

@@ -32,13 +32,13 @@ class AppNotification {
         createdAt = createdAt ?? DateTime.now();
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
-    DateTime _parseDate(dynamic v) {
+    DateTime parseDate(dynamic v) {
       if (v == null) return DateTime.now();
       if (v is DateTime) return v;
       return DateTime.parse(v.toString());
     }
 
-    DateTime? _parseDateNullable(dynamic v) {
+    DateTime? parseDateNullable(dynamic v) {
       if (v == null) return null;
       if (v is DateTime) return v;
       return DateTime.tryParse(v.toString());
@@ -53,9 +53,9 @@ class AppNotification {
       ),
       title: json['title'] ?? '',
       message: json['message'] ?? '',
-      readAt: _parseDateNullable(json['readAt']),
-      sentAt: _parseDateNullable(json['sentAt']),
-      createdAt: _parseDate(json['createdAt']),
+      readAt: parseDateNullable(json['readAt']),
+      sentAt: parseDateNullable(json['sentAt']),
+      createdAt: parseDate(json['createdAt']),
     );
   }
 
