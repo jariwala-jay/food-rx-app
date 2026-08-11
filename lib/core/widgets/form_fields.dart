@@ -79,6 +79,7 @@ class AppFormField extends StatelessWidget {
           onFieldSubmitted: onFieldSubmitted,
           scrollPadding: scrollPadding,
           autofillHints: autofillHints,
+          style: AppTypography.bg_16_m.copyWith(color: Colors.black),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: AppTypography.bg_14_r.copyWith(
@@ -410,7 +411,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                     child: Text(
                       widget.value ?? widget.hintText,
                       style: widget.value != null
-                          ? AppTypography.bg_14_r
+                          ? AppTypography.bg_14_r.copyWith(color: Colors.black)
                           : AppTypography.bg_14_r.copyWith(
                               color: const Color(0xFF90909A),
                             ),
@@ -497,6 +498,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                       child: TextField(
                         controller: controller,
                         focusNode: searchFocusNode,
+                        style: AppTypography.bg_14_r.copyWith(color: Colors.black),
                         decoration: InputDecoration(
                           hintText: 'Search here',
                           hintStyle: AppTypography.bg_14_r
@@ -684,6 +686,7 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
                           child: TextField(
                             controller: _searchController,
                             focusNode: _focusNode,
+                            style: AppTypography.bg_14_r.copyWith(color: Colors.black),
                             decoration: InputDecoration(
                               hintText: 'Search here',
                               hintStyle: AppTypography.bg_14_r.copyWith(
@@ -878,7 +881,7 @@ class _HeightDropdownFieldState extends State<HeightDropdownField> {
                 child: Text(
                   widget.value ?? widget.hintText,
                   style: widget.value != null
-                      ? AppTypography.bg_14_r
+                      ? AppTypography.bg_14_r.copyWith(color: Colors.black)
                       : AppTypography.bg_14_r.copyWith(
                           color: const Color(0xFF90909A),
                         ),

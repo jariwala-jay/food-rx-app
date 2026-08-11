@@ -391,6 +391,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           backgroundColor: WidgetStatePropertyAll<Color>(Colors.white),
         ),
       ),
+      // Material 3 derives cursor/selection colors from ColorScheme, not
+      // primarySwatch — without this, every text field gets Flutter's
+      // built-in purple default instead of the app's orange.
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: Color(0xFFFF6A00),
+        selectionColor: Color(0x33FF6A00),
+        selectionHandleColor: Color(0xFFFF6A00),
+      ),
     );
 
     return base.copyWith(
