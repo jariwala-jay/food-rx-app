@@ -120,21 +120,39 @@ class _TrackerGridState extends State<TrackerGrid>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton(
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFFF6A00)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
                         onPressed: () {
                           setState(() {
                             _showLoadingTimeout = false;
                           });
                           _loadTrackers();
                         },
-                        child: const Text('Retry'),
+                        child: const Text(
+                          'Retry',
+                          style: TextStyle(color: Color(0xFFFF6A00)),
+                        ),
                       ),
                       const SizedBox(width: 16),
-                      TextButton(
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFFF6A00)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
                         onPressed: () {
                           Navigator.of(context).pop();
                         },
-                        child: const Text('Go Back'),
+                        child: const Text(
+                          'Go Back',
+                          style: TextStyle(color: Color(0xFFFF6A00)),
+                        ),
                       ),
                     ],
                   ),

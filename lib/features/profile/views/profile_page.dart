@@ -352,10 +352,15 @@ class _ProfilePageState extends State<ProfilePage> {
       final authController = context.read<AuthController>();
       await authController.logout();
       if (context.mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        // Pop back to (not replace) the root Consumer<AuthController> in
+        // main.dart, then push /login on top of it. LoginPage's own Google
+        // sign-in handler pops back to that root route on success — if we
+        // replaced it instead (pushNamedAndRemoveUntil), there'd be nothing
+        // left for that pop to reveal, and a Google re-sign-in right after
+        // logout would silently strand the user on LoginPage despite a
+        // fully authenticated session.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        Navigator.of(context).pushNamed('/login');
       }
     }
   }

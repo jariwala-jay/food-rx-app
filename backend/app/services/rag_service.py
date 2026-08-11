@@ -32,7 +32,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import chromadb
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
@@ -207,6 +206,11 @@ class RAGService:
         _log_chunk_preview(self._chunks, sample_per_doc=2)
 
         # ── ChromaDB persistent collection ──────────────────────────────
+        # Imported here, not at module load, so a cold start doesn't pay
+        # chromadb's import cost before the app can serve non-chatbot
+        # requests (auth/pantry/trackers) — see app/main.py's lifespan.
+        import chromadb
+
         chroma_path = Path(__file__).parent.parent / "knowledge" / "chroma_db"
         self._chroma_client = chromadb.PersistentClient(path=str(chroma_path))
         current_fp = _cache_fingerprint(self._chunks)

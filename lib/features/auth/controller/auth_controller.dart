@@ -848,16 +848,24 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      try {
-        await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
-      } catch (_) {
-        // Ignore; logout should proceed regardless.
-      }
-      // Clear cached Google credentials so the next loginWithGoogle() call
-      // does a fresh OAuth flow instead of silently reusing this session.
-      try {
-        await GoogleSignIn().signOut();
-      } catch (_) {}
+      // Best-effort cleanup, unawaited: the FCM-clear API call and Google's
+      // native signOut() (which alone can take 1-3+ seconds) would otherwise
+      // hold the loading screen up for no benefit — neither's success
+      // affects correctness. loginWithGoogle() already does its own
+      // signOut() before signing in again, so a still-pending one here
+      // doesn't risk a stale session on immediate re-login.
+      unawaited(() async {
+        try {
+          await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
+        } catch (_) {
+          // Ignore; logout should proceed regardless.
+        }
+      }());
+      unawaited(() async {
+        try {
+          await GoogleSignIn().signOut();
+        } catch (_) {}
+      }());
       await _clearAuthSession();
       _currentUser = null;
     } catch (e) {
