@@ -54,6 +54,7 @@ class _SignupPageState extends State<SignupPage> {
           name: d.name,
           email: d.email,
           profilePhotoUrl: d.profilePhotoUrl,
+          googleIdToken: d.googleIdToken,
         );
       });
     }
@@ -146,17 +147,44 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
+  Future<void> _handleSwitchAccount() async {
+    final authController = context.read<AuthController>();
+    final success = await authController.switchGoogleAccount();
+    if (!success && mounted && authController.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authController.error!),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   Future<void> _handleGoogleOnboardingSubmit() async {
     try {
       final signupProvider = context.read<SignupProvider>();
       final authController = context.read<AuthController>();
       final signupData = signupProvider.data;
 
-      await authController.updateUserProfile(signupData.toJson());
+      // For a brand-new account this creates it (atomically, with the full
+      // profile) for the first time; for one resuming interrupted onboarding
+      // it patches the existing profile. Either way, clears the onboarding
+      // flag only on success — root then shows MainScreen automatically.
+      final success =
+          await authController.completeGoogleOnboarding(signupData.toJson());
 
-      // Clearing the flag triggers a root rebuild: isAuthenticated=true and
-      // pendingGoogleOnboarding=null → root shows MainScreen automatically.
-      authController.clearGoogleOnboarding();
+      if (!success && mounted) {
+        final message =
+            authController.error ?? 'Failed to save your preferences. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -192,6 +220,8 @@ class _SignupPageState extends State<SignupPage> {
                     HealthInfoStep(
                       onNext: _handleNext,
                       onPrevious: _handlePrevious,
+                      isGoogleOnboarding: widget.isGoogleOnboarding,
+                      onSwitchAccount: _handleSwitchAccount,
                     ),
                     PreferencesStep(
                       onPrevious: _handlePrevious,

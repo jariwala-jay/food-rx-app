@@ -187,8 +187,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Reset Password', style: AppTypography.bg_24_b),
-                  const SizedBox(height: 8),
+                  if (!_passwordReset) ...[
+                    const Text('Reset Password', style: AppTypography.bg_24_b),
+                    const SizedBox(height: 8),
+                  ],
                   if (_isValidatingToken) ...[
                     const SizedBox(height: 40),
                     const Center(
@@ -230,12 +232,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       ),
                     ),
                   ] else if (_passwordReset) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your password has been successfully reset. You can now login with your new password.',
-                      style: AppTypography.bg_14_r
-                          .copyWith(color: const Color(0xFF90909A)),
-                    ),
                     const SizedBox(height: 40),
                     Container(
                       width: double.infinity,

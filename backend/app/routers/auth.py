@@ -1,11 +1,10 @@
 from datetime import date, datetime, timezone, timedelta
 import base64
 import hashlib
-import json
+import math
 import re
 import secrets
 import warnings
-from html import escape
 from urllib.parse import quote
 
 from bson import ObjectId
@@ -17,7 +16,8 @@ from app.auth_password import hash_password, verify_password
 from app.auth_jwt import ACCESS_TOKEN_EXPIRE_HOURS, create_access_token
 from app.config import settings
 from app.deps import get_current_user_id
-from app.firebase_admin_app import verify_google_access_token
+from app.email_service import send_google_signin_notice_email, send_password_reset_email
+from app.firebase_admin_app import verify_google_id_token
 from app.notification_eligibility import NEW_ACCOUNT_GRACE_HOURS, parse_iso_datetime
 from app.refresh_tokens import (
     issue_refresh_token,
@@ -81,6 +81,13 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _is_google_only_account(user: dict) -> bool:
+    """Google-linked accounts (see /auth/google/complete) have no password —
+    they must never receive a reset token or have a password field written
+    via the unauthenticated forgot-password/reset-password flow."""
+    return user.get("authProvider") == "google"
+
+
 async def _auth_token_response(db, user_id: ObjectId, email: str, user: dict) -> dict:
     """Access + refresh token pair for login/register/refresh."""
     uid = str(user_id)
@@ -97,39 +104,53 @@ async def _auth_token_response(db, user_id: ObjectId, email: str, user: dict) ->
     }
 
 
-def _password_reset_bridge_html(token: str) -> str:
-    """Minimal HTTPS page: tries to open the app via custom scheme; fallback button for mail clients."""
-    token_js = json.dumps(token)
-    deep = f"foodrx://reset-password?token={quote(token, safe='')}"
-    href_escaped = escape(deep, quote=True)
-    return f"""<!DOCTYPE html>
+# Static HTML — same response for every request. The token is only ever in
+# the URL fragment (#token=...), which browsers never send to the server,
+# so this page reads it client-side via location.hash instead of the server
+# rendering it in. See forgot_password() for the link construction.
+_PASSWORD_RESET_BRIDGE_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <title>Reset password — MyFoodRx</title>
   <style>
-    body {{ font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f7f7f8; color: #2c2c2c; }}
-    .card {{ max-width: 420px; margin: 40px auto; background: #fff; border-radius: 12px;
-      padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }}
-    a.btn {{ display: inline-block; background: #FF6A00; color: #fff !important;
-      text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: 600; margin-top: 16px; }}
-    p.note {{ color: #90909a; font-size: 14px; line-height: 1.5; margin-top: 20px; }}
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f7f7f8; color: #2c2c2c; }
+    .card { max-width: 420px; margin: 40px auto; background: #fff; border-radius: 12px;
+      padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: center; }
+    a.btn { display: inline-block; background: #FF6A00; color: #fff !important;
+      text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: 600; margin-top: 16px; }
+    p.note { color: #90909a; font-size: 14px; line-height: 1.5; margin-top: 20px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1 style="font-size: 22px; margin: 0 0 12px;">Open MyFoodRx</h1>
-    <p>We’re opening the app so you can finish resetting your password.</p>
-    <p>If nothing happens, tap the button below. MyFoodRx must be installed on this phone.</p>
-    <p><a class="btn" href="{href_escaped}">Open MyFoodRx</a></p>
+    <p id="status">We’re opening the app so you can finish resetting your password.</p>
+    <p id="fallback-note" style="display:none;">If nothing happens, tap the button below. MyFoodRx must be installed on this phone.</p>
+    <p id="btn-container"></p>
     <p class="note">You can close this tab after the app opens or after you’ve set a new password.</p>
   </div>
   <script>
-    (function() {{
-      var token = {token_js};
-      window.location.replace('foodrx://reset-password?token=' + encodeURIComponent(token));
-    }})();
+    (function() {
+      // The token lives only in the fragment — never sent to this server.
+      var hash = window.location.hash || '';
+      var token = new URLSearchParams(hash.replace(/^#/, '')).get('token');
+      if (!token) {
+        document.getElementById('status').textContent =
+          'Missing reset token. Request a new reset link from the app.';
+        return;
+      }
+      var deepLink = 'foodrx://reset-password?token=' + encodeURIComponent(token);
+      var btn = document.createElement('a');
+      btn.className = 'btn';
+      btn.href = deepLink;
+      btn.textContent = 'Open MyFoodRx';
+      document.getElementById('btn-container').appendChild(btn);
+      document.getElementById('fallback-note').style.display = 'block';
+      window.location.replace(deepLink);
+    })();
   </script>
 </body>
 </html>"""
@@ -359,16 +380,26 @@ async def refresh_session(body: dict):
 @router.post("/google")
 async def google_sign_in(body: dict):
     """
-    Authenticate via Google Sign-In. Body: { "accessToken": "<google-oauth-access-token>" }.
-    Verifies the token via Google's userinfo endpoint, finds or creates the user,
-    and returns the same JWT + refresh-token payload as /login, plus "isNewUser": bool.
+    Authenticate via Google Sign-In. Body: { "idToken": "<google-id-token>" }.
+    See app.firebase_admin_app.verify_google_id_token for signature/audience
+    verification.
+
+    Existing account: logs in and returns the same JWT + refresh-token payload
+    as /login, plus "isNewUser": false.
+
+    Brand-new email: does NOT create a user document or issue a session — the
+    account is only created once onboarding actually completes (see
+    /auth/google/complete). Returns the decoded Google profile and
+    "isNewUser": true instead, so the client can hold onto it through the
+    health-profile steps without a half-finished account sitting in the DB if
+    onboarding is abandoned.
     """
-    access_token = (body.get("accessToken") or "").strip()
-    if not access_token:
-        raise HTTPException(status_code=400, detail="accessToken required")
+    id_token_str = (body.get("idToken") or "").strip()
+    if not id_token_str:
+        raise HTTPException(status_code=400, detail="idToken required")
 
     try:
-        decoded = await verify_google_access_token(access_token)
+        decoded = await verify_google_id_token(id_token_str)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception:
@@ -383,48 +414,112 @@ async def google_sign_in(body: dict):
 
     db = await get_database()
     users = db[USERS]
-    now = datetime.now(timezone.utc).isoformat()
 
     user = await users.find_one({"email": email})
-    is_new_user = user is None
 
-    if user:
-        if user.get("password") and not user.get("authProvider"):
-            # Existing email/password account — do not silently merge.
-            raise HTTPException(
-                status_code=400,
-                detail="An account with this email already exists. Please sign in with your email and password.",
-            )
-        await _handle_successful_login(users, user["_id"])
-    else:
-        user_id = ObjectId()
-        user = {
-            "_id": user_id,
+    if user is None:
+        # Truly new — nothing to log into yet. Client proceeds to onboarding
+        # and finalizes account creation via /auth/google/complete.
+        return {
+            "isNewUser": True,
             "email": email,
             "name": name,
             "profilePhotoUrl": picture,
-            "authProvider": "google",
-            "createdAt": now,
-            "updatedAt": now,
-            "lastLoginAt": now,
-            "lastActiveAt": now,
-            "failedLoginAttempts": 0,
-            "isLocked": False,
-            "lockUntil": None,
         }
-        await users.insert_one(user)
-        notifications = db["notifications"]
-        await notifications.insert_one({
-            "_id": ObjectId(),
-            "userId": str(user_id),
-            "type": "admin",
-            "title": "Welcome to MyFoodRx",
-            "message": "We're glad you're here. Start by adding ingredients to your pantry to get personalized recommendations.",
-            "createdAt": now,
-        })
+
+    if user.get("password") and not user.get("authProvider"):
+        # Existing email/password account — do not silently merge.
+        raise HTTPException(
+            status_code=400,
+            detail="An account with this email already exists. Please sign in with your email and password.",
+        )
+    await _handle_successful_login(users, user["_id"])
 
     response = await _auth_token_response(db, user["_id"], user["email"], user)
-    response["isNewUser"] = is_new_user
+    response["isNewUser"] = False
+    return response
+
+
+@router.post("/google/complete")
+async def google_sign_in_complete(body: dict):
+    """
+    Finalizes a brand-new Google account at the end of onboarding ("Let's get
+    started"). Body: { "idToken": "<google-id-token>", ...health profile
+    fields (same keys as /auth/register) }.
+
+    Re-verifies the Google token (it may be ~minutes old by now) and creates
+    the user document with the full profile in one atomic write — mirroring
+    /auth/register, so there's never a partial account in the database.
+    """
+    id_token_str = (body.get("idToken") or "").strip()
+    if not id_token_str:
+        raise HTTPException(status_code=400, detail="idToken required")
+
+    try:
+        decoded = await verify_google_id_token(id_token_str)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired Google token")
+
+    email = (decoded.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email address")
+
+    db = await get_database()
+    users = db[USERS]
+
+    existing = await users.find_one({"email": email})
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="An account with this email already exists. Please sign in instead.",
+        )
+
+    user_id = ObjectId()
+    now = datetime.now(timezone.utc).isoformat()
+    user_doc = {
+        "_id": user_id,
+        "email": email,
+        "name": decoded.get("name") or body.get("name") or "",
+        "profilePhotoUrl": decoded.get("picture") or body.get("profilePhotoUrl") or "",
+        "authProvider": "google",
+        "createdAt": now,
+        "updatedAt": now,
+        "lastLoginAt": now,
+        "lastActiveAt": now,
+        "failedLoginAttempts": 0,
+        "isLocked": False,
+        "lockUntil": None,
+    }
+    allowed = {
+        "firstName", "lastName", "age", "dateOfBirth", "sex",
+        "height", "heightUnit", "heightFeet", "heightInches", "weight", "weightUnit",
+        "activityLevel", "medicalConditions", "allergies", "dietType", "myPlanType",
+        "showGlycemicIndex", "excludedIngredients", "foodRestrictions", "favoriteCuisines",
+        "dailyFruitIntake", "dailyVegetableIntake", "dailyWaterIntake",
+        "preferredMealPrepTime", "cookingForPeople", "cookingSkill",
+        "selectedDietPlan", "targetCalories", "macroNutrients", "mealTimings",
+        "requiresGroceryList", "diagnostics", "healthGoals", "hasCompletedTour",
+    }
+    for key, value in body.items():
+        if key in allowed and key not in user_doc:
+            user_doc[key] = value
+
+    await users.insert_one(user_doc)
+
+    notifications = db["notifications"]
+    await notifications.insert_one({
+        "_id": ObjectId(),
+        "userId": str(user_id),
+        "type": "admin",
+        "title": "Welcome to MyFoodRx",
+        "message": "We're glad you're here. Start by adding ingredients to your pantry to get personalized recommendations.",
+        "createdAt": now,
+    })
+
+    response = await _auth_token_response(db, user_id, email, user_doc)
+    response["isNewUser"] = True
     return response
 
 
@@ -603,39 +698,32 @@ async def upload_profile_photo(
     return {"profilePhotoId": str(photo_id)}
 
 
-@router.get("/profile-photos/{photo_id}")
-async def get_profile_photo(photo_id: str):
-    """Return profile photo bytes (image/jpeg)."""
-    db = await get_database()
-    try:
-        oid = ObjectId(photo_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid photo id")
-    chunk = await db[PROFILE_PHOTOS_CHUNKS].find_one({"files_id": oid})
-    if not chunk or "data" not in chunk:
-        raise HTTPException(status_code=404, detail="Photo not found")
-    data = chunk["data"]
-    if isinstance(data, bytes):
-        return Response(content=data, media_type="image/jpeg")
-    return Response(content=bytes(data), media_type="image/jpeg")
+_BRIDGE_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+}
 
 
 @router.get("/reset-password/open")
-async def reset_password_open(token: str = ""):
+async def reset_password_open():
     """Email-friendly HTTPS link: opens MyFoodRx via foodrx:// (see Flutter deep link handler)."""
-    token = (token or "").strip()
-    if not token:
-        return HTMLResponse(
-            content="<html><body><p>Missing reset token. Request a new reset link from the app.</p></body></html>",
-            status_code=400,
-        )
-    return HTMLResponse(content=_password_reset_bridge_html(token), media_type="text/html")
+    return HTMLResponse(
+        content=_PASSWORD_RESET_BRIDGE_HTML,
+        media_type="text/html",
+        headers=_BRIDGE_RESPONSE_HEADERS,
+    )
 
 
 # Password reset (no auth required for request; token in body for reset)
 @router.post("/forgot-password")
 async def forgot_password(body: dict):
-    """Generate password reset token. Body: { \"email\" }. Returns { \"success\": true } (never reveal if email exists)."""
+    """
+    Request a password-reset email. Body: { \"email\" }.
+    Always returns { \"success\": true } — never reveals whether the email is
+    registered or which auth provider it uses, and never returns the reset
+    token itself: only the email (sent server-side, below) proves ownership
+    of the account.
+    """
     db = await get_database()
     users = db[USERS]
     tokens_coll = db[PASSWORD_RESET_TOKENS]
@@ -645,10 +733,25 @@ async def forgot_password(body: dict):
     user = await users.find_one({"email": email})
     if not user:
         return {"success": True}
+    if _is_google_only_account(user):
+        # No password to reset — never issue a token or touch the password
+        # field for this account. Tell them how to actually sign in instead.
+        await send_google_signin_notice_email(email, user.get("name"))
+        return {"success": True}
     one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    recent = await tokens_coll.count_documents({"userId": user["_id"], "createdAt": {"$gte": one_hour_ago}})
-    if recent >= 3:
-        raise HTTPException(status_code=429, detail="Too many reset requests. Try again later.")
+    recent_tokens = await tokens_coll.find(
+        {"userId": user["_id"], "createdAt": {"$gte": one_hour_ago}},
+        sort=[("createdAt", 1)],
+    ).to_list(length=None)
+    if len(recent_tokens) >= 3:
+        oldest_created = parse_iso_datetime(recent_tokens[0]["createdAt"])
+        retry_at = (oldest_created or datetime.now(timezone.utc)) + timedelta(hours=1)
+        wait_minutes = max(1, math.ceil((retry_at - datetime.now(timezone.utc)).total_seconds() / 60))
+        unit = "minute" if wait_minutes == 1 else "minutes"
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many reset requests. Please try again in {wait_minutes} {unit}.",
+        )
     await tokens_coll.update_many({"userId": user["_id"], "used": False}, {"$set": {"used": True}})
     token = base64.b64encode(secrets.token_bytes(32)).decode()
     hashed = _hash_token(token)
@@ -661,10 +764,12 @@ async def forgot_password(body: dict):
         "used": False,
         "createdAt": now,
     })
-    out = {"success": True, "token": token}
-    if user.get("name"):
-        out["userName"] = user["name"]
-    return out
+    # Fragment (#token=...), not a query string: browsers never send the
+    # fragment to the server, so it never ends up in access logs. Built from
+    # settings.public_base_url, not the request's Host header — see config.py.
+    reset_link = f"{settings.public_base_url.rstrip('/')}/auth/reset-password/open#token={quote(token, safe='')}"
+    await send_password_reset_email(email, reset_link, user.get("name"))
+    return {"success": True}
 
 
 @router.post("/validate-reset-token")
@@ -710,6 +815,24 @@ async def reset_password(body: dict):
         await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     user_id = doc["userId"]
+    user = await users.find_one({"_id": user_id})
+    if user and _is_google_only_account(user):
+        # Defense in depth: forgot-password no longer issues tokens for
+        # Google-only accounts, but never write a password for one even if a
+        # token somehow still validates (e.g. one issued before this fix).
+        await tokens_coll.update_one({"token": hashed}, {"$set": {"used": True}})
+        raise HTTPException(
+            status_code=400,
+            detail="This account uses Google Sign-In. Please tap 'Continue with Google' to sign in.",
+        )
+    if user and verify_password(new_password, user.get("password") or ""):
+        # A validation failure, not a successful reset — leave the token
+        # usable so the user can retry with an actually different password
+        # on the same link instead of requesting a new email.
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different from your current password.",
+        )
     await users.update_one(
         {"_id": user_id},
         {"$set": {"password": hash_password(new_password), "updatedAt": datetime.now(timezone.utc).isoformat()}},

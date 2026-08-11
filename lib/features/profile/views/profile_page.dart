@@ -9,7 +9,9 @@ import 'package:flutter_app/features/profile/views/notification_preferences_page
 import 'package:intl/intl.dart';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:flutter_app/core/utils/image_crop_helper.dart';
+
+enum _PhotoAction { gallery, camera, remove }
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -47,7 +49,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _pickAndUpdateProfilePhoto() async {
     try {
-      final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      final _PhotoAction? action = await showModalBottomSheet<_PhotoAction>(
         context: context,
         builder: (context) => Container(
           padding: const EdgeInsets.all(16),
@@ -57,13 +59,20 @@ class _ProfilePageState extends State<ProfilePage> {
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Choose from Gallery'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
+                onTap: () => Navigator.pop(context, _PhotoAction.gallery),
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt),
                 title: const Text('Take Photo'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
+                onTap: () => Navigator.pop(context, _PhotoAction.camera),
               ),
+              if (_profilePhotoData != null)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text('Remove Photo',
+                      style: TextStyle(color: Colors.red)),
+                  onTap: () => Navigator.pop(context, _PhotoAction.remove),
+                ),
               ListTile(
                 leading: const Icon(Icons.cancel),
                 title: const Text('Cancel'),
@@ -74,7 +83,12 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
 
-      if (source == null) return;
+      if (action == null) return;
+
+      if (action == _PhotoAction.remove) {
+        await _removeProfilePhoto();
+        return;
+      }
 
       // Wait for the bottom sheet route to finish closing before presenting the
       // system picker; opening PHPicker immediately after pop can hang on iOS.
@@ -82,7 +96,9 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
 
       final pickedFile = await _imagePicker.pickImage(
-        source: source,
+        source: action == _PhotoAction.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
         maxWidth: 512,
         maxHeight: 512,
         imageQuality: 85,
@@ -90,16 +106,33 @@ class _ProfilePageState extends State<ProfilePage> {
       );
 
       if (pickedFile != null && mounted) {
+        final croppedFile = await cropProfilePhoto(context, pickedFile.path);
+        if (croppedFile == null || !mounted) return;
+
         setState(() {
           _isUploadingPhoto = true;
         });
 
         final authController = context.read<AuthController>();
-        final photoFile = File(pickedFile.path);
 
-        await authController.updateProfilePhoto(photoFile);
+        authController.clearError();
+        await authController.updateProfilePhoto(croppedFile);
 
         if (mounted) {
+          final error = authController.error;
+          if (error != null) {
+            setState(() {
+              _isUploadingPhoto = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(error),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
           await _loadProfilePhoto();
 
           setState(() {
@@ -129,6 +162,44 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  Future<void> _removeProfilePhoto() async {
+    setState(() {
+      _isUploadingPhoto = true;
+    });
+
+    final authController = context.read<AuthController>();
+    authController.clearError();
+    await authController.removeProfilePhoto();
+
+    if (!mounted) return;
+
+    final error = authController.error;
+    if (error != null) {
+      setState(() {
+        _isUploadingPhoto = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _profilePhotoData = null;
+      _isUploadingPhoto = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile photo removed'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   String _getPlanDisplayName(UserModel user) {

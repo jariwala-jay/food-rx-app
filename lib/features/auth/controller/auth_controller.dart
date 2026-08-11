@@ -17,8 +17,6 @@ import 'package:flutter_app/core/services/personalization_service.dart';
 import 'package:flutter_app/core/services/replan_service.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
-import 'package:flutter_app/core/services/email_service.dart';
-import 'package:flutter_app/core/services/gmail_smtp_email_service.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
 import 'package:http/http.dart' show ClientException;
 
@@ -28,7 +26,6 @@ bool isSameLocalDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
 class AuthController with ChangeNotifier {
-  final EmailService _emailService = GmailSMTPEmailService();
   final LocalAuthentication _localAuth = LocalAuthentication();
   BiometricSignInLabels? _cachedBiometricLabels;
   UserModel? _currentUser;
@@ -45,8 +42,43 @@ class AuthController with ChangeNotifier {
   SignupData? _pendingGoogleOnboarding;
   SignupData? get pendingGoogleOnboarding => _pendingGoogleOnboarding;
 
+  /// A Google-auth account with no dietType yet never finished the
+  /// health-profile steps (e.g. abandoned mid-onboarding) — used to resume
+  /// onboarding instead of landing on Home with an empty profile.
+  bool _isGoogleOnboardingIncomplete(Map<String, dynamic> userData) {
+    final isGoogleUser = userData['authProvider'] == 'google';
+    final dietType = userData['dietType'] as String?;
+    return isGoogleUser && (dietType == null || dietType.isEmpty);
+  }
+
+  /// Backs out of Google onboarding and immediately relaunches Google's
+  /// account picker (one tap, no intermediate Welcome screen) so the user
+  /// can pick a different account. The abandoned account stays in the
+  /// database with an incomplete profile; signing back into it later resumes
+  /// onboarding via [_isGoogleOnboardingIncomplete] rather than landing on a
+  /// broken Home. If the user cancels the new picker, they end up signed
+  /// out (Welcome screen) since the old session was already torn down.
+  Future<bool> switchGoogleAccount() async {
+    _pendingGoogleOnboarding = null;
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+    await _clearAuthSession();
+    _currentUser = null;
+    // No notifyListeners() here — loginWithGoogle() fires one immediately
+    // (isLoading=true) so the UI goes straight to a spinner, never flashing
+    // the signed-out Welcome screen in between.
+    return loginWithGoogle();
+  }
+
   void clearGoogleOnboarding() {
     _pendingGoogleOnboarding = null;
+    // Onboarding is done and the user is about to land on the home page —
+    // safe now to register the FCM token, which is what triggers the
+    // backend's "welcome" push (see auth.py's /auth/profile handler).
+    if (_currentUser?.id != null) {
+      unawaited(_initializeNotificationServices(_currentUser!.id!));
+    }
     notifyListeners();
   }
 
@@ -177,12 +209,12 @@ class AuthController with ChangeNotifier {
   bool _shouldSuggestBiometric = false;
   bool get shouldSuggestBiometric => _shouldSuggestBiometric;
 
-  Future<void> _checkBiometricSuggestion() async {
+  Future<void> _checkBiometricSuggestion(String userId) async {
     if (_shouldSuggestBiometric) return;
     if (await SessionStorage.isBiometricEnabled()) return;
     if (await CredentialStorage.hasSavedCredentials()) return;
-    if (await SessionStorage.isBiometricSuggestionShown()) return;
-    final count = await SessionStorage.getLoginCount();
+    if (await SessionStorage.isBiometricSuggestionShown(userId)) return;
+    final count = await SessionStorage.getLoginCount(userId);
     if (count < 2) return;
     if (!await canUseBiometricLogin()) return;
     _shouldSuggestBiometric = true;
@@ -190,7 +222,10 @@ class AuthController with ChangeNotifier {
   }
 
   Future<void> dismissBiometricSuggestion() async {
-    await SessionStorage.markBiometricSuggestionShown();
+    final userId = _currentUser?.id;
+    if (userId != null) {
+      await SessionStorage.markBiometricSuggestionShown(userId);
+    }
     _shouldSuggestBiometric = false;
     notifyListeners();
   }
@@ -200,6 +235,7 @@ class AuthController with ChangeNotifier {
     bool saveLogin = false,
     String? loginEmail,
     String? loginPassword,
+    bool initNotifications = true,
   }) async {
     final token = res['access_token'] as String?;
     final refresh = res['refresh_token'] as String?;
@@ -238,10 +274,15 @@ class AuthController with ChangeNotifier {
     if (_currentUser?.id != null) {
       // Unawaited so navigation isn't blocked on notification init, which
       // can take several seconds (network calls + FCM retry loops).
-      unawaited(_initializeNotificationServices(_currentUser!.id!));
+      // Skipped for new Google users still mid-onboarding (health profile,
+      // date of birth, etc.) — the welcome push should only fire once they
+      // actually reach the home page; see clearGoogleOnboarding().
+      if (initNotifications) {
+        unawaited(_initializeNotificationServices(_currentUser!.id!));
+      }
       unawaited(_markUserActive());
-      unawaited(SessionStorage.incrementLoginCount());
-      unawaited(_checkBiometricSuggestion());
+      unawaited(SessionStorage.incrementLoginCount(_currentUser!.id!));
+      unawaited(_checkBiometricSuggestion(_currentUser!.id!));
     }
     return _currentUser != null;
   }
@@ -390,10 +431,7 @@ class AuthController with ChangeNotifier {
       // If this is a Google user whose onboarding was interrupted (no dietType
       // means they never completed the health-profile signup), resume onboarding
       // instead of sending them to Home with an empty profile.
-      final isGoogleUser = userData['authProvider'] == 'google';
-      final onboardingIncomplete =
-          (userData['dietType'] == null || (userData['dietType'] as String?)?.isEmpty == true);
-      if (isGoogleUser && onboardingIncomplete) {
+      if (_isGoogleOnboardingIncomplete(userData)) {
         debugPrint('[AuthController] Google user has incomplete onboarding — resuming signup flow');
         _pendingGoogleOnboarding = SignupData(
           name: _currentUser!.name,
@@ -716,16 +754,16 @@ class AuthController with ChangeNotifier {
       debugPrint('[Google] User selected: ${googleUser.email}');
 
       final googleAuth = await googleUser.authentication;
-      final accessToken = googleAuth.accessToken;
-      if (accessToken == null) {
-        _error = 'Failed to get Google access token';
-        debugPrint('[Google] accessToken is null — authentication object: idToken=${googleAuth.idToken != null}');
+      final idToken = googleAuth.idToken;
+      if (idToken == null) {
+        _error = 'Failed to get Google sign-in token';
+        debugPrint('[Google] idToken is null — authentication object: accessToken=${googleAuth.accessToken != null}');
         return false;
       }
 
       final res = await ApiClient.post(
         '/auth/google',
-        body: {'accessToken': accessToken},
+        body: {'idToken': idToken},
         requireAuth: false,
       ) as Map<String, dynamic>?;
 
@@ -736,16 +774,39 @@ class AuthController with ChangeNotifier {
       }
 
       final isNewUser = res['isNewUser'] == true;
+      final hasSession = res['access_token'] != null;
+
+      if (isNewUser && !hasSession) {
+        // Truly brand-new account: the backend hasn't created anything yet
+        // (see /auth/google — new emails get no DB write, no session). Hold
+        // the Google profile + idToken and route to onboarding; the
+        // account is only created, atomically, at the final "Let's get
+        // started" step via /auth/google/complete.
+        debugPrint('[Google] New account — deferring creation until onboarding completes');
+        _pendingGoogleOnboarding = SignupData(
+          name: (res['name'] as String?) ?? googleUser.displayName,
+          email: (res['email'] as String?) ?? googleUser.email,
+          profilePhotoUrl: (res['profilePhotoUrl'] as String?) ?? googleUser.photoUrl,
+          googleIdToken: idToken,
+        );
+        return true;
+      }
+
+      final userMap = res['user'] as Map<String, dynamic>?;
+      // Resume onboarding for an EXISTING Google account with no dietType —
+      // e.g. a legacy incomplete record, or they signed in before, abandoned
+      // the health-profile steps, and are now signing in again.
+      final needsOnboarding = userMap != null && _isGoogleOnboardingIncomplete(userMap);
       debugPrint('[Backend] Existing user found: ${!isNewUser}');
-      debugPrint('[Backend] accessToken: ${res['access_token'] != null}, refreshToken: ${res['refresh_token'] != null}, isNewUser: $isNewUser');
+      debugPrint('[Backend] accessToken: ${res['access_token'] != null}, refreshToken: ${res['refresh_token'] != null}, isNewUser: $isNewUser, needsOnboarding: $needsOnboarding');
 
-      if (await _completeAuthFromResponse(res)) {
+      if (await _completeAuthFromResponse(res, initNotifications: !needsOnboarding)) {
         debugPrint('[AuthController] currentUser updated: ${_currentUser != null}, isAuthenticated: $isAuthenticated');
-        debugPrint('[Navigation] Going to: ${isNewUser ? "Signup/Onboarding" : "Home"}');
+        debugPrint('[Navigation] Going to: ${needsOnboarding ? "Signup/Onboarding" : "Home"}');
 
-        // For new Google users, set the onboarding flag BEFORE notifyListeners()
-        // so the root widget routes to SignupPage (step 2) instead of MainScreen.
-        if (isNewUser) {
+        // Set the onboarding flag BEFORE notifyListeners() so the root
+        // widget routes to SignupPage (step 2) instead of MainScreen.
+        if (needsOnboarding) {
           _pendingGoogleOnboarding = SignupData(
             name: googleUser.displayName,
             email: googleUser.email,
@@ -803,6 +864,59 @@ class AuthController with ChangeNotifier {
     } catch (e) {
       _error = userFacingErrorMessage(e);
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Finalizes Google onboarding at the "Let's get started" step. For a
+  /// brand-new account (no session yet — [pendingGoogleOnboarding] carries a
+  /// googleIdToken), creates the account atomically via
+  /// /auth/google/complete, mirroring [register]. For an existing account
+  /// resuming interrupted onboarding (already has a session), just patches
+  /// the profile as usual. Either way, clears the onboarding flag only on
+  /// success, so a failure doesn't send the user to Home with an empty
+  /// profile.
+  Future<bool> completeGoogleOnboarding(Map<String, dynamic> profileData) async {
+    final googleIdToken = _pendingGoogleOnboarding?.googleIdToken;
+    if (googleIdToken == null) {
+      await updateUserProfile(profileData);
+      if (_error != null) return false;
+      clearGoogleOnboarding();
+      return true;
+    }
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await ApiClient.post(
+        '/auth/google/complete',
+        body: {'idToken': googleIdToken, ...profileData},
+        requireAuth: false,
+      ) as Map<String, dynamic>?;
+
+      if (res == null) {
+        _error = 'Failed to complete sign-up';
+        return false;
+      }
+
+      if (await _completeAuthFromResponse(res, initNotifications: false)) {
+        clearGoogleOnboarding();
+        return true;
+      }
+      _error = 'Failed to complete sign-up';
+      return false;
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } on SocketException catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
+    } catch (e) {
+      _error = userFacingErrorMessage(e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -898,6 +1012,22 @@ class AuthController with ChangeNotifier {
     }
   }
 
+  Future<void> removeProfilePhoto() async {
+    if (_currentUser == null) return;
+    try {
+      await ApiClient.patch('/auth/profile', body: {'profilePhotoId': null});
+      _localProfilePhotoData = null;
+      final updated = await ApiClient.get('/auth/me') as Map<String, dynamic>?;
+      if (updated != null) _currentUser = _createUserModel(updated);
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = userFacingErrorMessage(e);
+    } finally {
+      notifyListeners();
+    }
+  }
+
   Future<List<int>?> getProfilePhoto() async {
     if (_currentUser?.profilePhotoId == null) return null;
     try {
@@ -976,28 +1106,16 @@ class AuthController with ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final res = await ApiClient.post('/auth/forgot-password',
-          body: {'email': email}, requireAuth: false) as Map<String, dynamic>?;
-      final token = res?['token'] as String?;
-      if (token != null && token.isNotEmpty) {
-        final userName = res?['userName'] as String?;
-        final emailSent = await _emailService.sendPasswordResetEmail(
-          email: email,
-          resetToken: token,
-          userName: userName,
-        );
-        if (!emailSent) {
-          _error = 'Failed to send password reset email. Please try again later.';
-          return false;
-        }
-      }
+      // Backend sends the reset email itself (see /auth/forgot-password) and
+      // never returns the token or reveals whether the email is registered —
+      // a generic success here is all the client should ever see.
+      await ApiClient.post('/auth/forgot-password',
+          body: {'email': email}, requireAuth: false);
       return true;
     } on ApiException catch (e) {
-      if (e.statusCode == 429) {
-        _error = 'Too many reset requests. Please try again later.';
-      } else {
-        _error = e.message;
-      }
+      // Backend computes the exact wait time for 429s (see
+      // /auth/forgot-password) — surface it as-is instead of a generic string.
+      _error = e.message;
       return false;
     } catch (e) {
       _error = userFacingErrorMessage(e);

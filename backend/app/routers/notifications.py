@@ -102,7 +102,10 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     clean.pop("dedupeWindowHours", None)
     clean.pop("sendPush", None)
     item_ids = clean.pop("itemIds", None)
-    doc = {"_id": nid, "userId": user_id, **clean, "createdAt": now}
+    # userId must come after **clean, not before — a dict literal keeps the
+    # last occurrence of a repeated key, so this stops a client-supplied
+    # "userId" in the body from overriding the authenticated user.
+    doc = {**clean, "_id": nid, "userId": user_id, "createdAt": now}
 
     if type_ == "expired_items" and item_ids:
         # Push once per item ("first sighting"); the Center digest doc is

@@ -149,10 +149,14 @@ class TrackerProvider extends ChangeNotifier {
       // Skip cache if force reload is requested
       if (!forceReload) {
         try {
-          _dailyTrackers =
-              await _trackerService.getDailyTrackers(userId, dietType);
-          _weeklyTrackers =
-              await _trackerService.getWeeklyTrackers(userId, dietType);
+          // Daily and weekly trackers are independent network calls — fetch
+          // them in parallel instead of waiting on one before the other.
+          final results = await Future.wait([
+            _trackerService.getDailyTrackers(userId, dietType),
+            _trackerService.getWeeklyTrackers(userId, dietType),
+          ]);
+          _dailyTrackers = results[0];
+          _weeklyTrackers = results[1];
 
           // Strictly verify trackers match the requested diet type
           final allTrackers = [..._dailyTrackers, ..._weeklyTrackers];

@@ -132,19 +132,24 @@ async def _reset_trackers(
         q["dietType"] = diet_type
 
     trackers = await db[TRACKERS].find(q).to_list(length=None)
-    snapshots_saved = await _save_progress_snapshot_for_docs(db, trackers, is_weekly)
     tracker_count = len(trackers)
 
     if dry_run or tracker_count == 0:
+        snapshots_would_save = 0
+        if dry_run and trackers:
+            snapshots_would_save = sum(
+                1 for t in trackers if float(t.get("currentValue") or 0.0) > 0
+            )
         return {
             "ok": True,
             "period": _tracker_period_value(is_weekly),
             "trackersMatched": tracker_count,
-            "snapshotsSaved": snapshots_saved,
+            "snapshotsSaved": snapshots_would_save,
             "trackersReset": 0,
             "dryRun": dry_run,
         }
 
+    snapshots_saved = await _save_progress_snapshot_for_docs(db, trackers, is_weekly)
     ids = [t["_id"] for t in trackers if "_id" in t]
     result = await db[TRACKERS].update_many(
         {"_id": {"$in": ids}},
@@ -182,7 +187,10 @@ async def create_tracker(body: dict, user_id: str = Depends(get_current_user_id)
     db = await get_database()
     tid = ObjectId()
     now = datetime.now(timezone.utc).isoformat()
-    doc = {"_id": tid, "userId": user_id, **body, "lastUpdated": now, "createdAt": now}
+    # userId must come after **body, not before — a dict literal keeps the
+    # last occurrence of a repeated key, so this stops a client-supplied
+    # "userId" in the body from overriding the authenticated user.
+    doc = {**body, "_id": tid, "userId": user_id, "lastUpdated": now, "createdAt": now}
     await db[TRACKERS].insert_one(doc)
     return _serialize_doc(doc)
 
@@ -236,7 +244,7 @@ async def get_progress(
 
 
 @router.post("/progress")
-async def save_progress(body: dict | list, user_id: str = Depends(get_current_user_id)):
+async def save_progress(body: dict | list = Body(...), user_id: str = Depends(get_current_user_id)):
     """Body: single progress doc or list of progress docs (snapshot)."""
     db = await get_database()
     now = datetime.now(timezone.utc)
@@ -244,7 +252,8 @@ async def save_progress(body: dict | list, user_id: str = Depends(get_current_us
     docs = []
     for item in items:
         item = dict(item)
-        item.setdefault("userId", user_id)
+        # Force-set, not setdefault — a client-supplied "userId" must not survive.
+        item["userId"] = user_id
         item["_id"] = ObjectId()
         if "progressDate" not in item:
             item["progressDate"] = now.isoformat()

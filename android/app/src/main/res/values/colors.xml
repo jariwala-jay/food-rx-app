@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the app's default Scaffold background (see lib/main.dart / most
+         auth screens) so the transition from native splash to first Flutter
+         frame doesn't flash a different shade of white. -->
+    <color name="launch_background">#FFF7F7F8</color>
+</resources>
