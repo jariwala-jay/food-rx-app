@@ -239,20 +239,20 @@ String? extractPasswordResetToken(
   final isVerifiedResetLink = uri.scheme == 'https' &&
       uri.host == verifiedResetHost &&
       uri.path == '/auth/reset-password/open';
-  final isCustomSchemeLink = uri.scheme == 'foodrx';
+  // Only the two forms we actually generate — not any foodrx://... link,
+  // since AndroidManifest's catch-all foodrx intent-filter routes all of
+  // them here regardless of host.
+  final isCustomResetLink = uri.scheme == 'foodrx' &&
+      (uri.host == 'reset-password' ||
+          (uri.host.isEmpty && (uri.path.isEmpty || uri.path == '/')));
 
-  if (!isVerifiedResetLink && !isCustomSchemeLink) return null;
+  if (!isVerifiedResetLink && !isCustomResetLink) return null;
 
   final token = isVerifiedResetLink
       ? _tokenFromFragment(uri.fragment)
       : uri.queryParameters['token'];
 
-  final isResetPassword = isVerifiedResetLink ||
-      uri.host == 'reset-password' ||
-      uri.path.contains('reset-password') ||
-      token != null; // If token exists, assume it's reset password
-
-  if (!isResetPassword || token == null || token.isEmpty) return null;
+  if (token == null || token.isEmpty) return null;
   return token;
 }
 

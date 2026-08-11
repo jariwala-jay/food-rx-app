@@ -115,9 +115,24 @@ class _ProfilePageState extends State<ProfilePage> {
 
         final authController = context.read<AuthController>();
 
+        authController.clearError();
         await authController.updateProfilePhoto(croppedFile);
 
         if (mounted) {
+          final error = authController.error;
+          if (error != null) {
+            setState(() {
+              _isUploadingPhoto = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(error),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
           await _loadProfilePhoto();
 
           setState(() {
@@ -155,9 +170,24 @@ class _ProfilePageState extends State<ProfilePage> {
     });
 
     final authController = context.read<AuthController>();
+    authController.clearError();
     await authController.removeProfilePhoto();
 
     if (!mounted) return;
+
+    final error = authController.error;
+    if (error != null) {
+      setState(() {
+        _isUploadingPhoto = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _profilePhotoData = null;

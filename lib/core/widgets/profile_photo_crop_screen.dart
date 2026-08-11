@@ -46,24 +46,28 @@ class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
   }
 
   Future<void> _loadImage() async {
-    final bytes = await File(widget.sourcePath).readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
+    try {
+      final bytes = await File(widget.sourcePath).readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        if (mounted) setState(() => _loadFailed = true);
+        return;
+      }
+
+      final baked = img.bakeOrientation(decoded);
+      final baseScale = _cropSize /
+          (baked.width < baked.height ? baked.width : baked.height);
+
+      if (!mounted) return;
+      setState(() {
+        _decodedImage = baked;
+        _baseScale = baseScale;
+        _coverWidth = baked.width * baseScale;
+        _coverHeight = baked.height * baseScale;
+      });
+    } catch (_) {
       if (mounted) setState(() => _loadFailed = true);
-      return;
     }
-
-    final baked = img.bakeOrientation(decoded);
-    final baseScale =
-        _cropSize / (baked.width < baked.height ? baked.width : baked.height);
-
-    if (!mounted) return;
-    setState(() {
-      _decodedImage = baked;
-      _baseScale = baseScale;
-      _coverWidth = baked.width * baseScale;
-      _coverHeight = baked.height * baseScale;
-    });
   }
 
   Future<void> _onDone() async {

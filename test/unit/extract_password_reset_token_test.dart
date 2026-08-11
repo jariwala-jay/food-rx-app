@@ -123,6 +123,14 @@ void main() {
         isNull,
       );
     });
+
+    test('returns null for an unrelated foodrx:// host even with a token param', () {
+      final uri = Uri.parse('foodrx://evil-host?token=attacker-controlled');
+      expect(
+        extractPasswordResetToken(uri, verifiedResetHost: _apiHost),
+        isNull,
+      );
+    });
   });
 
   group('extractPasswordResetToken — unrelated links', () {

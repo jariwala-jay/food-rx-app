@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 from typing import Any
@@ -82,7 +83,9 @@ async def send_push_to_fcm_token(
         data=data or None,
     )
     try:
-        message_id = messaging.send(msg)
+        # firebase_admin.messaging.send is a blocking network call; run it off
+        # the event loop so one slow FCM request doesn't stall other requests.
+        message_id = await asyncio.to_thread(messaging.send, msg)
         return {"ok": True, "messageId": message_id}
     except Exception as e:
         return {"ok": False, "error": str(e)}

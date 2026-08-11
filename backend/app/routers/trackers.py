@@ -132,19 +132,24 @@ async def _reset_trackers(
         q["dietType"] = diet_type
 
     trackers = await db[TRACKERS].find(q).to_list(length=None)
-    snapshots_saved = await _save_progress_snapshot_for_docs(db, trackers, is_weekly)
     tracker_count = len(trackers)
 
     if dry_run or tracker_count == 0:
+        snapshots_would_save = 0
+        if dry_run and trackers:
+            snapshots_would_save = sum(
+                1 for t in trackers if float(t.get("currentValue") or 0.0) > 0
+            )
         return {
             "ok": True,
             "period": _tracker_period_value(is_weekly),
             "trackersMatched": tracker_count,
-            "snapshotsSaved": snapshots_saved,
+            "snapshotsSaved": snapshots_would_save,
             "trackersReset": 0,
             "dryRun": dry_run,
         }
 
+    snapshots_saved = await _save_progress_snapshot_for_docs(db, trackers, is_weekly)
     ids = [t["_id"] for t in trackers if "_id" in t]
     result = await db[TRACKERS].update_many(
         {"_id": {"$in": ids}},
