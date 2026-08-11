@@ -180,8 +180,9 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   void _showCarouselArrowsTemporarily() {
     _carouselArrowsHideTimer?.cancel();
-    if (!_showCarouselArrows && mounted)
+    if (!_showCarouselArrows && mounted) {
       setState(() => _showCarouselArrows = true);
+    }
     _carouselArrowsHideTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) setState(() => _showCarouselArrows = false);
     });
@@ -1193,13 +1194,15 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
     return MouseRegion(
       onEnter: (_) {
         _carouselArrowsHideTimer?.cancel();
-        if (!_showCarouselArrows && mounted)
+        if (!_showCarouselArrows && mounted) {
           setState(() => _showCarouselArrows = true);
+        }
       },
       onExit: (_) {
         _carouselArrowsHideTimer?.cancel();
-        if (_showCarouselArrows && mounted)
+        if (_showCarouselArrows && mounted) {
           setState(() => _showCarouselArrows = false);
+        }
       },
       child: GestureDetector(
         onTapDown: (_) => _showCarouselArrowsTemporarily(),
@@ -1710,8 +1713,9 @@ class _MealGoalsHistoryPageState extends State<MealGoalsHistoryPage> {
 
   String _defaultUnit(String key) {
     if (key == 'sodium') return 'mg';
-    if (key == 'water' || key == 'veggies' || key == 'fruits' || key == 'dairy')
+    if (key == 'water' || key == 'veggies' || key == 'fruits' || key == 'dairy') {
       return 'Cups';
+    }
     if (key == 'protein' || key == 'grains') return 'oz';
     if (key == 'fatsOils') return 'Servings';
     return '';

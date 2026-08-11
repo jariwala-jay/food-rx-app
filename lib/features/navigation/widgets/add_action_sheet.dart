@@ -162,7 +162,7 @@ class _AddActionSheetState extends State<AddActionSheet> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                            'Please tap \"Add FoodRx Items\" to continue the tour'),
+                            'Please tap "Add FoodRx Items" to continue the tour'),
                         duration: Duration(seconds: 2),
                         backgroundColor: Color(0xFFFF6A00),
                       ),

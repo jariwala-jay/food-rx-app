@@ -26,7 +26,7 @@ class ModalActionButton extends StatelessWidget {
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
     
     // Calculate responsive height based on text scaling
-    final baseHeight = 115.0;
+    const baseHeight = 115.0;
     final cardHeight = baseHeight * clampedScale.clamp(1.0, 1.1);
     
     return SizedBox(

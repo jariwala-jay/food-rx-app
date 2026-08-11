@@ -226,7 +226,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           if (_fieldErrors.show('sex') &&
                               _selectedSex == null) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please select your sex',
                               style: TextStyle(
                                 color: Colors.red,
@@ -301,7 +301,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               (_heightFeet == null ||
                                   _heightInches == null)) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please select your height',
                               style: TextStyle(
                                 color: Colors.red,
@@ -426,7 +426,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                           if (_fieldErrors.show('conditions') &&
                               _selectedMedicalConditions.isEmpty) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please select your medical conditions (or None)',
                               style: TextStyle(
                                 color: Colors.red,

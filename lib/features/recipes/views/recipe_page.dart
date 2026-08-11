@@ -116,7 +116,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
 
   Future<void> _generateFallbackRecipes(RecipeController controller) async {
     // Use a simple query that always returns results
-    final fallbackFilter = const RecipeFilter(
+    const fallbackFilter = RecipeFilter(
       query: 'healthy',
       veryHealthy: true,
     );
@@ -574,7 +574,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 24),
 
-            Text(
+            const Text(
               'Finding Perfect Recipes for You...',
               textAlign: TextAlign.center,
               style: TextStyle(

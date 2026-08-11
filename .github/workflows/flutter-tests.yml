@@ -1,0 +1,29 @@
+name: Flutter Tests
+
+on:
+  pull_request:
+    branches: [staging, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.3"
+          channel: "stable"
+
+      - run: flutter pub get
+
+      - name: Create .env
+        # pubspec.yaml bundles .env as an asset; it's gitignored (may hold
+        # secrets locally) so CI needs a stand-in for asset bundling to
+        # succeed. Tests don't depend on real values, just the file existing.
+        run: cp .env.example .env
+
+      - name: Analyze (errors only — repo has ~480 pre-existing info/warning lints)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - run: flutter test

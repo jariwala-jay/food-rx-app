@@ -23,8 +23,8 @@ void main() {
   });
 
   test('RecipeFilter.toSpoonacularParams includes intolerances', () {
-    final filter = RecipeFilter(
-      intolerances: const [
+    const filter = RecipeFilter(
+      intolerances: [
         Intolerances.dairy,
         Intolerances.gluten,
         Intolerances.peanut,

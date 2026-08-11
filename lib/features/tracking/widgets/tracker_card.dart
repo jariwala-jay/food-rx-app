@@ -468,7 +468,7 @@ class TrackerCard extends StatelessWidget {
   }) {
     final fraction = tracker.formattedProgressFraction;
     final weight = progressFractionWeightFor();
-    final baseSize = progressLargeLayoutFractionBaseFontSize;
+    const baseSize = progressLargeLayoutFractionBaseFontSize;
 
     return LayoutBuilder(
       builder: (context, constraints) {

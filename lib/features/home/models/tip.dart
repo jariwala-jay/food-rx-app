@@ -53,7 +53,7 @@ class Tip {
   }
 
   factory Tip.fromJson(Map<String, dynamic> json) {
-    DateTime _parseLastShown(dynamic v) {
+    DateTime parseLastShown(dynamic v) {
       if (v == null) return DateTime.now();
       if (v is DateTime) return v;
       return DateTime.tryParse(v.toString()) ?? DateTime.now();
@@ -67,7 +67,7 @@ class Tip {
       imageUrl: json['imageUrl']?.toString() ?? '',
       lastShownToUsers:
           (json['lastShownToUsers'] as Map<String, dynamic>?)?.map(
-                (key, value) => MapEntry(key, _parseLastShown(value)),
+                (key, value) => MapEntry(key, parseLastShown(value)),
               ) ??
               {},
       viewCountByUser: (json['viewCountByUser'] as Map<String, dynamic>?)?.map(

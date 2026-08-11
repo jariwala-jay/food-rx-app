@@ -8,9 +8,7 @@ class DietConstraintsService {
 
   /// Get nutrition content, loading it if necessary
   Future<NutritionContent> get content async {
-    if (_content == null) {
-      _content = await NutritionContentLoader.load();
-    }
+    _content ??= await NutritionContentLoader.load();
     return _content!;
   }
 

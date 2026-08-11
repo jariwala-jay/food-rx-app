@@ -25,7 +25,7 @@ class CategoryFilterChips extends StatelessWidget {
     final clampedScale = textScaleFactor.clamp(0.8, 1.0);
 
     // Calculate responsive height based on text scaling
-    final baseHeight = 40.0;
+    const baseHeight = 40.0;
     final chipHeight = baseHeight * clampedScale.clamp(1.0, 1.1);
 
     return Container(

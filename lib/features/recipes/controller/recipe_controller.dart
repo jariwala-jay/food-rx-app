@@ -280,7 +280,9 @@ class RecipeController extends ChangeNotifier {
     final Map<TrackerCategory, double> categoryServings = {};
     for (final ingredient in recipe.extendedIngredients) {
       if (ingredient.unit.toLowerCase() == 'servings' ||
-          ingredient.unit.toLowerCase() == 'serving') continue;
+          ingredient.unit.toLowerCase() == 'serving') {
+        continue;
+      }
       final categories = dietServingService.getCategoriesForIngredient(
           ingredient.nameClean,
           dietType: userDietType);
@@ -309,7 +311,9 @@ class RecipeController extends ChangeNotifier {
         double sodiumMg = sodiumNutrient.amount * servingsConsumed;
         if (sodiumNutrient.unit.toLowerCase() == 'g') sodiumMg *= 1000;
         if (sodiumNutrient.unit.toLowerCase() == 'mcg' ||
-            sodiumNutrient.unit.toLowerCase() == 'μg') sodiumMg /= 1000;
+            sodiumNutrient.unit.toLowerCase() == 'μg') {
+          sodiumMg /= 1000;
+        }
         if (sodiumMg > 0) {
           categoryServings[TrackerCategory.sodium] =
               (categoryServings[TrackerCategory.sodium] ?? 0.0) +

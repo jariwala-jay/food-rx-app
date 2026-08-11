@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app/core/utils/objectid_helper.dart';
 import '../models/tracker_goal.dart';
 import '../models/tracker_progress.dart';
 import 'tracker_progress_service.dart';
@@ -963,7 +962,7 @@ class TrackerService {
 
     // Trackers always use "MyPlate" as dietType
     // Note: DiabetesPlate users should already be mapped to DASH before reaching here
-    final trackerDietType = 'MyPlate';
+    const trackerDietType = 'MyPlate';
 
     return [
       TrackerGoal(

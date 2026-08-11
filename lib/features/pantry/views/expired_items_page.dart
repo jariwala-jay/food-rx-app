@@ -82,7 +82,7 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
   }
 
   Future<void> _showExtendDialog(PantryItem item) async {
-    final accent = const Color(0xFFFF6A00);
+    const accent = Color(0xFFFF6A00);
 
     final result = await showDialog<_ExtendAction>(
       context: context,
@@ -105,7 +105,7 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
                           Navigator.pop(context, _ExtendAction.oneDay),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: accent,
-                        side: BorderSide(color: accent),
+                        side: const BorderSide(color: accent),
                       ),
                       child: const Text('+1 day'),
                     ),
@@ -117,7 +117,7 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
                           Navigator.pop(context, _ExtendAction.twoDays),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: accent,
-                        side: BorderSide(color: accent),
+                        side: const BorderSide(color: accent),
                       ),
                       child: const Text('+2 days'),
                     ),
@@ -131,7 +131,7 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
                       Navigator.pop(context, _ExtendAction.chooseDate),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: accent,
-                    side: BorderSide(color: accent),
+                    side: const BorderSide(color: accent),
                   ),
                   child: const Text('Choose another date'),
                 ),
@@ -291,12 +291,12 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
                   ),
                 )
               : _expiredItems.isEmpty
-                  ? Center(
+                  ? const Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
+                        padding: EdgeInsets.all(24),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
+                          children: [
                             Icon(
                               Icons.check_circle_outline,
                               size: 64,

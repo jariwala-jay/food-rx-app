@@ -254,7 +254,7 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
             Expanded(
               child: Text(
                 _cuisineSelectorLabel,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.black87,
                 ),

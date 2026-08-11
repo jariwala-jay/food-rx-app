@@ -3,7 +3,7 @@ import 'package:flutter_app/core/services/tour_service.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 
 class TourProvider extends ChangeNotifier {
-  TourService _tourService;
+  final TourService _tourService;
 
   TourProvider({required TourService tourService}) : _tourService = tourService;
 

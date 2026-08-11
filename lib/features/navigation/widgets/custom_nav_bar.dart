@@ -65,7 +65,7 @@ class CustomNavBar extends StatelessWidget {
         final currentStep = tourProvider.currentStep;
 
         // Helper to wrap nav tap with tour check
-        VoidCallback _wrapWithTourCheck(
+        VoidCallback wrapWithTourCheck(
             String tabName, VoidCallback originalTap) {
           return () {
             if (isTourActive &&
@@ -116,7 +116,7 @@ class CustomNavBar extends StatelessWidget {
                             svgPath: 'assets/icons/home.svg',
                             label: 'Home',
                             isSelected: currentIndex == 0,
-                            onTap: _wrapWithTourCheck('home', onHomeTap),
+                            onTap: wrapWithTourCheck('home', onHomeTap),
                             isDisabledDuringTour: isTourActive &&
                                 !_isTabAllowedDuringTour(currentStep, 'home'),
                           ),
@@ -217,7 +217,7 @@ class CustomNavBar extends StatelessWidget {
                               svgPath: 'assets/icons/pantry.svg',
                               label: 'Pantry',
                               isSelected: currentIndex == 1,
-                              onTap: _wrapWithTourCheck('pantry', onPantryTap),
+                              onTap: wrapWithTourCheck('pantry', onPantryTap),
                               isDisabledDuringTour: isTourActive &&
                                   !_isTabAllowedDuringTour(
                                       currentStep, 'pantry'),
@@ -326,7 +326,7 @@ class CustomNavBar extends StatelessWidget {
                               svgPath: 'assets/icons/recipe.svg',
                               label: 'Recipe',
                               isSelected: currentIndex == 2,
-                              onTap: _wrapWithTourCheck('recipe', onRecipeTap),
+                              onTap: wrapWithTourCheck('recipe', onRecipeTap),
                               isDisabledDuringTour: isTourActive &&
                                   !_isTabAllowedDuringTour(
                                       currentStep, 'recipe'),
@@ -417,7 +417,7 @@ class CustomNavBar extends StatelessWidget {
                               svgPath: 'assets/icons/education.svg',
                               label: 'Education',
                               isSelected: currentIndex == 3,
-                              onTap: _wrapWithTourCheck(
+                              onTap: wrapWithTourCheck(
                                   'education', onEducationTap),
                               isDisabledDuringTour: isTourActive &&
                                   !_isTabAllowedDuringTour(

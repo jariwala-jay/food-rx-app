@@ -265,7 +265,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           if (_fieldErrors.show('healthGoals') &&
                               _selectedHealthGoals.isEmpty) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please select at least one health goal',
                               style: TextStyle(
                                 color: Colors.red,
@@ -310,7 +310,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           if (_fieldErrors.show('mealPrep') &&
                               _preferredMealPrepTime == null) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please select preferred meal prep time',
                               style: TextStyle(
                                 color: Colors.red,
@@ -350,7 +350,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                                   .trim()
                                   .isEmpty) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please enter how many people you cook for',
                               style: TextStyle(
                                 color: Colors.red,
@@ -395,7 +395,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                           if (_fieldErrors.show('cookingSkill') &&
                               _cookingSkill == null) ...[
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Please rate your cooking skill',
                               style: TextStyle(
                                 color: Colors.red,

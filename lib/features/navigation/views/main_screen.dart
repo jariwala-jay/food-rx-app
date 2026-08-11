@@ -31,9 +31,9 @@ class _MainScreenState extends State<MainScreen> {
   // ignore: unused_field - used when tour is re-enabled
   bool _wasTourActive = false;
   // ignore: unused_field - used when tour is re-enabled
-  bool _hasShownCompletionDialog = false;
+  final bool _hasShownCompletionDialog = false;
   // ignore: unused_field - used when tour is re-enabled
-  bool _hasShownWelcomeDialog = false;
+  final bool _hasShownWelcomeDialog = false;
   final List<Widget> _pages = [
     const HomePage(),
     const PantryPage(),
