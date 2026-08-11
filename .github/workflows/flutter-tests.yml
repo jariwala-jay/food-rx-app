@@ -17,6 +17,12 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Create .env
+        # pubspec.yaml bundles .env as an asset; it's gitignored (may hold
+        # secrets locally) so CI needs a stand-in for asset bundling to
+        # succeed. Tests don't depend on real values, just the file existing.
+        run: cp .env.example .env
+
       - name: Analyze (errors only — repo has ~480 pre-existing info/warning lints)
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
