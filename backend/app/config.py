@@ -6,6 +6,11 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    # Canonical origin for links we email to users (e.g. password reset).
+    # Deliberately NOT derived from the request's Host header, which is
+    # client-controlled and unvalidated (no TrustedHostMiddleware) — trusting
+    # it would let an attacker point reset links at a domain they control.
+    public_base_url: str = "https://foodrx-api-609996001749.us-central1.run.app"
     # Optional: set BROADCAST_SECRET in .env to enable POST /notifications/broadcast
     broadcast_secret: str = ""
     # Optional: set TRACKER_RESET_SECRET in .env to enable tracker reset cron endpoints

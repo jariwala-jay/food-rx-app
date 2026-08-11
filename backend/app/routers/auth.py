@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone, timedelta
-import asyncio
 import base64
 import hashlib
 import math
@@ -9,7 +8,7 @@ import warnings
 from urllib.parse import quote
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from app.database import get_database
@@ -717,7 +716,7 @@ async def reset_password_open():
 
 # Password reset (no auth required for request; token in body for reset)
 @router.post("/forgot-password")
-async def forgot_password(body: dict, request: Request):
+async def forgot_password(body: dict):
     """
     Request a password-reset email. Body: { \"email\" }.
     Always returns { \"success\": true } — never reveals whether the email is
@@ -766,8 +765,9 @@ async def forgot_password(body: dict, request: Request):
         "createdAt": now,
     })
     # Fragment (#token=...), not a query string: browsers never send the
-    # fragment to the server, so it never ends up in access logs.
-    reset_link = f"{str(request.base_url).rstrip('/')}/auth/reset-password/open#token={quote(token, safe='')}"
+    # fragment to the server, so it never ends up in access logs. Built from
+    # settings.public_base_url, not the request's Host header — see config.py.
+    reset_link = f"{settings.public_base_url.rstrip('/')}/auth/reset-password/open#token={quote(token, safe='')}"
     await send_password_reset_email(email, reset_link, user.get("name"))
     return {"success": True}
 
