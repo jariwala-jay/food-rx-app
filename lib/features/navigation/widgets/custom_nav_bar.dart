@@ -368,6 +368,7 @@ class CustomNavBar extends StatelessWidget {
                               // Trigger appropriate showcase after navigation
                               Future.delayed(const Duration(milliseconds: 500),
                                   () {
+                                if (!context.mounted) return;
                                 try {
                                   final articleController =
                                       Provider.of<ArticleController>(context,
@@ -399,6 +400,7 @@ class CustomNavBar extends StatelessWidget {
                               // Trigger appropriate showcase after navigation
                               Future.delayed(const Duration(milliseconds: 500),
                                   () {
+                                if (!context.mounted) return;
                                 try {
                                   final articleController =
                                       Provider.of<ArticleController>(context,

@@ -575,6 +575,7 @@ class TrackerCard extends StatelessWidget {
         dietType: tracker.dietType,
       ),
     );
+    if (!context.mounted) return;
 
     final tourProvider =
         Provider.of<ForcedTourProvider>(context, listen: false);

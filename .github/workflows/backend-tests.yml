@@ -33,7 +33,10 @@ jobs:
             tests.test_env_client_secret_separation \
             tests.test_forgot_reset_password_endpoints \
             tests.test_google_id_token_verification \
+            tests.test_password_hash_migration \
             tests.test_password_reset_token_not_logged \
+            tests.test_profile_photo_auth \
+            tests.test_rate_limiting \
             tests.test_userid_idor_fix \
             tests.test_well_known_app_links \
             -v
