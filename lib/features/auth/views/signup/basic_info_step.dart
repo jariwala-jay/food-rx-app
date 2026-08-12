@@ -217,6 +217,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
         return;
       }
 
+      if (!mounted) return;
       final signupProvider = context.read<SignupProvider>();
       signupProvider.updateBasicInfo(
         name: _nameController.text,
@@ -228,6 +229,7 @@ class _BasicInfoStepState extends State<BasicInfoStep> {
       widget.onNext();
     } catch (e) {
       final msg = userFacingErrorMessage(e);
+      if (!mounted) return;
       setState(() {
         _error = msg;
       });

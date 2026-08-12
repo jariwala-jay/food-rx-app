@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         try {
           // Wait a bit before showing next to ensure previous is fully dismissed
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (!mounted) return;
+            if (!context.mounted) return;
             final tp = Provider.of<ForcedTourProvider>(context, listen: false);
             // Double-check we're on the trackerInfo step
             if (tp.isOnStep(TourStep.trackerInfo)) {
@@ -65,7 +65,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 // Dismiss again just to be safe
                 ShowcaseView.get().dismiss();
                 Future.delayed(const Duration(milliseconds: 200), () {
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   final tp2 =
                       Provider.of<ForcedTourProvider>(context, listen: false);
                   if (tp2.isOnStep(TourStep.trackerInfo)) {
@@ -96,12 +96,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
       // Dismiss current showcase and trigger the next showcase step (My Plan button)
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         try {
           // Dismiss any active showcase first
           ShowcaseView.get().dismiss();
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (!mounted) return;
+            if (!context.mounted) return;
             final tp = Provider.of<ForcedTourProvider>(context, listen: false);
             // Double-check we're on the myPlan step
             if (tp.isOnStep(TourStep.myPlan)) {

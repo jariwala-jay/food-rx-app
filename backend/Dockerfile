@@ -24,5 +24,9 @@ RUN mkdir -p app/knowledge/chroma_db
 ENV PORT=8080
 EXPOSE 8080
 
-# Must listen on 0.0.0.0 so Cloud Run health checks work
-CMD exec sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"
+# Must listen on 0.0.0.0 so Cloud Run health checks work.
+# --proxy-headers/--forwarded-allow-ips: Cloud Run terminates TLS and proxies
+# every request, so without these uvicorn sees Cloud Run's internal IP as the
+# client for every request — collapsing the per-IP rate limiter (app/rate_limit.py)
+# onto a single shared bucket instead of limiting each real client separately.
+CMD exec sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"

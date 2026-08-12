@@ -521,11 +521,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                       Provider.of<ForcedTourProvider>(context, listen: false);
                   if (tourProvider.isOnStep(TourStep.pantryItems)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       try {
                         ShowcaseView.get().dismiss();
                         Future.delayed(const Duration(milliseconds: 300), () {
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           final tp = Provider.of<ForcedTourProvider>(context,
                               listen: false);
                           // Double-check step hasn't changed
@@ -548,11 +548,11 @@ class _PantryPageState extends State<PantryPage> with RouteAware {
                       Provider.of<ForcedTourProvider>(context, listen: false);
                   if (tourProvider.isOnStep(TourStep.pantryItems)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       try {
                         ShowcaseView.get().dismiss();
                         Future.delayed(const Duration(milliseconds: 300), () {
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           final tp = Provider.of<ForcedTourProvider>(context,
                               listen: false);
                           // Double-check step hasn't changed

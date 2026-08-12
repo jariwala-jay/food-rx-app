@@ -271,7 +271,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                   style: TextStyle(
                                     color: Color(0xFF545454),
                                     fontSize: 14,
-                                    fontFamily: 'Bricolage Grotesque',
+                                    fontFamily: 'BricolageGrotesque',
                                     fontWeight: FontWeight.w400,
                                   ),
                                 ),
@@ -280,7 +280,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                   style: TextStyle(
                                     color: Color(0xFFFF6A00),
                                     fontSize: 14,
-                                    fontFamily: 'Bricolage Grotesque',
+                                    fontFamily: 'BricolageGrotesque',
                                     fontWeight: FontWeight.w400,
                                   ),
                                 ),

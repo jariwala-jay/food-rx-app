@@ -340,7 +340,7 @@ class _LoginPageState extends State<LoginPage> {
                                       style: TextStyle(
                                         color: Color(0xFF545454),
                                         fontSize: 12,
-                                        fontFamily: 'Bricolage Grotesque',
+                                        fontFamily: 'BricolageGrotesque',
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),
@@ -444,7 +444,7 @@ class _LoginPageState extends State<LoginPage> {
                                       style: TextStyle(
                                         color: Color(0xFF545454),
                                         fontSize: 16,
-                                        fontFamily: 'Bricolage Grotesque',
+                                        fontFamily: 'BricolageGrotesque',
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),
@@ -453,7 +453,7 @@ class _LoginPageState extends State<LoginPage> {
                                       style: TextStyle(
                                         color: Color(0xFFFF6A00),
                                         fontSize: 16,
-                                        fontFamily: 'Bricolage Grotesque',
+                                        fontFamily: 'BricolageGrotesque',
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),

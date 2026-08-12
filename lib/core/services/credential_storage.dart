@@ -1,6 +1,11 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Optional saved login (email + password) for biometric re-auth on this device.
+/// Reads/clears the legacy saved login (email + raw password) written by
+/// pre-migration app versions for biometric re-auth. New devices never write
+/// to this storage — see AuthController.enableBiometricLogin(), which uses a
+/// refresh token instead — so this only exists to detect and migrate
+/// installs that still have a plaintext password on disk from before that
+/// change (see AuthController.loginWithSavedCredentials()).
 class CredentialStorage {
   CredentialStorage._();
 
@@ -21,14 +26,6 @@ class CredentialStorage {
         email.isNotEmpty &&
         password != null &&
         password.isNotEmpty;
-  }
-
-  static Future<void> saveCredentials({
-    required String email,
-    required String password,
-  }) async {
-    await _storage.write(key: _keyEmail, value: email.trim().toLowerCase());
-    await _storage.write(key: _keyPassword, value: password);
   }
 
   static Future<({String email, String password})?> readCredentials() async {
