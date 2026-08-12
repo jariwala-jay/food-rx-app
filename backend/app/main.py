@@ -2,12 +2,16 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from bson import ObjectId
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pymongo.errors import AutoReconnect, ConnectionFailure, ServerSelectionTimeoutError
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.database import ensure_database_indexes, get_database, close_database, reset_database
+from app.deps import get_current_user_id
+from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips, well_known
 from app.services.rag_service import rag_service
 
@@ -44,10 +48,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# The Flutter app authenticates with a Bearer JWT (Authorization header), not
+# cookies, so allow_credentials brings no functional benefit here — and
+# combining it with a wildcard origin is a known anti-pattern (it defeats the
+# purpose of an origin allowlist for any credentialed request). CORS itself
+# only matters for the handful of browser-rendered surfaces this API serves
+# (Swagger UI, the password-reset bridge page); the Flutter HTTP client
+# ignores CORS entirely.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -99,17 +114,22 @@ async def health():
 
 
 @app.get("/api/profile-photos/{photo_id}")
-async def api_profile_photo(photo_id: str):
-    """Serve profile photo by ID (used by Flutter profile photo URL)."""
+async def api_profile_photo(photo_id: str, user_id: str = Depends(get_current_user_id)):
+    """Serve profile photo by ID. Every current caller only ever fetches its
+    own photo (see AuthController's home-page/avatar loaders), so this is
+    scoped to the caller's own profilePhotoId rather than any ID reachable by
+    a logged-in user — photo IDs are ordinary (guessable) ObjectIds, not
+    capability tokens."""
     try:
         oid = ObjectId(photo_id)
     except Exception:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Invalid photo id")
     db = await get_database()
+    owner = await db["users"].find_one({"_id": ObjectId(user_id), "profilePhotoId": photo_id})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Photo not found")
     chunk = await db["profile_photos.chunks"].find_one({"files_id": oid})
     if not chunk or "data" not in chunk:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Photo not found")
     data = chunk["data"]
     return Response(content=bytes(data) if not isinstance(data, bytes) else data, media_type="image/jpeg")

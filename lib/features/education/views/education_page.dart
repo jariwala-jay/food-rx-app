@@ -65,7 +65,7 @@ class _EducationPageState extends State<EducationPage> {
       // Wait for article lists to render, then decide which target to highlight.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 800), () {
-          if (!mounted) return;
+          if (!context.mounted) return;
           try {
             final tp = Provider.of<ForcedTourProvider>(context, listen: false);
             // Double-check we're still on education step

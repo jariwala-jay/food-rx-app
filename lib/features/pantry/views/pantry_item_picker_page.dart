@@ -111,7 +111,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
       PantryItemPickerProvider provider,
       ForcedTourProvider tourProvider) async {
     final success = await provider.saveSelectedItemsToPantry();
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     // Store context before async operations to avoid linter warnings
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -153,7 +153,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                 // Trigger pantry items showcase after closing
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   Future.delayed(const Duration(milliseconds: 500), () {
-                    if (!mounted) return;
+                    if (!context.mounted) return;
                     try {
                       final tp2 = Provider.of<ForcedTourProvider>(context,
                           listen: false);
@@ -250,9 +250,9 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
 
     // Trigger quantity/unit showcase after modal opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       Future.delayed(const Duration(milliseconds: 300), () {
-        if (!mounted) return;
+        if (!context.mounted) return;
         try {
           final tp = Provider.of<ForcedTourProvider>(context, listen: false);
           if (tp.isOnStep(TourStep.setQuantityUnit)) {
@@ -785,9 +785,9 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                       if (isSaveStep && !_hasTriggeredSaveShowcase) {
                         _hasTriggeredSaveShowcase = true;
                         WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!mounted) return;
+                            if (!context.mounted) return;
                             try {
                               final tp = Provider.of<ForcedTourProvider>(
                                   context,
@@ -837,7 +837,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                             ShowcaseView.get().dismiss();
                             Future.delayed(const Duration(milliseconds: 100),
                                 () {
-                              if (!mounted) return;
+                              if (!context.mounted) return;
                               // Directly trigger the button's onPressed
                               _handleSaveButtonClick(
                                   context, provider, tourProvider);
@@ -848,7 +848,7 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                             ShowcaseView.get().dismiss();
                             Future.delayed(const Duration(milliseconds: 100),
                                 () {
-                              if (!mounted) return;
+                              if (!context.mounted) return;
                               // Directly trigger the button's onPressed
                               _handleSaveButtonClick(
                                   context, provider, tourProvider);

@@ -8,17 +8,18 @@ import warnings
 from urllib.parse import quote
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from app.database import get_database
-from app.auth_password import hash_password, verify_password
+from app.auth_password import hash_password, needs_rehash, verify_password
 from app.auth_jwt import ACCESS_TOKEN_EXPIRE_HOURS, create_access_token
 from app.config import settings
 from app.deps import get_current_user_id
 from app.email_service import send_google_signin_notice_email, send_password_reset_email
 from app.firebase_admin_app import verify_google_id_token
 from app.notification_eligibility import NEW_ACCOUNT_GRACE_HOURS, parse_iso_datetime
+from app.rate_limit import limiter
 from app.refresh_tokens import (
     issue_refresh_token,
     revoke_all_refresh_tokens_for_user,
@@ -40,8 +41,10 @@ if settings.secret_key in ("", "change-me-in-production"):
 MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 # Dummy hash so a missing-email login still runs verify_password, keeping
-# response time constant to prevent email enumeration via timing.
-_DUMMY_HASH = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:" + "0" * 64
+# response time constant to prevent email enumeration via timing. bcrypt
+# (not the legacy HMAC format) so timing matches the common case now that
+# logins transparently migrate accounts to bcrypt — see needs_rehash().
+_DUMMY_HASH = "$2b$12$HIEqwI9dxn.6kPDgJuazKOmz9M22tVXAQtiiMUDNVox7aY4boisDC"
 
 USERS = "users"
 PASSWORD_RESET_TOKENS = "passwordResetTokens"
@@ -56,6 +59,10 @@ _SENSITIVE_FIELDS = {"password", "failedLoginAttempts", "isLocked", "lockUntil"}
 
 _PASSWORD_RULES = [
     (lambda p: len(p) >= 8,                          "Password must be at least 8 characters"),
+    # bcrypt (app.auth_password) silently truncates beyond 72 bytes; reject
+    # up front instead of letting longer passwords hash as if only the
+    # first 72 bytes were entered.
+    (lambda p: len(p.encode("utf-8")) <= 72,          "Password must be at most 72 characters"),
     (lambda p: bool(re.search(r"[A-Z]", p)),          "Password must contain at least one uppercase letter"),
     (lambda p: bool(re.search(r"[a-z]", p)),          "Password must contain at least one lowercase letter"),
     (lambda p: bool(re.search(r"[0-9]", p)),          "Password must contain at least one number"),
@@ -183,7 +190,8 @@ def _is_at_least_minimum_age(dob: date, minimum_years: int = MINIMUM_AGE_YEARS) 
 
 
 @router.post("/check-email")
-async def check_email(body: dict):
+@limiter.limit("15/minute")
+async def check_email(request: Request, body: dict):
     """
     Check if an email is already registered. Body: { "email": "user@example.com" }.
     Returns { "exists": true } or { "exists": false }. No auth required.
@@ -198,7 +206,8 @@ async def check_email(body: dict):
 
 
 @router.post("/register")
-async def register(body: dict):
+@limiter.limit("5/minute")
+async def register(request: Request, body: dict):
     """
     Register a new user. Body must include: email, password.
     Any other keys (firstName, lastName, dietType, etc.) are stored as user profile.
@@ -276,7 +285,8 @@ async def register(body: dict):
 
 
 @router.post("/login")
-async def login(body: dict):
+@limiter.limit("10/minute")
+async def login(request: Request, body: dict):
     """Login with email and password. Returns JWT and user."""
     db = await get_database()
     users = db[USERS]
@@ -332,16 +342,25 @@ async def login(body: dict):
             except (ValueError, TypeError):
                 pass
 
-    if not verify_password(password, user.get("password") or ""):
+    stored_password = user.get("password") or ""
+    if not verify_password(password, stored_password):
         await _handle_failed_login(users, user["_id"])
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if needs_rehash(stored_password):
+        # Transparent migration off the legacy HMAC-SHA256 scheme: the
+        # plaintext password is only ever available here, right after the
+        # user has proven they know it, so this is the only place a legacy
+        # hash can be upgraded without forcing a password reset.
+        await users.update_one({"_id": user["_id"]}, {"$set": {"password": hash_password(password)}})
 
     await _handle_successful_login(users, user["_id"])
     return await _auth_token_response(db, user["_id"], user["email"], user)
 
 
 @router.post("/refresh")
-async def refresh_session(body: dict):
+@limiter.limit("20/minute")
+async def refresh_session(request: Request, body: dict):
     """Exchange a valid refresh token for a new access + refresh pair (rotation)."""
     raw = (body.get("refresh_token") or "").strip()
     if not raw:
@@ -378,7 +397,8 @@ async def refresh_session(body: dict):
 
 
 @router.post("/google")
-async def google_sign_in(body: dict):
+@limiter.limit("20/minute")
+async def google_sign_in(request: Request, body: dict):
     """
     Authenticate via Google Sign-In. Body: { "idToken": "<google-id-token>" }.
     See app.firebase_admin_app.verify_google_id_token for signature/audience
@@ -441,7 +461,8 @@ async def google_sign_in(body: dict):
 
 
 @router.post("/google/complete")
-async def google_sign_in_complete(body: dict):
+@limiter.limit("10/minute")
+async def google_sign_in_complete(request: Request, body: dict):
     """
     Finalizes a brand-new Google account at the end of onboarding ("Let's get
     started"). Body: { "idToken": "<google-id-token>", ...health profile
@@ -716,7 +737,8 @@ async def reset_password_open():
 
 # Password reset (no auth required for request; token in body for reset)
 @router.post("/forgot-password")
-async def forgot_password(body: dict):
+@limiter.limit("10/minute")
+async def forgot_password(request: Request, body: dict):
     """
     Request a password-reset email. Body: { \"email\" }.
     Always returns { \"success\": true } — never reveals whether the email is
@@ -773,7 +795,8 @@ async def forgot_password(body: dict):
 
 
 @router.post("/validate-reset-token")
-async def validate_reset_token(body: dict):
+@limiter.limit("20/minute")
+async def validate_reset_token(request: Request, body: dict):
     """Validate reset token. Body: { \"token\" }. Returns { \"valid\": true } or { \"valid\": false }."""
     db = await get_database()
     tokens_coll = db[PASSWORD_RESET_TOKENS]
@@ -792,7 +815,8 @@ async def validate_reset_token(body: dict):
 
 
 @router.post("/reset-password")
-async def reset_password(body: dict):
+@limiter.limit("10/minute")
+async def reset_password(request: Request, body: dict):
     """Reset password. Body: { \"token\", \"newPassword\" }."""
     db = await get_database()
     users = db[USERS]

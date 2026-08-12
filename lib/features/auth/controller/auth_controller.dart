@@ -231,9 +231,6 @@ class AuthController with ChangeNotifier {
 
   Future<bool> _completeAuthFromResponse(
     Map<String, dynamic> res, {
-    bool saveLogin = false,
-    String? loginEmail,
-    String? loginPassword,
     bool initNotifications = true,
   }) async {
     final token = res['access_token'] as String?;
@@ -255,13 +252,6 @@ class AuthController with ChangeNotifier {
       userId: userId,
       email: emailRes,
     );
-
-    if (saveLogin && loginEmail != null && loginPassword != null) {
-      await CredentialStorage.saveCredentials(
-        email: loginEmail,
-        password: loginPassword,
-      );
-    }
 
     if (user != null) {
       _currentUser = _createUserModel(user);
@@ -386,7 +376,17 @@ class AuthController with ChangeNotifier {
       return false;
     }
 
-    return login(creds.email, creds.password, saveLogin: true);
+    final success = await login(creds.email, creds.password);
+    if (success) {
+      // One-time migration off the legacy raw-password flow: biometrics was
+      // already just confirmed above, so switch this device to the
+      // flag-based approach (login() already issued a fresh refresh token)
+      // and delete the stored plaintext password instead of keeping it
+      // around indefinitely.
+      await SessionStorage.setBiometricEnabled(true);
+      await CredentialStorage.clearCredentials();
+    }
+    return success;
   }
 
   Future<bool> _restoreSessionFromStorage() async {
@@ -587,7 +587,6 @@ class AuthController with ChangeNotifier {
     required String password,
     required Map<String, dynamic> userData,
     File? profilePhoto,
-    bool saveLogin = false,
   }) async {
     _isLoading = true;
     _error = null;
@@ -601,12 +600,7 @@ class AuthController with ChangeNotifier {
 
       final res = await ApiClient.post('/auth/register', body: cleanUserData, requireAuth: false)
           as Map<String, dynamic>;
-      if (await _completeAuthFromResponse(
-        res,
-        saveLogin: saveLogin,
-        loginEmail: email.trim().toLowerCase(),
-        loginPassword: password,
-      )) {
+      if (await _completeAuthFromResponse(res)) {
         if (profilePhoto != null) {
           try {
             _localProfilePhotoData = await profilePhoto.readAsBytes();
@@ -667,11 +661,7 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  Future<bool> login(
-    String email,
-    String password, {
-    bool saveLogin = false,
-  }) async {
+  Future<bool> login(String email, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -685,17 +675,10 @@ class AuthController with ChangeNotifier {
         return false;
       }
 
-      if (await _completeAuthFromResponse(
-        res,
-        saveLogin: saveLogin,
-        loginEmail: email,
-        loginPassword: password,
-      )) {
+      if (await _completeAuthFromResponse(res)) {
         return true;
       }
-      if (!saveLogin) {
-        await CredentialStorage.clearCredentials();
-      }
+      await CredentialStorage.clearCredentials();
       _error = 'Invalid email or password';
       return false;
     } on ApiException catch (e) {
