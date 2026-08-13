@@ -1,0 +1,71 @@
+name: Deploy Backend
+
+# Runs on every push to main that touches backend/ — i.e. after any PR merges
+# into main, regardless of source branch (staging or a feature branch
+# directly). Re-runs the same test suite as backend-tests.yml as a gate: the
+# deploy job only runs if tests pass, so a broken main never reaches Cloud
+# Run even if branch protection was somehow bypassed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run unittest-style suites
+        run: |
+          python3 -m unittest \
+            tests.test_env_client_secret_separation \
+            tests.test_forgot_reset_password_endpoints \
+            tests.test_google_id_token_verification \
+            tests.test_password_hash_migration \
+            tests.test_password_reset_token_not_logged \
+            tests.test_profile_photo_auth \
+            tests.test_rate_limiting \
+            tests.test_userid_idor_fix \
+            tests.test_well_known_app_links \
+            -v
+
+      - name: Run pytest-style suites
+        run: pytest tests/test_password_reset.py tests/test_refresh_tokens.py -v
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required to mint the OIDC token Workload Identity Federation exchanges
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: gcloud run deploy foodrx-api --source . --region us-central1 --quiet
