@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
-import 'package:flutter_app/core/services/simple_notification_service.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
-import 'package:flutter_app/core/services/api_client.dart';
-import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -17,8 +14,6 @@ class NotificationCenterPage extends StatefulWidget {
 }
 
 class _NotificationCenterPageState extends State<NotificationCenterPage> {
-  static final SimpleNotificationService _expiringService =
-      SimpleNotificationService();
   bool _sortNewestFirst = true;
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
@@ -95,68 +90,18 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   @override
   void initState() {
     super.initState();
-    // Load notifications and ensure expiring-ingredient digest exists for today
+    // Notification Center is a read/display surface only — it must never be
+    // responsible for creating notifications (expiring/expired-ingredient and
+    // tracker-reminder generation live in PantryController on pantry data
+    // changes, and in the server-side scheduled jobs; see
+    // gcloud/functions/notification-scheduler).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final notificationManager =
           Provider.of<NotificationManager>(context, listen: false);
       // Opening Notification Center should clear the app icon badge immediately.
       notificationManager.clearAppIconBadge();
       notificationManager.loadNotifications();
-      _ensureExpiringNotificationThenReload(notificationManager);
-      _ensureExpiredNotificationThenReload(notificationManager);
-      _ensureTrackerReminderThenReload(notificationManager);
     });
-  }
-
-  /// If user has pantry items expiring in the next 3 days, ensure we have
-  /// an expiring_ingredient notification for today, then reload the list.
-  Future<void> _ensureExpiringNotificationThenReload(
-      NotificationManager notificationManager) async {
-    try {
-      final userId = await ApiClient.userId;
-      if (userId == null || userId.isEmpty) return;
-      await _expiringService.checkExpiringIngredients(userId);
-      await notificationManager.loadNotifications();
-    } catch (_) {
-      // Ignore; list already loaded
-    }
-  }
-
-  /// If user has expired pantry items, ensure we have an expired_items
-  /// notification for today, then reload the list.
-  Future<void> _ensureExpiredNotificationThenReload(
-      NotificationManager notificationManager) async {
-    try {
-      final userId = await ApiClient.userId;
-      if (userId == null || userId.isEmpty) return;
-      await _expiringService.checkExpiredItems(userId);
-      await notificationManager.loadNotifications();
-    } catch (_) {
-      // Ignore; list already loaded
-    }
-  }
-
-  /// Ensures a tracker_reminder notification exists for today if the user
-  /// hasn't logged anything yet, then reloads. New accounts (&lt; 24h old)
-  /// are gated server-side in POST /notifications.
-  Future<void> _ensureTrackerReminderThenReload(
-      NotificationManager notificationManager) async {
-    try {
-      final mealRemindersEnabled =
-          Provider.of<AuthController>(context, listen: false)
-                  .currentUser
-                  ?.mealLoggingReminderPrefs?['enabled'] ==
-              true;
-      final userId = await ApiClient.userId;
-      if (userId == null || userId.isEmpty) return;
-      await _expiringService.checkTrackerReminder(
-        userId,
-        mealRemindersEnabled: mealRemindersEnabled,
-      );
-      await notificationManager.loadNotifications();
-    } catch (_) {
-      // Ignore; list already loaded
-    }
   }
 
   void _goBackToHome() {

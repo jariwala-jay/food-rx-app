@@ -52,7 +52,15 @@ def resolve_created_at_from_user_doc(user_doc: dict | None) -> datetime | None:
 
 
 async def get_trusted_account_created_at(db, user_id: str) -> datetime | None:
-    user = await db["users"].find_one({"_id": ObjectId(user_id)}, {"createdAt": 1})
+    try:
+        object_id = ObjectId(user_id)
+    except (InvalidId, TypeError):
+        # Malformed/unresolvable user_id -- not a database problem. Returning
+        # None here routes into is_eligible_given_created_at's existing
+        # fail-closed handling for "can't establish account age" instead of
+        # raising and turning this into a 500.
+        return None
+    user = await db["users"].find_one({"_id": object_id}, {"createdAt": 1})
     return resolve_created_at_from_user_doc(user)
 
 
@@ -83,6 +91,47 @@ async def is_eligible_for_non_welcome_notification(db, user_id: str) -> bool:
     """True once an account is >= NEW_ACCOUNT_GRACE_HOURS old."""
     created_at = await get_trusted_account_created_at(db, user_id)
     return is_eligible_given_created_at(created_at, user_id)
+
+
+# Maps a notification's `type` to the key inside a user's
+# `notificationTypePrefs` map that controls it. Types intentionally absent
+# here (e.g. "app_inactivity_reminder", "goal_limit") have no defined
+# per-type preference yet — see the notification-system implementation notes
+# for why; callers must not invent a mapping for them.
+#
+# This is the canonical definition. It's mirrored (not imported -- there's
+# no shared package across the Python backend and the independently
+# deployed Node Cloud Functions) in gcloud/functions/{admin-notification,
+# notification-delivery,notification-scheduler}/index.js. Keeping all four
+# copies in sync is enforced by
+# notification-scheduler/scripts/test_notification_preferences.js, which
+# parses this file's source text and diffs it against each JS copy.
+NOTIFICATION_TYPE_TO_PREF_KEY = {
+    "expiring_ingredient": "expiringIngredients",
+    "expired_items": "expiringIngredients",
+    "tracker_reminder": "trackerReminders",
+    "education": "education",
+    "admin": "adminUpdates",
+}
+
+
+def is_notification_type_enabled(user_doc: dict | None, notification_type: str) -> bool:
+    """
+    True unless the user explicitly turned this notification type off via
+    `notificationTypePrefs`. Absent field/key, or any non-`False` value,
+    means enabled — this preserves existing behavior for every account that
+    has never touched the Notification Settings toggles.
+
+    The one-time "Welcome to MyFoodRx" notification is a special onboarding
+    message, not a normal administrative broadcast — it is created and sent
+    via a separate code path (see auth.py register()/update_profile()) that
+    never calls this function, so it is never suppressed by adminUpdates.
+    """
+    pref_key = NOTIFICATION_TYPE_TO_PREF_KEY.get(notification_type)
+    if pref_key is None:
+        return True
+    prefs = (user_doc or {}).get("notificationTypePrefs") or {}
+    return prefs.get(pref_key) is not False
 
 
 def local_day_start_utc(now_utc: datetime, timezone_offset_minutes: int) -> datetime:

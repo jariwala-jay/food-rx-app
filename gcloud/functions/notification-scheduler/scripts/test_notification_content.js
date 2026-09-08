@@ -8,18 +8,29 @@
 //    log) and taking whichever is fresher — this file proves that fix
 //    holds, including the exact false-positive scenario it was written for.
 //
-// 2. The notification copy itself: bucketLabel()'s singular/plural wording
-//    and formatMessageWithReason()'s call-to-action-first, reason-last
-//    ordering, so a future copy tweak can't silently drop the "since ..."
-//    clause or revert the ordering without a test failing.
+// 2. The notification copy itself: bucketLabel()'s singular/plural wording;
+//    formatMessageWithReason()'s call-to-action-first, reason-last ordering
+//    (its sole remaining caller is App Inactivity -- left deliberately
+//    unchanged, see the notification-copy-finalization implementation
+//    notes); formatTrackerInactivityBody()'s reason-first ordering (Tracker
+//    Inactivity's own, separate copy, approved as a deliberate deviation
+//    from the CTA-first pattern above); and expiringSoonHeading()'s
+//    today/tomorrow/N-days branching.
 //
 // No test framework dependency by design (see notification-scheduler has
 // none configured project-wide); run directly with:
 //   node scripts/test_notification_content.js
 
 const assert = require("assert");
-const { bucketLabel, formatMessageWithReason, resolveLatestActivityDate, getInactivityBucket } =
-  require("../index.js").__testables;
+const {
+  bucketLabel,
+  formatMessageWithReason,
+  formatTrackerInactivityBody,
+  expiringSoonHeading,
+  expiringItemsListSummary,
+  resolveLatestActivityDate,
+  getInactivityBucket,
+} = require("../index.js").__testables;
 
 let passed = 0;
 function check(name, fn) {
@@ -53,17 +64,17 @@ check("bucketLabel: unrecognized key returns empty string", () => {
   assert.strictEqual(bucketLabel("x1"), "");
 });
 
-// -- formatMessageWithReason --------------------------------------------------
+// -- formatMessageWithReason (App Inactivity's copy -- unchanged) -----------
 
 check("formatMessageWithReason: call-to-action first, reason clause last", () => {
   const msg = formatMessageWithReason(
-    "Log your food to stay on track with your nutrition goals.",
-    "you last logged your meals",
+    "Open MyFoodRx to review your pantry, trackers and recommendations.",
+    "you last opened MyFoodRx",
     "d3"
   );
   assert.strictEqual(
     msg,
-    "Log your food to stay on track with your nutrition goals. It's been 3 days since you last logged your meals."
+    "Open MyFoodRx to review your pantry, trackers and recommendations. It's been 3 days since you last opened MyFoodRx."
   );
 });
 
@@ -83,6 +94,54 @@ check("formatMessageWithReason: missing/invalid bucket key falls back to the cal
   const cta = "Open MyFoodRx to review your pantry, trackers and recommendations.";
   assert.strictEqual(formatMessageWithReason(cta, "you last opened MyFoodRx", null), cta);
   assert.strictEqual(formatMessageWithReason(cta, "you last opened MyFoodRx", "bogus"), cta);
+});
+
+// -- formatTrackerInactivityBody (Tracker Inactivity's copy) ----------------
+
+check("formatTrackerInactivityBody: reason clause first, then the check-in line", () => {
+  assert.strictEqual(
+    formatTrackerInactivityBody("d3"),
+    "It's been 3 days since you last logged a meal. Check in when you're ready."
+  );
+  assert.strictEqual(
+    formatTrackerInactivityBody("w2"),
+    "It's been 2 weeks since you last logged a meal. Check in when you're ready."
+  );
+  assert.strictEqual(
+    formatTrackerInactivityBody("m1"),
+    "It's been a month since you last logged a meal. Check in when you're ready."
+  );
+});
+
+check("formatTrackerInactivityBody: missing/invalid bucket key falls back gracefully", () => {
+  assert.strictEqual(formatTrackerInactivityBody(null), "Check in when you're ready.");
+  assert.strictEqual(formatTrackerInactivityBody("bogus"), "Check in when you're ready.");
+});
+
+// -- expiringSoonHeading ------------------------------------------------------
+
+check("expiringSoonHeading: today, tomorrow, and N-days branching", () => {
+  assert.strictEqual(expiringSoonHeading("Milk", 0), "Milk expires today");
+  assert.strictEqual(expiringSoonHeading("Milk", -1), "Milk expires today"); // already past, treat as today
+  assert.strictEqual(expiringSoonHeading("Milk", 1), "Milk expires tomorrow");
+  assert.strictEqual(expiringSoonHeading("Milk", 3), "Milk expires in 3 days");
+});
+
+check("expiringItemsListSummary: 3 or fewer names, no truncation", () => {
+  assert.strictEqual(expiringItemsListSummary(["Milk"]), "Milk");
+  assert.strictEqual(expiringItemsListSummary(["Milk", "Eggs"]), "Milk, Eggs");
+  assert.strictEqual(expiringItemsListSummary(["Milk", "Eggs", "Yogurt"]), "Milk, Eggs, Yogurt");
+});
+
+check("expiringItemsListSummary: more than 3 names truncates with an 'and N more' tail", () => {
+  assert.strictEqual(
+    expiringItemsListSummary(["Milk", "Eggs", "Yogurt", "Spinach"]),
+    "Milk, Eggs, Yogurt and 1 more"
+  );
+  assert.strictEqual(
+    expiringItemsListSummary(["Milk", "Eggs", "Yogurt", "Spinach", "Butter"]),
+    "Milk, Eggs, Yogurt and 2 more"
+  );
 });
 
 // -- resolveLatestActivityDate ----------------------------------------------

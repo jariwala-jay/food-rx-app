@@ -616,6 +616,7 @@ async def update_profile(body: dict, user_id: str = Depends(get_current_user_id)
         "selectedDietPlan", "targetCalories", "macroNutrients", "mealTimings",
         "requiresGroceryList", "diagnostics", "healthGoals", "hasCompletedTour", "profilePhotoId",
         "fcmToken", "lastActiveAt", "timezoneOffsetMinutes", "mealLoggingReminderPrefs",
+        "notificationTypePrefs",
     }
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:

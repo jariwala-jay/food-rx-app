@@ -8,16 +8,34 @@ class SimpleNotificationService {
   static DateTime _dateOnly(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
-  static String _expiringItemMessage(DateTime expiryDate) {
+  // Keeps the today/tomorrow/N-days urgency signal in the *heading* (the
+  // body is now fixed regardless of day count — see checkExpiringIngredients
+  // below). Mirrors expiringSoonHeading() in
+  // gcloud/functions/notification-scheduler/index.js — keep both in sync.
+  // Not private (and @visibleForTesting) so it's directly unit-testable —
+  // there's no ApiClient mocking seam in this codebase to test it via the
+  // public checkExpiringIngredients() entry point instead.
+  @visibleForTesting
+  static String expiringItemHeading(String itemName, DateTime expiryDate) {
     final days =
         _dateOnly(expiryDate).difference(_dateOnly(DateTime.now())).inDays;
-    if (days <= 0) {
-      return 'Use it in a recipe today so it doesn\'t go to waste.';
-    }
-    if (days == 1) {
-      return 'Expires tomorrow. Use it today before it goes to waste.';
-    }
-    return 'Expires in $days days. Try adding it to a recipe before it expires.';
+    if (days <= 0) return '$itemName expires today';
+    if (days == 1) return '$itemName expires tomorrow';
+    return '$itemName expires in $days days';
+  }
+
+  // Truncates a multi-item digest body to the first 3 item names plus an
+  // "and N more" tail, so a large pantry doesn't produce an unreadably long
+  // notification. Mirrors expiringItemsListSummary() in
+  // gcloud/functions/notification-scheduler/index.js — keep both in sync.
+  @visibleForTesting
+  static String expiringItemsListSummary(List<String> names) {
+    const maxNames = 3;
+    final shown = names.take(maxNames).toList();
+    final remaining = names.length - shown.length;
+    return remaining > 0
+        ? '${shown.join(', ')} and $remaining more'
+        : shown.join(', ');
   }
 
   Future<void> checkExpiringIngredients(String userId) async {
@@ -43,21 +61,16 @@ class SimpleNotificationService {
           .map((i) => (i['name'] ?? '').toString())
           .where((n) => n.isNotEmpty)
           .toList();
-      const maxNames = 3;
-      final shown = names.take(maxNames).toList();
-      final remaining = names.length - shown.length;
-      final itemsSummary = remaining > 0
-          ? '${shown.join(', ')} and $remaining more'
-          : shown.join(', ');
 
       final title = names.length == 1
-          ? '${names.first} expires soon'
-          : '${names.length} ingredients expire soon';
-      final message = names.length == 1
-          ? _expiringItemMessage(
+          ? expiringItemHeading(
+              names.first,
               DateTime.parse(inWindow.first['expiryDate'].toString()),
             )
-          : 'Expiring soon: $itemsSummary';
+          : '${names.length} items expire soon';
+      final message = names.length == 1
+          ? 'Check your pantry and use it before it expires.'
+          : '${expiringItemsListSummary(names)}. Check your pantry and use them before they expire.';
 
       final list = await ApiClient.get('/notifications') as List?;
       final startOfDay = DateTime(now.year, now.month, now.day);
@@ -124,13 +137,6 @@ class SimpleNotificationService {
           .where((n) => n.isNotEmpty)
           .toList();
 
-      const maxNames = 3;
-      final shown = names.take(maxNames).toList();
-      final remaining = names.length - shown.length;
-      final itemsSummary = remaining > 0
-          ? '${shown.join(', ')} and $remaining more'
-          : shown.join(', ');
-
       final list = await ApiClient.get('/notifications') as List?;
       final startOfDay = DateTime(now.year, now.month, now.day);
       final hasToday = list?.any((n) {
@@ -158,10 +164,10 @@ class SimpleNotificationService {
 
       final title = names.length == 1
           ? '${names.first} has expired'
-          : 'Some ingredients have expired';
+          : 'Some items have expired';
       final message = names.length == 1
-          ? 'Tap to review and update this ingredient in your pantry.'
-          : '$itemsSummary need your review. Tap to view your pantry and update expiration dates.';
+          ? 'Review its expiration date and update it if needed.'
+          : '${expiringItemsListSummary(names)}. Review the expiration dates and update them if needed.';
 
       await ApiClient.post('/notifications', body: {
         'type': 'expired_items',
@@ -173,67 +179,6 @@ class SimpleNotificationService {
       debugPrint('✅ Created expired items digest');
     } catch (e) {
       debugPrint('Error checking expired items: $e');
-    }
-  }
-
-  // Note: the 24h new-account grace period is enforced authoritatively by
-  // the backend (POST /notifications), not here — see
-  // notification_eligibility.py::is_eligible_for_non_welcome_notification.
-  //
-  // If meal reminders are enabled, they already serve as the user's daily
-  // logging nudge, so this generic same-day reminder is skipped entirely.
-  // The server-side milestone reminders (see notification-scheduler) are a
-  // separate, longer-horizon habit-reengagement mechanism and are only
-  // gated on their day-1 bucket, not here.
-  Future<void> checkTrackerReminder(
-    String userId, {
-    bool mealRemindersEnabled = false,
-  }) async {
-    if (mealRemindersEnabled) return;
-    try {
-      final list = await ApiClient.get('/trackers/progress') as List?;
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      final hasProgressToday = list?.any((p) {
-            if (p is! Map) return false;
-            final d = p['progressDate']?.toString();
-            if (d == null) return false;
-            try {
-              final dt = DateTime.parse(d);
-              return !dt.isBefore(startOfDay) && dt.isBefore(endOfDay);
-            } catch (_) {
-              return false;
-            }
-          }) ??
-          false;
-
-      if (!hasProgressToday) {
-        final existing = await ApiClient.get('/notifications') as List?;
-        final hasTodayReminder = existing?.any((n) {
-              if (n is! Map) return false;
-              if (n['type'] != 'tracker_reminder') return false;
-              final createdAt = n['createdAt']?.toString();
-              if (createdAt == null) return false;
-              try {
-                return DateTime.parse(createdAt).isAfter(startOfDay);
-              } catch (_) {
-                return false;
-              }
-            }) ??
-            false;
-        if (hasTodayReminder) return;
-
-        await ApiClient.post('/notifications', body: {
-          'type': 'tracker_reminder',
-          'title': "Don't forget to log today",
-          'message':
-              "You haven't logged anything yet today. Tap to open your tracker and record your meals.",
-        });
-      }
-    } catch (e) {
-      debugPrint('Error checking tracker reminder: $e');
     }
   }
 

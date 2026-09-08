@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
+import 'package:flutter_app/core/utils/meal_reminder_prefs.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 
@@ -16,16 +17,14 @@ const String _dailyReminderChannelName = 'Daily Meal Reminders';
 const String _dailyReminderChannelDesc =
     'Daily reminders to log your meals and track nutrition';
 
-// Exactly one of these id groups is ever scheduled at a time — the generic
-// reminder, or the three per-meal ones — never both. See
-// applyMealLoggingReminderPreferences().
+// _genericReminderId is no longer scheduled (see
+// applyMealLoggingReminderPreferences() — nothing is scheduled locally when
+// Meal Reminders is off) but stays here so cancelDailyReminders() can still
+// clear any lingering occurrence scheduled by an older app version.
 const int _genericReminderId = 1004;
 const int _breakfastReminderId = 1001;
 const int _lunchReminderId = 1002;
 const int _dinnerReminderId = 1003;
-
-const int _genericReminderHour = 18; // 6 PM local — staggered ahead of the ~7pm GCP tracker-milestone push
-const int _genericReminderMinute = 0;
 
 const int _defaultBreakfastHour = 9;
 const int _defaultBreakfastMinute = 0;
@@ -627,9 +626,15 @@ class NotificationService {
   List<_ScheduledReminder> _activeReminders = const [];
 
   /// Decides and schedules the correct meal-reminder set for this user in
-  /// one shot: the three custom breakfast/lunch/dinner reminders if
-  /// [prefs] has opted in, otherwise the single generic reminder. Never
-  /// schedules the generic reminder and then immediately cancels it.
+  /// one shot: breakfast/lunch/dinner are each scheduled independently,
+  /// gated on both the master "Meal reminders" switch and that meal's own
+  /// enabled flag in [prefs] — see [isMealReminderEnabled], which requires
+  /// both to be true. If the master switch is off, nothing is scheduled
+  /// regardless of the individual per-meal flags (they're preserved as-is
+  /// for whenever the master is turned back on). Always cancels every
+  /// meal-reminder id first, then reschedules only the subset that's
+  /// actually enabled; a disabled meal simply isn't rescheduled, so it
+  /// stays cancelled.
   /// Safe to call multiple times — cancels whichever set was active first.
   ///
   /// If [accountCreatedAt] is provided and the account is still within its
@@ -646,18 +651,10 @@ class NotificationService {
       const Duration(hours: _newAccountGraceHours),
     );
 
-    final reminders = (prefs != null && prefs['enabled'] == true)
-        ? _customMealReminders(prefs)
-        : const [
-            _ScheduledReminder(
-              id: _genericReminderId,
-              title: "Don't forget to log today",
-              body:
-                  'Log your meals to keep your nutrition tracking on target.',
-              hour: _genericReminderHour,
-              minute: _genericReminderMinute,
-            ),
-          ];
+    // A meal with no reminder scheduled falls back to the server-side
+    // tracker_reminder / Notification Center path for "haven't logged
+    // today" instead — this is the only local reminder mechanism.
+    final reminders = _customMealReminders(prefs);
 
     for (final r in reminders) {
       await _scheduleDailyReminder(
@@ -670,37 +667,43 @@ class NotificationService {
       );
     }
     _activeReminders = reminders;
-    debugPrint(reminders.length == 1
-        ? '✅ Generic daily meal reminder scheduled (6 PM)'
-        : '✅ Custom meal reminders scheduled (breakfast/lunch/dinner)');
+    debugPrint(reminders.isEmpty
+        ? '✅ No meal reminders scheduled (all meals disabled)'
+        : '✅ Meal reminders scheduled for: ${reminders.map((r) => r.id).join(', ')}');
   }
 
-  List<_ScheduledReminder> _customMealReminders(Map<String, dynamic> prefs) {
-    return [
-      _ScheduledReminder(
+  List<_ScheduledReminder> _customMealReminders(Map<String, dynamic>? prefs) {
+    final reminders = <_ScheduledReminder>[];
+    if (isMealReminderEnabled(prefs, 'breakfast')) {
+      reminders.add(_ScheduledReminder(
         id: _breakfastReminderId,
         title: 'Good morning! Start your day with MyFoodRx',
         body: 'Log your breakfast and check your nutrition targets for today.',
-        hour: _timeField(prefs['breakfast'], 'hour', _defaultBreakfastHour),
-        minute:
-            _timeField(prefs['breakfast'], 'minute', _defaultBreakfastMinute),
-      ),
-      _ScheduledReminder(
+        hour: _timeField(prefs?['breakfast'], 'hour', _defaultBreakfastHour),
+        minute: _timeField(
+            prefs?['breakfast'], 'minute', _defaultBreakfastMinute),
+      ));
+    }
+    if (isMealReminderEnabled(prefs, 'lunch')) {
+      reminders.add(_ScheduledReminder(
         id: _lunchReminderId,
         title: 'Lunchtime check-in',
         body:
             'Log your lunch and keep making progress toward your nutrition goals.',
-        hour: _timeField(prefs['lunch'], 'hour', _defaultLunchHour),
-        minute: _timeField(prefs['lunch'], 'minute', _defaultLunchMinute),
-      ),
-      _ScheduledReminder(
+        hour: _timeField(prefs?['lunch'], 'hour', _defaultLunchHour),
+        minute: _timeField(prefs?['lunch'], 'minute', _defaultLunchMinute),
+      ));
+    }
+    if (isMealReminderEnabled(prefs, 'dinner')) {
+      reminders.add(_ScheduledReminder(
         id: _dinnerReminderId,
         title: 'End your day strong',
         body: "Log your dinner and complete today's nutrition record.",
-        hour: _timeField(prefs['dinner'], 'hour', _defaultDinnerHour),
-        minute: _timeField(prefs['dinner'], 'minute', _defaultDinnerMinute),
-      ),
-    ];
+        hour: _timeField(prefs?['dinner'], 'hour', _defaultDinnerHour),
+        minute: _timeField(prefs?['dinner'], 'minute', _defaultDinnerMinute),
+      ));
+    }
+    return reminders;
   }
 
   static int _timeField(dynamic mealPrefs, String key, int fallback) {
@@ -719,9 +722,10 @@ class NotificationService {
   }
 
   /// Call after a successful meal-log save: cancels today's occurrence of
-  /// every currently-active reminder (the generic one, or all three
-  /// per-meal ones) and reschedules each for tomorrow, so the user isn't
-  /// nudged again the same day they already logged.
+  /// every currently-active reminder (the three per-meal ones, if Meal
+  /// Reminders is on — a no-op otherwise) and reschedules each for
+  /// tomorrow, so the user isn't nudged again the same day they already
+  /// logged.
   ///
   /// Cancel remaining reminders for today by re-anchoring each active
   /// daily reminder to its next valid occurrence (tomorrow). This does
