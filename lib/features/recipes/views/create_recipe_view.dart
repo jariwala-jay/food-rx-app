@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/features/recipes/controller/recipe_controller.dart';
@@ -453,12 +454,84 @@ class _CreateRecipeViewState extends State<CreateRecipeView> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.access_time, color: Colors.grey),
-                  onPressed: () {},
+                  onPressed: _showCookingTimePicker,
                 ),
               ],
             ),
           ),
       ],
+    );
+  }
+
+  void _showCookingTimePicker() {
+    Duration pickedDuration = Duration(
+      hours: _cookingTimeHours ?? 0,
+      minutes: _cookingTimeMinutes ?? 0,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Select Cooking Time',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _useCustomCookingTime = true;
+                        _selectedPresetMinutes = null;
+                        _cookingTimeHours = pickedDuration.inHours;
+                        _cookingTimeMinutes = pickedDuration.inMinutes % 60;
+                        _cookingTimeHoursController.text =
+                            _cookingTimeHours.toString();
+                        _cookingTimeMinutesController.text =
+                            _cookingTimeMinutes!.toString().padLeft(2, '0');
+                      });
+                      Navigator.pop(sheetContext);
+                    },
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: Color(0xFFFF6A00),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            SizedBox(
+              height: 216,
+              child: CupertinoTimerPicker(
+                mode: CupertinoTimerPickerMode.hm,
+                initialTimerDuration: pickedDuration,
+                onTimerDurationChanged: (duration) {
+                  pickedDuration = duration;
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

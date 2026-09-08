@@ -94,9 +94,24 @@ class IngredientCategoryMapper {
     if (_matchesAny(name, _nutKeywords)) return _Bucket.nut;
     if (_matchesAny(name, _dairyKeywords)) return _Bucket.dairy;
     if (_matchesAny(name, _vegetableKeywords)) return _Bucket.vegetable;
-    if (_matchesAny(name, _fruitKeywords)) return _Bucket.fruit;
+    if (_matchesAny(name, _fruitKeywords) || _isPlainCoconut(name)) {
+      return _Bucket.fruit;
+    }
     if (_matchesAny(name, _grainKeywords)) return _Bucket.grain;
     return null;
+  }
+
+  /// True only for the whole fruit itself ("Coconut", "Shredded Coconut",
+  /// "Fresh Coconut") — not derived/processed products like coconut oil,
+  /// flour, sugar, or water, which shouldn't be filed as fresh_fruits just
+  /// because the word "coconut" appears. Coconut milk/cream are unaffected
+  /// either way — they already resolve via the dairy bucket, checked before
+  /// fruit. Mirrors the `_isCookingOilOrFat`/`_isPepperSpice` qualifier-guard
+  /// pattern in lib/features/recipes/utils/ingredient_nutritional_category.dart.
+  static bool _isPlainCoconut(String name) {
+    if (!_matchesAny(name, const ['coconut'])) return false;
+    const qualifiers = ['oil', 'flour', 'sugar', 'water', 'aminos', 'extract'];
+    return !_matchesAny(name, qualifiers);
   }
 
   static bool _matchesAny(String name, List<String> keywords) {

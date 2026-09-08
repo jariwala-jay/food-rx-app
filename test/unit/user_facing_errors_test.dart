@@ -33,5 +33,20 @@ void main() {
       final generic = userFacingErrorMessage(Exception('boom'));
       expect(rateLimited, isNot(equals(generic)));
     });
+
+    test('a missing API_BASE_URL surfaces the build-config message', () {
+      final error =
+          const MissingApiConfigurationException('API_BASE_URL is not set');
+      expect(userFacingErrorMessage(error),
+          'This build is missing configuration. Please contact support.');
+    });
+
+    test(
+        'an unrelated StateError (e.g. Iterable.firstWhere finding no match) '
+        'falls back to the generic message, not the build-config one', () {
+      final error = StateError('Bad state: No element');
+      expect(userFacingErrorMessage(error),
+          'Something went wrong. Please try again.');
+    });
   });
 }

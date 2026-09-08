@@ -51,6 +51,7 @@ app.*.map.json
 /gcloud/functions/notification-scheduler/node_modules/
 /gcloud/functions/notification-delivery/node_modules/
 /gcloud/functions/tracker-reset/node_modules/
+/gcloud/functions/admin-notification/node_modules/
 /gcloud/functions/tracker-reset/.env
 /gcloud/functions/tracker-reset/package-lock.json
 /gcloud/functions/tracker-reset/.gcloudignore

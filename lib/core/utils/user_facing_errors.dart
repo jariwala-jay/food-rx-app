@@ -64,7 +64,7 @@ String userFacingErrorMessage(Object error) {
     }
     return 'Something went wrong. Please try again.';
   }
-  if (error is StateError) {
+  if (error is MissingApiConfigurationException) {
     return 'This build is missing configuration. Please contact support.';
   }
   if (error is SocketException) {

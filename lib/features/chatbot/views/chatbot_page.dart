@@ -823,13 +823,16 @@ class _ChatbotPageState extends State<ChatbotPage>
       appBar: AppBar(
         backgroundColor: const Color(0xFFF7F7F8),
         elevation: 1,
-        leadingWidth: 30,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 22),
-          padding: EdgeInsets.zero,
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        leadingWidth: 46,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black87, size: 22),
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
         ),
         title: Row(
           children: [
