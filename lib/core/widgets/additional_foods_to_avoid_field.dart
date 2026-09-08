@@ -24,7 +24,7 @@ Future<bool> _confirmClearAllIngredients(BuildContext context) async {
             const Text(
               'Remove all additional ingredients?',
               style: TextStyle(
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: Colors.black,
@@ -35,7 +35,7 @@ Future<bool> _confirmClearAllIngredients(BuildContext context) async {
               "This will remove all additional ingredients you've selected "
               'under Other.',
               style: TextStyle(
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 fontSize: 15,
                 color: Color(0xFF444444),
               ),
@@ -126,7 +126,7 @@ class AdditionalFoodsToAvoidField extends StatelessWidget {
         const Text(
           'Additional Foods to Avoid',
           style: TextStyle(
-            fontFamily: 'BricolageGrotesque',
+            fontFamily: 'Inter',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFF2C2C2C),
@@ -150,7 +150,7 @@ class AdditionalFoodsToAvoidField extends StatelessWidget {
                   child: Text(
                     'Search ingredients or add your own',
                     style: TextStyle(
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       color: Color(0xFF777777),
                     ),
                   ),
@@ -170,7 +170,7 @@ class AdditionalFoodsToAvoidField extends StatelessWidget {
                   (ingredient) => InputChip(
                     label: Text(ingredient.displayName),
                     labelStyle: const TextStyle(
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       color: Color(0xFFFF6A00),
                     ),
                     backgroundColor: const Color(0xFFFFEFE7),
@@ -187,7 +187,7 @@ class AdditionalFoodsToAvoidField extends StatelessWidget {
         const Text(
           'These foods will be excluded from your recipe recommendations.',
           style: TextStyle(
-            fontFamily: 'BricolageGrotesque',
+            fontFamily: 'Inter',
             fontSize: 12,
             color: Color(0xFF777777),
           ),
@@ -378,7 +378,7 @@ class _AdditionalFoodsPickerSheetState
       activeColor: const Color(0xFFFF6A00),
       title: Text(
         ingredient.displayName,
-        style: const TextStyle(fontFamily: 'BricolageGrotesque'),
+        style: const TextStyle(fontFamily: 'Inter'),
       ),
     );
   }
@@ -405,7 +405,7 @@ class _AdditionalFoodsPickerSheetState
                         child: Text(
                           'Additional Foods to Avoid',
                           style: TextStyle(
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -422,7 +422,7 @@ class _AdditionalFoodsPickerSheetState
                           child: const Text(
                             'Clear All',
                             style: TextStyle(
-                              fontFamily: 'BricolageGrotesque',
+                              fontFamily: 'Inter',
                               color: Color(0xFF5F5F6E),
                               fontWeight: FontWeight.w600,
                             ),
@@ -433,7 +433,7 @@ class _AdditionalFoodsPickerSheetState
                         child: const Text(
                           'Done',
                           style: TextStyle(
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             color: Color(0xFFFF6A00),
                             fontWeight: FontWeight.bold,
                           ),
@@ -483,7 +483,7 @@ class _AdditionalFoodsPickerSheetState
                             child: Text(
                               'Selected',
                               style: TextStyle(
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -503,7 +503,7 @@ class _AdditionalFoodsPickerSheetState
                                     (ingredient) => InputChip(
                                       label: Text(ingredient.displayName),
                                       labelStyle: const TextStyle(
-                                        fontFamily: 'BricolageGrotesque',
+                                        fontFamily: 'Inter',
                                         color: Color(0xFFFF6A00),
                                       ),
                                       backgroundColor: const Color(
@@ -527,7 +527,7 @@ class _AdditionalFoodsPickerSheetState
                               child: Text(
                                 'No matching ingredients found',
                                 style: TextStyle(
-                                  fontFamily: 'BricolageGrotesque',
+                                  fontFamily: 'Inter',
                                 ),
                               ),
                             ),
@@ -547,7 +547,7 @@ class _AdditionalFoodsPickerSheetState
                       const Text(
                         "Can't find your ingredient?",
                         style: TextStyle(
-                          fontFamily: 'BricolageGrotesque',
+                          fontFamily: 'Inter',
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -560,13 +560,13 @@ class _AdditionalFoodsPickerSheetState
                               controller: _manualEntryController,
                               onSubmitted: (_) => _addManualIngredient(),
                               style: const TextStyle(
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                                 fontSize: 14,
                               ),
                               decoration: InputDecoration(
                                 hintText: 'Enter ingredient',
                                 hintStyle: const TextStyle(
-                                  fontFamily: 'BricolageGrotesque',
+                                  fontFamily: 'Inter',
                                   fontSize: 14,
                                 ),
                                 filled: true,
@@ -592,7 +592,7 @@ class _AdditionalFoodsPickerSheetState
                             child: const Text(
                               'Add',
                               style:
-                                  TextStyle(fontFamily: 'BricolageGrotesque'),
+                                  TextStyle(fontFamily: 'Inter'),
                             ),
                           ),
                         ],

@@ -164,7 +164,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       color: Color(0xFF2C2C2C),
                     ),
                   ),
@@ -184,7 +184,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
               'How many servings did you have?',
               style: TextStyle(
                 fontSize: 16,
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF2C2C2C),
               ),
@@ -195,7 +195,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
               _subtitle,
               style: const TextStyle(
                 fontSize: 14,
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 color: Color(0xFF8E8E93),
               ),
               textAlign: TextAlign.center,
@@ -236,7 +236,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                           color: isSelected
                               ? const Color(0xFFFF6A00)
                               : const Color(0xFF2C2C2C),
-                          fontFamily: 'BricolageGrotesque',
+                          fontFamily: 'Inter',
                         ),
                       ),
                     ),
@@ -257,7 +257,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                   _error!,
                   style: const TextStyle(
                     color: Color(0xFFFF5275),
-                    fontFamily: 'BricolageGrotesque',
+                    fontFamily: 'Inter',
                     fontSize: 14,
                   ),
                   textAlign: TextAlign.center,
@@ -305,7 +305,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF2C2C2C),
                           ),
@@ -352,7 +352,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                           style: TextStyle(
                             color: Color(0xFF8E8E93),
                             fontSize: 12,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ],
@@ -389,7 +389,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                     'Cancel',
                     style: TextStyle(
                       color: Color(0xFF8E8E93),
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       fontSize: 16,
                     ),
                   ),
@@ -421,7 +421,7 @@ class _ServingsConsumedModalState extends State<ServingsConsumedModal> {
                           'Log',
                           style: TextStyle(
                             fontSize: 16,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w600,
                           ),
                         ),

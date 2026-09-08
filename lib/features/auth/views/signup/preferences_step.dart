@@ -201,7 +201,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
               style: TextStyle(
                 color: Color(0xFFFF6A00),
                 fontWeight: FontWeight.w600,
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
               ),
             ),
           ),
@@ -374,7 +374,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -500,7 +500,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -583,7 +583,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -595,7 +595,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -642,7 +642,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -719,7 +719,7 @@ class _PreferencesStepState extends State<PreferencesStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],

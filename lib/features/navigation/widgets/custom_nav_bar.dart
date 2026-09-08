@@ -605,7 +605,7 @@ class CustomNavBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'BricolageGrotesque',
+                    fontFamily: 'Inter',
                     fontSize: 12,
                     color: isDisabledDuringTour
                         ? disabledColor

@@ -270,7 +270,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -315,7 +315,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -355,7 +355,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -400,7 +400,7 @@ class _OtherDetailsStepState extends State<OtherDetailsStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
