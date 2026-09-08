@@ -111,6 +111,14 @@ class RecipeFilter {
   final String? query; // Search query
   final List<String> excludedIngredientNames;
 
+  /// Last-resort fallback: omit the `type` param from the Spoonacular query
+  /// while keeping [mealType] itself, so local meal-type-intent matching can
+  /// still apply. Some cuisine+type combos (e.g. Indian breakfast) have zero
+  /// matches in Spoonacular's dataset even though the cuisine alone has
+  /// plenty — dropping the dishType filter lets those through for local
+  /// heuristic filtering instead of an empty result.
+  final bool suppressTypeParam;
+
   /// True when the user chose at least one cuisine (not [CuisineType.noPreference] only).
   bool get hasExplicitCuisinePreference =>
       cuisines.any((c) => c != CuisineType.noPreference);
@@ -161,6 +169,7 @@ class RecipeFilter {
     this.veryHealthy = false,
     this.query,
     this.excludedIngredientNames = const [],
+    this.suppressTypeParam = false,
   });
 
   static const Object _unset = Object();
@@ -191,6 +200,7 @@ class RecipeFilter {
     bool? veryHealthy,
     Object? query = _unset,
     List<String>? excludedIngredientNames,
+    bool? suppressTypeParam,
   }) {
     return RecipeFilter(
       cuisines: cuisines ?? this.cuisines,
@@ -230,6 +240,7 @@ class RecipeFilter {
       query: identical(query, _unset) ? this.query : query as String?,
       excludedIngredientNames:
           excludedIngredientNames ?? this.excludedIngredientNames,
+      suppressTypeParam: suppressTypeParam ?? this.suppressTypeParam,
     );
   }
 
@@ -325,37 +336,6 @@ class RecipeFilter {
     );
   }
 
-  // Helper methods for medical condition dietary constraints
-  Map<String, dynamic> getMedicalConditionConstraints() {
-    Map<String, dynamic> constraints = {};
-
-    for (var condition in medicalConditions) {
-      switch (condition) {
-        case MedicalCondition.hypertension:
-          // DASH Diet Guidelines for Hypertension (practical approach)
-          constraints['maxSodium'] =
-              1500; // mg per day (more practical than 1500)
-          constraints['veryHealthy'] = true;
-          break;
-        case MedicalCondition.diabetes:
-          // ADA Guidelines for Diabetes (very practical approach)
-          constraints['veryHealthy'] = true;
-          constraints['maxSodium'] = 2300; // mg per day
-          break;
-        case MedicalCondition.prediabetes:
-          constraints['veryHealthy'] = true;
-          constraints['maxSodium'] = 2300; // mg per day
-          break;
-        case MedicalCondition.obesity:
-          // Weight management guidelines (very practical)
-          constraints['veryHealthy'] = true;
-          break;
-      }
-    }
-
-    return constraints;
-  }
-
   // Get recommended diet type based on medical conditions and health goals
   static String getRecommendedDietType(
       List<String> medicalConditions, List<String> healthGoals) {
@@ -403,11 +383,11 @@ class RecipeFilter {
     final apiCuisines =
         cuisines.where((e) => e != CuisineType.noPreference).toList();
     if (apiCuisines.isNotEmpty) {
-      params['cuisine'] = apiCuisines.map((e) => e.name).join(',');
+      params['cuisine'] = apiCuisines.map((e) => e.apiName).join(',');
     }
 
     final typeParam = spoonacularTypeParam;
-    if (typeParam != null) {
+    if (typeParam != null && !suppressTypeParam) {
       params['type'] = typeParam;
     }
 
@@ -434,26 +414,6 @@ class RecipeFilter {
     if (excludedIngredientNames.isNotEmpty) {
       params['excludeIngredients'] = excludedIngredientNames.join(',');
     }
-
-    // Add medical condition constraints
-    final constraints = getMedicalConditionConstraints();
-    constraints.forEach((key, value) {
-      if (key == 'maxSodium' ||
-          key == 'maxSugar' ||
-          key == 'maxCalories' ||
-          key == 'minProtein' ||
-          key == 'maxSaturatedFat' ||
-          key == 'minFiber' ||
-          key == 'minPotassium' ||
-          key == 'maxCarbs') {
-        params[key] = value.toString();
-      } else if ((key == 'veryHealthy' ||
-              key == 'lowFat' ||
-              key == 'lowGlycemic') &&
-          value == true) {
-        params[key] = 'true';
-      }
-    });
 
     // Add diet-specific constraints
     if (dashCompliant) {
@@ -528,6 +488,27 @@ extension CuisineTypeExtension on CuisineType {
         .map((name) => cuisineMap[name])
         .whereType<CuisineType>()
         .toList();
+  }
+
+  /// Spoonacular's `cuisine` query value — lowercase, space-separated for
+  /// multi-word cuisines (e.g. "middle eastern", not the enum's camelCase
+  /// `middleEastern`). Single-word cuisines already match [name] as-is.
+  /// [CuisineType.centralEurope] has no real Spoonacular equivalent (not on
+  /// their supported cuisine list) — kept as an honest space-separated
+  /// pass-through since it's not currently reachable from any picker.
+  String get apiName {
+    switch (this) {
+      case CuisineType.centralEurope:
+        return 'central european';
+      case CuisineType.easternEurope:
+        return 'eastern european';
+      case CuisineType.latinAmerican:
+        return 'latin american';
+      case CuisineType.middleEastern:
+        return 'middle eastern';
+      default:
+        return name;
+    }
   }
 
   String get displayName {

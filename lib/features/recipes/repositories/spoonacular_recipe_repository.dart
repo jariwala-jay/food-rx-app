@@ -11,12 +11,60 @@ import 'dart:developer' as developer;
 const String recipeRateLimitMessage =
     'Recipes are temporarily unavailable. Please try again in a moment.';
 
+/// Spaces out real Spoonacular network calls so the app's own fallback
+/// ladder — sequential tiers, pagination's page-2 follow-ups, and the
+/// No-Preference path's two concurrent tier batches — never bursts past
+/// RapidAPI's plan rate limit (2 requests/second as of Aug 2026). Cache
+/// hits never go through this; only calls that actually hit the network.
+///
+/// [now] and [delay] are injectable so [waitForSlot]'s slot-reservation
+/// math is unit-testable without real elapsed time (see
+/// spoonacular_request_throttle_test.dart).
+class SpoonacularRequestThrottle {
+  SpoonacularRequestThrottle({
+    this.minInterval = const Duration(milliseconds: 550),
+    DateTime Function()? now,
+    Future<void> Function(Duration)? delay,
+  })  : _now = now ?? DateTime.now,
+        _delay = delay ?? Future.delayed;
+
+  final Duration minInterval;
+  final DateTime Function() _now;
+  final Future<void> Function(Duration) _delay;
+  DateTime? _nextSlot;
+
+  /// Reserves the next available slot and waits until it arrives; returns
+  /// how long it waited (Duration.zero if the slot was already available).
+  /// Slot reservation happens synchronously — before any `await` — so
+  /// concurrent callers (e.g. two [Future.wait]'d batches each hitting the
+  /// network) queue in call order instead of racing on the same "last
+  /// call" timestamp and both slipping through together.
+  Future<Duration> waitForSlot() {
+    final current = _now();
+    final slot =
+        (_nextSlot == null || _nextSlot!.isBefore(current)) ? current : _nextSlot!;
+    _nextSlot = slot.add(minInterval);
+    final wait = slot.difference(current);
+    if (wait <= Duration.zero) return Future.value(Duration.zero);
+    return _delay(wait).then((_) => wait);
+  }
+}
+
 class SpoonacularRecipeRepository {
   static const String complexSearchBaseUrl =
       'https://spoonacular-recipe-food-nutrition-v1.p.rapidapi.com/recipes/complexSearch';
   final String? _apiKey = dotenv.env['RAPID_API_KEY'];
   bool _isRateLimited = false;
   DateTime? _rateLimitUntil;
+  final SpoonacularRequestThrottle _throttle = SpoonacularRequestThrottle();
+
+  // A single generation pass can retry the same (or near-identical) query
+  // across several fallback tiers, and a user re-tapping "Generate" without
+  // changing filters/pantry repeats it again — caching identical requests
+  // for a short window avoids burning API quota on answers we already have.
+  static const Duration _cacheTtl = Duration(minutes: 5);
+  final Map<String, ({DateTime cachedAt, List<Recipe> recipes, int? totalResults})>
+      _cache = {};
 
   /// True while a prior 429 cooldown is still in effect.
   bool get isRateLimited {
@@ -40,6 +88,7 @@ class SpoonacularRecipeRepository {
       'number': number.toString(),
       'offset': offset.toString(),
       'addRecipeInformation': 'true',
+      'addRecipeNutrition': 'true',
       'instructionsRequired': 'true',
       'fillIngredients': 'true',
       'sort': 'min-missing-ingredients',
@@ -57,9 +106,56 @@ class SpoonacularRecipeRepository {
     int number = 100,
     int offset = 0,
   }) async {
+    final result = await getRecipesDetailed(
+      filter,
+      pantryIngredients,
+      number: number,
+      offset: offset,
+    );
+    return result.recipes;
+  }
+
+  /// Same fetch as [getRecipes], but also reports whether this specific call
+  /// was served from the in-memory cache — for instrumentation only (e.g.
+  /// distinguishing real network calls from cache hits in generation
+  /// diagnostics). Returned as part of the result rather than a shared
+  /// mutable field, since concurrent callers (e.g. the no-preference
+  /// favorites/all-cuisines branches, which now run in parallel) could
+  /// otherwise race on a single "last call" flag.
+  Future<({List<Recipe> recipes, bool fromCache, int? totalResults})>
+      getRecipesDetailed(
+    RecipeFilter filter,
+    List<String> pantryIngredients, {
+    int number = 100,
+    int offset = 0,
+  }) async {
     if (_apiKey == null) {
       developer.log('No API key available, returning demo recipe data');
-      return _getDemoRecipes();
+      return (recipes: _getDemoRecipes(), fromCache: false, totalResults: null);
+    }
+
+    final uri = buildComplexSearchUri(
+      filter,
+      pantryIngredients,
+      number: number,
+      offset: offset,
+    );
+
+    // A cached answer needs no network call at all, so serve it even during
+    // an active rate-limit cooldown.
+    final cacheKey = uri.toString();
+    final cached = _cache[cacheKey];
+    if (cached != null &&
+        DateTime.now().difference(cached.cachedAt) < _cacheTtl) {
+      if (kDebugMode) {
+        debugPrint('\n♻️  Spoonacular cache hit (${cached.recipes.length} '
+            'recipes): $uri');
+      }
+      return (
+        recipes: List<Recipe>.from(cached.recipes),
+        fromCache: true,
+        totalResults: cached.totalResults,
+      );
     }
 
     // A single generation pass can issue several fallback requests; once one
@@ -70,12 +166,17 @@ class SpoonacularRecipeRepository {
       throw ApiException(429, recipeRateLimitMessage);
     }
 
-    final uri = buildComplexSearchUri(
-      filter,
-      pantryIngredients,
-      number: number,
-      offset: offset,
-    );
+    // Space this call out from the last real network call so the fallback
+    // ladder's sequential tiers, pagination's page-2 follow-ups, and the
+    // No-Preference path's two concurrent batches can't burst past
+    // RapidAPI's rate limit between them.
+    final waited = await _throttle.waitForSlot();
+    if (kDebugMode && waited > Duration.zero) {
+      debugPrint(
+          '⏳ Spoonacular throttle: waited ${waited.inMilliseconds}ms before '
+          'this call to stay under the rate limit');
+    }
+
     final queryParams = Map<String, String>.from(uri.queryParameters);
 
     final headers = {
@@ -105,16 +206,29 @@ class SpoonacularRecipeRepository {
         final String jsonString = utf8.decode(response.bodyBytes);
         final data = json.decode(jsonString);
         final results = data['results'] as List;
+        final totalResults = data['totalResults'] as int?;
 
         if (kDebugMode) {
-          debugPrint('\n📥 Spoonacular API results (${results.length} recipes):');
+          debugPrint('\n📥 Spoonacular API results (${results.length} recipes, '
+              'totalResults=$totalResults):');
           for (final item in results) {
             final map = item as Map<String, dynamic>;
             debugPrint('  [${map['id']}] ${map['title']}');
           }
         }
 
-        return results.map((item) => Recipe.fromSearchResult(item)).toList();
+        final parsed =
+            results.map((item) => Recipe.fromSearchResult(item)).toList();
+        _cache[cacheKey] = (
+          cachedAt: DateTime.now(),
+          recipes: parsed,
+          totalResults: totalResults,
+        );
+        return (
+          recipes: List<Recipe>.from(parsed),
+          fromCache: false,
+          totalResults: totalResults,
+        );
       } else if (response.statusCode == 429) {
         _isRateLimited = true;
         _rateLimitUntil = DateTime.now().add(const Duration(seconds: 60));

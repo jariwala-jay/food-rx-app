@@ -140,10 +140,17 @@ class IngredientNutritionalCategoryResolver {
 
   /// Builds the `includeIngredients` list for Spoonacular (Phase 1.5).
   /// Empty [includedNames] means omit the param and search without pantry bias.
+  ///
+  /// Spoonacular's `includeIngredients` is an AND filter — a recipe must
+  /// contain *every* listed ingredient to match. Sending the whole pantry
+  /// (e.g. chicken thighs + oranges + coconut + canned tomatoes together)
+  /// makes a match nearly impossible, so only the [maxIncluded] highest-signal
+  /// items (by [weightFor], protein first) are kept.
   static SpoonacularIncludeSelection selectForSpoonacularInclude(
-    Iterable<({String name, String category})> pantryEntries,
-  ) {
-    final included = <String>[];
+    Iterable<({String name, String category})> pantryEntries, {
+    int maxIncluded = 3,
+  }) {
+    final candidates = <({String name, IngredientNutritionalCategory category})>[];
     final excluded = <SpoonacularIncludeExclusion>[];
     final seenIncluded = <String>{};
 
@@ -165,9 +172,21 @@ class IngredientNutritionalCategoryResolver {
 
       final key = name.toLowerCase();
       if (seenIncluded.add(key)) {
-        included.add(name);
+        candidates.add((name: name, category: category));
       }
     }
+
+    // Rank by weight (descending); ties keep original pantry order.
+    final order = List<int>.generate(candidates.length, (i) => i)
+      ..sort((i, j) {
+        final byWeight = weightFor(candidates[j].category)
+            .compareTo(weightFor(candidates[i].category));
+        return byWeight != 0 ? byWeight : i.compareTo(j);
+      });
+    final included = order
+        .take(maxIncluded)
+        .map((i) => candidates[i].name)
+        .toList();
 
     return SpoonacularIncludeSelection(
       includedNames: included,
@@ -317,6 +336,8 @@ class IngredientNutritionalCategoryResolver {
     'ham',
     'lamb',
     'paneer',
+    'crab',
+    'scallop',
   ];
 
   static const List<String> _legumeKeywords = [

@@ -319,6 +319,52 @@ void main() {
       expect(recipes.first.healthScore, 90);
     });
 
+    // Regression: "No preference" should mix cuisines rather than favor an
+    // account's favorite cuisine (previously preferredCuisines defaulted to
+    // the favorites list here, which pushed them ahead of everything else).
+    test(
+        'with no cuisine preference, recipes fully tied on ease get '
+        'shuffled instead of keeping arrival order', () {
+      Recipe make(int id, String cuisine) => _recipe(
+            id: id,
+            title: cuisine,
+            cuisines: [cuisine],
+            extendedIngredients: [_ingredient(name: 'chicken breast')],
+          );
+
+      // All four need the exact same single (in-pantry) ingredient, so
+      // they're fully tied on missing/coverage/score — no tiebreaker given.
+      final base = [
+        make(1, 'indian'),
+        make(2, 'indian'),
+        make(3, 'mexican'),
+        make(4, 'thai'),
+      ];
+
+      final orderA = List<Recipe>.of(base);
+      RecipePantrySort.sortByEasiestToMake(
+        orderA,
+        pantry: pantry,
+        counts: counts,
+        random: Random(1),
+      );
+
+      final orderB = List<Recipe>.of(base);
+      RecipePantrySort.sortByEasiestToMake(
+        orderB,
+        pantry: pantry,
+        counts: counts,
+        random: Random(7),
+      );
+
+      expect(
+        orderA.map((r) => r.id).toList(),
+        isNot(equals(orderB.map((r) => r.id).toList())),
+      );
+      // Still the same four recipes either way — nothing dropped or added.
+      expect(orderA.map((r) => r.id).toSet(), {1, 2, 3, 4});
+    });
+
     test('when ease is equal, preferred cuisines rank above others', () {
       final chickenOnly = [_pantry('Chicken', category: 'protein')];
       final indian = _recipe(
@@ -356,6 +402,43 @@ void main() {
       // see the round-robin test below); "other" (French) is always last.
       expect(recipes.take(2).map((r) => r.id).toSet(), {1, 2});
       expect(recipes.last.id, 3);
+    });
+
+    // Regression: cuisinePriorityMap keyed preferred cuisines by
+    // `cuisine.name.toLowerCase()` (e.g. "middleeastern", no space), but
+    // recipes come back tagged with Spoonacular's actual display string
+    // (e.g. "Middle Eastern" -> "middle eastern" lowercased) — the two
+    // never matched, so a preferred multi-word cuisine always fell into the
+    // "other" (999) bucket instead of being prioritized. apiName fixes the
+    // key to match what recipes are actually tagged with.
+    test(
+        'a preferred multi-word cuisine (e.g. Middle Eastern) is actually '
+        'prioritized, not treated as "other"', () {
+      final chickenOnly = [_pantry('Chicken', category: 'protein')];
+      final middleEastern = _recipe(
+        id: 1,
+        title: 'Middle Eastern Chicken',
+        cuisines: const ['Middle Eastern'],
+        extendedIngredients: [_ingredient(name: 'chicken breast')],
+      );
+      final french = _recipe(
+        id: 2,
+        title: 'French Chicken',
+        cuisines: const ['french'],
+        extendedIngredients: [_ingredient(name: 'chicken breast')],
+      );
+
+      final recipes = [french, middleEastern];
+      RecipePantrySort.sortByEasiestToMake(
+        recipes,
+        pantry: chickenOnly,
+        counts: counts,
+        preferredCuisines: const [CuisineType.middleEastern],
+      );
+
+      // Preferred cuisine (Middle Eastern) ranks ahead of "other" (French).
+      expect(recipes.first.id, 1);
+      expect(recipes.last.id, 2);
     });
 
     test('ties interleave cuisines round-robin instead of fixed blocks', () {
