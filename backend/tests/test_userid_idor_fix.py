@@ -46,10 +46,10 @@ class _FakeCollection:
         self.docs.extend(docs)
         return type("Result", (), {"inserted_ids": [d.get("_id") for d in docs]})()
 
-    async def find_one(self, query: dict):
+    async def find_one(self, query: dict, projection=None):
         return None
 
-    def find(self, query: dict):
+    def find(self, query: dict, projection=None):
         class _Cursor:
             async def to_list(self_inner, length=None):
                 return []

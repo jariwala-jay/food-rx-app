@@ -117,7 +117,7 @@ class TourTheme {
   static const double borderRadius = 16.0;
   static const double tooltipPadding = 16.0;
   static const double tooltipFontSize = 16.0;
-  static const String fontFamily = 'BricolageGrotesque';
+  static const String fontFamily = 'Inter';
 
   static ThemeData get theme => ThemeData(
         primaryColor: accentColor,
@@ -140,7 +140,7 @@ class TourTooltipStyle {
     fontSize: 18,
     fontWeight: FontWeight.bold,
     color: Colors.black,
-    fontFamily: 'BricolageGrotesque',
+    fontFamily: 'Inter',
   );
 
   // Fixed description style - won't scale with system font size
@@ -149,7 +149,7 @@ class TourTooltipStyle {
     fontWeight: FontWeight.w400,
     color: Colors.black87,
     height: 1.4,
-    fontFamily: 'BricolageGrotesque',
+    fontFamily: 'Inter',
   );
 
   // Common tooltip properties

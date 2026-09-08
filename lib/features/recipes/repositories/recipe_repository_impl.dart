@@ -25,6 +25,23 @@ class RecipeRepositoryImpl implements RecipeRepository {
     );
   }
 
+  /// Not part of [RecipeRepository] — passthrough to the Spoonacular repo's
+  /// cache-hit-aware fetch, for generation diagnostics only.
+  Future<({List<Recipe> recipes, bool fromCache, int? totalResults})>
+      getRecipesDetailed(
+    RecipeFilter filter,
+    List<String> pantryIngredients, {
+    int number = 100,
+    int offset = 0,
+  }) {
+    return _spoonacularRecipeRepository.getRecipesDetailed(
+      filter,
+      pantryIngredients,
+      number: number,
+      offset: offset,
+    );
+  }
+
   @override
   Future<List<Recipe>> getSavedRecipes(String userId) {
     return _httpRecipeRepository.getSavedRecipes(userId);

@@ -1,13 +1,19 @@
 class ImageUrlHelper {
   // Standardized Spoonacular image base URL
   static const String spoonacularBaseUrl = 'https://spoonacular.com/cdn/ingredients_100x100/';
-  static const String spoonacularFallbackUrl = 'https://spoonacular.com/cdn/ingredients_100x100/no-image.jpg';
 
   /// Normalizes a Spoonacular image reference (bare filename, full URL, or
   /// an alternate base URL) to our standard base URL.
   static String getSpoonacularImageUrl(String? imageInput) {
+    // No image to normalize — return empty rather than a placeholder URL.
+    // Spoonacular's own "no-image.jpg" placeholder 404s (confirmed via a
+    // direct request), so pointing at it just wastes a network round trip
+    // and logs a framework-level image error for every imageless item
+    // (e.g. every custom/typed-in pantry item). CachedNetworkImageWidget
+    // already renders its fallback icon immediately for an empty URL,
+    // with no network call at all.
     if (imageInput == null || imageInput.isEmpty) {
-      return spoonacularFallbackUrl;
+      return '';
     }
 
     if (imageInput.startsWith('asset:')) {
@@ -52,9 +58,9 @@ class ImageUrlHelper {
   /// Gets a fallback image URL if the provided URL is invalid
   static String getValidImageUrl(String? imageInput) {
     final processedUrl = getSpoonacularImageUrl(imageInput);
-    if (processedUrl.startsWith('asset:')) {
+    if (processedUrl.isEmpty || processedUrl.startsWith('asset:')) {
       return processedUrl;
     }
-    return isValidImageUrl(processedUrl) ? processedUrl : spoonacularFallbackUrl;
+    return isValidImageUrl(processedUrl) ? processedUrl : '';
   }
 } 

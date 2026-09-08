@@ -48,6 +48,11 @@ class UserModel {
   // Opt-in per-meal reminder preferences: {enabled, breakfast: {hour, minute}, lunch: {...}, dinner: {...}}
   final Map<String, dynamic>? mealLoggingReminderPrefs;
 
+  // Per-category notification toggles: {expiringIngredients, trackerReminders,
+  // education, adminUpdates} — each bool, defaults to true (enabled) when
+  // absent so existing accounts keep receiving everything until they opt out.
+  final Map<String, dynamic>? notificationTypePrefs;
+
   // System Fields
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -102,6 +107,7 @@ class UserModel {
     this.requiresGroceryList,
     this.diagnostics,
     this.mealLoggingReminderPrefs,
+    this.notificationTypePrefs,
     // System Fields
     this.createdAt,
     this.updatedAt,
@@ -172,6 +178,7 @@ class UserModel {
       requiresGroceryList: json['requiresGroceryList'],
       diagnostics: json['diagnostics'],
       mealLoggingReminderPrefs: json['mealLoggingReminderPrefs'],
+      notificationTypePrefs: json['notificationTypePrefs'],
       // System Fields
       createdAt: json['createdAt'] is String
           ? DateTime.parse(json['createdAt'])
@@ -229,6 +236,7 @@ class UserModel {
       'requiresGroceryList': requiresGroceryList,
       'diagnostics': diagnostics,
       'mealLoggingReminderPrefs': mealLoggingReminderPrefs,
+      'notificationTypePrefs': notificationTypePrefs,
       // System Fields
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -276,6 +284,7 @@ class UserModel {
     bool? requiresGroceryList,
     Map<String, dynamic>? diagnostics,
     Map<String, dynamic>? mealLoggingReminderPrefs,
+    Map<String, dynamic>? notificationTypePrefs,
     // System Fields
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -322,6 +331,7 @@ class UserModel {
       diagnostics: diagnostics ?? this.diagnostics,
       mealLoggingReminderPrefs:
           mealLoggingReminderPrefs ?? this.mealLoggingReminderPrefs,
+      notificationTypePrefs: notificationTypePrefs ?? this.notificationTypePrefs,
       // System Fields
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

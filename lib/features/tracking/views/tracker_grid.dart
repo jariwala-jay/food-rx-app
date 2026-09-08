@@ -326,7 +326,7 @@ class _TrackerGridState extends State<TrackerGrid>
                                       child: Text(
                                         'My Plan',
                                         style: TextStyle(
-                                          fontFamily: 'BricolageGrotesque',
+                                          fontFamily: 'Inter',
                                           fontSize:
                                               14 * clampedScale.clamp(0.8, 1.0),
                                           fontWeight: FontWeight.bold,
@@ -598,7 +598,7 @@ class _TrackerGridState extends State<TrackerGrid>
                                 child: Text(
                                   'My Plan',
                                   style: TextStyle(
-                                    fontFamily: 'BricolageGrotesque',
+                                    fontFamily: 'Inter',
                                     fontSize: 14 * clampedScale.clamp(1.0, 1.2),
                                     fontWeight: FontWeight.bold,
                                   ),

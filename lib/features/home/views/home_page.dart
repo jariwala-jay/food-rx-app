@@ -743,7 +743,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               body: SafeArea(
                 child: DefaultTextStyle.merge(
                   style: const TextStyle(
-                    fontFamily: 'BricolageGrotesque',
+                    fontFamily: 'Inter',
                   ),
                   child: SingleChildScrollView(
                     child: Column(
@@ -808,13 +808,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               ),
                               Row(
                                 children: [
-                                  // IconButton(
-                                  //   icon: const Icon(Icons.chat_bubble_outline),
-                                  //   onPressed: () {
-                                  //     if (tourProvider.isTourActive) return;
-                                  //     Navigator.pushNamed(context, '/chatbot');
-                                  //   },
-                                  // ),
+                                  IconButton(
+                                    icon: const Icon(Icons.chat_bubble_outline),
+                                    onPressed: () {
+                                      if (tourProvider.isTourActive) return;
+                                      Navigator.pushNamed(context, '/chatbot');
+                                    },
+                                  ),
                                   Consumer<NotificationManager>(
                                     builder:
                                         (context, notificationManager, child) {

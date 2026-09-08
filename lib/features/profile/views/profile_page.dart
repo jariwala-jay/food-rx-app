@@ -517,11 +517,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         context: context,
                         label: 'Email',
                         value: user.email,
-                        onTap: () => _navigateToEditField(
-                          context,
-                          'email',
-                          user.email,
-                        ),
                       ),
                       _buildDivider(),
                       _buildInfoRow(
@@ -886,7 +881,7 @@ class _ProfilePageState extends State<ProfilePage> {
     required BuildContext context,
     required String label,
     required String value,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
     Color? textColor,
   }) {
     return InkWell(
@@ -916,10 +911,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: Color(0xFF90909A),
-            ),
+            if (onTap != null)
+              const Icon(
+                Icons.chevron_right,
+                color: Color(0xFF90909A),
+              ),
           ],
         ),
       ),

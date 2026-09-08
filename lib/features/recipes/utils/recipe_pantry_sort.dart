@@ -122,7 +122,10 @@ class RecipePantrySort {
     for (var i = 0; i < preferred.length; i++) {
       final cuisine = preferred[i];
       if (cuisine == CuisineType.noPreference) continue;
-      map[cuisine.name.toLowerCase()] = i;
+      // apiName, not name — Spoonacular tags recipes with the space-separated
+      // display form (e.g. "Middle Eastern"), not the enum's camelCase, and
+      // cuisinePriorityFor keys its lookup off that same tag string.
+      map[cuisine.apiName.toLowerCase()] = i;
     }
     return map;
   }
@@ -180,8 +183,9 @@ class RecipePantrySort {
 
     final easeSorted = List<Recipe>.of(recipes)..sort(easeCompare);
 
+    final effectiveRandom = random ?? Random();
     final cuisineVisitOrder = cuisinePriority.values.toSet().toList()..sort();
-    cuisineVisitOrder.shuffle(random ?? Random());
+    cuisineVisitOrder.shuffle(effectiveRandom);
 
     // Group by missing-ingredient count (not the full ease comparator) so
     // groups are big enough for interleaving to actually show up.
@@ -194,12 +198,19 @@ class RecipePantrySort {
           scores[easeSorted[end].id]!.requiredMissing == groupMissing) {
         end++;
       }
+      final tiedGroup = easeSorted.sublist(start, end);
+      // No cuisine preference at all → nothing to interleave by, so shuffle
+      // within the tied group instead of preserving whatever order the
+      // recipes happened to arrive in (e.g. a favorites-cuisine batch
+      // fetched before an all-cuisines batch). Only recipes fully tied by
+      // the complete ease comparator (coverage/score/tiebreaker, not just
+      // missing-count) get shuffled together, so a real tiebreaker (e.g.
+      // health score) still orders recipes that merely share a missing
+      // count.
       merged.addAll(
-        _interleaveByCuisine(
-          easeSorted.sublist(start, end),
-          cuisineRanks,
-          cuisineVisitOrder,
-        ),
+        cuisineVisitOrder.isEmpty
+            ? _shuffleFullyTiedRuns(tiedGroup, easeCompare, effectiveRandom)
+            : _interleaveByCuisine(tiedGroup, cuisineRanks, cuisineVisitOrder),
       );
       start = end;
     }
@@ -211,6 +222,32 @@ class RecipePantrySort {
     if (kDebugMode) {
       _logPantryScores(recipes, scores, cuisineRanks);
     }
+  }
+
+  /// [group] is already sorted by [compare]. Shuffles only within
+  /// contiguous runs where consecutive recipes compare equal (0) — i.e.
+  /// genuinely indistinguishable by ease/tiebreaker — leaving the relative
+  /// order between distinct runs untouched.
+  static List<Recipe> _shuffleFullyTiedRuns(
+    List<Recipe> group,
+    int Function(Recipe a, Recipe b) compare,
+    Random random,
+  ) {
+    if (group.length <= 1) return group;
+
+    final result = <Recipe>[];
+    var start = 0;
+    while (start < group.length) {
+      var end = start + 1;
+      while (end < group.length && compare(group[start], group[end]) == 0) {
+        end++;
+      }
+      final run = group.sublist(start, end);
+      if (run.length > 1) run.shuffle(random);
+      result.addAll(run);
+      start = end;
+    }
+    return result;
   }
 
   /// Round-robin interleaves a group of equally-easy recipes across

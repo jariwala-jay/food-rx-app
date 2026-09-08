@@ -211,6 +211,64 @@ void main() {
       expect(result.gateSkipped, isTrue);
     });
 
+    test('fails Crab Mac and Cheese when crab missing, even with cheese in '
+        'pantry (regression: previously misidentified cheddar cheese as '
+        'main since "crab" wasn\'t a recognized title/category keyword)',
+        () {
+      final recipe = _recipe(
+        title: 'Crab Mac and Cheese',
+        extendedIngredients: [
+          _ingredient(name: 'crab meat', amount: 200, unit: 'g'),
+          _ingredient(name: 'cheddar cheese', amount: 200, unit: 'g'),
+          _ingredient(name: 'pasta', amount: 1),
+        ],
+      );
+      final pantry = [
+        _pantry('Cheddar Cheese', category: 'dairy'),
+        _pantry('Pasta', category: 'grains'),
+      ];
+
+      final result = validator.validate(recipe, pantry);
+
+      expect(result.passes, isFalse);
+      expect(result.mainIngredientName, 'crab');
+      expect(result.mainCategory, IngredientNutritionalCategory.protein);
+    });
+
+    test(
+        'scallops categorize as protein, not other (regression: '
+        '"Seared Scallops" used to fall through to "other" and get '
+        'outranked by a non-protein ingredient)', () {
+      expect(
+        IngredientNutritionalCategoryResolver.fromIngredientName('scallops'),
+        IngredientNutritionalCategory.protein,
+      );
+    });
+
+    test('fails Seared Scallops salad when scallops missing, even with '
+        'arugula in pantry', () {
+      final recipe = _recipe(
+        title: 'Citrus Arugula Salad with Seared Scallops',
+        extendedIngredients: [
+          _ingredient(name: 'scallops', amount: 8),
+          _ingredient(name: 'arugula', amount: 2, unit: 'cup'),
+        ],
+      );
+      final pantry = [
+        _pantry('Arugula', category: 'fresh_veggies'),
+      ];
+
+      final result = validator.validate(recipe, pantry);
+
+      expect(result.passes, isFalse);
+      // 'scallop' (singular, the title-keyword text) now that it's in
+      // _titleProteinKeywords — matches how 'crab' and other title-matched
+      // proteins report their name, rather than falling through to the
+      // ingredient-list path and reporting the recipe's own plural form.
+      expect(result.mainIngredientName, 'scallop');
+      expect(result.mainCategory, IngredientNutritionalCategory.protein);
+    });
+
     test('ignores seasonings, condiments and water when picking main', () {
       final recipe = _recipe(
         extendedIngredients: [

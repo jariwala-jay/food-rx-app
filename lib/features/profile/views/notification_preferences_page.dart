@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/notification_service.dart';
+import 'package:flutter_app/core/utils/meal_reminder_prefs.dart';
 import 'package:flutter_app/core/utils/typography.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 
@@ -14,10 +15,14 @@ class NotificationPreferencesPage extends StatefulWidget {
 
 class _NotificationPreferencesPageState
     extends State<NotificationPreferencesPage> {
-  bool _expiringIngredientNotifications = true;
-  bool _trackerReminderNotifications = true;
-  bool _educationNotifications = true;
-  bool _adminNotifications = true;
+  // Keys match the backend/Cloud Function `notificationTypePrefs` map —
+  // see AuthController.updateUserProfile and notification_eligibility docs.
+  static const String _expiringIngredientsKey = 'expiringIngredients';
+  static const String _trackerRemindersKey = 'trackerReminders';
+  static const String _educationKey = 'education';
+  static const String _adminUpdatesKey = 'adminUpdates';
+
+  late Map<String, bool> _notificationTypePrefs;
 
   static const List<String> _mealOrder = ['breakfast', 'lunch', 'dinner'];
   static const Map<String, String> _mealLabels = {
@@ -31,54 +36,87 @@ class _NotificationPreferencesPageState
     'dinner': TimeOfDay(hour: 20, minute: 0),
   };
 
-  late bool _mealRemindersEnabled;
+  late bool _mealRemindersMasterEnabled;
+  late Map<String, bool> _mealEnabled;
   late Map<String, TimeOfDay> _mealTimes;
 
   @override
   void initState() {
     super.initState();
-    final prefs =
-        context.read<AuthController>().currentUser?.mealLoggingReminderPrefs;
-    _mealRemindersEnabled = prefs?['enabled'] == true;
+    final currentUser = context.read<AuthController>().currentUser;
+    final prefs = currentUser?.mealLoggingReminderPrefs;
+    _mealRemindersMasterEnabled = isMealRemindersMasterEnabled(prefs);
+    _mealEnabled = {
+      for (final meal in _mealOrder) meal: mealReminderOwnEnabled(prefs, meal),
+    };
+    // Self-heal stale data where the master was left on with every meal
+    // individually off (e.g. saved before this sync existed) — the master
+    // switch must never display as on when nothing underneath will fire.
+    if (!_mealEnabled.values.any((enabled) => enabled)) {
+      _mealRemindersMasterEnabled = false;
+    }
     _mealTimes = {
       for (final meal in _mealOrder)
-        meal: _timeOfDayFrom(prefs?[meal]) ?? _defaultMealTimes[meal]!,
+        meal: mealReminderTimeOfDay(prefs, meal, _defaultMealTimes[meal]!),
+    };
+
+    // Absent/non-bool => enabled, so existing accounts that never touched
+    // these switches keep receiving everything they already get today.
+    final typePrefs = currentUser?.notificationTypePrefs;
+    bool enabledByDefault(String key) => typePrefs?[key] != false;
+    _notificationTypePrefs = {
+      _expiringIngredientsKey: enabledByDefault(_expiringIngredientsKey),
+      _trackerRemindersKey: enabledByDefault(_trackerRemindersKey),
+      _educationKey: enabledByDefault(_educationKey),
+      _adminUpdatesKey: enabledByDefault(_adminUpdatesKey),
     };
   }
 
-  static TimeOfDay? _timeOfDayFrom(dynamic mealPrefs) {
-    if (mealPrefs is Map &&
-        mealPrefs['hour'] is int &&
-        mealPrefs['minute'] is int) {
-      return TimeOfDay(
-        hour: mealPrefs['hour'] as int,
-        minute: mealPrefs['minute'] as int,
-      );
-    }
-    return null;
-  }
-
-  Map<String, dynamic> _buildMealPrefsPayload() {
-    return {
-      'enabled': _mealRemindersEnabled,
-      for (final meal in _mealOrder)
-        meal: {
-          'hour': _mealTimes[meal]!.hour,
-          'minute': _mealTimes[meal]!.minute
-        },
-    };
+  Future<void> _toggleNotificationType(String key, bool value) async {
+    setState(() => _notificationTypePrefs[key] = value);
+    await context
+        .read<AuthController>()
+        .updateUserProfile({'notificationTypePrefs': _notificationTypePrefs});
   }
 
   Future<void> _persistMealPrefs() async {
-    final prefs = _buildMealPrefsPayload();
+    final prefs = buildMealReminderPrefsPayload(
+      masterEnabled: _mealRemindersMasterEnabled,
+      enabled: _mealEnabled,
+      times: _mealTimes,
+    );
     await context
         .read<AuthController>()
         .updateUserProfile({'mealLoggingReminderPrefs': prefs});
     await NotificationService().applyMealLoggingReminderPreferences(prefs);
   }
 
-  Future<void> _toggleMealReminders(bool value) async {
-    setState(() => _mealRemindersEnabled = value);
+  Future<void> _toggleMasterEnabled(bool value) async {
+    setState(() {
+      _mealRemindersMasterEnabled = value;
+      if (!value) {
+        // Master off is a clean slate: every meal turns off and its time
+        // resets to the default, so turning the master back on starts
+        // fresh rather than silently resuming whatever was set before.
+        for (final meal in _mealOrder) {
+          _mealEnabled[meal] = false;
+          _mealTimes[meal] = _defaultMealTimes[meal]!;
+        }
+      }
+    });
+    await _persistMealPrefs();
+  }
+
+  Future<void> _toggleMealEnabled(String meal, bool value) async {
+    setState(() {
+      _mealEnabled[meal] = value;
+      // Turning off the last individually-enabled meal collapses the
+      // master switch too — it must never show on when nothing underneath
+      // will actually fire.
+      if (!_mealEnabled.values.any((enabled) => enabled)) {
+        _mealRemindersMasterEnabled = false;
+      }
+    });
     await _persistMealPrefs();
   }
 
@@ -174,68 +212,60 @@ class _NotificationPreferencesPageState
                       title: 'Expiring Ingredients',
                       subtitle:
                           'Get notified when pantry items are about to expire',
-                      value: _expiringIngredientNotifications,
-                      onChanged: (value) {
-                        setState(() {
-                          _expiringIngredientNotifications = value;
-                        });
-                        // TODO: Save preference
-                      },
+                      value: _notificationTypePrefs[_expiringIngredientsKey]!,
+                      onChanged: (value) =>
+                          _toggleNotificationType(_expiringIngredientsKey, value),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     _buildNotificationSwitch(
                       title: 'Tracker Reminders',
                       subtitle: 'Receive reminders to log your daily trackers',
-                      value: _trackerReminderNotifications,
-                      onChanged: (value) {
-                        setState(() {
-                          _trackerReminderNotifications = value;
-                        });
-                        // TODO: Save preference
-                      },
+                      value: _notificationTypePrefs[_trackerRemindersKey]!,
+                      onChanged: (value) =>
+                          _toggleNotificationType(_trackerRemindersKey, value),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     _buildNotificationSwitch(
                       title: 'Education Content',
                       subtitle:
                           'Get notified about new articles and health tips',
-                      value: _educationNotifications,
-                      onChanged: (value) {
-                        setState(() {
-                          _educationNotifications = value;
-                        });
-                        // TODO: Save preference
-                      },
+                      value: _notificationTypePrefs[_educationKey]!,
+                      onChanged: (value) =>
+                          _toggleNotificationType(_educationKey, value),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     _buildNotificationSwitch(
                       title: 'Administrative Updates',
                       subtitle:
                           'Receive important app updates and announcements',
-                      value: _adminNotifications,
-                      onChanged: (value) {
-                        setState(() {
-                          _adminNotifications = value;
-                        });
-                        // TODO: Save preference
-                      },
+                      value: _notificationTypePrefs[_adminUpdatesKey]!,
+                      onChanged: (value) =>
+                          _toggleNotificationType(_adminUpdatesKey, value),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     _buildNotificationSwitch(
                       title: 'Meal reminders',
                       subtitle:
                           'Receive reminders to log your breakfast, lunch and dinner',
-                      value: _mealRemindersEnabled,
-                      onChanged: (value) => _toggleMealReminders(value),
+                      value: _mealRemindersMasterEnabled,
+                      onChanged: (value) => _toggleMasterEnabled(value),
                     ),
-                    if (_mealRemindersEnabled)
-                      ..._mealOrder.map(
-                        (meal) => _buildMealTimeRow(
+                    if (_mealRemindersMasterEnabled)
+                      for (final meal in _mealOrder) ...[
+                        _buildNotificationSwitch(
                           title: _mealLabels[meal]!,
-                          time: _mealTimes[meal]!,
-                          onTap: () => _pickMealTime(meal),
+                          subtitle:
+                              'Get a reminder to log your ${_mealLabels[meal]!.toLowerCase()}',
+                          value: _mealEnabled[meal]!,
+                          onChanged: (value) =>
+                              _toggleMealEnabled(meal, value),
                         ),
-                      ),
+                        if (_mealEnabled[meal]!)
+                          _buildMealTimeRow(
+                            time: _mealTimes[meal]!,
+                            onTap: () => _pickMealTime(meal),
+                          ),
+                      ],
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -298,25 +328,17 @@ class _NotificationPreferencesPageState
   }
 
   Widget _buildMealTimeRow({
-    required String title,
     required TimeOfDay time,
     required VoidCallback onTap,
   }) {
     return ListTile(
-      title: Text(title, style: AppTypography.bg_16_m),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            time.format(context),
-            style: AppTypography.bg_14_r.copyWith(
-              color: const Color(0xFF90909A),
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right, color: Color(0xFF90909A)),
-        ],
+      title: Text(
+        time.format(context),
+        style: AppTypography.bg_14_r.copyWith(
+          color: const Color(0xFF90909A),
+        ),
       ),
+      trailing: const Icon(Icons.chevron_right, color: Color(0xFF90909A)),
       onTap: onTap,
       contentPadding: const EdgeInsets.only(left: 32, right: 16),
     );

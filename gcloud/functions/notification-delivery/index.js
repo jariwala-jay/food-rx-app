@@ -78,7 +78,19 @@ async function connectToMongo() {
 // typically deliberate) but are still subject to the onboarding gate,
 // which is enforced upstream at notification-creation time.
 const TIER1_TYPES = ["expired_items", "expiring_ingredient"];
-const TIER2_TYPES = ["tracker_reminder", "app_inactivity_reminder"];
+// lunch_reminder_fallback / dinner_reminder_fallback (generic server-side
+// meal-logging nudges for meals without a personalized reminder enabled --
+// see notification-scheduler/index.js's checkMealReminderFallbacks) share
+// Tier 2 with tracker_reminder/app_inactivity_reminder by design: all four
+// are behavioral nudges, and the existing "one Tier-2 push per user per
+// local day" ceiling should account for all of them together, not create a
+// second budget just for meal fallbacks.
+const TIER2_TYPES = [
+  "tracker_reminder",
+  "app_inactivity_reminder",
+  "lunch_reminder_fallback",
+  "dinner_reminder_fallback",
+];
 const QUIET_HOURS_START_LOCAL = 8; // no push before 8am local
 const QUIET_HOURS_END_LOCAL = 21; // no push at/after 9pm local
 
@@ -96,6 +108,36 @@ const PANTRY_PREFERRED_LOCAL_MINUTES = {
 // checked against the current instant — deliberately cadence-independent,
 // so behavior doesn't change depending on how often this sweep runs.
 const MEAL_COLLISION_BUFFER_MINUTES = 45;
+
+// Final delivery-time preference gate -- the authoritative backstop that
+// guarantees a disabled notification type is never pushed, regardless of
+// which of the several code paths created the underlying document (client
+// SimpleNotificationService via POST /notifications, notification-scheduler's
+// cron sweeps, or the admin-notification Cloud Function). Mirrors
+// notification_eligibility.NOTIFICATION_TYPE_TO_PREF_KEY (Python) and the
+// equivalent map in notification-scheduler/index.js.
+//
+// The one-time "Welcome to MyFoodRx" push is sent synchronously from
+// auth.py's update_profile() and never passes through this sweep (its DB
+// doc has sentAt stamped in that same request), so it is unaffected by the
+// adminUpdates gate below even though its notification doc uses type
+// "admin". "app_inactivity_reminder" has no defined per-type preference yet
+// and is intentionally left out of this map -- see notification-scheduler
+// for the same note.
+const NOTIFICATION_TYPE_TO_PREF_KEY = {
+  expiring_ingredient: "expiringIngredients",
+  expired_items: "expiringIngredients",
+  tracker_reminder: "trackerReminders",
+  education: "education",
+  admin: "adminUpdates",
+};
+
+function isNotificationTypeEnabled(user, type) {
+  const prefKey = NOTIFICATION_TYPE_TO_PREF_KEY[type];
+  if (!prefKey) return true;
+  const prefs = user?.notificationTypePrefs || {};
+  return prefs[prefKey] !== false;
+}
 
 function getTier(type) {
   if (TIER1_TYPES.includes(type)) return 1;
@@ -144,15 +186,50 @@ function localMinutesOfDay(nowUtc, timezoneOffsetMinutes) {
   return local.getUTCHours() * 60 + local.getUTCMinutes();
 }
 
+// Mirrors lib/core/utils/meal_reminder_prefs.dart's isMealRemindersMasterEnabled
+// / mealReminderOwnEnabled / isMealReminderEnabled (also ported into
+// notification-scheduler/index.js for its fallback-reminder eligibility
+// check) -- kept in sync by hand, same as every other cross-language/
+// cross-function mirror in this codebase. `enabled` at the top level is the
+// master "Meal reminders" switch: when false, every meal is off regardless
+// of its own flag. A meal whose own `enabled` key is present is
+// authoritative once the master is on -- an explicit per-meal `false`
+// stays disabled even if a stale top-level `enabled: true` also exists on
+// the doc. Only a genuinely old-format doc (no per-meal `enabled` key at
+// all) falls back to the single top-level flag for that meal.
+function isMealRemindersMasterEnabled(prefs) {
+  return prefs != null && prefs.enabled === true;
+}
+
+function mealReminderOwnEnabled(prefs, meal) {
+  const mealPrefs = prefs ? prefs[meal] : null;
+  if (
+    mealPrefs &&
+    typeof mealPrefs === "object" &&
+    Object.prototype.hasOwnProperty.call(mealPrefs, "enabled")
+  ) {
+    return mealPrefs.enabled === true;
+  }
+  return prefs != null && prefs.enabled === true;
+}
+
+function isPersonalizedMealReminderEnabled(prefs, meal) {
+  return isMealRemindersMasterEnabled(prefs) && mealReminderOwnEnabled(prefs, meal);
+}
+
 // Enabled meal reminder times for today, as minutes-since-local-midnight.
 // Meal reminders themselves are scheduled entirely client-side and never
 // pass through this pipeline; this reads only the user's saved preference
-// (`mealLoggingReminderPrefs`) so pantry pushes can steer around them.
+// (`mealLoggingReminderPrefs`) so pantry pushes can steer around them. Each
+// meal is evaluated independently via isPersonalizedMealReminderEnabled --
+// a user with, say, only Dinner enabled gets collision avoidance around
+// dinner only, not around all three (or none) based on a single top-level
+// flag.
 function getEnabledMealMinutes(user) {
   const prefs = user?.mealLoggingReminderPrefs;
-  if (!prefs || prefs.enabled !== true) return [];
   const minutes = [];
   for (const meal of ["breakfast", "lunch", "dinner"]) {
+    if (!isPersonalizedMealReminderEnabled(prefs, meal)) continue;
     const m = prefs[meal];
     if (m && Number.isInteger(m.hour) && Number.isInteger(m.minute)) {
       minutes.push(m.hour * 60 + m.minute);
@@ -294,6 +371,7 @@ async function sendScheduledNotifications() {
                 name: 1,
                 timezoneOffsetMinutes: 1,
                 mealLoggingReminderPrefs: 1,
+                notificationTypePrefs: 1,
               },
             }
           );
@@ -302,6 +380,17 @@ async function sendScheduledNotifications() {
             usersWithoutToken++;
             console.log(
               `[Notification Delivery] No FCM token for user ${notification.userId}`
+            );
+            continue;
+          }
+
+          // Final preference gate: never push a type the user has turned
+          // off, no matter which path created this document. Left unsent
+          // (not marked with a terminal status) so it retries automatically
+          // if the user re-enables the preference later.
+          if (!isNotificationTypeEnabled(user, notification.type)) {
+            console.log(
+              `[Notification Delivery] Skipping ${notification._id.toHexString()} for user ${notification.userId}: type ${notification.type} disabled by notification preference`
             );
             continue;
           }
@@ -332,19 +421,49 @@ async function sendScheduledNotifications() {
             continue;
           }
 
-          // Daily push budget: at most one push per tier per user per
-          // local day. If this user already got a push in this tier
-          // today, leave this one unsent (it stays visible in the
-          // Notification Center and is retried later/next day).
+          // Daily push budget: at most one push per tier per user per local
+          // day. Keyed off the *content* date (createdAt) of the already-sent
+          // notification, not when it was actually delivered (sentAt) --a
+          // notification can sit unsent for a while (quiet hours, meal
+          // collision, an earlier outage) and finally go out on a later day
+          // than it was created. Keying off sentAt let that late, stale
+          // delivery consume the budget for the day it happened to land on,
+          // silently suppressing that day's real alert (see incident: a
+          // Aug-30 expiring_ingredient digest delivered at 9am on Aug-31
+          // blocked both of Aug-31's own pantry alerts). Uses the same
+          // $convert-to-date pattern as notification-scheduler's
+          // findTodaysNotification() since createdAt can be a native BSON
+          // Date (written here) or an ISO string (written by the Python
+          // backend).
           const tier = getTier(notification.type);
           if (tier !== null) {
             const todayLocal = localDayStartUtc(now, user.timezoneOffsetMinutes);
-            const alreadySentThisTier = await notificationsCollection.findOne({
-              userId: notification.userId,
-              type: { $in: tierTypes(tier) },
-              sentAt: { $gte: todayLocal },
-            });
-            if (alreadySentThisTier) {
+            const alreadySentThisTier = await notificationsCollection
+              .aggregate([
+                {
+                  $match: {
+                    userId: notification.userId,
+                    type: { $in: tierTypes(tier) },
+                    sentAt: { $exists: true },
+                  },
+                },
+                {
+                  $addFields: {
+                    createdAtParsed: {
+                      $convert: {
+                        input: "$createdAt",
+                        to: "date",
+                        onError: new Date(0),
+                        onNull: new Date(0),
+                      },
+                    },
+                  },
+                },
+                { $match: { createdAtParsed: { $gte: todayLocal } } },
+                { $limit: 1 },
+              ])
+              .toArray();
+            if (alreadySentThisTier.length > 0) {
               console.log(
                 `[Notification Delivery] Skipping ${notification._id.toHexString()} for user ${notification.userId}: tier ${tier} push budget already used today`
               );
@@ -464,6 +583,28 @@ function getNotificationColor(type) {
     app_inactivity_reminder: "#5C6BC0", // Indigo
     admin: "#9E9E9E", // Grey
     education: "#2196F3", // Blue
+    lunch_reminder_fallback: "#FF7043", // Deep orange
+    dinner_reminder_fallback: "#FF7043", // Deep orange
   };
   return colors[type] || "#9E9E9E";
 }
+
+// Exposed only for scripts/test_*.js regression checks (no live MongoDB/FCM
+// needed for these pure functions). Not used by the Cloud Function runtime
+// itself, which only invokes exports.notificationDelivery.
+exports.__testables = {
+  getTier,
+  tierTypes,
+  sortByPriority,
+  localDayStartUtc,
+  localHourOf,
+  localMinutesOfDay,
+  getEnabledMealMinutes,
+  isWithinMealCollisionWindow,
+  pantryDeliveryDeferralReason,
+  isNotificationTypeEnabled,
+  NOTIFICATION_TYPE_TO_PREF_KEY,
+  isMealRemindersMasterEnabled,
+  mealReminderOwnEnabled,
+  isPersonalizedMealReminderEnabled,
+};

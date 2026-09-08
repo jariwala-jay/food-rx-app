@@ -45,7 +45,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   void _initializeValues() {
     switch (widget.fieldType) {
       case 'name':
-      case 'email':
         _textController.text = widget.currentValue ?? '';
         break;
       case 'sex':
@@ -190,9 +189,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         case 'name':
           updates['name'] = _textController.text.trim();
           break;
-        case 'email':
-          updates['email'] = _textController.text.trim();
-          break;
         case 'sex':
           if (_selectedValue != null) {
             updates['sex'] = _selectedValue;
@@ -313,8 +309,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     switch (widget.fieldType) {
       case 'name':
         return 'Edit Name';
-      case 'email':
-        return 'Edit Email';
       case 'sex':
         return 'Edit Sex';
       case 'activityLevel':
@@ -395,7 +389,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Widget _buildEditWidget() {
     switch (widget.fieldType) {
       case 'name':
-      case 'email':
         return _buildTextEdit();
       case 'sex':
         return _buildSexEdit();
@@ -426,21 +419,12 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: AppFormField(
-        label: widget.fieldType == 'name' ? 'Name' : 'Email',
-        hintText:
-            widget.fieldType == 'name' ? 'Enter your name' : 'Enter your email',
+        label: 'Name',
+        hintText: 'Enter your name',
         controller: _textController,
-        keyboardType: widget.fieldType == 'email'
-            ? TextInputType.emailAddress
-            : TextInputType.text,
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
             return 'This field is required';
-          }
-          if (widget.fieldType == 'email') {
-            if (!value.contains('@') || !value.contains('.')) {
-              return 'Please enter a valid email';
-            }
           }
           return null;
         },

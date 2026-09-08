@@ -49,6 +49,13 @@ class Recipe {
   final DateTime? savedAt;
   final bool isSaved;
 
+  /// True when this recipe only surfaced via the last-resort "shop for it"
+  /// fallback — pantry-completeness, main-ingredient and meal-type gates
+  /// were relaxed to avoid an empty state. Not a literal match on everything
+  /// requested (e.g. may not really be a breakfast dish); UI should label it
+  /// as a closest match rather than a strict result.
+  final bool isShoppingListSuggestion;
+
   Recipe({
     required this.id,
     required this.title,
@@ -92,6 +99,7 @@ class Recipe {
     this.isMyPlateCompliant = false,
     this.savedAt,
     this.isSaved = false,
+    this.isShoppingListSuggestion = false,
   });
 
   /// Builds a usable image URL from Spoonacular search/detail payloads.
@@ -161,6 +169,7 @@ class Recipe {
       isMyPlateCompliant: json['isMyPlateCompliant'] ?? false,
       savedAt: json['savedAt'] != null ? DateTime.parse(json['savedAt']) : null,
       isSaved: json['isSaved'] ?? false,
+      isShoppingListSuggestion: json['isShoppingListSuggestion'] ?? false,
       nutrition: json['nutrition'] != null
           ? Nutrition.fromJson(json['nutrition'])
           : null,
@@ -280,6 +289,7 @@ class Recipe {
       'isMyPlateCompliant': isMyPlateCompliant,
       'savedAt': savedAt?.toIso8601String(),
       'isSaved': isSaved,
+      'isShoppingListSuggestion': isShoppingListSuggestion,
       'nutrition': nutrition?.toJson(),
       'missedIngredientCount': missedIngredientCount,
       'usedIngredientCount': usedIngredientCount,
@@ -331,6 +341,7 @@ class Recipe {
     bool? isMyPlateCompliant,
     DateTime? savedAt,
     bool? isSaved,
+    bool? isShoppingListSuggestion,
   }) {
     return Recipe(
       id: id ?? this.id,
@@ -377,6 +388,8 @@ class Recipe {
       isMyPlateCompliant: isMyPlateCompliant ?? this.isMyPlateCompliant,
       savedAt: savedAt ?? this.savedAt,
       isSaved: isSaved ?? this.isSaved,
+      isShoppingListSuggestion:
+          isShoppingListSuggestion ?? this.isShoppingListSuggestion,
     );
   }
 

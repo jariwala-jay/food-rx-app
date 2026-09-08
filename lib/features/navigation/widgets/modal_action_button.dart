@@ -95,7 +95,7 @@ class ModalActionButton extends StatelessWidget {
                         : const Color(0xFFBDBDBD),
                     fontSize: 12 * clampedScale,
                     fontWeight: FontWeight.w500,
-                    fontFamily: 'BricolageGrotesque',
+                    fontFamily: 'Inter',
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

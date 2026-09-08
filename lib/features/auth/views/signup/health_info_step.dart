@@ -231,7 +231,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -306,7 +306,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -431,7 +431,7 @@ class _HealthInfoStepState extends State<HealthInfoStep> {
                               style: TextStyle(
                                 color: Colors.red,
                                 fontSize: 12,
-                                fontFamily: 'BricolageGrotesque',
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],

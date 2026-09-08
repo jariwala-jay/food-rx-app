@@ -502,7 +502,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             'Password must contain:',
             style: TextStyle(
               fontSize: 12,
-              fontFamily: 'BricolageGrotesque',
+              fontFamily: 'Inter',
               color: Color(0xFF8E8E93),
               fontWeight: FontWeight.w500,
             ),
@@ -527,7 +527,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                         req['text'] as String,
                         style: TextStyle(
                           fontSize: 12,
-                          fontFamily: 'BricolageGrotesque',
+                          fontFamily: 'Inter',
                           color: req['met'] as bool
                               ? const Color(0xFF34C759)
                               : const Color(0xFF8E8E93),

@@ -4,7 +4,7 @@
   "description": "Admin notification function for Food Rx",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/test_notification_preferences.js"
   },
   "keywords": [
     "notifications",

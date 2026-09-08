@@ -70,6 +70,8 @@ class RecipeMainIngredientValidator {
     'duck',
     'clam',
     'mussel',
+    'crab',
+    'scallop',
     'egg',
     'ham',
   ];

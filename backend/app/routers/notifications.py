@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.config import settings
@@ -8,6 +9,7 @@ from app.deps import get_current_user_id
 from app.notification_eligibility import (
     is_eligible_for_non_welcome_notification,
     is_eligible_given_created_at,
+    is_notification_type_enabled,
     resolve_created_at_from_user_doc,
 )
 
@@ -81,6 +83,24 @@ async def create_notification(body: dict, user_id: str = Depends(get_current_use
     # suppressed for a user's first NEW_ACCOUNT_GRACE_HOURS.
     if not await is_eligible_for_non_welcome_notification(db, user_id):
         return {"ok": True, "skipped": "onboarding_grace_period"}
+
+    # Preference gate: skip creation entirely for a type the user has turned
+    # off in Notification Settings, rather than creating a doc that would
+    # just get filtered out later at delivery time.
+    try:
+        user_object_id = ObjectId(user_id)
+    except InvalidId:
+        # Malformed/unresolvable user_id -- not a database problem, so fall
+        # through to is_notification_type_enabled(None, ...)'s existing
+        # "unresolvable -> default enabled" behavior, same as any other
+        # unresolvable user elsewhere in this pipeline, instead of a 500.
+        user_for_prefs = None
+    else:
+        user_for_prefs = await users.find_one(
+            {"_id": user_object_id}, {"notificationTypePrefs": 1}
+        )
+    if not is_notification_type_enabled(user_for_prefs, type_):
+        return {"ok": True, "skipped": "preference_disabled"}
 
     if type_ in ("admin", "education"):
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
@@ -248,17 +268,21 @@ async def broadcast_notification(
     dedupe_hours = int(body.get("dedupeWindowHours", 24))
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=dedupe_hours)).isoformat()
 
-    cursor = db[USERS].find({}, {"_id": 1, "createdAt": 1})
+    cursor = db[USERS].find({}, {"_id": 1, "createdAt": 1, "notificationTypePrefs": 1})
     user_docs = await cursor.to_list(length=None)
     inserted = 0
     skipped = 0
     skipped_onboarding = 0
+    skipped_preference = 0
     for user_doc in user_docs:
         uid = str(user_doc["_id"])
         # Same 24h onboarding gate as create_notification() — a broadcast
         # created while a user is still new is suppressed, not queued.
         if not is_eligible_given_created_at(resolve_created_at_from_user_doc(user_doc), uid):
             skipped_onboarding += 1
+            continue
+        if not is_notification_type_enabled(user_doc, type_):
+            skipped_preference += 1
             continue
         if type_ in ("admin", "education"):
             existing = await db[COLL].find_one(
@@ -287,4 +311,5 @@ async def broadcast_notification(
         "usersNotified": inserted,
         "usersSkippedDuplicate": skipped,
         "usersSkippedOnboarding": skipped_onboarding,
+        "usersSkippedPreference": skipped_preference,
     }

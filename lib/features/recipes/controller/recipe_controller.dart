@@ -9,6 +9,7 @@ import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/pantry/controller/pantry_controller.dart';
 import 'package:flutter_app/features/recipes/repositories/recipe_repository.dart'
     as domain_repo;
+import 'package:flutter_app/core/services/allergy_filtering_service.dart';
 import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/features/tracking/controller/tracker_provider.dart';
@@ -53,7 +54,10 @@ class RecipeController extends ChangeNotifier {
   String? get error => _error;
   bool get hasAttemptedGeneration => _hasAttemptedGeneration;
   UserModel? get currentUser => authProvider.currentUser;
-  List<PantryItem> get pantryItems => pantryController.pantryItems;
+  List<PantryItem> get pantryItems => [
+        ...pantryController.pantryItems,
+        ...pantryController.otherItems,
+      ];
 
   List<String> get userMedicalConditionsDisplay {
     final conditions = currentUser?.medicalConditions ?? [];
@@ -94,7 +98,6 @@ class RecipeController extends ChangeNotifier {
       }
 
       await pantryController.loadItems();
-      final pantryItems = pantryController.pantryItems;
 
       // Create comprehensive user profile for recipe filtering
       final userProfile = {
@@ -161,7 +164,19 @@ class RecipeController extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      _savedRecipes = await recipeRepository.getSavedRecipes(userId);
+      final loaded = await recipeRepository.getSavedRecipes(userId);
+      final user = authProvider.currentUser;
+      // Re-check against current allergies: a recipe saved before an
+      // allergy was added should no longer surface here.
+      _savedRecipes = user == null
+          ? loaded
+          : loaded
+              .where((recipe) => !AllergyFilteringService.recipeContainsRestrictions(
+                    recipe,
+                    allergies: user.allergies ?? const [],
+                    excludedIngredients: user.excludedIngredients ?? const [],
+                  ))
+              .toList();
     } catch (e) {
       if (kDebugMode) {
         print('Failed to load saved recipes: $e');
@@ -219,9 +234,16 @@ class RecipeController extends ChangeNotifier {
     if (userId == null) return;
     try {
       final raw = await recipeRepository.getPreparedRaw(userId);
+      final user = authProvider.currentUser;
       _preparedRecipes = raw
           .map((d) => PreparedRecipe.fromJson(d))
           .where((p) => p.remainingServings > 0)
+          .where((p) => user == null ||
+              !AllergyFilteringService.recipeContainsRestrictions(
+                p.recipe,
+                allergies: user.allergies ?? const [],
+                excludedIngredients: user.excludedIngredients ?? const [],
+              ))
           .toList();
     } catch (e) {
       if (kDebugMode) print('Failed to load prepared recipes: $e');
@@ -257,20 +279,15 @@ class RecipeController extends ChangeNotifier {
     final deductionResult =
         await pantryDeductionService.deductIngredientsFromPantry(
       scaledIngredients: scaledIngredients,
-      pantryItems: [
-        ...pantryController.pantryItems,
-        ...pantryController.otherItems
-      ],
+      pantryItems: pantryItems,
     );
 
     for (final updatedItem in deductionResult.updatedItems) {
       await pantryController.updateItem(updatedItem);
     }
     for (final itemId in deductionResult.itemsToRemove) {
-      final itemToRemove = [
-        ...pantryController.pantryItems,
-        ...pantryController.otherItems
-      ].where((item) => item.id == itemId);
+      final itemToRemove =
+          pantryItems.where((item) => item.id == itemId);
       if (itemToRemove.isNotEmpty) {
         await pantryController.removeItem(
             itemId, itemToRemove.first.isPantryItem);
@@ -441,10 +458,7 @@ class RecipeController extends ChangeNotifier {
       final deductionResult =
           await pantryDeductionService.deductIngredientsFromPantry(
         scaledIngredients: scaledIngredients,
-        pantryItems: [
-          ...pantryController.pantryItems,
-          ...pantryController.otherItems
-        ],
+        pantryItems: pantryItems,
       );
 
       if (kDebugMode) {

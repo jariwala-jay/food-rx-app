@@ -10,6 +10,19 @@ import 'package:http/http.dart' as http;
 /// the refresh token may still be valid, so don't sign out.
 enum SessionRefreshOutcome { success, invalid, networkError }
 
+/// Thrown when a required build-time value (e.g. API_BASE_URL) is missing
+/// from `.env`. This is a build/deploy defect, not a runtime network error --
+/// kept distinct from [StateError] so it isn't confused with the many
+/// unrelated failures (e.g. `Iterable.firstWhere` finding no match) that
+/// also throw `StateError`.
+class MissingApiConfigurationException implements Exception {
+  final String message;
+  const MissingApiConfigurationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// HTTP client for Food Rx backend API. Session tokens live in secure storage.
 class ApiClient {
   // Shared so concurrent callers don't each send the single-use refresh
@@ -26,7 +39,8 @@ class ApiClient {
   static String get _baseUrl {
     final url = dotenv.env['API_BASE_URL'] ?? '';
     if (url.isEmpty) {
-      throw StateError('API_BASE_URL is not set in .env');
+      throw const MissingApiConfigurationException(
+          'API_BASE_URL is not set in .env');
     }
     return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
   }

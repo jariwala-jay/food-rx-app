@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTypography {
-  static const String fontFamily = "BricolageGrotesque";
+  static const String fontFamily = "Inter";
 
   // 10px
   static const TextStyle bg_10_r = TextStyle(

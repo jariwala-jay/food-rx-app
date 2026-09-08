@@ -1210,6 +1210,8 @@ class KitchenQuantityFormatter {
         return 'stalks';
       case 'egg':
         return 'eggs';
+      case 'each':
+        return 'each';
       case 'tsp':
       case 'tbsp':
       case 'oz':
@@ -1288,6 +1290,10 @@ class KitchenQuantityFormatter {
         return 'stalk';
       case 'eggs':
         return 'egg';
+      case 'ea':
+      case 'ea.':
+      case 'each':
+        return 'each';
       default:
         return unit;
     }

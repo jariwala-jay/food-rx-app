@@ -1,3 +1,5 @@
+import 'levenshtein.dart';
+
 /// True when [value] is local@domain.tld with a TLD of at least two letters.
 bool isValidEmailFormat(String? value) {
   if (value == null) return false;
@@ -56,36 +58,6 @@ const _knownDomainTypos = <String, String>{
   'icoud.com': 'icloud.com',
 };
 
-int _levenshtein(String a, String b) {
-  if (a == b) return 0;
-  if (a.isEmpty) return b.length;
-  if (b.isEmpty) return a.length;
-
-  final rows = a.length + 1;
-  final cols = b.length + 1;
-  final matrix = List.generate(rows, (_) => List<int>.filled(cols, 0));
-
-  for (var i = 0; i < rows; i++) {
-    matrix[i][0] = i;
-  }
-  for (var j = 0; j < cols; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (var i = 1; i < rows; i++) {
-    for (var j = 1; j < cols; j++) {
-      final cost = a[i - 1] == b[j - 1] ? 0 : 1;
-      matrix[i][j] = [
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost,
-      ].reduce((left, right) => left < right ? left : right);
-    }
-  }
-
-  return matrix[a.length][b.length];
-}
-
 /// Returns a suggested domain if [domain] looks like a typo, else null.
 String? emailDomainTypoSuggestion(String domain) {
   final lower = domain.trim().toLowerCase();
@@ -100,7 +72,7 @@ String? emailDomainTypoSuggestion(String domain) {
     // Same starting letter and very close spelling (e.g. gmil.com ≈ gmail.com).
     if (lower[0] != popular[0]) continue;
 
-    final distance = _levenshtein(lower, popular);
+    final distance = levenshteinDistance(lower, popular);
     final lengthDelta = (lower.length - popular.length).abs();
     if (distance == 1 && lengthDelta <= 1) {
       return popular;

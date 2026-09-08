@@ -14,10 +14,25 @@ class SpoonacularIngredientRepository implements IngredientRepository {
   bool _isRateLimited = false;
   DateTime? _rateLimitUntil;
 
+  // In-memory cache so repeated searches for the same query within a
+  // session (e.g. re-opening a category, or the same term typed again)
+  // don't re-hit the API. Shared across screens via the single instance
+  // each screen resolves from the app-wide Provider.
+  final Map<String, List<Ingredient>> _searchCache = {};
+  final Map<String, List<Ingredient>> _autocompleteCache = {};
+
   Map<String, String> get _headers => {
         'X-RapidAPI-Key': _apiKey!,
         'X-RapidAPI-Host': _host,
       };
+
+  String _cacheKey(String? query, String? aisle, int number,
+      List<String>? intolerances) {
+    final q = (query ?? '').trim().toLowerCase();
+    final a = (aisle ?? '').trim().toLowerCase();
+    final sortedIntolerances = [...?intolerances]..sort();
+    return '$q|$a|$number|${sortedIntolerances.join(',')}';
+  }
 
   /// Parses each entry independently so one malformed row (missing/odd
   /// fields) doesn't throw away the rest of an otherwise-good batch.
@@ -56,6 +71,13 @@ class SpoonacularIngredientRepository implements IngredientRepository {
       }
     }
 
+    final cacheKey = _cacheKey(query, aisle, number, intolerances);
+    final cached = _searchCache[cacheKey];
+    if (cached != null) {
+      developer.log('Search cache hit for "$query" (aisle: $aisle)');
+      return cached;
+    }
+
     final Map<String, String> queryParams = {
       'number': number.toString(),
     };
@@ -83,7 +105,9 @@ class SpoonacularIngredientRepository implements IngredientRepository {
 
         final data = json.decode(response.body);
         final results = data['results'] as List;
-        return _parseIngredients(results);
+        final parsed = _parseIngredients(results);
+        _searchCache[cacheKey] = parsed;
+        return parsed;
       } else if (response.statusCode == 429) {
         // Rate limited - set flag and wait 60 seconds before retrying
         _isRateLimited = true;
@@ -122,6 +146,13 @@ class SpoonacularIngredientRepository implements IngredientRepository {
       }
     }
 
+    final cacheKey = _cacheKey(query, null, number, null);
+    final cached = _autocompleteCache[cacheKey];
+    if (cached != null) {
+      developer.log('Autocomplete cache hit for "$query"');
+      return cached;
+    }
+
     final Map<String, String> queryParams = {
       'query': query,
       'number': number.toString(),
@@ -139,7 +170,9 @@ class SpoonacularIngredientRepository implements IngredientRepository {
         _rateLimitUntil = null;
 
         final data = json.decode(response.body) as List;
-        return _parseIngredients(data);
+        final parsed = _parseIngredients(data);
+        _autocompleteCache[cacheKey] = parsed;
+        return parsed;
       } else if (response.statusCode == 429) {
         // Rate limited - set flag and wait 60 seconds before retrying
         _isRateLimited = true;

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "functions-framework --target=notificationScheduler",
-    "test": "node scripts/test_inactivity_bucket.js && node scripts/test_notification_content.js"
+    "test": "node scripts/test_inactivity_bucket.js && node scripts/test_notification_content.js && node scripts/test_notification_preferences.js && node scripts/test_daily_tracker_reminder.js && node scripts/test_expired_items.js && node scripts/test_meal_reminder_fallback.js"
   },
   "keywords": ["notifications", "food-rx", "health"],
   "author": "",

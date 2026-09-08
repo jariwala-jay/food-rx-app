@@ -354,6 +354,17 @@ class _ExpiredItemsPageState extends State<ExpiredItemsPage> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        item.isPantryItem
+                                            ? 'FoodRx Item'
+                                            : 'Home Item',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
                                       const SizedBox(height: 6),
                                       Text(
                                         'Category: ${item.category}',

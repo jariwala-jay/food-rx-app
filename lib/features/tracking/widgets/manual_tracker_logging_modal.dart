@@ -216,7 +216,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       color: Color(0xFF2C2C2C),
                     ),
                   ),
@@ -238,7 +238,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
               _getCategorySpecificHint(),
               style: const TextStyle(
                 fontSize: 14,
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 color: Color(0xFF8E8E93),
               ),
               textAlign: TextAlign.center,
@@ -248,7 +248,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
               _getCategorySpecificExamples(),
               style: const TextStyle(
                 fontSize: 12,
-                fontFamily: 'BricolageGrotesque',
+                fontFamily: 'Inter',
                 color: Color(0xFF8E8E93),
               ),
               textAlign: TextAlign.center,
@@ -268,7 +268,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                   _error!,
                   style: const TextStyle(
                     color: Color(0xFFFF5275),
-                    fontFamily: 'BricolageGrotesque',
+                    fontFamily: 'Inter',
                     fontSize: 14,
                   ),
                   textAlign: TextAlign.center,
@@ -318,7 +318,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF2C2C2C),
                           ),
@@ -362,7 +362,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                           style: const TextStyle(
                             color: Color(0xFF8E8E93),
                             fontSize: 12,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                           ),
                         ),
                       ],
@@ -401,7 +401,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                     'Cancel',
                     style: TextStyle(
                       color: Color(0xFF8E8E93),
-                      fontFamily: 'BricolageGrotesque',
+                      fontFamily: 'Inter',
                       fontSize: 16,
                     ),
                   ),
@@ -433,7 +433,7 @@ class _ManualTrackerLoggingModalState extends State<ManualTrackerLoggingModal> {
                           'Log',
                           style: TextStyle(
                             fontSize: 16,
-                            fontFamily: 'BricolageGrotesque',
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w600,
                           ),
                         ),
