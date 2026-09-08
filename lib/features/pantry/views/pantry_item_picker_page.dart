@@ -9,11 +9,13 @@ import 'dart:async';
 import '../widgets/pantry_item_add_modal.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
+import 'package:flutter_app/core/models/pantry_item.dart';
 import '../repositories/ingredient_repository.dart';
 import '../controller/pantry_controller.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_app/core/services/ingredient_category_mapper.dart';
+import 'package:flutter_app/core/services/ingredient_fuzzy_matcher.dart';
 import 'package:showcaseview/showcaseview.dart';
 
 class PantryItemPickerPage extends StatelessWidget {
@@ -21,6 +23,7 @@ class PantryItemPickerPage extends StatelessWidget {
   final String categoryKey;
   final bool isFoodPantryItem;
   final String? initialSearchQuery;
+  final bool autoAddOnArrival;
 
   const PantryItemPickerPage({
     Key? key,
@@ -28,6 +31,7 @@ class PantryItemPickerPage extends StatelessWidget {
     required this.categoryKey,
     this.isFoodPantryItem = true,
     this.initialSearchQuery,
+    this.autoAddOnArrival = false,
   }) : super(key: key);
 
   @override
@@ -53,6 +57,7 @@ class PantryItemPickerPage extends StatelessWidget {
         categoryKey: categoryKey,
         isFoodPantryItem: isFoodPantryItem,
         initialSearchQuery: initialSearchQuery,
+        autoAddOnArrival: autoAddOnArrival,
       ),
     );
   }
@@ -63,12 +68,14 @@ class _PantryItemPickerView extends StatefulWidget {
   final String categoryKey;
   final bool isFoodPantryItem;
   final String? initialSearchQuery;
+  final bool autoAddOnArrival;
 
   const _PantryItemPickerView({
     required this.title,
     required this.categoryKey,
     required this.isFoodPantryItem,
     this.initialSearchQuery,
+    this.autoAddOnArrival = false,
   });
   @override
   State<_PantryItemPickerView> createState() => _PantryItemPickerViewState();
@@ -84,6 +91,23 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   bool _hasScrolledToApple = false;
   bool _hasTriggeredSaveShowcase = false;
   bool _didApplyInitialSearch = false;
+
+  // Measured so the empty-state content below can be shifted up by half
+  // this height, centering it on the full screen instead of just the
+  // leftover space below the search bar (same technique as
+  // PantryGroupCategoryPage's _searchBarHeight).
+  final GlobalKey _searchBarKey = GlobalKey();
+  double _searchBarHeight = 0;
+
+  void _measureSearchBarHeight() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final height = _searchBarKey.currentContext?.size?.height;
+      if (height != null && height != _searchBarHeight) {
+        setState(() => _searchBarHeight = height);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -104,6 +128,44 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onSearchTextChanged(String query, PantryItemPickerProvider provider) {
+    setState(() {
+      _isTyping = query.isNotEmpty;
+    });
+
+    // Cancel previous debounce timer
+    _debounceTimer?.cancel();
+
+    // Local filtering is instant on every keystroke so curated matches
+    // never wait on the API debounce.
+    provider.searchItems(query);
+
+    if (query.trim().length < 3) return;
+
+    // Only hit Spoonacular once the user pauses, so "coc" -> "coco" ->
+    // "coconut" fires one request instead of one per keystroke.
+    _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted && _searchController.text == query) {
+        provider.searchSpoonacular(query);
+      }
+    });
+  }
+
+  /// Applies a spelling-correction suggestion by fixing the search box
+  /// text itself and re-running the normal search — this is a correction
+  /// to what the user meant to type, not a different item to add, so it
+  /// goes through the exact same path as if they'd typed it correctly
+  /// themselves.
+  void _applyTypoCorrection(
+      PantryItemPickerProvider provider, IngredientSuggestion correction) {
+    final name = correction.ingredient.name;
+    _searchController.value = TextEditingValue(
+      text: name,
+      selection: TextSelection.collapsed(offset: name.length),
+    );
+    _onSearchTextChanged(name, provider);
   }
 
   Future<void> _handleSaveButtonClick(
@@ -171,8 +233,14 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
           }
         });
       } else {
-        // Normal behavior - just pop back
-        navigator.pop();
+        // Close the whole add flow — not just this search screen. A
+        // single pop leaves the category-picker sheet (Fruits/Vegetables/
+        // Grains/...) sitting open underneath as an extra screen the user
+        // has to dismiss themselves before actually landing back on their
+        // tab. This works regardless of how deep the item picker was
+        // opened from (direct category, or via the Fruits/Vegetables
+        // handoff) since the tab screen is always the first route.
+        navigator.popUntil((route) => route.isFirst);
       }
     } else {
       if (provider.error != null) {
@@ -186,15 +254,170 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
     }
   }
 
+  /// One more chance to adjust quantity/unit for an item already staged
+  /// for save — tapping its QTY pill in the selected-items list below.
+  Future<void> _editSelectedItemQuantity(BuildContext context,
+      PantryItemPickerProvider provider, PantryItem item) async {
+    final quantityController = TextEditingController(
+      text: item.quantity.toStringAsFixed(
+          item.quantity.truncateToDouble() == item.quantity ? 0 : 1),
+    );
+    UnitType selectedUnit = item.unit;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            item.name,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: TextField(
+                    controller: quantityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      hintText: 'Quantity',
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<UnitType>(
+                      value: selectedUnit,
+                      isExpanded: true,
+                      dropdownColor: Colors.white,
+                      style: const TextStyle(color: Colors.black87),
+                      items: UnitType.values
+                          .map((u) => DropdownMenuItem(
+                                value: u,
+                                child: Text(_unitDisplayName(u)),
+                              ))
+                          .toList(),
+                      onChanged: (u) {
+                        if (u != null) setDialogState(() => selectedUnit = u);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child:
+                  const Text('Cancel', style: TextStyle(color: Colors.black)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6A00),
+              ),
+              onPressed: () {
+                final qty = double.tryParse(quantityController.text.trim());
+                if (qty == null || qty <= 0) return;
+                provider.updateSelectedItemQuantity(item.id, qty, selectedUnit);
+                Navigator.of(dialogContext).pop();
+              },
+              child:
+                  const Text('Update', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+    quantityController.dispose();
+  }
+
+  String _unitDisplayName(UnitType unit) {
+    switch (unit) {
+      case UnitType.pound:
+        return 'Pound (lb)';
+      case UnitType.ounces:
+        return 'Ounces (oz)';
+      case UnitType.gallon:
+        return 'Gallon';
+      case UnitType.milliliter:
+        return 'Milliliter (ml)';
+      case UnitType.liter:
+        return 'Liter (L)';
+      case UnitType.piece:
+        return 'Piece';
+      case UnitType.grams:
+        return 'Grams (g)';
+      case UnitType.kilograms:
+        return 'Kilograms (kg)';
+      case UnitType.cup:
+        return 'Cup';
+      case UnitType.tablespoon:
+        return 'Tablespoon';
+      case UnitType.teaspoon:
+        return 'Teaspoon';
+    }
+  }
+
+  /// Lets the user add exactly what they typed, even with no curated or
+  /// Spoonacular match — a misspelling or an ingredient outside Spoonacular's
+  /// database shouldn't block adding it. Category is resolved the same way
+  /// as any other item; we don't try to "correct" the typed name.
+  void _addCustomIngredient(BuildContext context, String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final custom = Ingredient(
+      id: 'custom_${DateTime.now().microsecondsSinceEpoch}',
+      name: trimmed,
+      image: '',
+      imageName: 'default.jpg',
+    );
+    _showAddItemModal(context, custom);
+  }
+
+  /// Adds a "Did you mean?" suggestion via the normal add flow, using its
+  /// real curated category directly rather than letting the usual
+  /// category-inference logic run — we already know exactly where this
+  /// ingredient belongs since it came from our own curated data.
+  void _addSuggestedIngredient(
+      BuildContext context, IngredientSuggestion suggestion) {
+    _showAddItemModal(context, suggestion.ingredient,
+        explicitCategory: suggestion.category);
+  }
+
   // Show modal dialog to add quantity and unit
-  Future<void> _showAddItemModal(BuildContext context, Ingredient item) async {
+  Future<void> _showAddItemModal(BuildContext context, Ingredient item,
+      {String? explicitCategory}) async {
     // Only global-search results need re-filing; curated items already
     // belong to this category (their `aisle` is a FoodRx key, not Spoonacular's).
+    // Applies to both FoodRx and Home items — the Home Tracker merges both
+    // lists for nutrition logging, so both need an accurate category, not
+    // just whichever tab the item happened to be searched from.
     final pickerProvider =
         Provider.of<PantryItemPickerProvider>(context, listen: false);
     String category = widget.categoryKey;
-    if (widget.isFoodPantryItem &&
-        pickerProvider.isShowingGlobalIngredientSearch) {
+    if (explicitCategory != null) {
+      category = explicitCategory;
+    } else if (pickerProvider.isShowingGlobalIngredientSearch) {
       // Name matching first — resolves the vast majority of items with no
       // API call. Only fall back to a lazy aisle lookup when the name alone
       // is inconclusive.
@@ -272,6 +495,36 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   Widget build(BuildContext context) {
     final provider = Provider.of<PantryItemPickerProvider>(context);
     const primaryColor = Color(0xFFFF6A00);
+    _measureSearchBarHeight();
+
+    // Two distinct offline suggestions, only meaningful once the search
+    // has actually come up empty; recomputed each build is fine since
+    // both are pure, local lookups against the curated list, never a
+    // network call. Kept separate rather than one combined signal:
+    //  - relatedSuggestion: a different, recognizable ingredient the
+    //    query is describing ("pickled onions" -> "Onions") — offered as
+    //    "Did you mean?", a suggestion to add *instead*.
+    //  - typoCorrection: a spelling fix for what was typed ("cocnut" ->
+    //    "Coconut Oil") — offered as a "search instead for X?" prompt
+    //    near the search field, to fix the query itself, not to replace
+    //    what gets added.
+    final hasEmptyResults = _isTyping &&
+        _searchController.text.trim().isNotEmpty &&
+        provider.searchResults.isEmpty;
+    final relatedSuggestion = hasEmptyResults
+        ? IngredientFuzzyMatcher.findRelatedSuggestion(
+            _searchController.text,
+            isFoodPantryItem: widget.isFoodPantryItem,
+            isExcluded: provider.isAllergyConflict,
+          )
+        : null;
+    final typoCorrection = hasEmptyResults
+        ? IngredientFuzzyMatcher.findTypoCorrection(
+            _searchController.text,
+            isFoodPantryItem: widget.isFoodPantryItem,
+            isExcluded: provider.isAllergyConflict,
+          )
+        : null;
 
     developer.log('Building PantryItemPickerView for ${widget.categoryKey}, '
         'isLoading: ${provider.isLoading}, '
@@ -289,12 +542,31 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
           provider.hasInitialized) {
         _didApplyInitialSearch = true;
         final q = widget.initialSearchQuery!.trim();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
           // Prefer in-category curated match; only go global if none found.
           provider.searchItems(q);
           if (q.length >= 3 && provider.searchResults.isEmpty) {
-            provider.searchSpoonacular(q);
+            await provider.searchSpoonacular(q);
+          }
+          if (!context.mounted || !widget.autoAddOnArrival) return;
+
+          // Arrived here already having tapped "Add" or a suggestion on
+          // the previous screen (Fruits/Vegetables group page) — opening
+          // the add modal again automatically avoids making the user
+          // repeat that tap on this screen for a search that already
+          // told them there was nothing else to pick from.
+          Ingredient? exactMatch;
+          for (final item in provider.searchResults) {
+            if (item.name.toLowerCase() == q.toLowerCase()) {
+              exactMatch = item;
+              break;
+            }
+          }
+          if (exactMatch != null) {
+            _showAddItemModal(context, exactMatch);
+          } else if (!provider.isAllergyConflict(q)) {
+            _addCustomIngredient(context, q);
           }
         });
       }
@@ -377,38 +649,13 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
               children: [
                 if (_isSearching)
                   Padding(
+                    key: _searchBarKey,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (query) {
-                        setState(() {
-                          _isTyping = query.isNotEmpty;
-                        });
-
-                        // Cancel previous debounce timer
-                        _debounceTimer?.cancel();
-
-                        // If query is empty, search locally immediately
-                        if (query.isEmpty) {
-                          provider.searchItems(query);
-                          return;
-                        }
-
-                        // For short queries, use local search only
-                        if (query.length < 3) {
-                          provider.searchItems(query);
-                          return;
-                        }
-
-                        // Debounce API calls: wait 500ms after user stops typing
-                        _debounceTimer =
-                            Timer(const Duration(milliseconds: 500), () {
-                          if (mounted && _searchController.text == query) {
-                            provider.searchSpoonacular(query);
-                          }
-                        });
-                      },
+                      onChanged: (query) =>
+                          _onSearchTextChanged(query, provider),
                       decoration: InputDecoration(
                         hintText: provider.isShowingGlobalIngredientSearch
                             ? 'Search all ingredients...'
@@ -511,54 +758,153 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                   )
                 else if (provider.searchResults.isEmpty)
                   Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off,
-                              size: 48, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
-                          Text(
-                            _isTyping
-                                ? (provider.isRateLimitedSearch
-                                    ? 'Search is temporarily unavailable. Please try again in a moment.'
-                                    : 'This ingredient is not currently available in our database. Please select a similar ingredient from the available options.')
-                                : 'No ingredients available in this category',
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 16),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_isTyping)
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: TextButton(
-                                onPressed: () {
-                                  _searchController.clear();
-                                  provider.searchItems('');
-                                  setState(() {
-                                    _isTyping = false;
-                                  });
-                                },
-                                child: const Text(
-                                  'Clear search',
-                                  style: TextStyle(color: primaryColor),
+                    child: Transform.translate(
+                      // Centers on the full screen instead of just the
+                      // space left over below the search bar.
+                      offset: Offset(0, -_searchBarHeight / 2),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _isTyping
+                                  ? (provider.isRateLimitedSearch
+                                      ? 'Search is temporarily unavailable.'
+                                      : provider.isEmptyDueToAllergyFilter
+                                          ? "Results matching your allergies or foods you avoid aren't shown."
+                                          : 'No match for "${_searchController.text.trim()}"')
+                                  : 'No ingredients available in this category',
+                              style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            // Add-as-typed is the primary action here — it
+                            // always works and preserves exactly what the
+                            // user entered, regardless of whether a
+                            // suggestion below happens to exist. Never
+                            // offered when the typed text itself conflicts
+                            // with an allergy/exclusion (checked directly,
+                            // not via isEmptyDueToAllergyFilter, so a short
+                            // query that never reached Spoonacular is still
+                            // caught).
+                            if (_isTyping &&
+                                _searchController.text.trim().isNotEmpty &&
+                                !provider.isAllergyConflict(
+                                    _searchController.text.trim()))
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _addCustomIngredient(
+                                        context, _searchController.text),
+                                    icon: const Icon(Icons.add,
+                                        color: primaryColor),
+                                    label: Text(
+                                      'Add "${_searchController.text.trim()}"',
+                                      style:
+                                          const TextStyle(color: primaryColor),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side:
+                                          const BorderSide(color: primaryColor),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          if (!_isTyping && !provider.hasInitialized)
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: ElevatedButton(
-                                onPressed: () =>
-                                    provider.loadItems(widget.categoryKey),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
+                            // One secondary, lighter-weight suggestion below
+                            // Add — never both at once. relatedSuggestion
+                            // ("Did you mean?") takes priority since it's a
+                            // suggestion to add something else entirely;
+                            // typoCorrection ("Search instead for?") only
+                            // shows when there's no related item, since it's
+                            // just a fix to the search text itself. If both
+                            // happen to resolve to the same curated
+                            // ingredient (e.g. "tomatoe" -> "Tomatoes" via
+                            // both), show only the typo correction — it's
+                            // the more direct explanation, and showing both
+                            // would just repeat the same name twice.
+                            if (relatedSuggestion != null &&
+                                !IngredientFuzzyMatcher.sameIngredient(
+                                    relatedSuggestion, typoCorrection))
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: GestureDetector(
+                                  onTap: () => _addSuggestedIngredient(
+                                      context, relatedSuggestion),
+                                  child: Text.rich(
+                                    TextSpan(
+                                      style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold),
+                                      children: [
+                                        const TextSpan(text: 'Did you mean '),
+                                        TextSpan(
+                                          text:
+                                              relatedSuggestion.ingredient.name,
+                                          style: const TextStyle(
+                                            color: primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const TextSpan(text: '?'),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                                child: const Text('Load Ingredients',
-                                    style: TextStyle(color: Colors.white)),
+                              )
+                            else if (typoCorrection != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: GestureDetector(
+                                  onTap: () => _applyTypoCorrection(
+                                      provider, typoCorrection),
+                                  child: Text.rich(
+                                    TextSpan(
+                                      style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold),
+                                      children: [
+                                        const TextSpan(
+                                            text: 'Search instead for '),
+                                        TextSpan(
+                                          text: typoCorrection.ingredient.name,
+                                          style: const TextStyle(
+                                            color: primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const TextSpan(text: '?'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                        ],
+                            if (!_isTyping && !provider.hasInitialized)
+                              Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: ElevatedButton(
+                                  onPressed: () =>
+                                      provider.loadItems(widget.categoryKey),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                  ),
+                                  child: const Text('Load Ingredients',
+                                      style: TextStyle(color: Colors.white)),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   )
@@ -577,6 +923,45 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                               style: TextStyle(
                                 color: Colors.grey[600],
                                 fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        if (_isTyping &&
+                            _searchController.text.trim().isNotEmpty &&
+                            !provider.isAllergyConflict(
+                                _searchController.text.trim()) &&
+                            !provider.searchResults.any((r) =>
+                                r.name.toLowerCase() ==
+                                _searchController.text.trim().toLowerCase()))
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            child: GestureDetector(
+                              onTap: () => _addCustomIngredient(
+                                  context, _searchController.text),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: primaryColor),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.add,
+                                        color: primaryColor, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Add "${_searchController.text.trim()}"',
+                                      style: const TextStyle(
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -771,6 +1156,80 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                             ),
                           ),
                       ],
+                    ),
+                  ),
+
+                // Selected items summary — shown regardless of whether an
+                // item still appears in the current search results, since a
+                // custom/typo'd add never does (it has no search match to
+                // show a tile for). Otherwise the Save button below appears
+                // with no visible confirmation of what it's about to save.
+                if (provider.hasSelectedItems)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 160),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: provider.selectedItemsList.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final item = provider.selectedItemsList[index];
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.name,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2C2C2C),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => _editSelectedItemQuantity(
+                                      context, provider, item),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF3EB),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      item.quantityDisplay,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () =>
+                                      provider.removeItemFromSelection(item.id),
+                                  icon: const Icon(Icons.close,
+                                      size: 18, color: Colors.grey),
+                                  padding: const EdgeInsets.only(left: 4),
+                                  constraints: const BoxConstraints(),
+                                  splashRadius: 16,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
 

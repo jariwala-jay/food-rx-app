@@ -5,6 +5,7 @@ import 'package:flutter_app/core/constants/pantry_categories.dart';
 import 'package:flutter_app/core/constants/tour_constants.dart';
 import 'package:flutter_app/core/models/ingredient.dart';
 import 'package:flutter_app/core/services/allergy_filtering_service.dart';
+import 'package:flutter_app/core/services/ingredient_fuzzy_matcher.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -45,6 +46,7 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
   bool _isGlobalSearching = false;
   bool _showingGlobalResults = false;
   bool _isRateLimited = false;
+  bool _isEmptyDueToAllergyFilter = false;
   List<Ingredient> _globalResults = const [];
 
   // Measured so the empty-state message below can be shifted up by half
@@ -71,6 +73,15 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
     _ingredientRepository = repository is SpoonacularIngredientRepository
         ? repository
         : SpoonacularIngredientRepository();
+  }
+
+  bool _isAllergyItemName(String itemName) {
+    final currentUser =
+        Provider.of<AuthController>(context, listen: false).currentUser;
+    return AllergyFilteringService.itemNameConflictsWithUser(
+      itemName,
+      currentUser,
+    );
   }
 
   List<Map<String, String>> get _subcategories =>
@@ -110,7 +121,9 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
         );
       }
     }
-    return results;
+    return results
+        .where((g) => !_isAllergyItemName(g.ingredient.name))
+        .toList();
   }
 
   List<_GroupedIngredient> get _filteredItems {
@@ -139,6 +152,7 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
           _globalResults = const [];
           _isGlobalSearching = false;
           _isRateLimited = false;
+          _isEmptyDueToAllergyFilter = false;
         });
       }
       return;
@@ -157,6 +171,7 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
           _globalResults = const [];
           _isGlobalSearching = false;
           _isRateLimited = false;
+          _isEmptyDueToAllergyFilter = false;
         });
       }
       return;
@@ -167,6 +182,7 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
       _showingGlobalResults = true;
       _globalResults = const [];
       _isRateLimited = false;
+      _isEmptyDueToAllergyFilter = false;
     });
 
     try {
@@ -180,9 +196,20 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
         number: 20,
         intolerances: intolerances,
       );
+      // `intolerances` only covers Spoonacular's fixed categories; custom
+      // "other" allergies (and derivatives like "applesauce") need this
+      // local re-check too — same fix as PantryItemPickerProvider.
+      var hadAllergyFilteredResults = false;
+      var beforeFilterCount = results.length;
+      results = results.where((r) => !_isAllergyItemName(r.name)).toList();
+      if (results.length != beforeFilterCount) hadAllergyFilteredResults = true;
       final rateLimitedAfterSearch = _ingredientRepository.isRateLimited;
       if (results.isEmpty && !rateLimitedAfterSearch) {
         results = await _ingredientRepository.autocompleteIngredient(query: q);
+        beforeFilterCount = results.length;
+        results = results.where((r) => !_isAllergyItemName(r.name)).toList();
+        if (results.length != beforeFilterCount)
+          hadAllergyFilteredResults = true;
       }
       final rateLimited =
           rateLimitedAfterSearch || _ingredientRepository.isRateLimited;
@@ -193,6 +220,8 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
         _isGlobalSearching = false;
         _showingGlobalResults = true;
         _isRateLimited = results.isEmpty && rateLimited;
+        _isEmptyDueToAllergyFilter =
+            results.isEmpty && !_isRateLimited && hadAllergyFilteredResults;
       });
     } catch (_) {
       if (!mounted || _searchController.text.trim() != q) return;
@@ -211,6 +240,20 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
       if (!mounted) return;
       _runGlobalSearchIfNeeded(value);
     });
+  }
+
+  /// Applies a spelling-correction suggestion by fixing the search box
+  /// text itself and re-running the normal search — this is a correction
+  /// to what the user meant to type, not a different item to add, so it
+  /// goes through the exact same path as if they'd typed it correctly
+  /// themselves.
+  void _applyTypoCorrection(IngredientSuggestion correction) {
+    final name = correction.ingredient.name;
+    _searchController.value = TextEditingValue(
+      text: name,
+      selection: TextSelection.collapsed(offset: name.length),
+    );
+    _onQueryChanged(name);
   }
 
   void _openStorageType(Map<String, String> sub) {
@@ -254,6 +297,66 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
           categoryKey: sub['key']!,
           isFoodPantryItem: widget.isFoodPantryItem,
           initialSearchQuery: ingredient.name,
+        ),
+      ),
+    );
+  }
+
+  /// Display title for an arbitrary curated category key — a "Did you
+  /// mean?" suggestion can belong to any category, not just the current
+  /// group's own subcategories (e.g. suggesting a seasoning while
+  /// browsing Vegetables), so this isn't limited to `_subcategories`.
+  String _categoryTitleForKey(String key) {
+    for (final cat in foodPantryCategories) {
+      if (cat['key'] == key) return cat['title']!;
+    }
+    for (final subs in foodPantrySubcategories.values) {
+      for (final sub in subs) {
+        if (sub['key'] == key) return sub['title']!;
+      }
+    }
+    for (final cat in otherPantryItemCategories) {
+      if (cat['key'] == key) return cat['title']!;
+    }
+    return key;
+  }
+
+  /// Opens a "Did you mean?" suggestion through the normal item-picker add
+  /// flow, targeting its actual curated category directly (which may well
+  /// differ from this group's own domain) rather than reusing the current
+  /// screen's category. Auto-opens the add modal on arrival — the user
+  /// already chose to add this by tapping the suggestion here, so making
+  /// them tap it again on the next screen would just repeat the same
+  /// action.
+  void _openSuggestedIngredient(IngredientSuggestion suggestion) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PantryItemPickerPage(
+          categoryTitle: _categoryTitleForKey(suggestion.category),
+          categoryKey: suggestion.category,
+          isFoodPantryItem: widget.isFoodPantryItem,
+          initialSearchQuery: suggestion.ingredient.name,
+          autoAddOnArrival: true,
+        ),
+      ),
+    );
+  }
+
+  /// Lets the user carry a typed name (misspelled or outside Spoonacular's
+  /// database) into the item picker, where it can be added directly even
+  /// with no curated or API match — see `_addCustomIngredient` there.
+  /// Auto-opens the add modal on arrival — the user already tapped "Add"
+  /// here, so a second tap on the next screen would just repeat it.
+  void _openCustomItemSearch(String query) {
+    final sub = _defaultStorageSub;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PantryItemPickerPage(
+          categoryTitle: '${sub['title']} ${widget.groupTitle}',
+          categoryKey: sub['key']!,
+          isFoodPantryItem: widget.isFoodPantryItem,
+          initialSearchQuery: query,
+          autoAddOnArrival: true,
         ),
       ),
     );
@@ -362,6 +465,7 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
                                     _globalResults = const [];
                                     _isGlobalSearching = false;
                                     _isRateLimited = false;
+                                    _isEmptyDueToAllergyFilter = false;
                                   });
                                 },
                               )
@@ -589,6 +693,31 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
 
     final waitingForGlobal =
         _query.trim().length >= 3 && !_showingGlobalResults;
+    final trimmedQuery = _query.trim();
+
+    // Two distinct offline suggestions, only meaningful once the search
+    // has actually come up empty; recomputed each build is fine since
+    // both are pure, local lookups against the curated list, never a
+    // network call. See IngredientFuzzyMatcher's doc comment for why
+    // these stay separate: relatedSuggestion is a different, recognizable
+    // ingredient ("pickled onions" -> "Onions"); typoCorrection is a
+    // spelling fix for the query itself ("cocnut" -> "Coconut Oil").
+    final canSuggest = !waitingForGlobal && trimmedQuery.isNotEmpty;
+    final relatedSuggestion = canSuggest
+        ? IngredientFuzzyMatcher.findRelatedSuggestion(
+            trimmedQuery,
+            isFoodPantryItem: widget.isFoodPantryItem,
+            isExcluded: _isAllergyItemName,
+          )
+        : null;
+    final typoCorrection = canSuggest
+        ? IngredientFuzzyMatcher.findTypoCorrection(
+            trimmedQuery,
+            isFoodPantryItem: widget.isFoodPantryItem,
+            isExcluded: _isAllergyItemName,
+          )
+        : null;
+
     return Center(
       child: Transform.translate(
         // Centers on the full screen instead of just the space left over
@@ -599,19 +728,116 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
-              const SizedBox(height: 16),
               Text(
                 waitingForGlobal
                     ? 'Searching all ingredients...'
                     : _query.trim().length < 3
                         ? 'Type at least 3 characters to search all ingredients'
                         : _isRateLimited
-                            ? 'Search is temporarily unavailable. Please try again in a moment.'
-                            : 'This ingredient is not currently available in our database. Please select a similar ingredient from the available options.',
+                            ? 'Search is temporarily unavailable.'
+                            : _isEmptyDueToAllergyFilter
+                                ? "Results matching your allergies or foods you avoid aren't shown."
+                                : 'No match for "$trimmedQuery"',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[600], fontSize: 15),
+                style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold),
               ),
+              // Add-as-typed is the primary action here — it always works
+              // and preserves exactly what the user entered, regardless of
+              // whether a suggestion below happens to exist. Never offered
+              // when the typed text itself conflicts with an
+              // allergy/exclusion — checked directly (not via
+              // _isEmptyDueToAllergyFilter, which only reflects a search
+              // that actually ran a network call) so a short query never
+              // slips past.
+              if (!waitingForGlobal &&
+                  trimmedQuery.isNotEmpty &&
+                  !_isAllergyItemName(trimmedQuery))
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openCustomItemSearch(trimmedQuery),
+                    icon: Icon(Icons.add, color: primaryColor),
+                    label: Text(
+                      'Add "$trimmedQuery"',
+                      style: TextStyle(color: primaryColor),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: primaryColor),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              // One secondary, lighter-weight suggestion below Add — never
+              // both at once. relatedSuggestion ("Did you mean?") takes
+              // priority since it's a suggestion to add something else
+              // entirely; typoCorrection ("Search instead for?") only
+              // shows when there's no related item, since it's just a fix
+              // to the search text itself. If both happen to resolve to
+              // the same curated ingredient (e.g. "tomatoe" -> "Tomatoes"
+              // via both), show only the typo correction — it's the more
+              // direct explanation, and showing both would just repeat
+              // the same name twice.
+              if (relatedSuggestion != null &&
+                  !IngredientFuzzyMatcher.sameIngredient(
+                      relatedSuggestion, typoCorrection))
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: GestureDetector(
+                    onTap: () => _openSuggestedIngredient(relatedSuggestion),
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold),
+                        children: [
+                          const TextSpan(text: 'Did you mean '),
+                          TextSpan(
+                            text: relatedSuggestion.ingredient.name,
+                            style: const TextStyle(
+                              color: Color(0xFFFF6A00),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const TextSpan(text: '?'),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else if (typoCorrection != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: GestureDetector(
+                    onTap: () => _applyTypoCorrection(typoCorrection),
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold),
+                        children: [
+                          const TextSpan(text: 'Search instead for '),
+                          TextSpan(
+                            text: typoCorrection.ingredient.name,
+                            style: const TextStyle(
+                              color: Color(0xFFFF6A00),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const TextSpan(text: '?'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

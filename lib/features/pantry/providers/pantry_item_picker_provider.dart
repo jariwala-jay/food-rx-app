@@ -33,8 +33,19 @@ class PantryItemPickerProvider extends ChangeNotifier {
   /// Lets the UI show "try again in a moment" instead of "not found".
   bool isRateLimitedSearch = false;
 
+  /// True when the last global search came back empty only because every
+  /// match conflicted with the user's allergies/excluded ingredients — as
+  /// opposed to a genuine "no such ingredient" result.
+  bool isEmptyDueToAllergyFilter = false;
+
   // Track which items have been selected and their quantities
   final Map<String, PantryItem> _selectedItems = {};
+
+  // Bumped on every searchSpoonacular() call so an in-flight request whose
+  // response arrives after a newer one (e.g. "coco" resolves after
+  // "coconut" already finished) can detect it's stale and discard itself
+  // instead of clobbering the newer results.
+  int _searchGeneration = 0;
 
   bool get hasInitialized => _currentCategoryKey.isNotEmpty;
   bool get hasSelectedItems => _selectedItems.isNotEmpty;
@@ -49,14 +60,17 @@ class PantryItemPickerProvider extends ChangeNotifier {
   }
 
   bool _isAllergyItemName(String itemName) {
-    final allergies = _authProvider.currentUser?.allergies ?? [];
-    final excluded = _authProvider.currentUser?.excludedIngredients ?? const [];
-    return AllergyFilteringService.conflictsWithRestrictions(
+    return AllergyFilteringService.itemNameConflictsWithUser(
       itemName,
-      allergies: allergies,
-      excludedIngredients: excluded,
+      _authProvider.currentUser,
     );
   }
+
+  /// Direct allergy/exclusion check for a typed name, independent of any
+  /// search having actually run — used to gate the "add exactly what I
+  /// typed" UI so it's never offered for a name that would just be
+  /// silently rejected by [addItemToSelection] below.
+  bool isAllergyConflict(String itemName) => _isAllergyItemName(itemName);
 
   Future<void> loadItems(String categoryKey) async {
     isLoading = true;
@@ -179,7 +193,11 @@ class PantryItemPickerProvider extends ChangeNotifier {
     // Increased minimum to 3 characters to reduce API calls
     if (query.length < 3) return;
 
+    final int requestId = ++_searchGeneration;
+    bool isSuperseded() => requestId != _searchGeneration;
+
     isRateLimitedSearch = false;
+    isEmptyDueToAllergyFilter = false;
 
     // Prefer curated / already-loaded items in this category first.
     // e.g. "Frozen Peas" from Vegetables → Frozen should stay in-category,
@@ -219,6 +237,18 @@ class PantryItemPickerProvider extends ChangeNotifier {
         number: 20,
         intolerances: _mapUserAllergiesToIntolerances(),
       );
+      // A newer keystroke kicked off its own search while this request was
+      // still in flight (e.g. "coco" resolving after "coconut" already
+      // has) — its results already own `searchResults`, so bail out here
+      // instead of clobbering them with this stale response.
+      if (isSuperseded()) return;
+
+      // The `intolerances` param only covers Spoonacular's fixed categories;
+      // custom "other" allergies (e.g. "peach") need this local re-check too.
+      var hadAllergyFilteredResults = false;
+      var beforeFilterCount = results.length;
+      results = results.where((r) => !_isAllergyItemName(r.name)).toList();
+      if (results.length != beforeFilterCount) hadAllergyFilteredResults = true;
 
       final rateLimitedAfterSearch =
           repository is SpoonacularIngredientRepository &&
@@ -228,6 +258,11 @@ class PantryItemPickerProvider extends ChangeNotifier {
         developer.log('No search results for "$query", trying autocomplete...');
         results =
             await _ingredientRepository.autocompleteIngredient(query: query);
+        if (isSuperseded()) return;
+        // Autocomplete has no `intolerances` param at all — filter fully here.
+        beforeFilterCount = results.length;
+        results = results.where((r) => !_isAllergyItemName(r.name)).toList();
+        if (results.length != beforeFilterCount) hadAllergyFilteredResults = true;
       }
 
       final rateLimitedAfterAutocomplete =
@@ -239,10 +274,13 @@ class PantryItemPickerProvider extends ChangeNotifier {
         // genuine "no matches" so it doesn't claim the ingredient isn't found.
         isRateLimitedSearch =
             rateLimitedAfterSearch || rateLimitedAfterAutocomplete;
+        isEmptyDueToAllergyFilter =
+            !isRateLimitedSearch && hadAllergyFilteredResults;
         searchItems(query);
         isShowingGlobalIngredientSearch = false;
       } else {
         isRateLimitedSearch = false;
+        isEmptyDueToAllergyFilter = false;
         searchResults = results;
         isShowingGlobalIngredientSearch = true;
       }
@@ -252,12 +290,15 @@ class PantryItemPickerProvider extends ChangeNotifier {
           '(isShowingGlobalIngredientSearch=$isShowingGlobalIngredientSearch, '
           'isRateLimitedSearch=$isRateLimitedSearch)');
     } catch (e) {
+      if (isSuperseded()) return;
       developer.log('Spoonacular search error: $e');
       error = userFacingErrorMessage(e);
       isShowingGlobalIngredientSearch = false;
     } finally {
-      isLoading = false;
-      notifyListeners();
+      if (!isSuperseded()) {
+        isLoading = false;
+        notifyListeners();
+      }
     }
   }
 

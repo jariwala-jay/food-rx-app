@@ -5,7 +5,10 @@ import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../controller/pantry_controller.dart';
 import 'package:flutter_app/core/models/pantry_item.dart';
+import 'package:flutter_app/core/models/user_model.dart';
+import 'package:flutter_app/core/services/allergy_filtering_service.dart';
 import 'package:flutter_app/core/widgets/cached_network_image.dart';
+import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import '../widgets/category_filter_chips.dart';
 import 'package:flutter_app/features/navigation/widgets/add_action_sheet.dart';
 import 'package:flutter_app/features/home/providers/forced_tour_provider.dart';
@@ -275,6 +278,15 @@ class _PantryItemRowContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textScaler = _pantryTileTextScaler(context);
+    // select (not watch) so this row only rebuilds when currentUser itself
+    // changes, not on every unrelated AuthController notification.
+    final currentUser =
+        context.select<AuthController, UserModel?>((auth) => auth.currentUser);
+    final hasAllergyConflict =
+        AllergyFilteringService.itemNameConflictsWithUser(
+      item.name,
+      currentUser,
+    );
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -283,10 +295,7 @@ class _PantryItemRowContent extends StatelessWidget {
           imageUrl: item.imageUrl,
           width: 64,
           height: 64,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(12),
-            bottomLeft: Radius.circular(12),
-          ),
+          borderRadius: BorderRadius.circular(8),
         ),
         Expanded(
           child: Padding(
@@ -295,17 +304,54 @@ class _PantryItemRowContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2C2C2C),
-                  ),
-                  textScaler: textScaler,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasAllergyConflict) ...[
+                      const Tooltip(
+                        message:
+                            'Conflicts with an allergy or food you avoid',
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: Color(0xFFD32F2F),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2C2C2C),
+                        ),
+                        textScaler: textScaler,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
+                if (hasAllergyConflict) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Conflicts with allergy',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFD32F2F),
+                    ),
+                    textScaler: textScaler,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 if (expiryText.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -1399,10 +1445,7 @@ class _SwipeDemoItemState extends State<_SwipeDemoItem>
                           imageUrl: widget.item.imageUrl,
                           width: 64,
                           height: 64,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            bottomLeft: Radius.circular(12),
-                          ),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         Expanded(
                           child: Padding(
