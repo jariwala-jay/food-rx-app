@@ -374,13 +374,15 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.chat_bubble_outline),
-                    iconSize: 24,
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/chatbot');
-                    },
-                  ),
+                  // Chatbot icon hidden until GEMINI_API_KEY is configured — see
+                  // backend/app/services/rag_service.py.
+                  // IconButton(
+                  //   icon: const Icon(Icons.chat_bubble_outline),
+                  //   iconSize: 24,
+                  //   onPressed: () {
+                  //     Navigator.pushNamed(context, '/chatbot');
+                  //   },
+                  // ),
                   IconButton(
                     icon: const Icon(Icons.star_border_rounded),
                     iconSize: 28,

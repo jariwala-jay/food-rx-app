@@ -143,11 +143,13 @@ class _EducationPageState extends State<EducationPage> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        onPressed: () =>
-                            Navigator.pushNamed(context, '/chatbot'),
-                      ),
+                      // Chatbot icon hidden until GEMINI_API_KEY is configured — see
+                      // backend/app/services/rag_service.py.
+                      // IconButton(
+                      //   icon: const Icon(Icons.chat_bubble_outline),
+                      //   onPressed: () =>
+                      //       Navigator.pushNamed(context, '/chatbot'),
+                      // ),
                       IconButton(
                         icon: const Icon(Icons.tune),
                         onPressed: () async {

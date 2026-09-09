@@ -808,13 +808,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               ),
                               Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.chat_bubble_outline),
-                                    onPressed: () {
-                                      if (tourProvider.isTourActive) return;
-                                      Navigator.pushNamed(context, '/chatbot');
-                                    },
-                                  ),
+                                  // Chatbot icon hidden until GEMINI_API_KEY is configured — see
+                                  // backend/app/services/rag_service.py.
+                                  // IconButton(
+                                  //   icon: const Icon(Icons.chat_bubble_outline),
+                                  //   onPressed: () {
+                                  //     if (tourProvider.isTourActive) return;
+                                  //     Navigator.pushNamed(context, '/chatbot');
+                                  //   },
+                                  // ),
                                   Consumer<NotificationManager>(
                                     builder:
                                         (context, notificationManager, child) {
