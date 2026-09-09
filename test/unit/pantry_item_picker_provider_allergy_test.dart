@@ -114,5 +114,36 @@ void main() {
       expect(provider.isEmptyDueToAllergyFilter, false);
       expect(provider.isShowingGlobalIngredientSearch, false);
     });
+
+    // Regression: the fix above initially reset the flags unconditionally,
+    // which broke searchSpoonacular()'s own rate-limited/allergy-filtered
+    // paths — those deliberately set isRateLimitedSearch/
+    // isEmptyDueToAllergyFilter to reflect a real outcome, then call
+    // searchItems() internally to populate local results, which would
+    // otherwise immediately wipe the flag it just set. searchItems() must
+    // support preserving those flags for exactly that internal use.
+    test(
+        'searchItems with resetGlobalSearchFlags: false preserves an '
+        'already-set rate-limit/allergy-filter flag', () {
+      final provider =
+          PantryItemPickerProvider(repo, auth, isFoodPantryItem: true);
+
+      provider.isRateLimitedSearch = true;
+      provider.searchItems('milk', resetGlobalSearchFlags: false);
+      expect(provider.isRateLimitedSearch, true,
+          reason: 'a flag just set to reflect a real outcome must not be '
+              'wiped by the same internal searchItems() call');
+
+      provider.isRateLimitedSearch = false;
+      provider.isEmptyDueToAllergyFilter = true;
+      provider.searchItems('milk', resetGlobalSearchFlags: false);
+      expect(provider.isEmptyDueToAllergyFilter, true);
+
+      // isShowingGlobalIngredientSearch is unrelated to this parameter and
+      // must still always be cleared by searchItems().
+      provider.isShowingGlobalIngredientSearch = true;
+      provider.searchItems('milk', resetGlobalSearchFlags: false);
+      expect(provider.isShowingGlobalIngredientSearch, false);
+    });
   });
 }
