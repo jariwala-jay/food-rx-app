@@ -172,14 +172,17 @@ class PantryItemPickerProvider extends ChangeNotifier {
     }
   }
 
-  /// [resetGlobalSearchFlags] clears the rate-limit/allergy-filter flags
-  /// along with [isShowingGlobalIngredientSearch] — the right default for
-  /// every top-level caller (each keystroke, regardless of query length),
-  /// since it's the one place guaranteed to run even when searchSpoonacular
-  /// early-returns for a short query and never reaches its own resets.
+  /// [searchItems] always clears [isShowingGlobalIngredientSearch].
+  ///
+  /// When [resetGlobalSearchFlags] is true (the default for every
+  /// top-level caller — each keystroke, regardless of query length, since
+  /// this is the one place guaranteed to run even when searchSpoonacular
+  /// early-returns for a short query and never reaches its own resets),
+  /// this also clears [isRateLimitedSearch] and [isEmptyDueToAllergyFilter].
+  ///
   /// searchSpoonacular itself calls this internally *after* deliberately
   /// setting those two flags to reflect a real rate-limit/allergy-filter
-  /// outcome (to populate `searchResults` with local matches) — those call
+  /// outcome (to populate [searchResults] with local matches) — those call
   /// sites pass `false` so this reset doesn't immediately wipe out the
   /// result it just computed.
   void searchItems(String query, {bool resetGlobalSearchFlags = true}) {
