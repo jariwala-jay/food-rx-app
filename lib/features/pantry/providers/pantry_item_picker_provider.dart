@@ -173,7 +173,14 @@ class PantryItemPickerProvider extends ChangeNotifier {
   }
 
   void searchItems(String query) {
+    // Always run on every keystroke (unlike searchSpoonacular, which
+    // early-returns for queries under 3 chars) — the one guaranteed place
+    // to clear global-search-only state so a stale rate-limit/allergy-
+    // filter message doesn't survive the user deleting back down to a
+    // short query.
     isShowingGlobalIngredientSearch = false;
+    isRateLimitedSearch = false;
+    isEmptyDueToAllergyFilter = false;
     if (query.isEmpty) {
       // Show all items (common + API results)
       searchResults = List<Ingredient>.from(items);

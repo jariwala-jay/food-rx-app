@@ -75,7 +75,7 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     final cached = _searchCache[cacheKey];
     if (cached != null) {
       developer.log('Search cache hit for "$query" (aisle: $aisle)');
-      return cached;
+      return List<Ingredient>.from(cached);
     }
 
     final Map<String, String> queryParams = {
@@ -150,7 +150,7 @@ class SpoonacularIngredientRepository implements IngredientRepository {
     final cached = _autocompleteCache[cacheKey];
     if (cached != null) {
       developer.log('Autocomplete cache hit for "$query"');
-      return cached;
+      return List<Ingredient>.from(cached);
     }
 
     final Map<String, String> queryParams = {

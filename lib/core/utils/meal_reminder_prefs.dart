@@ -10,13 +10,17 @@ import 'package:flutter/material.dart';
 /// `{enabled: bool, breakfast: {enabled, hour, minute}, lunch: {...}, dinner: {...}}`
 ///
 /// `enabled` is the master "Meal reminders" switch: when false, no meal
-/// fires regardless of its own per-meal `enabled` value, and the per-meal
-/// values are preserved untouched so turning the master back on restores
-/// exactly what was set before. Old saved docs that predate per-meal
-/// `enabled` keys (`{enabled: bool, breakfast: {hour, minute}, ...}`) are
-/// still read correctly: a meal with no `enabled` key of its own inherits
-/// the top-level flag, which — since no per-meal state ever existed for
-/// those docs — plays the role of both "master" and "this meal" at once.
+/// fires regardless of its own per-meal `enabled` value. The Notification
+/// Preferences page resets every per-meal `enabled`/time back to its
+/// default the moment the master is turned off (a deliberate "clean slate"
+/// so turning it back on never silently resumes stale settings) — this
+/// module's helpers only read whatever is currently stored, they don't
+/// assume anything about what a caller does or doesn't preserve. Old saved
+/// docs that predate per-meal `enabled` keys (`{enabled: bool, breakfast:
+/// {hour, minute}, ...}`) are still read correctly: a meal with no
+/// `enabled` key of its own inherits the top-level flag, which — since no
+/// per-meal state ever existed for those docs — plays the role of both
+/// "master" and "this meal" at once.
 const List<String> mealReminderOrder = ['breakfast', 'lunch', 'dinner'];
 
 /// Whether the master "Meal reminders" switch is on. When this is false,

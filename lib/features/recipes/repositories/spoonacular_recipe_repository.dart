@@ -66,6 +66,17 @@ class SpoonacularRecipeRepository {
   final Map<String, ({DateTime cachedAt, List<Recipe> recipes, int? totalResults})>
       _cache = {};
 
+  /// Sweeps out entries past [_cacheTtl] so the in-memory cache doesn't grow
+  /// unbounded over a long session — a read only ever skips a stale entry,
+  /// it never removes it, so this is the one place that actually reclaims
+  /// the memory. Called on every cache write (i.e. every real network
+  /// fetch), which is frequent enough in practice to keep the map bounded
+  /// to roughly one TTL window's worth of distinct queries.
+  void _evictExpiredCacheEntries() {
+    final now = DateTime.now();
+    _cache.removeWhere((_, entry) => now.difference(entry.cachedAt) >= _cacheTtl);
+  }
+
   /// True while a prior 429 cooldown is still in effect.
   bool get isRateLimited {
     if (_isRateLimited && _rateLimitUntil != null) {
@@ -219,6 +230,7 @@ class SpoonacularRecipeRepository {
 
         final parsed =
             results.map((item) => Recipe.fromSearchResult(item)).toList();
+        _evictExpiredCacheEntries();
         _cache[cacheKey] = (
           cachedAt: DateTime.now(),
           recipes: parsed,
