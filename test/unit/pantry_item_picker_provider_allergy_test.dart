@@ -88,5 +88,31 @@ void main() {
       provider.addItemToSelection(item);
       expect(provider.error != null, true);
     });
+
+    // Regression: searchSpoonacular() early-returns for queries under 3
+    // characters before it ever reaches the lines that reset
+    // isRateLimitedSearch/isEmptyDueToAllergyFilter. Since the picker page's
+    // empty-results message reads those two flags directly (not gated on
+    // isShowingGlobalIngredientSearch), a stale "rate limited" or
+    // "allergy filtered" banner from an earlier, longer query used to
+    // survive the user deleting back down to a short one. searchItems() is
+    // called on every keystroke regardless of length, so it's the one
+    // reliable place to clear this global-search-only state.
+    test(
+        'searchItems on a short query clears stale rate-limit/allergy-filter '
+        'flags left over from a previous global search', () {
+      final provider =
+          PantryItemPickerProvider(repo, auth, isFoodPantryItem: true);
+
+      provider.isRateLimitedSearch = true;
+      provider.isEmptyDueToAllergyFilter = true;
+      provider.isShowingGlobalIngredientSearch = true;
+
+      provider.searchItems('ab');
+
+      expect(provider.isRateLimitedSearch, false);
+      expect(provider.isEmptyDueToAllergyFilter, false);
+      expect(provider.isShowingGlobalIngredientSearch, false);
+    });
   });
 }
