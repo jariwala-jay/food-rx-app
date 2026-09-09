@@ -172,15 +172,25 @@ class PantryItemPickerProvider extends ChangeNotifier {
     }
   }
 
-  void searchItems(String query) {
-    // Always run on every keystroke (unlike searchSpoonacular, which
-    // early-returns for queries under 3 chars) — the one guaranteed place
-    // to clear global-search-only state so a stale rate-limit/allergy-
-    // filter message doesn't survive the user deleting back down to a
-    // short query.
+  /// [searchItems] always clears [isShowingGlobalIngredientSearch].
+  ///
+  /// When [resetGlobalSearchFlags] is true (the default for every
+  /// top-level caller — each keystroke, regardless of query length, since
+  /// this is the one place guaranteed to run even when searchSpoonacular
+  /// early-returns for a short query and never reaches its own resets),
+  /// this also clears [isRateLimitedSearch] and [isEmptyDueToAllergyFilter].
+  ///
+  /// searchSpoonacular itself calls this internally *after* deliberately
+  /// setting those two flags to reflect a real rate-limit/allergy-filter
+  /// outcome (to populate [searchResults] with local matches) — those call
+  /// sites pass `false` so this reset doesn't immediately wipe out the
+  /// result it just computed.
+  void searchItems(String query, {bool resetGlobalSearchFlags = true}) {
     isShowingGlobalIngredientSearch = false;
-    isRateLimitedSearch = false;
-    isEmptyDueToAllergyFilter = false;
+    if (resetGlobalSearchFlags) {
+      isRateLimitedSearch = false;
+      isEmptyDueToAllergyFilter = false;
+    }
     if (query.isEmpty) {
       // Show all items (common + API results)
       searchResults = List<Ingredient>.from(items);
@@ -231,7 +241,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
           repository.isRateLimited) {
         developer.log('Repository is rate limited, skipping API calls');
         isRateLimitedSearch = true;
-        searchItems(query);
+        searchItems(query, resetGlobalSearchFlags: false);
         isShowingGlobalIngredientSearch = false;
         return;
       }
@@ -283,7 +293,7 @@ class PantryItemPickerProvider extends ChangeNotifier {
             rateLimitedAfterSearch || rateLimitedAfterAutocomplete;
         isEmptyDueToAllergyFilter =
             !isRateLimitedSearch && hadAllergyFilteredResults;
-        searchItems(query);
+        searchItems(query, resetGlobalSearchFlags: false);
         isShowingGlobalIngredientSearch = false;
       } else {
         isRateLimitedSearch = false;
