@@ -26,6 +26,17 @@ export FLUTTER_ROOT="$HOME/flutter"
 export PATH="$PATH:$FLUTTER_ROOT/bin"
 
 flutter --version
+
+# Xcode Cloud disables automatic Swift Package Manager dependency resolution
+# for reproducible builds, which requires a committed Package.resolved file.
+# Flutter's SPM integration (auto-triggered here because a Firebase plugin
+# references firebase-ios-sdk via SPM) is still experimental and this repo
+# has no such file, so `flutter build ios --config-only` below would fail
+# with "a resolved file is required when automatic dependency resolution is
+# disabled". This project already builds via CocoaPods (see Podfile /
+# Podfile.lock) — keep using that instead of Flutter's SPM path.
+flutter config --no-enable-swift-package-manager
+
 flutter precache --ios
 flutter pub get
 
