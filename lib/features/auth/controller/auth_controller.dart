@@ -1090,6 +1090,11 @@ class AuthController with ChangeNotifier {
       await _notificationManager!.initialize(userId);
       final notificationService = NotificationService();
       await notificationService.syncFCMTokenToDatabase();
+      // Independent of FCM token sync -- syncFCMTokenToDatabase() can return
+      // early (no token available, permission denied, Firebase not ready)
+      // without ever reaching its own timezone sync, so this must run as a
+      // sibling call rather than depend on that method's success path.
+      await notificationService.syncTimezoneOffsetToDatabase();
       await notificationService.applyMealLoggingReminderPreferences(
         _currentUser?.mealLoggingReminderPrefs,
         accountCreatedAt: _currentUser?.createdAt,
