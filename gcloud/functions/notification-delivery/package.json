@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "functions-framework --target=notificationDelivery",
-    "test": "node scripts/test_notification_preferences.js && node scripts/test_meal_collision_prefs.js && node scripts/test_tier_budget_suppression.js && node scripts/test_timezone_effective_offset.js"
+    "test": "node scripts/test_notification_preferences.js && node scripts/test_meal_collision_prefs.js && node scripts/test_tier_budget_suppression.js && node scripts/test_timezone_effective_offset.js && node scripts/test_dst_local_midnight.js"
   },
   "keywords": ["notifications", "fcm", "food-rx", "health"],
   "author": "",

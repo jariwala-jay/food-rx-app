@@ -224,13 +224,42 @@ function effectiveOffsetMinutes(nowUtc, user) {
   return Number.isFinite(stored) ? stored : 0;
 }
 
-// Mirrors `notification_eligibility.local_day_start_utc` (Python) and the
+// Resolves the UTC-offset-minutes that actually applies at `instant` --
+// prefers the IANA `timezoneId` (correct across DST) and falls back to
+// the legacy stored scalar `timezoneOffsetMinutes` when the id is
+// missing/unresolvable. Mirrors notification-scheduler/index.js's helper
+// of the same name.
+function resolveOffsetMinutesAt(instant, timezoneOffsetMinutes, timezoneId) {
+  if (typeof timezoneId === "string" && timezoneId.length > 0) {
+    const resolved = getOffsetMinutesForZone(instant, timezoneId);
+    if (resolved !== null) return resolved;
+  }
+  return Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
+}
+
+// Start of the user's local calendar day, expressed back in UTC.
+// `timezoneOffsetMinutes` follows the Dart `DateTime.timeZoneOffset` /
+// JS `-Date.getTimezoneOffset()` convention: minutes to ADD to UTC to get
+// local time -- used as the legacy fallback when `timezoneId` is absent
+// or unresolvable. When `timezoneId` IS available, resolves the DST-
+// correct offset at `nowUtc` for the calendar date and, separately, at
+// the candidate local midnight itself for the conversion back to UTC --
+// those can differ by up to an hour on a DST transition day, and blindly
+// reusing the offset-at-`nowUtc` for both (the previous implementation)
+// shifted the returned instant by that same hour. Mirrors
+// `notification_eligibility.local_day_start_utc` (Python) and the
 // equivalent helper in notification-scheduler/index.js.
-function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
-  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
-  const localNow = new Date(nowUtc.getTime() + offsetMs);
-  const localMidnightUtc = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate());
-  return new Date(localMidnightUtc - offsetMs);
+function localDayStartUtc(nowUtc, timezoneOffsetMinutes, timezoneId) {
+  const offsetAtNow = resolveOffsetMinutesAt(nowUtc, timezoneOffsetMinutes, timezoneId);
+  const localNow = new Date(nowUtc.getTime() + offsetAtNow * 60000);
+  const year = localNow.getUTCFullYear();
+  const month = localNow.getUTCMonth();
+  const day = localNow.getUTCDate();
+
+  const guessMs = offsetAtNow * 60 * 1000;
+  const candidateInstant = new Date(Date.UTC(year, month, day) - guessMs);
+  const offsetAtMidnight = resolveOffsetMinutesAt(candidateInstant, offsetAtNow, timezoneId);
+  return new Date(Date.UTC(year, month, day) - offsetAtMidnight * 60 * 1000);
 }
 
 function localHourOf(nowUtc, timezoneOffsetMinutes) {
@@ -482,7 +511,7 @@ async function sendScheduledNotifications() {
           // (written by the Python backend), hence the $convert.
           const tier = getTier(notification.type);
           if (tier !== null) {
-            const todayLocal = localDayStartUtc(now, offsetMinutes);
+            const todayLocal = localDayStartUtc(now, offsetMinutes, user.timezoneId);
             const alreadySentThisTier = await notificationsCollection
               .aggregate([
                 {
@@ -650,6 +679,7 @@ exports.__testables = {
   tierTypes,
   sortByPriority,
   localDayStartUtc,
+  resolveOffsetMinutesAt,
   localHourOf,
   localMinutesOfDay,
   getEnabledMealMinutes,

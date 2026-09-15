@@ -146,30 +146,89 @@ function mealReminderFallbackType(meal) {
   return `${meal}_reminder_fallback`;
 }
 
+// Resolves the UTC-offset-minutes that actually applies at `instant` --
+// prefers the IANA `timezoneId` (correct across DST) and falls back to
+// the legacy stored scalar `timezoneOffsetMinutes` when the id is
+// missing/unresolvable. Internal counterpart of effectiveOffsetMinutes()
+// below, parameterized directly so the local-day helpers here don't need
+// a `user` doc.
+function resolveOffsetMinutesAt(instant, timezoneOffsetMinutes, timezoneId) {
+  if (typeof timezoneId === "string" && timezoneId.length > 0) {
+    const resolved = getOffsetMinutesForZone(instant, timezoneId);
+    if (resolved !== null) return resolved;
+  }
+  return Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0;
+}
+
+// The local calendar date `instant` falls on. Safe to resolve directly --
+// unlike a candidate midnight (below), `instant` is a fixed point in time
+// with exactly one correct offset, so there's no DST ambiguity here.
+function localCalendarDateParts(instant, timezoneOffsetMinutes, timezoneId) {
+  const offsetMinutes = resolveOffsetMinutesAt(instant, timezoneOffsetMinutes, timezoneId);
+  const local = new Date(instant.getTime() + offsetMinutes * 60000);
+  return {
+    year: local.getUTCFullYear(),
+    month: local.getUTCMonth(),
+    day: local.getUTCDate(),
+    offsetMinutes,
+  };
+}
+
+// Converts a local calendar date (at local midnight) back to the UTC
+// instant it actually falls on. Resolves the timezone offset specifically
+// AT that candidate midnight rather than reusing `guessOffsetMinutes` --
+// on a DST transition day those can differ by up to an hour, and blindly
+// reusing the wrong one shifts the returned instant by that same hour.
+// `guessOffsetMinutes` only seeds the candidate instant used to resolve
+// the real offset; it doesn't need to already be correct.
+function localMidnightUtc(year, month, day, guessOffsetMinutes, timezoneId) {
+  const guessMs = (Number.isFinite(guessOffsetMinutes) ? guessOffsetMinutes : 0) * 60 * 1000;
+  const candidateInstant = new Date(Date.UTC(year, month, day) - guessMs);
+  const offsetMinutes = resolveOffsetMinutesAt(candidateInstant, guessOffsetMinutes, timezoneId);
+  const offsetMs = offsetMinutes * 60 * 1000;
+  return new Date(Date.UTC(year, month, day) - offsetMs);
+}
+
 // Number of local calendar-day boundaries crossed between `earlier` and
-// `later` -- not elapsed 24-hour periods. Don't simplify to
-// Math.floor((later - earlier) / DAY_MS); that reintroduces UTC-day bugs.
-function dayDiffFloor(later, earlier, timezoneOffsetMinutes) {
+// `later` -- not elapsed 24-hour periods. Deliberately does NOT compute
+// this as (laterMidnightUtc - earlierMidnightUtc) / 24h: a DST transition
+// shortens or lengthens the real UTC time between two local midnights by
+// an hour without changing how many calendar-day boundaries were crossed,
+// so that division would silently misclassify (e.g.) a 2-local-day gap
+// that happens to span a spring-forward as only 1 day. Diffing the
+// calendar dates themselves -- each resolved independently, at its own
+// instant -- sidesteps that entirely.
+function dayDiffFloor(later, earlier, timezoneOffsetMinutes, timezoneId) {
   const msPerDay = 24 * 60 * 60 * 1000;
-  const laterStart = localDayStartUtc(later, timezoneOffsetMinutes);
-  const earlierStart = localDayStartUtc(earlier, timezoneOffsetMinutes);
-  return Math.floor((laterStart.getTime() - earlierStart.getTime()) / msPerDay);
+  const laterYmd = localCalendarDateParts(later, timezoneOffsetMinutes, timezoneId);
+  const earlierYmd = localCalendarDateParts(earlier, timezoneOffsetMinutes, timezoneId);
+  const laterUtc = Date.UTC(laterYmd.year, laterYmd.month, laterYmd.day);
+  const earlierUtc = Date.UTC(earlierYmd.year, earlierYmd.month, earlierYmd.day);
+  return Math.floor((laterUtc - earlierUtc) / msPerDay);
 }
 
 // Adds `months` to `date`'s local calendar day, clamping day-of-month
 // overflow to the last day of the target month (Jan 31 + 1 month -> Feb
 // 28/29, not Mar 3). Returns that day's local midnight, in UTC, so it can
-// be compared against another localDayStartUtc() value.
-function addMonthsLocalDayStartUtc(date, months, timezoneOffsetMinutes) {
-  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
-  const local = new Date(date.getTime() + offsetMs);
+// be compared against another localDayStartUtc() value. `date`'s own
+// local calendar date is resolved at `date`'s own instant (not "now"),
+// and the target month's midnight resolves its own offset independently
+// too -- see localMidnightUtc() above.
+function addMonthsLocalDayStartUtc(date, months, timezoneOffsetMinutes, timezoneId) {
+  const { year, month, day, offsetMinutes } = localCalendarDateParts(date, timezoneOffsetMinutes, timezoneId);
+  const local = new Date(Date.UTC(year, month, day));
   const originalDay = local.getUTCDate();
   local.setUTCMonth(local.getUTCMonth() + months);
   if (local.getUTCDate() < originalDay) {
     local.setUTCDate(0);
   }
-  const localMidnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
-  return new Date(localMidnightUtc - offsetMs);
+  return localMidnightUtc(
+    local.getUTCFullYear(),
+    local.getUTCMonth(),
+    local.getUTCDate(),
+    offsetMinutes,
+    timezoneId
+  );
 }
 
 function getInactivityBucket(
@@ -178,11 +237,12 @@ function getInactivityBucket(
   dayMilestones,
   weekMilestones,
   monthMilestones,
-  timezoneOffsetMinutes
+  timezoneOffsetMinutes,
+  timezoneId
 ) {
   if (!referenceDate) return null;
 
-  const days = dayDiffFloor(now, referenceDate, timezoneOffsetMinutes);
+  const days = dayDiffFloor(now, referenceDate, timezoneOffsetMinutes, timezoneId);
   if (days <= 0) return null;
 
   for (const d of dayMilestones) {
@@ -197,9 +257,9 @@ function getInactivityBucket(
     }
   }
 
-  const todayLocalStart = localDayStartUtc(now, timezoneOffsetMinutes);
+  const todayLocalStart = localDayStartUtc(now, timezoneOffsetMinutes, timezoneId);
   for (const m of monthMilestones) {
-    const targetLocalStart = addMonthsLocalDayStartUtc(referenceDate, m, timezoneOffsetMinutes);
+    const targetLocalStart = addMonthsLocalDayStartUtc(referenceDate, m, timezoneOffsetMinutes, timezoneId);
     if (targetLocalStart.getTime() === todayLocalStart.getTime()) {
       return { key: `m${m}`, days };
     }
@@ -245,7 +305,7 @@ function formatTrackerInactivityBody(bucketKey) {
 //      enabled, since the user already gets their own nudge.
 // Does not perform the once-per-bucket or once-per-local-day dedupe --
 // callers must do that before inserting. Returns null if nothing to send.
-function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOffsetMinutes) {
+function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOffsetMinutes, timezoneId) {
   if (latestDate) {
     const bucket = getInactivityBucket(
       now,
@@ -253,7 +313,8 @@ function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOf
       MEAL_LOGGING_DAY_MILESTONES,
       MEAL_LOGGING_WEEK_MILESTONES,
       MEAL_LOGGING_MONTH_MILESTONES,
-      timezoneOffsetMinutes
+      timezoneOffsetMinutes,
+      timezoneId
     );
     // Day 1 is covered by the user's own meal reminders; days 2-6, weekly
     // and monthly milestones still fire regardless -- ignoring reminders
@@ -273,7 +334,7 @@ function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOf
   // <= 0 means the latest activity's local day is today -- already
   // logged, so no daily reminder needed.
   const loggedToday =
-    latestDate != null && dayDiffFloor(now, latestDate, timezoneOffsetMinutes) <= 0;
+    latestDate != null && dayDiffFloor(now, latestDate, timezoneOffsetMinutes, timezoneId) <= 0;
   if (loggedToday) return null;
 
   // A user with Meal Reminders enabled already gets their own nudge for
@@ -482,8 +543,16 @@ function localMinutesOfDay(nowUtc, timezoneOffsetMinutes) {
 //                           tracker_progress.progressDate and
 //                           user_trackers.lastUpdated (same signal
 //                           checkMealLoggingInactivityReminders uses)
-//   timezoneOffsetMinutes - user.timezoneOffsetMinutes
-function decideMealReminderFallback(meal, mealPrefs, now, latestActivityDate, timezoneOffsetMinutes) {
+//   timezoneOffsetMinutes - user.timezoneOffsetMinutes (legacy fallback)
+//   timezoneId            - user.timezoneId (DST-correct when resolvable)
+function decideMealReminderFallback(
+  meal,
+  mealPrefs,
+  now,
+  latestActivityDate,
+  timezoneOffsetMinutes,
+  timezoneId
+) {
   // Personalized reminder takes precedence -- no fallback needed at all,
   // regardless of what the other meal's toggle is set to.
   if (isPersonalizedMealReminderEnabled(mealPrefs, meal)) return null;
@@ -498,7 +567,7 @@ function decideMealReminderFallback(meal, mealPrefs, now, latestActivityDate, ti
   // meal's window (see MEAL_LOG_WINDOW_MINUTES's doc comment for the
   // approximation this represents).
   if (latestActivityDate) {
-    const sameLocalDay = dayDiffFloor(now, latestActivityDate, timezoneOffsetMinutes) <= 0;
+    const sameLocalDay = dayDiffFloor(now, latestActivityDate, timezoneOffsetMinutes, timezoneId) <= 0;
     if (sameLocalDay) {
       const activityMinutes = localMinutesOfDay(latestActivityDate, timezoneOffsetMinutes);
       const [windowStart, windowEnd] = MEAL_LOG_WINDOW_MINUTES[meal];
@@ -524,13 +593,17 @@ function isWithinNewAccountGracePeriod(now, user) {
 // Start of the user's local calendar day, expressed back in UTC.
 // `timezoneOffsetMinutes` follows the Dart `DateTime.timeZoneOffset` /
 // JS `-Date.getTimezoneOffset()` convention: minutes to ADD to UTC to get
-// local time. Mirrors `notification_eligibility.local_day_start_utc` on
-// the Python side (same semantics, same default of 0/UTC when unset).
-function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
-  const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
-  const localNow = new Date(nowUtc.getTime() + offsetMs);
-  const localMidnightUtc = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate());
-  return new Date(localMidnightUtc - offsetMs);
+// local time -- used as the legacy fallback when `timezoneId` is absent
+// or unresolvable. When `timezoneId` IS available, resolves the DST-
+// correct offset at `nowUtc` for the calendar date and, separately, at
+// the candidate local midnight itself for the conversion back to UTC --
+// see localMidnightUtc() above for why those can differ. Mirrors
+// `notification_eligibility.local_day_start_utc` on the Python side (same
+// semantics, same default of 0/UTC when unset, for the scalar-offset-only
+// case).
+function localDayStartUtc(nowUtc, timezoneOffsetMinutes, timezoneId) {
+  const { year, month, day, offsetMinutes } = localCalendarDateParts(nowUtc, timezoneOffsetMinutes, timezoneId);
+  return localMidnightUtc(year, month, day, offsetMinutes, timezoneId);
 }
 
 // Finds an existing notification of `type` for `userId` created on/after
@@ -613,6 +686,7 @@ async function checkExpiringIngredients() {
         }
 
         const offsetMinutes = effectiveOffsetMinutes(now, user);
+        const timezoneId = user?.timezoneId;
 
         // Get expiring items for this user (next 3 days)
         // expiryDate may be stored as ISO string; convert to Date for comparison
@@ -641,7 +715,7 @@ async function checkExpiringIngredients() {
           names.length === 1
             ? expiringSoonHeading(
                 names[0],
-                dayDiffFloor(expiringItems[0].expiryDateParsed, now, offsetMinutes)
+                dayDiffFloor(expiringItems[0].expiryDateParsed, now, offsetMinutes, timezoneId)
               )
             : `${names.length} items expire soon`;
         const message =
@@ -650,7 +724,7 @@ async function checkExpiringIngredients() {
             : `${expiringItemsListSummary(names)}. Check your pantry and use them before they expire.`;
 
         // If a digest exists today (in the user's local timezone), update it; otherwise insert new
-        const today = localDayStartUtc(now, offsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes, timezoneId);
 
         const existing = await findTodaysNotification(
           notificationsCollection,
@@ -783,10 +857,11 @@ async function checkExpiredItems() {
         if (expiredItems.length === 0) continue;
 
         const offsetMinutes = effectiveOffsetMinutes(now, user);
+        const timezoneId = user?.timezoneId;
 
         // One expired_items document per user per local day -- mirrors the
         // same per-day guard checkExpiringIngredients uses for its type.
-        const today = localDayStartUtc(now, offsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes, timezoneId);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -918,9 +993,10 @@ async function checkMealLoggingInactivityReminders() {
         }
 
         const offsetMinutes = effectiveOffsetMinutes(now, user);
+        const timezoneId = user?.timezoneId;
 
         // Only one tracker reminder notification per user per local day.
-        const today = localDayStartUtc(now, offsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes, timezoneId);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -968,7 +1044,8 @@ async function checkMealLoggingInactivityReminders() {
           now,
           latestDate,
           hasAnyPersonalizedMealReminderEnabled(user?.mealLoggingReminderPrefs),
-          offsetMinutes
+          offsetMinutes,
+          timezoneId
         );
         if (!decision) {
           continue;
@@ -1104,6 +1181,7 @@ async function checkMealReminderFallbacks() {
         );
 
         const offsetMinutes = effectiveOffsetMinutes(now, user);
+        const timezoneId = user?.timezoneId;
 
         for (const meal of ["lunch", "dinner"]) {
           const decision = decideMealReminderFallback(
@@ -1111,7 +1189,8 @@ async function checkMealReminderFallbacks() {
             mealPrefs,
             now,
             latestActivityDate,
-            offsetMinutes
+            offsetMinutes,
+            timezoneId
           );
           if (!decision) continue;
 
@@ -1119,7 +1198,7 @@ async function checkMealReminderFallbacks() {
 
           // Lunch and dinner dedupe independently since they're distinct
           // `type` values -- one fallback per meal per user per local day.
-          const today = localDayStartUtc(now, offsetMinutes);
+          const today = localDayStartUtc(now, offsetMinutes, timezoneId);
           const existingToday = await findTodaysNotification(
             notificationsCollection,
             userId,
@@ -1210,9 +1289,10 @@ async function checkAppInactivityReminders() {
         }
 
         const offsetMinutes = effectiveOffsetMinutes(now, user);
+        const timezoneId = user?.timezoneId;
 
         // Only one app inactivity reminder notification per user per local day.
-        const today = localDayStartUtc(now, offsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes, timezoneId);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -1236,7 +1316,8 @@ async function checkAppInactivityReminders() {
           APP_OPEN_DAY_MILESTONES,
           APP_OPEN_WEEK_MILESTONES,
           APP_OPEN_MONTH_MILESTONES,
-          offsetMinutes
+          offsetMinutes,
+          timezoneId
         );
 
         if (!bucket) continue;
@@ -1306,6 +1387,9 @@ exports.__testables = {
   localDayStartUtc,
   dayDiffFloor,
   addMonthsLocalDayStartUtc,
+  resolveOffsetMinutesAt,
+  localCalendarDateParts,
+  localMidnightUtc,
   getInactivityBucket,
   bucketLabel,
   formatMessageWithReason,
