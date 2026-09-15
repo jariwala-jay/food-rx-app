@@ -78,13 +78,9 @@ async function connectToMongo() {
 // typically deliberate) but are still subject to the onboarding gate,
 // which is enforced upstream at notification-creation time.
 const TIER1_TYPES = ["expired_items", "expiring_ingredient"];
-// lunch_reminder_fallback / dinner_reminder_fallback (generic server-side
-// meal-logging nudges for meals without a personalized reminder enabled --
-// see notification-scheduler/index.js's checkMealReminderFallbacks) share
-// Tier 2 with tracker_reminder/app_inactivity_reminder by design: all four
-// are behavioral nudges, and the existing "one Tier-2 push per user per
-// local day" ceiling should account for all of them together, not create a
-// second budget just for meal fallbacks.
+// lunch/dinner_reminder_fallback share Tier 2 with tracker_reminder and
+// app_inactivity_reminder -- all four are behavioral nudges under the same
+// one-push-per-user-per-local-day budget.
 const TIER2_TYPES = [
   "tracker_reminder",
   "app_inactivity_reminder",
@@ -109,21 +105,14 @@ const PANTRY_PREFERRED_LOCAL_MINUTES = {
 // so behavior doesn't change depending on how often this sweep runs.
 const MEAL_COLLISION_BUFFER_MINUTES = 45;
 
-// Final delivery-time preference gate -- the authoritative backstop that
-// guarantees a disabled notification type is never pushed, regardless of
-// which of the several code paths created the underlying document (client
-// SimpleNotificationService via POST /notifications, notification-scheduler's
-// cron sweeps, or the admin-notification Cloud Function). Mirrors
-// notification_eligibility.NOTIFICATION_TYPE_TO_PREF_KEY (Python) and the
-// equivalent map in notification-scheduler/index.js.
+// Final delivery-time preference gate, regardless of which code path
+// created the document. Mirrors notification_eligibility.NOTIFICATION_TYPE_TO_PREF_KEY
+// (Python) and the equivalent map in notification-scheduler/index.js.
 //
-// The one-time "Welcome to MyFoodRx" push is sent synchronously from
-// auth.py's update_profile() and never passes through this sweep (its DB
-// doc has sentAt stamped in that same request), so it is unaffected by the
-// adminUpdates gate below even though its notification doc uses type
-// "admin". "app_inactivity_reminder" has no defined per-type preference yet
-// and is intentionally left out of this map -- see notification-scheduler
-// for the same note.
+// The one-time Welcome push is sent synchronously from auth.py and never
+// reaches this sweep (sentAt is stamped in that same request), so it's
+// unaffected even though its type is "admin". app_inactivity_reminder has
+// no per-type preference yet and is intentionally absent here.
 const NOTIFICATION_TYPE_TO_PREF_KEY = {
   expiring_ingredient: "expiringIngredients",
   expired_items: "expiringIngredients",
@@ -143,6 +132,23 @@ function getTier(type) {
   if (TIER1_TYPES.includes(type)) return 1;
   if (TIER2_TYPES.includes(type)) return 2;
   return null;
+}
+
+// Stamped on `deliverySkippedAt` when a notification loses the Tier-2
+// daily budget to another notification created the same local day. Unlike
+// the other gates below, this one can't become true again until local
+// midnight, so it's dropped for good here instead of sitting unset and
+// eventually going out hours later, divorced from why it was created.
+const DELIVERY_SKIP_REASON_TIER_BUDGET_EXHAUSTED = "tier_budget_exhausted";
+
+// Shared by the count and batch `find()` below so they can't drift apart.
+// A notification leaves this set either by being sent (`sentAt` set) or
+// permanently dropped (`deliverySkippedAt` set).
+function pendingNotificationsQuery() {
+  return {
+    sentAt: { $exists: false },
+    deliverySkippedAt: { $exists: false },
+  };
 }
 
 function tierTypes(tier) {
@@ -166,6 +172,58 @@ function sortByPriority(notifications) {
   });
 }
 
+// Current UTC offset (minutes) for IANA zone `timeZoneId` at `nowUtc`,
+// via Intl's built-in ICU timezone database -- correct across DST since
+// the zone name doesn't change, only the offset it resolves to. Formats
+// `nowUtc` in `timeZoneId`, reinterprets those wall-clock parts as UTC,
+// and diffs against the real instant. Mirrors notification-scheduler/index.js.
+// Returns null for an unresolvable identifier; caller falls back to the
+// stored numeric offset.
+function getOffsetMinutesForZone(nowUtc, timeZoneId) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timeZoneId,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(nowUtc)
+      .reduce((acc, part) => {
+        acc[part.type] = part.value;
+        return acc;
+      }, {});
+    const asIfUtc = Date.UTC(
+      parseInt(parts.year, 10),
+      parseInt(parts.month, 10) - 1,
+      parseInt(parts.day, 10),
+      parseInt(parts.hour, 10) % 24,
+      parseInt(parts.minute, 10),
+      parseInt(parts.second, 10)
+    );
+    return Math.round((asIfUtc - nowUtc.getTime()) / 60000);
+  } catch (err) {
+    return null;
+  }
+}
+
+// Prefers the DST-correct offset derived from `user.timezoneId`; falls
+// back to the stored `user.timezoneOffsetMinutes` (or 0/UTC) when the id
+// is missing or unresolvable. Used by quiet hours, pantry collision, and
+// the Tier-2 local-day check below.
+function effectiveOffsetMinutes(nowUtc, user) {
+  const timeZoneId = user?.timezoneId;
+  if (typeof timeZoneId === "string" && timeZoneId.length > 0) {
+    const resolved = getOffsetMinutesForZone(nowUtc, timeZoneId);
+    if (resolved !== null) return resolved;
+  }
+  const stored = user?.timezoneOffsetMinutes;
+  return Number.isFinite(stored) ? stored : 0;
+}
+
 // Mirrors `notification_eligibility.local_day_start_utc` (Python) and the
 // equivalent helper in notification-scheduler/index.js.
 function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
@@ -187,16 +245,11 @@ function localMinutesOfDay(nowUtc, timezoneOffsetMinutes) {
 }
 
 // Mirrors lib/core/utils/meal_reminder_prefs.dart's isMealRemindersMasterEnabled
-// / mealReminderOwnEnabled / isMealReminderEnabled (also ported into
-// notification-scheduler/index.js for its fallback-reminder eligibility
-// check) -- kept in sync by hand, same as every other cross-language/
-// cross-function mirror in this codebase. `enabled` at the top level is the
-// master "Meal reminders" switch: when false, every meal is off regardless
-// of its own flag. A meal whose own `enabled` key is present is
-// authoritative once the master is on -- an explicit per-meal `false`
-// stays disabled even if a stale top-level `enabled: true` also exists on
-// the doc. Only a genuinely old-format doc (no per-meal `enabled` key at
-// all) falls back to the single top-level flag for that meal.
+// / mealReminderOwnEnabled / isMealReminderEnabled. `enabled` at the top
+// level is the master switch -- off means every meal is off regardless of
+// its own flag. A meal with its own `enabled` key is authoritative once
+// the master is on, even overriding a stale top-level `enabled: true`. An
+// old-format doc with no per-meal key falls back to the top-level flag.
 function isMealRemindersMasterEnabled(prefs) {
   return prefs != null && prefs.enabled === true;
 }
@@ -217,14 +270,12 @@ function isPersonalizedMealReminderEnabled(prefs, meal) {
   return isMealRemindersMasterEnabled(prefs) && mealReminderOwnEnabled(prefs, meal);
 }
 
-// Enabled meal reminder times for today, as minutes-since-local-midnight.
-// Meal reminders themselves are scheduled entirely client-side and never
-// pass through this pipeline; this reads only the user's saved preference
-// (`mealLoggingReminderPrefs`) so pantry pushes can steer around them. Each
-// meal is evaluated independently via isPersonalizedMealReminderEnabled --
-// a user with, say, only Dinner enabled gets collision avoidance around
-// dinner only, not around all three (or none) based on a single top-level
-// flag.
+// Enabled meal reminder times for today, in minutes since local midnight,
+// so pantry pushes can steer around them. Reads only the saved preference
+// (`mealLoggingReminderPrefs`) -- personalized reminders are scheduled
+// client-side and never pass through this pipeline. Each meal is checked
+// independently, so a user with only Dinner enabled gets collision
+// avoidance around dinner only.
 function getEnabledMealMinutes(user) {
   const prefs = user?.mealLoggingReminderPrefs;
   const minutes = [];
@@ -306,9 +357,9 @@ async function sendScheduledNotifications() {
     );
 
     // Get total count of unsent notifications
-    const totalUnsentCount = await notificationsCollection.countDocuments({
-      sentAt: { $exists: false },
-    });
+    const totalUnsentCount = await notificationsCollection.countDocuments(
+      pendingNotificationsQuery()
+    );
     console.log(
       `[Notification Delivery] Total unsent notifications: ${totalUnsentCount}`
     );
@@ -338,9 +389,7 @@ async function sendScheduledNotifications() {
     while (hasMore) {
       // Get next batch of notifications
       const scheduledNotifications = await notificationsCollection
-        .find({
-          sentAt: { $exists: false },
-        })
+        .find(pendingNotificationsQuery())
         .limit(BATCH_SIZE)
         .toArray();
 
@@ -370,6 +419,7 @@ async function sendScheduledNotifications() {
                 fcmToken: 1,
                 name: 1,
                 timezoneOffsetMinutes: 1,
+                timezoneId: 1,
                 mealLoggingReminderPrefs: 1,
                 notificationTypePrefs: 1,
               },
@@ -384,6 +434,8 @@ async function sendScheduledNotifications() {
             continue;
           }
 
+          const offsetMinutes = effectiveOffsetMinutes(now, user);
+
           // Final preference gate: never push a type the user has turned
           // off, no matter which path created this document. Left unsent
           // (not marked with a terminal status) so it retries automatically
@@ -397,7 +449,7 @@ async function sendScheduledNotifications() {
 
           // Quiet hours: leave unsent (retried on a later sweep) rather
           // than waking the user's device outside 8am-9pm local time.
-          const localHour = localHourOf(now, user.timezoneOffsetMinutes);
+          const localHour = localHourOf(now, offsetMinutes);
           if (localHour < QUIET_HOURS_START_LOCAL || localHour >= QUIET_HOURS_END_LOCAL) {
             console.log(
               `[Notification Delivery] Deferring ${notification._id.toHexString()} for user ${notification.userId}: outside quiet hours (local hour ${localHour})`
@@ -408,7 +460,7 @@ async function sendScheduledNotifications() {
           // Pantry preferred-time / meal-collision gate. Only expiring_ingredient
           // and expired_items are affected; every other type skips this
           // entirely and falls straight through to the tier budget check below.
-          const nowMinutes = localMinutesOfDay(now, user.timezoneOffsetMinutes);
+          const nowMinutes = localMinutesOfDay(now, offsetMinutes);
           const pantryDeferralReason = pantryDeliveryDeferralReason(
             notification.type,
             nowMinutes,
@@ -422,22 +474,15 @@ async function sendScheduledNotifications() {
           }
 
           // Daily push budget: at most one push per tier per user per local
-          // day. Keyed off the *content* date (createdAt) of the already-sent
-          // notification, not when it was actually delivered (sentAt) --a
-          // notification can sit unsent for a while (quiet hours, meal
-          // collision, an earlier outage) and finally go out on a later day
-          // than it was created. Keying off sentAt let that late, stale
-          // delivery consume the budget for the day it happened to land on,
-          // silently suppressing that day's real alert (see incident: a
-          // Aug-30 expiring_ingredient digest delivered at 9am on Aug-31
-          // blocked both of Aug-31's own pantry alerts). Uses the same
-          // $convert-to-date pattern as notification-scheduler's
-          // findTodaysNotification() since createdAt can be a native BSON
-          // Date (written here) or an ISO string (written by the Python
-          // backend).
+          // day. Keyed off the *content* date (createdAt), not sentAt -- a
+          // notification can sit unsent for a while and go out on a later
+          // day than it was created; keying off sentAt let a late delivery
+          // consume the wrong day's budget and suppress that day's real
+          // alert. `createdAt` may be a native Date or an ISO string
+          // (written by the Python backend), hence the $convert.
           const tier = getTier(notification.type);
           if (tier !== null) {
-            const todayLocal = localDayStartUtc(now, user.timezoneOffsetMinutes);
+            const todayLocal = localDayStartUtc(now, offsetMinutes);
             const alreadySentThisTier = await notificationsCollection
               .aggregate([
                 {
@@ -465,7 +510,16 @@ async function sendScheduledNotifications() {
               .toArray();
             if (alreadySentThisTier.length > 0) {
               console.log(
-                `[Notification Delivery] Skipping ${notification._id.toHexString()} for user ${notification.userId}: tier ${tier} push budget already used today`
+                `[Notification Delivery] Dropping ${notification._id.toHexString()} for user ${notification.userId}: tier ${tier} push budget already used today (will not carry over to a later day)`
+              );
+              await notificationsCollection.updateOne(
+                { _id: notification._id },
+                {
+                  $set: {
+                    deliverySkippedAt: new Date(),
+                    deliverySkippedReason: DELIVERY_SKIP_REASON_TIER_BUDGET_EXHAUSTED,
+                  },
+                }
               );
               continue;
             }
@@ -589,9 +643,8 @@ function getNotificationColor(type) {
   return colors[type] || "#9E9E9E";
 }
 
-// Exposed only for scripts/test_*.js regression checks (no live MongoDB/FCM
-// needed for these pure functions). Not used by the Cloud Function runtime
-// itself, which only invokes exports.notificationDelivery.
+// Exposed only for scripts/test_*.js so tests exercise the real logic
+// instead of a reimplementation. Not used by the runtime itself.
 exports.__testables = {
   getTier,
   tierTypes,
@@ -607,4 +660,8 @@ exports.__testables = {
   isMealRemindersMasterEnabled,
   mealReminderOwnEnabled,
   isPersonalizedMealReminderEnabled,
+  pendingNotificationsQuery,
+  DELIVERY_SKIP_REASON_TIER_BUDGET_EXHAUSTED,
+  getOffsetMinutesForZone,
+  effectiveOffsetMinutes,
 };

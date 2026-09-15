@@ -531,6 +531,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         return Colors.blue;
       case NotificationType.education:
         return const Color(0xFFFF6A00); // Orange
+      case NotificationType.lunch_reminder_fallback:
+      case NotificationType.dinner_reminder_fallback:
+        return const Color(0xFFFF7043); // Deep Orange 400
     }
   }
 
@@ -548,6 +551,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         return Icons.admin_panel_settings;
       case NotificationType.education:
         return Icons.school;
+      case NotificationType.lunch_reminder_fallback:
+      case NotificationType.dinner_reminder_fallback:
+        return Icons.restaurant;
     }
   }
 
@@ -585,6 +591,13 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         );
         break;
       case NotificationType.app_inactivity_reminder:
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
+          (route) => false,
+        );
+        break;
+      case NotificationType.lunch_reminder_fallback:
+      case NotificationType.dinner_reminder_fallback:
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 0)),
           (route) => false,

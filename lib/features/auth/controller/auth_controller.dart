@@ -113,6 +113,19 @@ class AuthController with ChangeNotifier {
     await _markUserActive();
   }
 
+  // Catches a user who travels without logging out -- syncTimezoneOffsetToDatabase's
+  // change-detection keeps this a local-only check on most calls, not a
+  // PATCH per resume. A timezone change made while the app stays
+  // continuously foregrounded won't be caught until the next resume.
+  Future<void> _checkTimezoneOnResume() async {
+    try {
+      await NotificationService().syncTimezoneOffsetToDatabase(onlyIfChanged: true);
+    } catch (_) {
+      // Best-effort -- syncTimezoneOffsetToDatabase already logs its own
+      // failures; never let a timezone check block session resume.
+    }
+  }
+
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -542,6 +555,7 @@ class AuthController with ChangeNotifier {
   Future<void> resumeSessionIfNeeded() async {
     if (_currentUser != null) {
       unawaited(_recordAppOpenHeartbeat());
+      unawaited(_checkTimezoneOnResume());
       return;
     }
     final hasRefresh = await ApiClient.hasRefreshToken();

@@ -7,6 +7,8 @@ enum NotificationType {
   app_inactivity_reminder,
   admin,
   education,
+  lunch_reminder_fallback,
+  dinner_reminder_fallback,
 }
 
 class AppNotification {

@@ -46,12 +46,9 @@ exports.notificationScheduler = async (req, res) => {
 
     let result;
 
-    // expired_items has a scheduled sweep (checkExpiredItems) alongside the
-    // existing client-side detection in SimpleNotificationService --
-    // both share the same per-item dedup ledger
-    // (pantry_items.expiredNotifiedAt), so neither path can double-notify
-    // about the same expired item. See checkExpiredItems()'s doc comment
-    // for the full reasoning.
+    // expired_items also has a client-side check in SimpleNotificationService;
+    // both share the pantry_items.expiredNotifiedAt ledger so neither
+    // double-notifies about the same item.
     switch (type) {
       case "expiring_ingredients":
         result = await checkExpiringIngredients();
@@ -100,41 +97,36 @@ const APP_OPEN_WEEK_MILESTONES = [7, 14, 21, 28];
 const APP_OPEN_MONTH_MILESTONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const NEW_ACCOUNT_GRACE_HOURS = 24;
 
-// Generic server-side fallback meal reminders for lunch/dinner, for
-// whichever of those two meals the user has NOT personally enabled a
-// reminder for (breakfast/lunch/dinner reminders are otherwise scheduled
-// entirely client-side -- see lib/core/services/notification_service.dart --
-// and never pass through this pipeline). No breakfast fallback exists by
-// design. Each meal is evaluated fully independently; see
-// decideMealReminderFallback().
+// Local-time targets, in minutes since local midnight, for
+// tracker_reminder, app_inactivity_reminder, expiring_ingredients, and
+// expired_items. Floors, not fixed slots -- a sweep that runs late still
+// fires once local time has passed the target, bounded by each check's
+// own once-per-local-day dedupe.
+const TRACKER_REMINDER_TARGET_MINUTES = 19 * 60; // 7:00 PM local
+const APP_INACTIVITY_TARGET_MINUTES = 9 * 60; // 9:00 AM local
+const EXPIRING_INGREDIENTS_TARGET_MINUTES = 8 * 60; // 8:00 AM local
+const EXPIRED_ITEMS_TARGET_MINUTES = 8 * 60; // 8:00 AM local
+
+// Fallback reminders for whichever of lunch/dinner the user hasn't
+// personally enabled -- personalized breakfast/lunch/dinner reminders run
+// entirely client-side (see notification_service.dart) and never reach
+// this pipeline. No breakfast fallback exists. Each meal is evaluated
+// independently; see decideMealReminderFallback().
 //
-// Target local times, in minutes since local midnight. A floor, not a fixed
-// slot -- once local time crosses this, the fallback stays eligible for the
-// rest of the day (mirrors PANTRY_PREFERRED_LOCAL_MINUTES in
-// notification-delivery/index.js, chosen specifically because that pattern
-// is documented there as cadence-independent, which this must also be since
-// the actual Cloud Scheduler cadence isn't tracked in this repo).
+// Target local times, in minutes since local midnight. A floor, not a
+// fixed slot -- eligible for the rest of the day once local time passes it.
 const MEAL_FALLBACK_TARGET_MINUTES = {
-  lunch: 12 * 60 + 30, // 12:30 PM local
-  dinner: 18 * 60, // 6:00 PM local
+  lunch: 13 * 60 + 30, // 1:30 PM local
+  dinner: 19 * 60 + 30, // 7:30 PM local
 };
 
-// Local-time windows (minutes since local midnight) used to approximate
-// "was this specific meal already logged today." There is no meal-type
-// field anywhere in the data model -- tracker updates
-// (user_trackers/tracker_progress) are cumulative nutrient/category
-// counters with no meal-of-day tagging, client or server side. This reuses
-// the exact same "latest tracker activity" signal
-// checkMealLoggingInactivityReminders already uses for its own "logged
-// today" check, just scoped to a meal-specific window instead of "any time
-// today." This is necessarily an approximation -- any tracker activity
-// landing in the window counts as "logged", not specifically an activity
-// caused by logging that meal -- accepting the same imprecision the
-// existing tracker_reminder check already lives with for its own
-// all-activity signal.
+// Local-time windows used to approximate "was this meal already logged
+// today." There's no meal-type field in the data model, so any tracker
+// activity inside the window counts as logged -- the same approximation
+// checkMealLoggingInactivityReminders relies on for its own signal.
 const MEAL_LOG_WINDOW_MINUTES = {
-  lunch: [11 * 60, 14 * 60 + 30], // 11:00 AM - 2:30 PM
-  dinner: [16 * 60, 18 * 60 + 30], // 4:00 PM - 6:30 PM
+  lunch: [12 * 60, 15 * 60 + 30], // 12:00 PM - 3:30 PM
+  dinner: [17 * 60 + 30, 20 * 60], // 5:30 PM - 8:00 PM
 };
 
 const MEAL_FALLBACK_COPY = {
@@ -154,17 +146,9 @@ function mealReminderFallbackType(meal) {
   return `${meal}_reminder_fallback`;
 }
 
-// Milestone day-count, using the user's LOCAL calendar day (localDayStartUtc,
-// defined below) rather than the server runtime's timezone. Cloud Functions
-// run in UTC, so without this every user's "days since last log" would
-// silently be computed against UTC calendar-day boundaries instead of their
-// own -- the same bug class localDayStartUtc already exists to prevent for
-// same-day dedupe checks elsewhere in this file.
-//
-// Returns the number of LOCAL CALENDAR DAY boundaries crossed between
-// `earlier` and `later` -- not elapsed 24-hour periods. Do not simplify
-// this to Math.floor((later - earlier) / DAY_MS); that reintroduces the
-// timezone bug this function exists to fix.
+// Number of local calendar-day boundaries crossed between `earlier` and
+// `later` -- not elapsed 24-hour periods. Don't simplify to
+// Math.floor((later - earlier) / DAY_MS); that reintroduces UTC-day bugs.
 function dayDiffFloor(later, earlier, timezoneOffsetMinutes) {
   const msPerDay = 24 * 60 * 60 * 1000;
   const laterStart = localDayStartUtc(later, timezoneOffsetMinutes);
@@ -172,12 +156,10 @@ function dayDiffFloor(later, earlier, timezoneOffsetMinutes) {
   return Math.floor((laterStart.getTime() - earlierStart.getTime()) / msPerDay);
 }
 
-// Adds `months` to `date`'s LOCAL calendar day, clamping day-of-month
-// overflow to the last day of the target month (e.g. Jan 31 + 1 month ->
-// Feb 28/29, not Mar 3 -- the standard setMonth() overflow idiom), but
-// anchored to the user's local calendar instead of the server's. Returns
-// that target day's local midnight, expressed back in UTC, so it can be
-// compared directly against another localDayStartUtc() value.
+// Adds `months` to `date`'s local calendar day, clamping day-of-month
+// overflow to the last day of the target month (Jan 31 + 1 month -> Feb
+// 28/29, not Mar 3). Returns that day's local midnight, in UTC, so it can
+// be compared against another localDayStartUtc() value.
 function addMonthsLocalDayStartUtc(date, months, timezoneOffsetMinutes) {
   const offsetMs = (Number.isFinite(timezoneOffsetMinutes) ? timezoneOffsetMinutes : 0) * 60 * 1000;
   const local = new Date(date.getTime() + offsetMs);
@@ -239,39 +221,30 @@ function bucketLabel(bucketKey) {
   return "";
 }
 
-// Leads with the call to action, then names the "why" (time since
-// sincePhrase) last, so the reminder still reads as personalized instead of
-// a generic "It's been 1 day." with no context of what that's since.
+// Leads with the call to action, then the "why" (time since sincePhrase)
+// last, so it reads as personalized rather than a bare "It's been 1 day."
 function formatMessageWithReason(callToAction, sincePhrase, bucketKey) {
   const label = bucketLabel(bucketKey);
   if (!label) return callToAction;
   return `${callToAction} It's been ${label} since ${sincePhrase}.`;
 }
 
-// Tracker-inactivity-ladder body copy: leads with the time-since clause
-// instead of a call to action (deliberately the opposite ordering from
-// formatMessageWithReason, which App Inactivity still uses unchanged --
-// this is a separate function, not a restructuring of that shared one, so
-// App Inactivity's copy is unaffected).
+// Leads with the time-since clause instead of a call to action -- the
+// opposite ordering from formatMessageWithReason, which App Inactivity
+// uses instead.
 function formatTrackerInactivityBody(bucketKey) {
   const label = bucketLabel(bucketKey);
   if (!label) return "Check in when you're ready.";
   return `It's been ${label} since you last logged a meal. Check in when you're ready.`;
 }
 
-// Decides which (if any) tracker reminder a single user should get today,
-// given their latest logging activity. Encodes two priority rules in one
-// place so they're unit-testable without a live Mongo connection:
+// Decides which (if any) tracker reminder a user should get today.
 //   1. The inactivity ladder takes priority over the same-day daily
 //      reminder -- never send both.
-//   2. The daily ("d0") reminder is suppressed entirely when the user has
-//      Meal Reminders enabled -- they already get a configured
-//      breakfast/lunch/dinner (or generic) nudge for "haven't logged
-//      today", so this would be redundant. This mirrors, and is separate
-//      from, the d1 ladder milestone's own meal-reminder suppression above.
-// Does NOT perform the once-per-bucket-ever or once-per-local-day dedupe
-// checks (those need the database) -- callers must still run those before
-// actually inserting a document. Returns null if nothing should be sent.
+//   2. The daily ("d0") reminder is suppressed when Meal Reminders are
+//      enabled, since the user already gets their own nudge.
+// Does not perform the once-per-bucket or once-per-local-day dedupe --
+// callers must do that before inserting. Returns null if nothing to send.
 function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOffsetMinutes) {
   if (latestDate) {
     const bucket = getInactivityBucket(
@@ -282,10 +255,9 @@ function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOf
       MEAL_LOGGING_MONTH_MILESTONES,
       timezoneOffsetMinutes
     );
-    // Day 1 is already covered by the user's own meal reminders when
-    // enabled; days 2-6, weekly and monthly milestones still fire
-    // regardless, since a user ignoring meal reminders for that long is a
-    // distinct "fell out of the habit" signal worth surfacing.
+    // Day 1 is covered by the user's own meal reminders; days 2-6, weekly
+    // and monthly milestones still fire regardless -- ignoring reminders
+    // that long is its own signal worth surfacing.
     const skipDueToMealReminders = bucket?.key === "d1" && mealRemindersEnabled === true;
     if (bucket && !skipDueToMealReminders) {
       return {
@@ -298,18 +270,14 @@ function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOf
     }
   }
 
-  // dayDiffFloor(now, latestDate, ...) <= 0 means the latest activity's
-  // local day is today (or later, which can't happen) -- i.e. already
-  // logged today, so no daily reminder is needed either.
+  // <= 0 means the latest activity's local day is today -- already
+  // logged, so no daily reminder needed.
   const loggedToday =
     latestDate != null && dayDiffFloor(now, latestDate, timezoneOffsetMinutes) <= 0;
   if (loggedToday) return null;
 
-  // A user with Meal Reminders enabled already gets their own configured
-  // breakfast/lunch/dinner (or generic) nudge for "haven't logged today" --
-  // sending this daily reminder too would be redundant. Matches the d1
-  // ladder milestone's existing suppression above, extended to the daily
-  // reminder per product decision.
+  // A user with Meal Reminders enabled already gets their own nudge for
+  // "haven't logged today" -- this daily reminder would be redundant.
   if (mealRemindersEnabled === true) return null;
 
   return {
@@ -326,20 +294,17 @@ function decideTrackerReminder(now, latestDate, mealRemindersEnabled, timezoneOf
 // checkMealLoggingInactivityReminders so the "use whichever activity
 // signal is fresher" rule has one unit-testable home instead of living
 // inline in the per-user loop.
-// Single-item expiring-soon heading: keeps the today/tomorrow/N-days urgency
-// signal in the *heading* (the body is now fixed regardless of day count --
-// see checkExpiringIngredients). Mirrors
-// SimpleNotificationService.expiringItemHeading (Dart) -- keep both in sync.
+// Keeps the today/tomorrow/N-days urgency signal in the heading; the body
+// is fixed regardless of day count. Mirrors
+// SimpleNotificationService.expiringItemHeading (Dart).
 function expiringSoonHeading(itemName, daysUntilExpiry) {
   if (daysUntilExpiry <= 0) return `${itemName} expires today`;
   if (daysUntilExpiry === 1) return `${itemName} expires tomorrow`;
   return `${itemName} expires in ${daysUntilExpiry} days`;
 }
 
-// Truncates a multi-item digest body to the first 3 item names plus an
-// "and N more" tail. Mirrors
-// SimpleNotificationService.expiringItemsListSummary (Dart) -- keep both in
-// sync.
+// Truncates a multi-item digest body to the first 3 names plus an
+// "and N more" tail. Mirrors SimpleNotificationService.expiringItemsListSummary (Dart).
 function expiringItemsListSummary(names) {
   const maxNames = 3;
   const shown = names.slice(0, maxNames);
@@ -347,22 +312,15 @@ function expiringItemsListSummary(names) {
   return remaining > 0 ? `${shown.join(", ")} and ${remaining} more` : shown.join(", ");
 }
 
-// Decides the expired_items digest for a single user, given the names/ids
-// of their currently-expired pantry items and which of those ids were
-// already notified about before (pantry_items.expiredNotifiedAt -- the same
-// ledger field and semantics as the client-side path in
-// POST /notifications, backend/app/routers/notifications.py). Pure
-// function, no DB access, so the "push once per item, Center-only digest
-// once nothing is new" rule is unit-testable without a live Mongo
-// connection. `itemIds` and `alreadyNotifiedIds` are plain hex-string ids
-// (callers convert to/from ObjectId around this call) so tests don't need
-// a Mongo driver either.
+// Decides the expired_items digest for a user, given the names/ids of
+// their currently-expired items and which ids were already notified about
+// (pantry_items.expiredNotifiedAt -- shared with the client-side path in
+// backend/app/routers/notifications.py). `itemIds`/`alreadyNotifiedIds` are
+// plain hex-string ids so this stays a pure, DB-free function.
 //
-// pushEligible=false means "every item in today's expired set was already
-// notified before" -- the caller should still create a Notification Center
-// doc (so it reflects current pantry state) but stamp it with sentAt
-// immediately so notification-delivery's sweep never pushes it, avoiding a
-// daily nag about the same still-unresolved expired item.
+// pushEligible=false means every expired item was already notified about
+// before -- still create the Notification Center doc, but stamp it with
+// sentAt immediately so it never gets pushed as a daily nag.
 function decideExpiredItemsDigest(itemNames, itemIds, alreadyNotifiedIds) {
   const alreadyNotified =
     alreadyNotifiedIds instanceof Set ? alreadyNotifiedIds : new Set(alreadyNotifiedIds);
@@ -394,10 +352,8 @@ function resolveLatestActivityDate(...rawDates) {
 // Maps a notification's `type` to the key inside a user's
 // notificationTypePrefs map that controls it. Mirrors
 // notification_eligibility.NOTIFICATION_TYPE_TO_PREF_KEY (Python) and the
-// equivalent map in notification-delivery/index.js (the final send-time
-// gate). "app_inactivity_reminder" is deliberately absent -- there is no
-// dedicated Notification Settings toggle for it yet, so it is left
-// ungated here; see the notification-system implementation notes.
+// equivalent map in notification-delivery/index.js. "app_inactivity_reminder"
+// is deliberately absent -- there's no dedicated Settings toggle for it.
 const NOTIFICATION_TYPE_TO_PREF_KEY = {
   expiring_ingredient: "expiringIngredients",
   expired_items: "expiringIngredients",
@@ -414,15 +370,11 @@ function isNotificationTypeEnabled(user, type) {
 }
 
 // Mirrors lib/core/utils/meal_reminder_prefs.dart's isMealRemindersMasterEnabled
-// / mealReminderOwnEnabled / isMealReminderEnabled -- kept in sync by hand,
-// same as every other cross-language mirror in this file. `enabled` at the
-// top level is the master "Meal reminders" switch: when false, every meal
-// is off regardless of its own flag. A meal whose own `enabled` key is
-// present is authoritative once the master is on -- an explicit per-meal
-// `false` stays disabled even if a stale top-level `enabled: true` also
-// exists on the doc. Only a genuinely old-format doc (no per-meal `enabled`
-// key at all, from before this preference structure changed) falls back to
-// the single top-level flag for that meal.
+// / mealReminderOwnEnabled / isMealReminderEnabled. `enabled` at the top
+// level is the master switch -- off means every meal is off regardless of
+// its own flag. A meal with its own `enabled` key is authoritative once
+// the master is on, even overriding a stale top-level `enabled: true`. An
+// old-format doc with no per-meal key falls back to the top-level flag.
 function isMealRemindersMasterEnabled(prefs) {
   return prefs != null && prefs.enabled === true;
 }
@@ -443,21 +395,70 @@ function isPersonalizedMealReminderEnabled(prefs, meal) {
   return isMealRemindersMasterEnabled(prefs) && mealReminderOwnEnabled(prefs, meal);
 }
 
-// Whether the user has a personalized reminder actually configured for AT
-// LEAST ONE meal. This -- not the bare master switch -- is what
-// decideTrackerReminder()'s mealRemindersEnabled parameter must mean: the
-// master switch can be on with every individual meal off (e.g. right after
-// the reset-on-master-off behavior in the Flutter settings page, or before
-// the user has picked any meal yet), and in that state no personalized
-// reminder fires for anything. Passing the bare master flag there would
-// suppress this daily fallback too, leaving the user with zero reminders
-// until lunch/dinner's own server-side fallback window opens (and no
-// coverage at all for breakfast, which has no fallback) -- a real
-// notification blackout. Checking all three meals here closes that gap.
+// Whether the user has a personalized reminder configured for at least
+// one meal. The master switch can be on with every meal off (e.g. right
+// after a reset, or before the user picks one), in which case nothing
+// personalized fires -- using the bare master flag as the "meal reminders
+// enabled" signal would wrongly suppress the tracker daily reminder too,
+// leaving the user with no reminders at all.
 function hasAnyPersonalizedMealReminderEnabled(prefs) {
   return ["breakfast", "lunch", "dinner"].some((meal) =>
     isPersonalizedMealReminderEnabled(prefs, meal)
   );
+}
+
+// Current UTC offset (minutes) for IANA zone `timeZoneId` at `nowUtc`,
+// via Intl's built-in ICU timezone database -- correct across DST since
+// the zone name doesn't change, only the offset it resolves to. Formats
+// `nowUtc` in `timeZoneId`, reinterprets those wall-clock parts as UTC,
+// and diffs against the real instant. Mirrors notification-delivery/index.js.
+// Returns null for an unresolvable identifier; caller falls back to the
+// stored numeric offset.
+function getOffsetMinutesForZone(nowUtc, timeZoneId) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timeZoneId,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(nowUtc)
+      .reduce((acc, part) => {
+        acc[part.type] = part.value;
+        return acc;
+      }, {});
+    const asIfUtc = Date.UTC(
+      parseInt(parts.year, 10),
+      parseInt(parts.month, 10) - 1,
+      parseInt(parts.day, 10),
+      parseInt(parts.hour, 10) % 24,
+      parseInt(parts.minute, 10),
+      parseInt(parts.second, 10)
+    );
+    return Math.round((asIfUtc - nowUtc.getTime()) / 60000);
+  } catch (err) {
+    // Unresolvable IANA identifier -- never let bad timezone data crash
+    // the sweep for every user behind it in the batch.
+    return null;
+  }
+}
+
+// Prefers the DST-correct offset derived from `user.timezoneId`; falls
+// back to the stored `user.timezoneOffsetMinutes` (or 0/UTC) when the id
+// is missing or unresolvable. decideMealReminderFallback still takes a
+// raw offset parameter -- callers pass this function's result into it.
+function effectiveOffsetMinutes(nowUtc, user) {
+  const timeZoneId = user?.timezoneId;
+  if (typeof timeZoneId === "string" && timeZoneId.length > 0) {
+    const resolved = getOffsetMinutesForZone(nowUtc, timeZoneId);
+    if (resolved !== null) return resolved;
+  }
+  const stored = user?.timezoneOffsetMinutes;
+  return Number.isFinite(stored) ? stored : 0;
 }
 
 // Mirrors notification-delivery/index.js's localMinutesOfDay (same
@@ -469,13 +470,9 @@ function localMinutesOfDay(nowUtc, timezoneOffsetMinutes) {
   return local.getUTCHours() * 60 + local.getUTCMinutes();
 }
 
-// Decides whether a single meal's generic fallback reminder should be
-// created "right now" for one user. Pure, no DB access, so all preference
-// combinations and the specific logging-window examples are unit-testable
-// without a live Mongo connection -- mirrors decideTrackerReminder /
-// decideExpiredItemsDigest. Does NOT perform the once-per-user-per-local-day
-// dedupe (needs the database) -- callers must still run
-// findTodaysNotification first.
+// Decides whether a meal's generic fallback reminder should fire right
+// now for one user. Pure, no DB access. Does not perform the
+// once-per-local-day dedupe -- callers must run findTodaysNotification first.
 //
 //   meal                  - "lunch" or "dinner"
 //   mealPrefs             - user.mealLoggingReminderPrefs (old- or
@@ -537,17 +534,10 @@ function localDayStartUtc(nowUtc, timezoneOffsetMinutes) {
 }
 
 // Finds an existing notification of `type` for `userId` created on/after
-// `sinceUtc`, tolerating `createdAt` stored as either a native BSON Date
-// (written by this Cloud Function) or an ISO string (written by the Python
-// backend -- see backend/app/routers/notifications.py, which formats every
-// createdAt via datetime.isoformat()). A plain `{createdAt: {$gte: ...}}`
-// filter only matches Date-typed values against a Date operand, so it
-// silently never found a same-day digest the *other* language's code path
-// had already created -- letting a client-triggered digest and this
-// scheduled sweep both fire for the same user on the same day instead of
-// one updating the other in place. Mirrors the same $convert-to-date
-// pattern notifications.py::list_notifications() already uses (for
-// sorting) -- applied here for filtering instead.
+// `sinceUtc`. `createdAt` may be a native BSON Date (written here) or an
+// ISO string (written by the Python backend), so this converts before
+// comparing -- a plain `{createdAt: {$gte: ...}}` filter would miss the
+// other language's docs and let both paths create a same-day duplicate.
 async function findTodaysNotification(notificationsCollection, userId, type, sinceUtc) {
   const matches = await notificationsCollection
     .aggregate([
@@ -622,6 +612,8 @@ async function checkExpiringIngredients() {
           continue;
         }
 
+        const offsetMinutes = effectiveOffsetMinutes(now, user);
+
         // Get expiring items for this user (next 3 days)
         // expiryDate may be stored as ISO string; convert to Date for comparison
         const expiringItems = await pantryCollection
@@ -649,7 +641,7 @@ async function checkExpiringIngredients() {
           names.length === 1
             ? expiringSoonHeading(
                 names[0],
-                dayDiffFloor(expiringItems[0].expiryDateParsed, now, user.timezoneOffsetMinutes)
+                dayDiffFloor(expiringItems[0].expiryDateParsed, now, offsetMinutes)
               )
             : `${names.length} items expire soon`;
         const message =
@@ -658,7 +650,7 @@ async function checkExpiringIngredients() {
             : `${expiringItemsListSummary(names)}. Check your pantry and use them before they expire.`;
 
         // If a digest exists today (in the user's local timezone), update it; otherwise insert new
-        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes);
 
         const existing = await findTodaysNotification(
           notificationsCollection,
@@ -668,6 +660,8 @@ async function checkExpiringIngredients() {
         );
 
         if (existing) {
+          // Already created today -- refresh the content regardless of
+          // time-of-day; the floor below only gates first creation.
           await notificationsCollection.updateOne(
             { _id: existing._id },
             { $set: { title, message, updatedAt: new Date() } }
@@ -675,6 +669,9 @@ async function checkExpiringIngredients() {
           console.log(
             `[Expiring Ingredients] Updated digest for user ${userId} with ${names.length} items`
           );
+        } else if (localMinutesOfDay(now, offsetMinutes) < EXPIRING_INGREDIENTS_TARGET_MINUTES) {
+          // Not yet 8am local -- retried on a later sweep.
+          continue;
         } else {
           await notificationsCollection.insertOne({
             userId: userId,
@@ -714,21 +711,11 @@ async function checkExpiringIngredients() {
 }
 
 /**
- * Check for already-expired pantry items.
- *
- * This is the scheduled, "app not opened" catch-all for expired_items --
- * added so a user who hasn't opened MyFoodRx still gets notified once an
- * item's expiration date has passed. It runs alongside, not instead of, the
- * existing client-side detection in SimpleNotificationService.checkExpiredItems
- * (fires when pantry data loads/refreshes on-device) -- that path stays for
- * the same reason expiring_ingredient keeps its own immediate pantry
- * add/edit check alongside this scheduled sweep: same-session detection
- * while the user is actively in the app is still valuable, and both paths
- * share the same per-item "already notified" ledger
- * (pantry_items.expiredNotifiedAt, also written/read by
- * POST /notifications in backend/app/routers/notifications.py), so neither
- * can double-notify about the same expired item regardless of which path
- * gets there first. See decideExpiredItemsDigest() for that dedup rule.
+ * Scheduled catch-all for expired pantry items, for users who haven't
+ * opened the app since an item expired. Runs alongside the client-side
+ * check in SimpleNotificationService.checkExpiredItems; both share the
+ * pantry_items.expiredNotifiedAt ledger so neither double-notifies about
+ * the same item. See decideExpiredItemsDigest() for the dedup rule.
  */
 async function checkExpiredItems() {
   let db;
@@ -795,9 +782,11 @@ async function checkExpiredItems() {
 
         if (expiredItems.length === 0) continue;
 
+        const offsetMinutes = effectiveOffsetMinutes(now, user);
+
         // One expired_items document per user per local day -- mirrors the
         // same per-day guard checkExpiringIngredients uses for its type.
-        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -805,6 +794,9 @@ async function checkExpiredItems() {
           today
         );
         if (existingToday) continue;
+
+        // Not yet 8am local -- retried on a later sweep.
+        if (localMinutesOfDay(now, offsetMinutes) < EXPIRED_ITEMS_TARGET_MINUTES) continue;
 
         const names = expiredItems
           .map((i) => (i.name || "").toString())
@@ -925,8 +917,10 @@ async function checkMealLoggingInactivityReminders() {
           continue;
         }
 
+        const offsetMinutes = effectiveOffsetMinutes(now, user);
+
         // Only one tracker reminder notification per user per local day.
-        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -934,6 +928,13 @@ async function checkMealLoggingInactivityReminders() {
           today
         );
         if (existingToday) {
+          continue;
+        }
+
+        // Not yet 7pm local -- retried on a later sweep. Gates both the
+        // daily (d0) and inactivity-milestone reminders, since both come
+        // from the same decideTrackerReminder() call below.
+        if (localMinutesOfDay(now, offsetMinutes) < TRACKER_REMINDER_TARGET_MINUTES) {
           continue;
         }
 
@@ -945,14 +946,11 @@ async function checkMealLoggingInactivityReminders() {
           .limit(1)
           .toArray();
 
-        // tracker_progress only gains a row once a day, when that day's
-        // trackers reset -- so on any given day, before tonight's reset
-        // runs, its latest row is always ~1 day stale by construction, even
-        // for a user actively logging meals right now. user_trackers is
-        // updated live on every log (see PATCH /trackers/{id} -> lastUpdated
-        // in trackers.py), so check it too and use whichever signal is more
-        // recent as "last logged" -- otherwise every active user trips the
-        // d1 bucket daily regardless of same-day logging.
+        // tracker_progress only gets a row once a day, at reset -- always
+        // ~1 day stale until then. user_trackers updates live on every log
+        // (PATCH /trackers/{id}), so use whichever is more recent, or
+        // every active user would trip the d1 bucket regardless of
+        // same-day logging.
         const latestTrackerUpdate = await trackersCollection
           .find({
             userId: userId,
@@ -970,17 +968,15 @@ async function checkMealLoggingInactivityReminders() {
           now,
           latestDate,
           hasAnyPersonalizedMealReminderEnabled(user?.mealLoggingReminderPrefs),
-          user.timezoneOffsetMinutes
+          offsetMinutes
         );
         if (!decision) {
           continue;
         }
 
-        // The inactivity-ladder milestones each fire at most once ever per
-        // user (unchanged from prior behavior); the daily ("d0") reminder
-        // has no such lifetime dedupe -- it's meant to recur, and the
-        // top-of-loop existingToday check already guarantees at most one
-        // tracker_reminder of either kind per user per local day.
+        // Milestones fire at most once ever per user; the daily ("d0")
+        // reminder is meant to recur, guarded only by the existingToday
+        // check above (at most one tracker_reminder per local day).
         if (decision.kind === "inactivity") {
           const existing = await notificationsCollection.findOne({
             userId: userId,
@@ -1034,22 +1030,15 @@ async function checkMealLoggingInactivityReminders() {
 }
 
 /**
- * Generic server-side fallback meal reminders (lunch/dinner).
+ * Generic fallback meal reminders (lunch/dinner), evaluated independently
+ * per meal. If the user has a personalized reminder for that meal, no
+ * fallback fires -- their client-scheduled reminder already covers it.
+ * Otherwise it's eligible once local time passes the meal's target and it
+ * hasn't already been "logged" (see decideMealReminderFallback). No
+ * breakfast fallback exists.
  *
- * For each of lunch and dinner independently: if the user has a
- * personalized reminder enabled for that specific meal (master switch on
- * AND that meal's own toggle on), no fallback is generated -- their
- * personalized (client-scheduled local) reminder already covers it. If
- * personalized is off for that meal, a generic fallback is eligible once
- * local time has passed that meal's target (12:30pm / 6:00pm) and the meal
- * hasn't already been "logged" per the local-time-window heuristic (see
- * decideMealReminderFallback). No breakfast fallback exists.
- *
- * NOT gated by any Notification Settings toggle -- same precedent as
- * checkAppInactivityReminders(): there is no dedicated preference for this
- * yet, and users already control it directly via the per-meal Meal
- * Reminders switches, so mapping it onto an unrelated existing toggle (e.g.
- * Tracker Reminders) would be an unreviewed product decision.
+ * Not gated by any Notification Settings toggle -- users control this
+ * directly via the per-meal Meal Reminders switches.
  */
 async function checkMealReminderFallbacks() {
   let db;
@@ -1114,23 +1103,23 @@ async function checkMealReminderFallbacks() {
           latestTrackerUpdate[0]?.lastUpdated
         );
 
+        const offsetMinutes = effectiveOffsetMinutes(now, user);
+
         for (const meal of ["lunch", "dinner"]) {
           const decision = decideMealReminderFallback(
             meal,
             mealPrefs,
             now,
             latestActivityDate,
-            user.timezoneOffsetMinutes
+            offsetMinutes
           );
           if (!decision) continue;
 
           const type = mealReminderFallbackType(meal);
 
-          // One fallback notification per meal per user per local day --
-          // lunch and dinner dedupe independently since they're distinct
-          // `type` values, so a repeated scheduler run within the same
-          // window (or later the same day) can't double-create either.
-          const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
+          // Lunch and dinner dedupe independently since they're distinct
+          // `type` values -- one fallback per meal per user per local day.
+          const today = localDayStartUtc(now, offsetMinutes);
           const existingToday = await findTodaysNotification(
             notificationsCollection,
             userId,
@@ -1178,15 +1167,9 @@ async function checkMealReminderFallbacks() {
 /**
  * App-open inactivity reminders.
  *
- * NOT gated by any Notification Settings toggle: there is currently no
- * dedicated preference for "app inactivity" in the product (the Settings
- * page's four togglable types are Expiring Ingredients, Tracker Reminders,
- * Education, and Administrative Updates), and mapping it onto Tracker
- * Reminders would be an unreviewed product decision -- these two are
- * already distinct, separately-dedup'd notification types
- * (app_inactivity_reminder vs tracker_reminder). Left unchanged pending an
- * explicit product decision; see the notification-system implementation
- * notes for this open question.
+ * Not gated by any Notification Settings toggle -- there's no dedicated
+ * preference for it, and it's a distinct, separately-deduped type from
+ * tracker_reminder.
  */
 async function checkAppInactivityReminders() {
   let db;
@@ -1226,8 +1209,10 @@ async function checkAppInactivityReminders() {
           continue;
         }
 
+        const offsetMinutes = effectiveOffsetMinutes(now, user);
+
         // Only one app inactivity reminder notification per user per local day.
-        const today = localDayStartUtc(now, user.timezoneOffsetMinutes);
+        const today = localDayStartUtc(now, offsetMinutes);
         const existingToday = await findTodaysNotification(
           notificationsCollection,
           userId,
@@ -1235,6 +1220,9 @@ async function checkAppInactivityReminders() {
           today
         );
         if (existingToday) continue;
+
+        // Not yet 9am local -- retried on a later sweep.
+        if (localMinutesOfDay(now, offsetMinutes) < APP_INACTIVITY_TARGET_MINUTES) continue;
 
         const rawLastActive = user.lastActiveAt || user.lastLoginAt || user.updatedAt;
         if (!rawLastActive) continue;
@@ -1248,7 +1236,7 @@ async function checkAppInactivityReminders() {
           APP_OPEN_DAY_MILESTONES,
           APP_OPEN_WEEK_MILESTONES,
           APP_OPEN_MONTH_MILESTONES,
-          user.timezoneOffsetMinutes
+          offsetMinutes
         );
 
         if (!bucket) continue;
@@ -1312,10 +1300,8 @@ async function runAllNotificationChecks() {
   };
 }
 
-// Exposed only for the scripts/test_*.js regression checks so they exercise
-// the real production logic instead of a reimplementation that could
-// silently drift from it. Not used by the Cloud Function runtime itself,
-// which only invokes exports.notificationScheduler.
+// Exposed only for scripts/test_*.js so tests exercise the real logic
+// instead of a reimplementation. Not used by the runtime itself.
 exports.__testables = {
   localDayStartUtc,
   dayDiffFloor,
@@ -1343,4 +1329,10 @@ exports.__testables = {
   MEAL_FALLBACK_TARGET_MINUTES,
   MEAL_LOG_WINDOW_MINUTES,
   MEAL_FALLBACK_COPY,
+  getOffsetMinutesForZone,
+  effectiveOffsetMinutes,
+  TRACKER_REMINDER_TARGET_MINUTES,
+  APP_INACTIVITY_TARGET_MINUTES,
+  EXPIRING_INGREDIENTS_TARGET_MINUTES,
+  EXPIRED_ITEMS_TARGET_MINUTES,
 };
