@@ -1,5 +1,5 @@
 // Regression check for the generic server-side fallback meal reminders
-// (lunch ~12:30pm local / dinner ~6:00pm local, for whichever of those two
+// (lunch ~1:30pm local / dinner ~7:30pm local, for whichever of those two
 // meals the user has NOT personally enabled a reminder for). No breakfast
 // fallback exists by design.
 //
@@ -46,8 +46,8 @@ const UTC = 0;
 // 2026-08-10 is a Monday; times below are expressed as if the user is in
 // UTC so "local time" and "UTC time" match 1:1, keeping each check's target
 // time obvious from the ISO string.
-const LUNCH_TIME_UTC = new Date("2026-08-10T12:30:00Z"); // exactly the lunch target
-const DINNER_TIME_UTC = new Date("2026-08-10T18:00:00Z"); // exactly the dinner target
+const LUNCH_TIME_UTC = new Date("2026-08-10T13:30:00Z"); // exactly the lunch target
+const DINNER_TIME_UTC = new Date("2026-08-10T19:30:00Z"); // exactly the dinner target
 const MORNING_UTC = new Date("2026-08-10T09:00:00Z"); // before either target
 
 function newFormatPrefs({ breakfast = false, lunch = false, dinner = false, master = true } = {}) {
@@ -138,6 +138,16 @@ check("no breakfast fallback target/window exists", () => {
   assert.strictEqual(MEAL_LOG_WINDOW_MINUTES.breakfast, undefined);
 });
 
+check("fallback targets are 1:30pm lunch / 7:30pm dinner", () => {
+  assert.strictEqual(MEAL_FALLBACK_TARGET_MINUTES.lunch, 13 * 60 + 30);
+  assert.strictEqual(MEAL_FALLBACK_TARGET_MINUTES.dinner, 19 * 60 + 30);
+});
+
+check("log-detection windows are shifted by the same delta as their target (12:00-3:30pm lunch, 5:30-8:00pm dinner)", () => {
+  assert.deepStrictEqual(MEAL_LOG_WINDOW_MINUTES.lunch, [12 * 60, 15 * 60 + 30]);
+  assert.deepStrictEqual(MEAL_LOG_WINDOW_MINUTES.dinner, [17 * 60 + 30, 20 * 60]);
+});
+
 // ---------------------------------------------------------------------
 // 3. Meal-specific logging suppression -- the exact scenarios requested.
 // ---------------------------------------------------------------------
@@ -155,74 +165,74 @@ check("1. breakfast logged at 10 AM does NOT suppress the lunch fallback", () =>
   assert.notStrictEqual(decision, null);
 });
 
-check("2. lunch logged at 12 PM suppresses the 12:30 PM lunch fallback", () => {
-  const lunchLoggedAtNoon = new Date("2026-08-10T12:00:00Z");
+check("2. lunch logged at 1 PM suppresses the 1:30 PM lunch fallback", () => {
+  const lunchLoggedAt1pm = new Date("2026-08-10T13:00:00Z");
   const decision = decideMealReminderFallback(
     "lunch",
     offPrefs,
     LUNCH_TIME_UTC,
-    lunchLoggedAtNoon,
+    lunchLoggedAt1pm,
     UTC
   );
   assert.strictEqual(decision, null);
 });
 
-check("3. activity at 3 PM does NOT suppress the 6 PM dinner fallback", () => {
-  const activityAt3pm = new Date("2026-08-10T15:00:00Z");
+check("3. activity at 4 PM does NOT suppress the 7:30 PM dinner fallback", () => {
+  const activityAt4pm = new Date("2026-08-10T16:00:00Z");
   const decision = decideMealReminderFallback(
     "dinner",
     offPrefs,
     DINNER_TIME_UTC,
-    activityAt3pm,
+    activityAt4pm,
     UTC
   );
-  assert.notStrictEqual(decision, null, "3pm falls before the 4:00pm dinner-log window and must not count as dinner logged");
+  assert.notStrictEqual(decision, null, "4pm falls before the 5:30pm dinner-log window and must not count as dinner logged");
 });
 
-check("4. dinner logged at 5 PM suppresses the 6 PM dinner fallback", () => {
-  const dinnerLoggedAt5pm = new Date("2026-08-10T17:00:00Z");
+check("4. dinner logged at 6:30 PM suppresses the 7:30 PM dinner fallback", () => {
+  const dinnerLoggedAt630pm = new Date("2026-08-10T18:30:00Z");
   const decision = decideMealReminderFallback(
     "dinner",
     offPrefs,
     DINNER_TIME_UTC,
-    dinnerLoggedAt5pm,
+    dinnerLoggedAt630pm,
     UTC
   );
   assert.strictEqual(decision, null);
 });
 
-check("5. dinner not logged at all leaves the 6 PM fallback eligible", () => {
+check("5. dinner not logged at all leaves the 7:30 PM fallback eligible", () => {
   const decision = decideMealReminderFallback("dinner", offPrefs, DINNER_TIME_UTC, null, UTC);
   assert.notStrictEqual(decision, null);
 });
 
-check("lunch logged before 12:30 does not create a duplicate suppression later the same day", () => {
+check("lunch logged before 1:30 does not create a duplicate suppression later the same day", () => {
   // decideMealReminderFallback is pure/idempotent: calling it again later
   // the same day with the same "latest activity" input still returns the
   // same (suppressed) decision -- the actual once-per-day guarantee comes
   // from findTodaysNotification()'s dedup, exercised separately below.
-  const lunchLoggedAtNoon = new Date("2026-08-10T12:00:00Z");
-  const laterSameDay = new Date("2026-08-10T13:00:00Z");
+  const lunchLoggedAt1pm = new Date("2026-08-10T13:00:00Z");
+  const laterSameDay = new Date("2026-08-10T14:00:00Z");
   const decision = decideMealReminderFallback(
     "lunch",
     offPrefs,
     laterSameDay,
-    lunchLoggedAtNoon,
+    lunchLoggedAt1pm,
     UTC
   );
   assert.strictEqual(decision, null);
 });
 
 check("logging one meal does not suppress the OTHER meal's fallback", () => {
-  // Logging lunch at noon falls outside dinner's [4:00pm, 6:30pm] window,
-  // so it must not affect dinner's independent decision -- dinner stays
+  // Logging lunch at 1pm falls outside dinner's [5:30pm, 8:00pm] window, so
+  // it must not affect dinner's independent decision -- dinner stays
   // eligible.
-  const lunchLoggedAtNoon = new Date("2026-08-10T12:00:00Z");
+  const lunchLoggedAt1pm = new Date("2026-08-10T13:00:00Z");
   const dinnerDecision = decideMealReminderFallback(
     "dinner",
     offPrefs,
     DINNER_TIME_UTC,
-    lunchLoggedAtNoon,
+    lunchLoggedAt1pm,
     UTC
   );
   assert.notStrictEqual(
@@ -235,12 +245,12 @@ check("logging one meal does not suppress the OTHER meal's fallback", () => {
 // ---------------------------------------------------------------------
 // 4. Before the target time, no fallback -- regardless of logging state.
 // ---------------------------------------------------------------------
-check("before 12:30 local, lunch fallback is never eligible even if never logged", () => {
+check("before 1:30 local, lunch fallback is never eligible even if never logged", () => {
   const decision = decideMealReminderFallback("lunch", offPrefs, MORNING_UTC, null, UTC);
   assert.strictEqual(decision, null);
 });
 
-check("before 6:00 local, dinner fallback is never eligible even if never logged", () => {
+check("before 7:30 local, dinner fallback is never eligible even if never logged", () => {
   const decision = decideMealReminderFallback("dinner", offPrefs, MORNING_UTC, null, UTC);
   assert.strictEqual(decision, null);
 });
@@ -256,66 +266,66 @@ check("exactly at the target minute, the fallback is already eligible (floor, no
   );
 });
 
-check("well after the target time (e.g. 8pm), lunch fallback is still eligible -- floor, not a fixed slot", () => {
-  const wellAfter = new Date("2026-08-10T20:00:00Z");
+check("well after the target time (e.g. 10pm), lunch fallback is still eligible -- floor, not a fixed slot", () => {
+  const wellAfter = new Date("2026-08-10T22:00:00Z");
   const decision = decideMealReminderFallback("lunch", offPrefs, wellAfter, null, UTC);
   assert.notStrictEqual(decision, null);
 });
 
 // ---------------------------------------------------------------------
-// 5. Timezone: 12:30pm/6:00pm must be evaluated in LOCAL time, not UTC.
+// 5. Timezone: 1:30pm/7:30pm must be evaluated in LOCAL time, not UTC.
 // ---------------------------------------------------------------------
-check("Eastern Time (UTC-4, summer): 12:30pm ET is 16:30 UTC, not 12:30 UTC", () => {
+check("Eastern Time (UTC-4, summer): 1:30pm ET is 17:30 UTC, not 13:30 UTC", () => {
   const ET_OFFSET = -4 * 60; // EDT
-  const noon30Utc = new Date("2026-08-10T12:30:00Z"); // 8:30am ET -- too early
-  const noon30Et = new Date("2026-08-10T16:30:00Z"); // 12:30pm ET
+  const oneThirtyUtc = new Date("2026-08-10T13:30:00Z"); // 9:30am ET -- too early
+  const oneThirtyEt = new Date("2026-08-10T17:30:00Z"); // 1:30pm ET
 
   assert.strictEqual(
-    decideMealReminderFallback("lunch", offPrefs, noon30Utc, null, ET_OFFSET),
+    decideMealReminderFallback("lunch", offPrefs, oneThirtyUtc, null, ET_OFFSET),
     null,
-    "8:30am ET must not be treated as past the 12:30pm ET target"
+    "9:30am ET must not be treated as past the 1:30pm ET target"
   );
   assert.notStrictEqual(
-    decideMealReminderFallback("lunch", offPrefs, noon30Et, null, ET_OFFSET),
+    decideMealReminderFallback("lunch", offPrefs, oneThirtyEt, null, ET_OFFSET),
     null,
-    "16:30 UTC is exactly 12:30pm ET and must be eligible"
+    "17:30 UTC is exactly 1:30pm ET and must be eligible"
   );
 });
 
-check("Pacific Time (UTC-7, summer): 6:00pm PT is 01:00 UTC the next day", () => {
+check("Pacific Time (UTC-7, summer): 7:30pm PT is 02:30 UTC the next day", () => {
   const PT_OFFSET = -7 * 60; // PDT
-  const sixPmUtcSameDay = new Date("2026-08-10T18:00:00Z"); // only 11am PT -- too early
-  const sixPmPt = new Date("2026-08-11T01:00:00Z"); // 6:00pm PT on Aug 10
+  const sevenThirtyUtcSameDay = new Date("2026-08-10T19:30:00Z"); // only 12:30pm PT -- too early
+  const sevenThirtyPt = new Date("2026-08-11T02:30:00Z"); // 7:30pm PT on Aug 10
 
   assert.strictEqual(
-    decideMealReminderFallback("dinner", offPrefs, sixPmUtcSameDay, null, PT_OFFSET),
+    decideMealReminderFallback("dinner", offPrefs, sevenThirtyUtcSameDay, null, PT_OFFSET),
     null,
-    "11am PT must not be treated as past the 6:00pm PT target"
+    "12:30pm PT must not be treated as past the 7:30pm PT target"
   );
   assert.notStrictEqual(
-    decideMealReminderFallback("dinner", offPrefs, sixPmPt, null, PT_OFFSET),
+    decideMealReminderFallback("dinner", offPrefs, sevenThirtyPt, null, PT_OFFSET),
     null,
-    "01:00 UTC (next day) is exactly 6:00pm PT the prior local day and must be eligible"
+    "02:30 UTC (next day) is exactly 7:30pm PT the prior local day and must be eligible"
   );
 });
 
 check("logged-meal window is also evaluated in local time, not UTC", () => {
   const ET_OFFSET = -4 * 60;
-  // 16:00 UTC = 12:00pm ET -- inside the lunch log window in ET.
-  const loggedAtNoonEt = new Date("2026-08-10T16:00:00Z");
-  const checkTimeEt = new Date("2026-08-10T16:30:00Z"); // 12:30pm ET
+  // 17:00 UTC = 1:00pm ET -- inside the lunch log window in ET.
+  const loggedAt1pmEt = new Date("2026-08-10T17:00:00Z");
+  const checkTimeEt = new Date("2026-08-10T17:30:00Z"); // 1:30pm ET
   const decision = decideMealReminderFallback(
     "lunch",
     offPrefs,
     checkTimeEt,
-    loggedAtNoonEt,
+    loggedAt1pmEt,
     ET_OFFSET
   );
-  assert.strictEqual(decision, null, "noon-ET activity must suppress the ET lunch fallback");
+  assert.strictEqual(decision, null, "1pm-ET activity must suppress the ET lunch fallback");
 });
 
 check("localMinutesOfDay matches the manual UTC-plus-offset math used above", () => {
-  assert.strictEqual(localMinutesOfDay(new Date("2026-08-10T16:30:00Z"), -4 * 60), 12 * 60 + 30);
+  assert.strictEqual(localMinutesOfDay(new Date("2026-08-10T17:30:00Z"), -4 * 60), 13 * 60 + 30);
 });
 
 // ---------------------------------------------------------------------
@@ -444,22 +454,18 @@ check("a lunch fallback and a tracker_reminder compete for the SAME Tier-2 daily
 });
 
 // ---------------------------------------------------------------------
-// 10. Quiet hours are enforced generically (type-agnostic) in
-//     notification-delivery -- confirm nothing about these two new types
-//     bypasses that check by being special-cased anywhere.
+// 10. Quiet hours are enforced generically in notification-delivery --
+//     confirm these types aren't special-cased anywhere.
 // ---------------------------------------------------------------------
 check("quiet hours logic in notification-delivery has no special-case branch for these types", () => {
-  // pantryDeliveryDeferralReason only special-cases PANTRY_PREFERRED_LOCAL_MINUTES
-  // keys (expiring_ingredient/expired_items) -- confirm the new types fall
-  // straight through it untouched, exactly like tracker_reminder does,
-  // meaning they're subject only to the same generic quiet-hours check
-  // every other type already goes through.
+  // pantryDeliveryDeferralReason only special-cases expiring_ingredient/
+  // expired_items -- confirm these fall straight through untouched.
   assert.strictEqual(
-    deliveryTestables.pantryDeliveryDeferralReason("lunch_reminder_fallback", 12 * 60 + 30, {}),
+    deliveryTestables.pantryDeliveryDeferralReason("lunch_reminder_fallback", 13 * 60 + 30, {}),
     null
   );
   assert.strictEqual(
-    deliveryTestables.pantryDeliveryDeferralReason("dinner_reminder_fallback", 18 * 60, {}),
+    deliveryTestables.pantryDeliveryDeferralReason("dinner_reminder_fallback", 19 * 60 + 30, {}),
     null
   );
 });
@@ -550,6 +556,32 @@ check("all 8 combinations agree with 'at least one meal\\'s own+master resolves 
       }
     }
   }
+});
+
+// ---------------------------------------------------------------------
+// 12. Exact copy: the fallback title AND message wording are asserted
+// character-for-character, via the actual decideMealReminderFallback()
+// decision (not a duplicate of the production constant), so a typo like
+// "MyFoodrx" or "notification record" fails here.
+// ---------------------------------------------------------------------
+check("lunch fallback: exact title and message wording", () => {
+  const decision = decideMealReminderFallback("lunch", offPrefs, LUNCH_TIME_UTC, null, UTC);
+  assert.notStrictEqual(decision, null);
+  assert.strictEqual(decision.title, "Time to log your meal");
+  assert.strictEqual(
+    decision.message,
+    "Take a moment to log your servings in MyFoodRx and keep your nutrition record up to date."
+  );
+});
+
+check("dinner fallback: exact title and message wording", () => {
+  const decision = decideMealReminderFallback("dinner", offPrefs, DINNER_TIME_UTC, null, UTC);
+  assert.notStrictEqual(decision, null);
+  assert.strictEqual(decision.title, "Don't forget to log your meal");
+  assert.strictEqual(
+    decision.message,
+    "Take a moment to log your servings in MyFoodRx and keep today's nutrition record complete."
+  );
 });
 
 console.log(`\n${passed} check(s) passed.`);

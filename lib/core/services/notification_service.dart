@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter_app/core/services/api_client.dart';
 import 'package:flutter_app/core/services/navigation_service.dart';
 import 'package:flutter_app/core/utils/meal_reminder_prefs.dart';
@@ -396,19 +397,56 @@ class NotificationService {
     await syncTimezoneOffsetToDatabase();
   }
 
-  /// Sync the device's local UTC offset (minutes) so the backend/Cloud
-  /// Functions can compute per-user quiet hours and "today" boundaries in
-  /// the user's local time instead of server/UTC time.
-  Future<void> syncTimezoneOffsetToDatabase() async {
+  static const String _lastSyncedTimezoneIdKey = 'last_synced_timezone_id';
+
+  /// Syncs the device's UTC offset and IANA timezone identifier (e.g.
+  /// "America/Los_Angeles") so the server can compute quiet hours, local
+  /// day boundaries, and notification-time floors in the user's actual
+  /// local time. The IANA id is DST-safe since the server re-resolves its
+  /// offset on every check; the numeric offset is sent too, as a fallback
+  /// for users whose id fails to resolve.
+  ///
+  /// [onlyIfChanged]: skips the network call if the device's IANA id
+  /// hasn't changed since the last sync -- a DST transition alone never
+  /// counts as a change, since the server derives the new offset from the
+  /// same id. Used by the app-resume trigger to avoid a PATCH on every
+  /// resume. Cold-start/login always syncs unconditionally.
+  Future<void> syncTimezoneOffsetToDatabase({bool onlyIfChanged = false}) async {
     try {
       final userId = await ApiClient.userId;
       if (userId == null) return;
+
       final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
-      await ApiClient.patch(
-        '/auth/profile',
-        body: {'timezoneOffsetMinutes': offsetMinutes},
-      );
-      debugPrint('✅ Timezone offset synced for user ($offsetMinutes min)');
+
+      String? timezoneId;
+      try {
+        timezoneId = (await FlutterTimezone.getLocalTimezone()).identifier;
+      } catch (e) {
+        // Fall back to sending the offset alone.
+        debugPrint('⚠️ Could not resolve IANA timezone identifier: $e');
+      }
+
+      if (onlyIfChanged && timezoneId != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final lastSyncedId = prefs.getString(_lastSyncedTimezoneIdKey);
+        if (lastSyncedId == timezoneId) {
+          return; // No region change since last sync -- nothing to do.
+        }
+      }
+
+      final body = <String, dynamic>{'timezoneOffsetMinutes': offsetMinutes};
+      if (timezoneId != null) {
+        body['timezoneId'] = timezoneId;
+      }
+      await ApiClient.patch('/auth/profile', body: body);
+
+      if (timezoneId != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_lastSyncedTimezoneIdKey, timezoneId);
+      }
+
+      debugPrint(
+          '✅ Timezone synced for user (${timezoneId ?? "offset only"}, $offsetMinutes min)');
     } catch (e) {
       debugPrint('❌ Error syncing timezone offset to database: $e');
     }
