@@ -1,4 +1,35 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_app/core/utils/objectid_helper.dart';
+
+// createdAt/readAt/sentAt are always UTC instants server-side (Node's
+// `new Date()` and Python's `datetime.now(timezone.utc)` both are), but the
+// Python backend's Motor client deserializes BSON dates as *naive* datetimes
+// (no tz_aware=True), so a notification created by the Node Cloud Functions
+// round-trips through the API as an ISO string with no "Z"/offset -- e.g.
+// "2026-09-16T17:45:00.000000". `DateTime.parse` treats an offset-less
+// string as LOCAL time, silently shifting the instant it represents by the
+// device's UTC offset (on a UTC-negative device, into the apparent future).
+// That's what made a real 36-minute-old notification compute a *negative*
+// age and fall through to "Just now". Forcing UTC here fixes it at the
+// parsing boundary rather than papering over it in every display site.
+// Not private (and @visibleForTesting) so it's directly unit-testable --
+// same rationale as NotificationService.timezoneSyncCacheKey.
+@visibleForTesting
+DateTime? parseUtcTimestamp(String s) {
+  final parsed = DateTime.tryParse(s);
+  if (parsed == null) return null;
+  if (parsed.isUtc) return parsed;
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
+}
 
 enum NotificationType {
   expiring_ingredient,
@@ -37,13 +68,13 @@ class AppNotification {
     DateTime parseDate(dynamic v) {
       if (v == null) return DateTime.now();
       if (v is DateTime) return v;
-      return DateTime.parse(v.toString());
+      return parseUtcTimestamp(v.toString()) ?? DateTime.now();
     }
 
     DateTime? parseDateNullable(dynamic v) {
       if (v == null) return null;
       if (v is DateTime) return v;
-      return DateTime.tryParse(v.toString());
+      return parseUtcTimestamp(v.toString());
     }
 
     return AppNotification(

@@ -141,6 +141,62 @@ function getTier(type) {
 // eventually going out hours later, divorced from why it was created.
 const DELIVERY_SKIP_REASON_TIER_BUDGET_EXHAUSTED = "tier_budget_exhausted";
 
+// The referenced user document no longer exists (account deleted after the
+// notification was created). Can never become deliverable.
+const DELIVERY_SKIP_REASON_USER_DELETED = "user_deleted";
+
+// User exists but has never registered (or has cleared) an FCM token.
+// Terminal rather than retried -- otherwise a stale test/dev account with
+// no token accumulates one undeliverable notification per sweep forever
+// (see the 2026-09-16 backlog audit). The notification doc itself is left
+// alone and still shows in the in-app Notification Center
+// (notifications.py's list_notifications does not filter on
+// deliverySkippedAt) -- only the push retry loop is affected.
+const DELIVERY_SKIP_REASON_NO_FCM_TOKEN = "no_fcm_token";
+
+// FCM confirmed the token is permanently invalid (see
+// FCM_PERMANENT_TOKEN_ERROR_CODE below) -- retrying it would never succeed.
+const DELIVERY_SKIP_REASON_TOKEN_INVALID = "token_invalid";
+
+// The only FCM error code observed in 90 days of staging + prod delivery
+// logs (2026-09-16 audit) -- Firebase Admin normalizes both the legacy
+// "NotRegistered" response and an APNs "device token is disabled"
+// rejection to this same code. It means the token is permanently invalid
+// and will never succeed again, so on this specific code the token is
+// cleared and the notification is terminally skipped instead of retried.
+// Any other error code (rate limits, transient server errors, etc.) is
+// left alone and retried on the next sweep, same as before.
+const FCM_PERMANENT_TOKEN_ERROR_CODE = "messaging/registration-token-not-registered";
+
+// Pure classification of why a notification can't be delivered right now,
+// based on the user lookup alone -- separated from the DB update so it's
+// unit-testable without mocking Mongo. Returns null when delivery should
+// proceed to the send attempt.
+function terminalSkipReasonForUser(user) {
+  if (!user) return DELIVERY_SKIP_REASON_USER_DELETED;
+  if (!user.fcmToken) return DELIVERY_SKIP_REASON_NO_FCM_TOKEN;
+  return null;
+}
+
+// Whether an FCM send error means the token is permanently invalid (see
+// FCM_PERMANENT_TOKEN_ERROR_CODE's doc comment) as opposed to a transient
+// failure (rate limit, server-unavailable, etc.) that should still be
+// retried on the next sweep.
+function isPermanentTokenError(error) {
+  return error?.code === FCM_PERMANENT_TOKEN_ERROR_CODE;
+}
+
+// Pure: the exact filter used to clear a permanently-invalid token from the
+// user doc. Scoped to the specific token that just failed (`attemptedToken`,
+// not just the user id) -- if the client re-synced a fresh token in the
+// narrow window between the failed send and this update (e.g.
+// onTokenRefresh firing from a reinstall), fcmToken on the user doc no
+// longer matches attemptedToken and the update becomes a no-op instead of
+// wiping out the new, valid token.
+function permanentTokenClearFilter(userId, attemptedToken) {
+  return { _id: new ObjectId(userId), fcmToken: attemptedToken };
+}
+
 // Shared by the count and batch `find()` below so they can't drift apart.
 // A notification leaves this set either by being sent (`sentAt` set) or
 // permanently dropped (`deliverySkippedAt` set).
@@ -439,6 +495,10 @@ async function sendScheduledNotifications() {
       const prioritized = sortByPriority(scheduledNotifications);
 
       for (const notification of prioritized) {
+        // Declared outside the try block (not just inside it) so the catch
+        // block below can still see which token was actually attempted --
+        // a `const` inside `try {}` is not visible in the sibling `catch`.
+        let attemptedFcmToken = null;
         try {
           // Get user's FCM token
           const user = await usersCollection.findOne(
@@ -455,10 +515,20 @@ async function sendScheduledNotifications() {
             }
           );
 
-          if (!user || !user.fcmToken) {
-            usersWithoutToken++;
+          const skipReason = terminalSkipReasonForUser(user);
+          if (skipReason) {
+            if (skipReason === DELIVERY_SKIP_REASON_NO_FCM_TOKEN) usersWithoutToken++;
             console.log(
-              `[Notification Delivery] No FCM token for user ${notification.userId}`
+              `[Notification Delivery] Permanently skipping ${notification._id.toHexString()} for user ${notification.userId}: ${skipReason}`
+            );
+            await notificationsCollection.updateOne(
+              { _id: notification._id },
+              {
+                $set: {
+                  deliverySkippedAt: new Date(),
+                  deliverySkippedReason: skipReason,
+                },
+              }
             );
             continue;
           }
@@ -557,6 +627,7 @@ async function sendScheduledNotifications() {
           usersWithToken++;
 
           // Prepare notification payload
+          attemptedFcmToken = user.fcmToken;
           const message = {
             token: user.fcmToken,
             notification: {
@@ -614,10 +685,31 @@ async function sendScheduledNotifications() {
             error
           );
 
+          const isPermanentTokenFailure = isPermanentTokenError(error);
+
+          if (isPermanentTokenFailure) {
+            console.log(
+              `[Notification Delivery] Token permanently invalid for user ${notification.userId}; clearing fcmToken and skipping ${notification._id.toHexString()}`
+            );
+            await usersCollection.updateOne(
+              permanentTokenClearFilter(notification.userId, attemptedFcmToken),
+              { $unset: { fcmToken: "" } }
+            );
+            await notificationsCollection.updateOne(
+              { _id: notification._id },
+              {
+                $set: {
+                  deliverySkippedAt: new Date(),
+                  deliverySkippedReason: DELIVERY_SKIP_REASON_TOKEN_INVALID,
+                },
+              }
+            );
+          }
+
           deliveryResults.push({
             notificationId: notification._id.toHexString(),
             userId: notification.userId,
-            status: "failed",
+            status: isPermanentTokenFailure ? "skipped_invalid_token" : "failed",
             error: error.message,
           });
         }
@@ -692,6 +784,13 @@ exports.__testables = {
   isPersonalizedMealReminderEnabled,
   pendingNotificationsQuery,
   DELIVERY_SKIP_REASON_TIER_BUDGET_EXHAUSTED,
+  DELIVERY_SKIP_REASON_USER_DELETED,
+  DELIVERY_SKIP_REASON_NO_FCM_TOKEN,
+  DELIVERY_SKIP_REASON_TOKEN_INVALID,
+  FCM_PERMANENT_TOKEN_ERROR_CODE,
+  terminalSkipReasonForUser,
+  isPermanentTokenError,
+  permanentTokenClearFilter,
   getOffsetMinutesForZone,
   effectiveOffsetMinutes,
 };

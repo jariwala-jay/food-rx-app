@@ -1,10 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_app/core/services/notification_manager.dart';
 import 'package:flutter_app/core/models/app_notification.dart';
 import 'package:flutter_app/features/pantry/views/expired_items_page.dart';
 import 'package:flutter_app/features/navigation/views/main_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
+// Relative time only for today's notifications; once createdAt falls on a
+// previous calendar day (in the device's local time, not just >24h ago --
+// the 11:55pm/12:05am boundary case deliberately still shows a date, not
+// "10m ago") it switches to an absolute date instead of growing into "3d
+// ago", "47d ago", etc. forever. `now` is a parameter rather than read
+// internally via DateTime.now() so this is deterministically testable --
+// same rationale as NotificationService.timezoneSyncCacheKey and
+// AppNotification.parseUtcTimestamp.
+@visibleForTesting
+String formatNotificationTimeAgo(DateTime createdAt, DateTime now) {
+  final local = createdAt.toLocal();
+  final difference = now.difference(local);
+
+  // Guards a future/clock-skewed timestamp (also the pre-fix symptom of
+  // the createdAt UTC-parsing bug -- see AppNotification.parseUtcTimestamp)
+  // from ever displaying a misleading negative duration like "-3h ago".
+  if (difference.isNegative) {
+    return 'Just now';
+  }
+
+  final isToday = local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day;
+
+  if (isToday) {
+    if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  return local.year == now.year
+      ? DateFormat('MMM d').format(local)
+      : DateFormat('MMM d, yyyy').format(local);
+}
 
 class NotificationCenterPage extends StatefulWidget {
   const NotificationCenterPage({super.key});
@@ -393,7 +433,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   Widget _buildNotificationCard(
       AppNotification notification, NotificationManager notificationManager) {
     final isRead = notification.isRead;
-    final timeAgo = _getTimeAgo(notification.createdAt);
+    final timeAgo = formatNotificationTimeAgo(notification.createdAt, DateTime.now());
     final isSelected = _selectedIds.contains(notification.id);
 
     return Container(
@@ -500,21 +540,6 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         ),
       ),
     );
-  }
-
-  String _getTimeAgo(DateTime createdAt) {
-    final now = DateTime.now();
-    final difference = now.difference(createdAt);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
   }
 
   Color _getTypeColor(NotificationType type) {
