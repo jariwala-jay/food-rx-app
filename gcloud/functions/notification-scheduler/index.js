@@ -146,6 +146,35 @@ function mealReminderFallbackType(meal) {
   return `${meal}_reminder_fallback`;
 }
 
+// Mirrors notification-delivery/index.js's DELIVERY_SKIP_REASON_NO_FCM_TOKEN
+// (same no-shared-package mirroring convention as every other helper this
+// file duplicates from notification-delivery). Stamped at creation time
+// here specifically for the fallback reminders, which otherwise accumulate
+// one new undeliverable pending notification per meal per day forever for
+// an account that has no token (see the 2026-09-16 backlog audit) --
+// delivery's own terminal-skip on !user.fcmToken is a safety net for
+// notification types this file doesn't gate at creation time, and for
+// tokens cleared after creation but before delivery runs. The doc is still
+// created (and still shows in the in-app Notification Center) -- only the
+// push retry loop is skipped.
+const DELIVERY_SKIP_REASON_NO_FCM_TOKEN = "no_fcm_token";
+
+// Pure: whether a notification doc being inserted for `user` should be
+// pre-skipped for delivery. Shared by every creator in this file that
+// inserts a notification directly for a user it already has in hand (no
+// equivalent of notification-delivery/index.js's terminalSkipReasonForUser
+// !user/user_deleted branch here, since there's no user lookup to fail).
+// Currently applied to checkMealReminderFallbacks and
+// checkMealLoggingInactivityReminders (tracker_reminder) -- both have an
+// unbounded daily-recurring notification kind that otherwise piles up
+// forever for a tokenless account (see the 2026-09-16 backlog audit).
+// checkExpiringIngredients / checkExpiredItems / checkAppInactivityReminders
+// are deliberately not gated yet -- see the audit for why they're lower
+// priority (naturally bounded or self-limiting).
+function noTokenSkipReason(user) {
+  return user?.fcmToken ? null : DELIVERY_SKIP_REASON_NO_FCM_TOKEN;
+}
+
 // Resolves the UTC-offset-minutes that actually applies at `instant` --
 // prefers the IANA `timezoneId` (correct across DST) and falls back to
 // the legacy stored scalar `timezoneOffsetMinutes` when the id is
@@ -1076,6 +1105,11 @@ async function checkMealLoggingInactivityReminders() {
         if (decision.daysSinceLastLog !== undefined) {
           doc.daysSinceLastLog = decision.daysSinceLastLog;
         }
+        const skipReason = noTokenSkipReason(user);
+        if (skipReason) {
+          doc.deliverySkippedAt = new Date();
+          doc.deliverySkippedReason = skipReason;
+        }
         await notificationsCollection.insertOne(doc);
         notificationsCreated++;
       }
@@ -1207,13 +1241,19 @@ async function checkMealReminderFallbacks() {
           );
           if (existingToday) continue;
 
-          await notificationsCollection.insertOne({
+          const doc = {
             userId: userId,
             type: type,
             title: decision.title,
             message: decision.message,
             createdAt: new Date(),
-          });
+          };
+          const skipReason = noTokenSkipReason(user);
+          if (skipReason) {
+            doc.deliverySkippedAt = new Date();
+            doc.deliverySkippedReason = skipReason;
+          }
+          await notificationsCollection.insertOne(doc);
           notificationsCreated++;
         }
       }
@@ -1409,6 +1449,8 @@ exports.__testables = {
   hasAnyPersonalizedMealReminderEnabled,
   decideMealReminderFallback,
   mealReminderFallbackType,
+  DELIVERY_SKIP_REASON_NO_FCM_TOKEN,
+  noTokenSkipReason,
   localMinutesOfDay,
   MEAL_FALLBACK_TARGET_MINUTES,
   MEAL_LOG_WINDOW_MINUTES,
