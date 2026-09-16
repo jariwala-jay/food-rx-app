@@ -25,6 +25,15 @@ class MissingApiConfigurationException implements Exception {
 
 /// HTTP client for Food Rx backend API. Session tokens live in secure storage.
 class ApiClient {
+  // Backend (Cloud Run) scales to zero when idle, so a request after a long
+  // gap can be a cold start rather than a hung connection — long enough to
+  // cover that, but bounded so a truly dead connection can't hang a caller
+  // indefinitely (previously there was no timeout at all: see the pre-runApp
+  // FCM-token PATCH in main.dart, which used to block the splash screen for
+  // as long as the OS socket timeout allowed). Callers already treat
+  // TimeoutException as a transient network error, not a hard failure.
+  static const Duration _requestTimeout = Duration(seconds: 20);
+
   // Shared so concurrent callers don't each send the single-use refresh
   // token, which would trip the server's reuse detection (refresh_tokens.py).
   static Future<SessionRefreshOutcome>? _refreshFuture;
@@ -122,11 +131,13 @@ class ApiClient {
     http.Response response;
     try {
       final uri = Uri.parse('$_baseUrl/auth/refresh');
-      response = await http.post(
-        uri,
-        headers: await _headers(includeAuth: false),
-        body: jsonEncode({'refresh_token': refreshToken}),
-      );
+      response = await http
+          .post(
+            uri,
+            headers: await _headers(includeAuth: false),
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(_requestTimeout);
     } catch (_) {
       // Couldn't even reach the server — say nothing about the token itself.
       return SessionRefreshOutcome.networkError;
@@ -173,11 +184,13 @@ class ApiClient {
     if (refreshToken == null || refreshToken.isEmpty) return;
     try {
       final uri = Uri.parse('$_baseUrl/auth/logout');
-      await http.post(
-        uri,
-        headers: await _headers(includeAuth: false),
-        body: jsonEncode({'refresh_token': refreshToken}),
-      );
+      await http
+          .post(
+            uri,
+            headers: await _headers(includeAuth: false),
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(_requestTimeout);
     } catch (_) {
       // Best effort; local session is cleared regardless.
     }
@@ -188,7 +201,7 @@ class ApiClient {
     required bool requireAuth,
     bool retried = false,
   }) async {
-    final response = await request();
+    final response = await request().timeout(_requestTimeout);
     if (requireAuth && response.statusCode == 401 && !retried) {
       final outcome = await refreshSessionDetailed();
       if (outcome == SessionRefreshOutcome.success) {
@@ -310,7 +323,9 @@ class ApiClient {
       }
       request.files
           .add(await http.MultipartFile.fromPath(fieldName, file.path));
-      final streamed = await request.send();
+      // Longer than _requestTimeout: uploads carry a body over a possibly
+      // slow connection, not just a cold-start wait.
+      final streamed = await request.send().timeout(const Duration(seconds: 60));
       return http.Response.fromStream(streamed);
     }
 
