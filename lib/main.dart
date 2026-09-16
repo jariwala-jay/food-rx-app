@@ -80,9 +80,26 @@ void main() async {
       // Continue without Firebase - the app will use local notifications only
     }
 
-    // Initialize notification service
+    // Initialize notification service. Not awaited: it ends in a network
+    // call (FCM token → PATCH /auth/profile) that can block for the length
+    // of a Cloud Run cold start (backend scales to zero when idle), which
+    // was holding up runApp() itself — the native splash sitting on the logo
+    // for up to a minute on the first open after a few hours away. Every
+    // other call site for notification init already does this unawaited
+    // (see AuthController._initializeNotificationServices callers); this was
+    // the one spot still blocking app boot on it.
+    //
+    // .catchError below matches that same convention: every unawaited target
+    // elsewhere fully swallows its own errors. initialize()'s Firebase/FCM
+    // path already does (inner try/catch), but its outer catch rethrows if
+    // the local-notifications plugin itself fails to register -- previously
+    // that crashed main() before runApp(); now it's a swallowed, logged
+    // no-op instead, so a plugin hiccup can no longer take the whole app
+    // down before the UI ever shows.
     final notificationService = NotificationService();
-    await notificationService.initialize();
+    unawaited(notificationService.initialize().catchError((e) {
+      debugPrint('Non-fatal: notification service init failed: $e');
+    }));
 
     // Configure logging based on .env DEBUG
     AppLogger.enabled = (dotenv.env['DEBUG']?.toLowerCase() == 'true');

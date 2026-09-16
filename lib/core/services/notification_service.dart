@@ -393,11 +393,19 @@ class NotificationService {
       debugPrint('❌ Error syncing FCM token to database: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
     }
-
-    await syncTimezoneOffsetToDatabase();
   }
 
   static const String _lastSyncedTimezoneIdKey = 'last_synced_timezone_id';
+
+  // Scoped per user so a shared/reused device can't skip a genuinely
+  // unsynced account's first sync just because a different account already
+  // wrote a matching zone under this key. Not private (and
+  // @visibleForTesting) so it's directly unit-testable -- there's no
+  // SharedPreferences/ApiClient mocking seam in this codebase to exercise
+  // the full sync method in a unit test.
+  @visibleForTesting
+  static String timezoneSyncCacheKey(String userId) =>
+      '$_lastSyncedTimezoneIdKey:$userId';
 
   /// Syncs the device's UTC offset and IANA timezone identifier (e.g.
   /// "America/Los_Angeles") so the server can compute quiet hours, local
@@ -426,9 +434,11 @@ class NotificationService {
         debugPrint('⚠️ Could not resolve IANA timezone identifier: $e');
       }
 
+      final cacheKey = timezoneSyncCacheKey(userId);
+
       if (onlyIfChanged && timezoneId != null) {
         final prefs = await SharedPreferences.getInstance();
-        final lastSyncedId = prefs.getString(_lastSyncedTimezoneIdKey);
+        final lastSyncedId = prefs.getString(cacheKey);
         if (lastSyncedId == timezoneId) {
           return; // No region change since last sync -- nothing to do.
         }
@@ -442,7 +452,7 @@ class NotificationService {
 
       if (timezoneId != null) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_lastSyncedTimezoneIdKey, timezoneId);
+        await prefs.setString(cacheKey, timezoneId);
       }
 
       debugPrint(

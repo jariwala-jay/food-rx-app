@@ -10,8 +10,6 @@ import re
 import unicodedata
 from typing import Any
 
-from google.genai import types
-
 from app.services.rag.constants import (
     _DIET_SIGNALS,
     _EMERGENCY_PATTERNS,
@@ -291,6 +289,11 @@ def is_session_closing(message: str) -> bool:
 
 
 def _history_to_contents(history: list[dict[str, Any]]) -> list[types.Content]:
+    # Imported here, not at module load, so a cold start doesn't pay the
+    # Gemini SDK's import cost before the app can serve non-chatbot requests
+    # — this only runs while handling an actual chatbot request.
+    from google.genai import types
+
     history_contents: list[types.Content] = []
     for turn in history[-(MAX_HISTORY * 2) :]:
         role = turn.get("role") or "user"
