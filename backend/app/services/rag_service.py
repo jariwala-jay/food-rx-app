@@ -32,17 +32,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from google import genai
-from google.genai import types
-from google.genai.errors import ClientError
-
-try:
-    from groq import Groq as _GroqClient
-    _GROQ_AVAILABLE = True
-except ImportError:
-    _GroqClient = None  # type: ignore[assignment,misc]
-    _GROQ_AVAILABLE = False
-
 from app.config import settings
 from app.knowledge.food_knowledge import KNOWLEDGE_DOCS
 
@@ -200,6 +189,12 @@ class RAGService:
                 "KNOWLEDGE_DOCS is empty in food_knowledge.py — add documents before using RAG."
             )
             return
+
+        # Imported here, not at module load, so a cold start doesn't pay the
+        # Gemini SDK's import cost before the app can serve non-chatbot
+        # requests (auth/pantry/trackers) — see app/main.py's lifespan.
+        from google import genai
+        from google.genai import types
 
         self._client = genai.Client(api_key=api_key)
         self._chunks = build_chunks(KNOWLEDGE_DOCS)
@@ -469,6 +464,13 @@ class RAGService:
         temperature: float = LLM_TEMPERATURE,
     ) -> tuple[str, Any | None, bool, str | None]:
         """Return (text, usage_metadata, truncated, model_used)."""
+        # Imported here, not at module load, so a cold start doesn't pay the
+        # Gemini SDK's import cost before the app can serve non-chatbot
+        # requests — this method only runs while handling an actual chatbot
+        # request (see app/main.py's lifespan).
+        from google.genai import types
+        from google.genai.errors import ClientError
+
         client = self._client
         assert client is not None
         last_exc: Exception | None = None
@@ -561,6 +563,18 @@ class RAGService:
 
         # ── Groq fallback (llama-3.3-70b) ──────────────────────────────────
         groq_key = settings.groq_api_key
+        # Imported here, not at module load, for the same reason as the
+        # google.genai imports above. Availability is re-checked on every
+        # call rather than once at import time, but after the first
+        # successful import Python's sys.modules cache makes this a cheap
+        # lookup, not a repeated real import — behavior is otherwise
+        # unchanged from the previous module-level try/except.
+        try:
+            from groq import Groq as _GroqClient
+            _GROQ_AVAILABLE = True
+        except ImportError:
+            _GroqClient = None  # type: ignore[assignment,misc]
+            _GROQ_AVAILABLE = False
         if _GROQ_AVAILABLE and groq_key:
             try:
                 logger.info("Trying Groq fallback (%s).", GROQ_FALLBACK_MODEL)
@@ -726,6 +740,12 @@ class RAGService:
                 audit["chars"] = len(reply)
                 audit["reply"] = reply
                 return reply
+
+            # Imported here, not at module load, so a cold start doesn't pay
+            # the Gemini SDK's import cost before the app can serve
+            # non-chatbot requests — this path only runs while handling an
+            # actual chatbot request (see app/main.py's lifespan).
+            from google.genai import types
 
             client = self._client
             text_for_embed = _embedding_text_for_retrieval(
