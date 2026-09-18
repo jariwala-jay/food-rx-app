@@ -99,9 +99,9 @@ class _ProfilePageState extends State<ProfilePage> {
         source: action == _PhotoAction.camera
             ? ImageSource.camera
             : ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 85,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 92,
         requestFullMetadata: false,
       );
 

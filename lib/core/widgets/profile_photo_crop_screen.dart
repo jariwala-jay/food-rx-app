@@ -21,8 +21,8 @@ class ProfilePhotoCropScreen extends StatefulWidget {
 
 class _ProfilePhotoCropScreenState extends State<ProfilePhotoCropScreen> {
   static const double _cropSize = 300;
-  static const double _maxUserScale = 4.0;
-  static const int _jpegQuality = 85;
+  static const double _maxUserScale = 2.0;
+  static const int _jpegQuality = 90;
 
   final TransformationController _controller = TransformationController();
 
