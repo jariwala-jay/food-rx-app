@@ -34,6 +34,18 @@ class PantryItemPickerPage extends StatelessWidget {
     this.autoAddOnArrival = false,
   }) : super(key: key);
 
+  /// Whether to resolve the item's category from its name instead of
+  /// trusting the currently browsed tab. True for Spoonacular matches and
+  /// fully custom items (`custom_` ids) -- the browsed tab isn't a
+  /// reliable category signal for either, and without this a custom item
+  /// can be silently miscategorized based on which tab it was added from.
+  static bool shouldResolveCategoryFromName({
+    required bool isShowingGlobalIngredientSearch,
+    required String itemId,
+  }) {
+    return isShowingGlobalIngredientSearch || itemId.startsWith('custom_');
+  }
+
   @override
   Widget build(BuildContext context) {
     // Shared instance so rate-limit backoff state is visible to every screen
@@ -378,6 +390,31 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
     }
   }
 
+  String _selectedItemsPreviewText(List<PantryItem> items) {
+    if (items.length <= 3) {
+      return items.map((e) => e.name).join(' · ');
+    }
+    final shown = items.take(3).map((e) => e.name).join(' · ');
+    return '$shown +${items.length - 3} more';
+  }
+
+  /// A modal route sits outside the page's own widget subtree, so
+  /// Provider.of/Consumer can't reach the picker's provider inside it
+  /// unless it's re-exposed via .value here.
+  Future<void> _showSelectedItemsSheet(
+      BuildContext context, PantryItemPickerProvider provider) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) =>
+          ChangeNotifierProvider<PantryItemPickerProvider>.value(
+        value: provider,
+        child: _SelectedItemsSheet(onEditQuantity: _editSelectedItemQuantity),
+      ),
+    );
+  }
+
   /// Lets the user add exactly what they typed, even with no curated or
   /// Spoonacular match — a misspelling or an ingredient outside Spoonacular's
   /// database shouldn't block adding it. Category is resolved the same way
@@ -417,10 +454,14 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
     String category = widget.categoryKey;
     if (explicitCategory != null) {
       category = explicitCategory;
-    } else if (pickerProvider.isShowingGlobalIngredientSearch) {
+    } else if (PantryItemPickerPage.shouldResolveCategoryFromName(
+        isShowingGlobalIngredientSearch:
+            pickerProvider.isShowingGlobalIngredientSearch,
+        itemId: item.id)) {
       // Name matching first — resolves the vast majority of items with no
       // API call. Only fall back to a lazy aisle lookup when the name alone
-      // is inconclusive.
+      // is inconclusive. Unclassifiable names safely degrade to
+      // 'miscellaneous' -- no fallback to the browsed tab needed.
       var resolved = IngredientCategoryMapper.resolveCategory(name: item.name);
       if (resolved == IngredientCategoryMapper.miscellaneous) {
         final aisle = await pickerProvider.resolveAisleForAdd(item);
@@ -1159,76 +1200,74 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                     ),
                   ),
 
-                // Selected items summary — shown regardless of whether an
-                // item still appears in the current search results, since a
-                // custom/typo'd add never does (it has no search match to
-                // show a tile for). Otherwise the Save button below appears
-                // with no visible confirmation of what it's about to save.
+                // A single fixed-height row, not a second scrollable list,
+                // so it never competes with the main list above for space.
                 if (provider.hasSelectedItems)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 160),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: provider.selectedItemsList.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final item = provider.selectedItemsList[index];
-                          return Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                    child: GestureDetector(
+                      onTap: () => _showSelectedItemsSheet(context, provider),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.name,
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFF3EB),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.shopping_cart,
+                                color: primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${provider.selectedItemsList.length} selected',
                                     style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                       color: Color(0xFF2C2C2C),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _selectedItemsPreviewText(
+                                        provider.selectedItemsList),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () => _editSelectedItemQuantity(
-                                      context, provider, item),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF3EB),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      item.quantityDisplay,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: primaryColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: () =>
-                                      provider.removeItemFromSelection(item.id),
-                                  icon: const Icon(Icons.close,
-                                      size: 18, color: Colors.grey),
-                                  padding: const EdgeInsets.only(left: 4),
-                                  constraints: const BoxConstraints(),
-                                  splashRadius: 16,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          );
-                        },
+                            const Icon(Icons.chevron_right, color: Colors.grey),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1329,9 +1368,9 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              child: const Text(
-                                'Save',
-                                style: TextStyle(
+                              child: Text(
+                                'Save (${provider.selectedItemsList.length})',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1349,6 +1388,161 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
         ),
       );
     });
+  }
+}
+
+/// Review/edit sheet for [PantryItemPickerProvider.selectedItemsList].
+///
+/// Stateful so its [ScrollController] has a proper dispose lifecycle --
+/// required by [AppScrollbar], which needs an explicit controller.
+class _SelectedItemsSheet extends StatefulWidget {
+  const _SelectedItemsSheet({required this.onEditQuantity});
+
+  final Future<void> Function(
+      BuildContext context, PantryItemPickerProvider provider, PantryItem item)
+      onEditQuantity;
+
+  @override
+  State<_SelectedItemsSheet> createState() => _SelectedItemsSheetState();
+}
+
+class _SelectedItemsSheetState extends State<_SelectedItemsSheet> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PantryItemPickerProvider>(
+      builder: (context, provider, child) {
+        // The bar that opened this sheet disappears once the last item is
+        // removed, so keep the sheet from lingering empty behind it.
+        if (provider.selectedItemsList.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Selected items',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          color: Color(0xFFFF6A00),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: AppScrollbar(
+                  controller: _scrollController,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: provider.selectedItemsList.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final item = provider.selectedItemsList[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImageWidget(
+                            imageUrl: item.imageUrl,
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
+                            borderRadius: BorderRadius.circular(8),
+                            fallbackIcon: Icons.food_bank,
+                            fallbackIconColor: const Color(0xFFFF6A00),
+                            fallbackBackgroundColor: const Color(0xFFEEEEEE),
+                          ),
+                        ),
+                        title: Text(
+                          item.name,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => widget.onEditQuantity(
+                                  context, provider, item),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF3EB),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  item.quantityDisplay,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFFFF6A00),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () =>
+                                  provider.removeItemFromSelection(item.id),
+                              icon: const Icon(Icons.close,
+                                  size: 18, color: Colors.grey),
+                              padding: const EdgeInsets.only(left: 4),
+                              constraints: const BoxConstraints(),
+                              splashRadius: 16,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: MediaQuery.of(context).viewPadding.bottom + 8,
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
