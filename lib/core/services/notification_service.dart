@@ -65,6 +65,19 @@ class NotificationService {
   String? _fcmToken;
   bool _verbose = false; // Toggle to reduce console noise
 
+  // token -> tail of the serialized /auth/profile sync chain for that
+  // token. Every sync for a token, regardless of which user, is appended
+  // onto this chain so its PATCH only fires once whatever was previously
+  // queued for that SAME token has settled -- two users' PATCHes for one
+  // token can never be in flight together, so they can't complete out of
+  // order and leave the backend pointed at the wrong owner.
+  final Map<String, Future<void>> _tokenChains = {};
+
+  // "userId:token" -> the Future currently associated with that exact
+  // pair. Only trusted as "nothing to do" while it's still the current
+  // tail of that token's chain -- see _patchFcmTokenIfNeeded.
+  final Map<String, Future<void>> _fcmSyncs = {};
+
   void setVerboseLogging(bool enabled) {
     _verbose = enabled;
   }
@@ -293,11 +306,46 @@ class NotificationService {
     }
   }
 
+  // Coalesces concurrent syncs for the same (userId, token) pair onto one
+  // request, and serializes different users' syncs for the same token so
+  // their PATCHes can never be in flight together -- see the _tokenChains/
+  // _fcmSyncs field comments above for why both are needed. Deliberately
+  // NOT async: the map check-and-claim below must be one synchronous
+  // stretch with no `await` in it, or two concurrent callers could both
+  // see the key as absent before either claims it.
+  Future<void> _patchFcmTokenIfNeeded(String userId, String token) {
+    final key = '$userId:$token';
+    final existingForPair = _fcmSyncs[key];
+    final currentTail = _tokenChains[token];
+    if (existingForPair != null && identical(existingForPair, currentTail)) {
+      return existingForPair;
+    }
+
+    final previousTail = currentTail ?? Future<void>.value();
+    final thisLink = previousTail
+        .catchError((_) {}) // a prior failure must not block this new attempt
+        .then((_) => _performFcmPatch(userId, token, key));
+
+    _tokenChains[token] = thisLink;
+    _fcmSyncs[key] = thisLink;
+    return thisLink;
+  }
+
+  Future<void> _performFcmPatch(String userId, String token, String key) async {
+    try {
+      await ApiClient.patch('/auth/profile', body: {'fcmToken': token});
+    } catch (e) {
+      // Don't let a failed attempt block a legitimate retry.
+      _fcmSyncs.remove(key);
+      rethrow;
+    }
+  }
+
   Future<void> _storeFCMTokenInDatabase(String token) async {
     try {
       final userId = await ApiClient.userId;
       if (userId != null) {
-        await ApiClient.patch('/auth/profile', body: {'fcmToken': token});
+        await _patchFcmTokenIfNeeded(userId, token);
         debugPrint('✅ FCM token stored for user');
       } else {
         debugPrint(
@@ -386,7 +434,7 @@ class NotificationService {
         return;
       }
 
-      await ApiClient.patch('/auth/profile', body: {'fcmToken': tokenToSync});
+      await _patchFcmTokenIfNeeded(userId, tokenToSync);
       debugPrint('✅ FCM token synced for user');
       _fcmToken = tokenToSync; // Update internal token reference
     } catch (e) {
