@@ -80,22 +80,9 @@ void main() async {
       // Continue without Firebase - the app will use local notifications only
     }
 
-    // Initialize notification service. Not awaited: it ends in a network
-    // call (FCM token → PATCH /auth/profile) that can block for the length
-    // of a Cloud Run cold start (backend scales to zero when idle), which
-    // was holding up runApp() itself — the native splash sitting on the logo
-    // for up to a minute on the first open after a few hours away. Every
-    // other call site for notification init already does this unawaited
-    // (see AuthController._initializeNotificationServices callers); this was
-    // the one spot still blocking app boot on it.
-    //
-    // .catchError below matches that same convention: every unawaited target
-    // elsewhere fully swallows its own errors. initialize()'s Firebase/FCM
-    // path already does (inner try/catch), but its outer catch rethrows if
-    // the local-notifications plugin itself fails to register -- previously
-    // that crashed main() before runApp(); now it's a swallowed, logged
-    // no-op instead, so a plugin hiccup can no longer take the whole app
-    // down before the UI ever shows.
+    // Not awaited: initialize() ends in a network call (FCM token PATCH)
+    // that can stall for a Cloud Run cold start — awaiting it here blocked
+    // runApp(). catchError swallows failures so they can't crash main().
     final notificationService = NotificationService();
     unawaited(notificationService.initialize().catchError((e) {
       debugPrint('Non-fatal: notification service init failed: $e');
@@ -238,17 +225,9 @@ void main() async {
 }
 
 /// Extracts the reset token from a password-reset deep link, or null if
-/// [uri] isn't one. Handles two forms:
-///  - the verified App Link / Universal Link
-///    (https://<verifiedResetHost>/auth/reset-password/open#token=...) —
-///    token is in the URL *fragment*, which browsers never send to the
-///    server (see backend/app/routers/auth.py forgot_password()).
-///  - the foodrx:// fallback (?token=... query string — fine there, since
-///    it's an OS-level intent, not an HTTP request), used until App Link
-///    verification is configured (backend/.env.example).
-///
-/// Top-level so it's directly unit-testable — see isSameLocalDay in
-/// auth_controller.dart for the same pattern.
+/// [uri] isn't one. The verified https App Link carries the token in the
+/// URL fragment (never sent to the server, unlike a query param — see
+/// auth.py forgot_password()); the foodrx:// fallback uses a query param.
 String? extractPasswordResetToken(
   Uri uri, {
   required String verifiedResetHost,
@@ -424,10 +403,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           fontWeight: FontWeight.bold,
           fontSize: 24,
         ),
-        // Without these, Material 3 tints the AppBar and adds a shadow once
-        // content scrolls beneath it, even with backgroundColor/elevation
-        // set explicitly per-screen — same fix already applied to cardTheme
-        // and dialogTheme below.
+        // Without these, Material 3 tints the AppBar and shadows it once
+        // content scrolls beneath — same fix as cardTheme/dialogTheme below.
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
       ),
@@ -463,11 +440,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             );
           }
 
-          // Google user mid-onboarding — health-profile steps before home.
-          // Checked before isAuthenticated: a brand-new account has no
-          // session yet at all (it's only created at the final "Let's get
-          // started" step), only an existing one resuming interrupted
-          // onboarding does.
+          // Google user mid-onboarding — checked before isAuthenticated
+          // since a brand-new account has no session until the final
+          // "Let's get started" step; only a resuming account does.
           final onboarding = authController.pendingGoogleOnboarding;
           if (onboarding != null) {
             return SignupPage(
@@ -544,8 +519,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 }
-
-// ── One-time biometric suggestion ───────────────────────────────────────────
 
 class _BiometricSuggestionWrapper extends StatefulWidget {
   final Widget child;

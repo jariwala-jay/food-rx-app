@@ -117,6 +117,8 @@ class IngredientFuzzyMatcher {
                 : (imageUrl?.split('/').last ?? 'default.jpg'),
             aisle: categoryKey,
             localAssetPath: asset,
+            spoonacularId: int.tryParse(
+                itemData['spoonacularId']?.toString() ?? ''),
           ),
           category: categoryKey,
           normalizedTokens: _normalizedTokens(name),

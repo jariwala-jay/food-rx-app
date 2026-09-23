@@ -50,13 +50,9 @@ class AuthController with ChangeNotifier {
     return isGoogleUser && (dietType == null || dietType.isEmpty);
   }
 
-  /// Backs out of Google onboarding and immediately relaunches Google's
-  /// account picker (one tap, no intermediate Welcome screen) so the user
-  /// can pick a different account. The abandoned account stays in the
-  /// database with an incomplete profile; signing back into it later resumes
-  /// onboarding via [_isGoogleOnboardingIncomplete] rather than landing on a
-  /// broken Home. If the user cancels the new picker, they end up signed
-  /// out (Welcome screen) since the old session was already torn down.
+  /// Relaunches Google's picker immediately (no Welcome-screen flash) to
+  /// switch accounts. The abandoned account keeps its incomplete profile in
+  /// the DB — signing into it again resumes onboarding via [_isGoogleOnboardingIncomplete].
   Future<bool> switchGoogleAccount() async {
     _pendingGoogleOnboarding = null;
     try {
@@ -94,13 +90,9 @@ class AuthController with ChangeNotifier {
     } catch (_) {}
   }
 
-  // Cold starts and logins already call _markUserActive directly. This
-  // covers the far more common case — resuming an already-live session
-  // from the background — which resumeSessionIfNeeded otherwise no-ops on,
-  // leaving lastActiveAt (and the app-inactivity reminder it drives) stale
-  // for users who open the app daily without ever force-quitting it.
-  // Throttled to once per local calendar day so routine foreground/
-  // background switching doesn't spam the profile endpoint.
+  // Keeps lastActiveAt fresh for foreground resumes, which resumeSessionIfNeeded
+  // otherwise no-ops on (cold starts/logins already call _markUserActive).
+  // Throttled to once per local day to avoid spamming the profile endpoint.
   DateTime? _lastActiveHeartbeatAt;
 
   Future<void> _recordAppOpenHeartbeat() async {
@@ -113,10 +105,9 @@ class AuthController with ChangeNotifier {
     await _markUserActive();
   }
 
-  // Catches a user who travels without logging out -- syncTimezoneOffsetToDatabase's
-  // change-detection keeps this a local-only check on most calls, not a
-  // PATCH per resume. A timezone change made while the app stays
-  // continuously foregrounded won't be caught until the next resume.
+  // Catches timezone changes for users who travel without logging out. Cheap
+  // on most calls (syncTimezoneOffsetToDatabase does its own change-detection,
+  // not a PATCH every resume), but misses changes while the app stays foregrounded.
   Future<void> _checkTimezoneOnResume() async {
     try {
       await NotificationService().syncTimezoneOffsetToDatabase(onlyIfChanged: true);
@@ -141,11 +132,9 @@ class AuthController with ChangeNotifier {
       e is HandshakeException ||
       e is TlsException;
 
-  /// Full session teardown — called on both explicit logout and forced expiry.
-  /// Must clear every piece of user-specific state so the next login starts
-  /// clean. Feature providers (Pantry, Tracker) clear themselves reactively
-  /// via ProxyProvider in main.dart when isAuthenticated flips to false; new
-  /// user-specific providers should hook in there or be added below.
+  /// Full session teardown for both logout and forced expiry — must clear all
+  /// user-specific state. Feature providers (Pantry, Tracker) self-clear via
+  /// ProxyProvider in main.dart on the isAuthenticated flip; new providers hook in there.
   Future<void> _clearAuthSession() async {
     await ApiClient.revokeRefreshTokenOnLogout();
     await ApiClient.clearSession();
@@ -159,13 +148,9 @@ class AuthController with ChangeNotifier {
     _localProfilePhotoData = null;
   }
 
-  /// True if the user has biometric login enabled AND a usable refresh token,
-  /// OR has legacy saved credentials. Used to decide whether to show the
-  /// biometric sign-in button on the login screen.
-  ///
-  /// After logout the refresh token is cleared, so even if biometricEnabled
-  /// is still true the button correctly hides — preventing a dead-end Face ID
-  /// prompt that immediately fails.
+  /// True if biometric login is enabled with a usable refresh token, or legacy
+  /// credentials exist — gates the biometric sign-in button. Refresh token is
+  /// cleared on logout, so the button hides even if biometricEnabled stays true.
   Future<bool> hasSavedLogin() async {
     if (await SessionStorage.isBiometricEnabled()) {
       if (await SessionStorage.hasRefreshToken()) return true;
@@ -215,8 +200,6 @@ class AuthController with ChangeNotifier {
   }
 
   Future<void> clearSavedLogin() => disableBiometricLogin();
-
-  // ── One-time biometric suggestion ─────────────────────────────────────────
 
   bool _shouldSuggestBiometric = false;
   bool get shouldSuggestBiometric => _shouldSuggestBiometric;
@@ -274,11 +257,9 @@ class AuthController with ChangeNotifier {
     }
 
     if (_currentUser?.id != null) {
-      // Unawaited so navigation isn't blocked on notification init, which
-      // can take several seconds (network calls + FCM retry loops).
-      // Skipped for new Google users still mid-onboarding (health profile,
-      // date of birth, etc.) — the welcome push should only fire once they
-      // actually reach the home page; see clearGoogleOnboarding().
+      // Unawaited: notification init can take several seconds (network +
+      // FCM retries) and shouldn't block navigation. Skipped for Google users
+      // mid-onboarding — welcome push should only fire once they reach Home (see clearGoogleOnboarding()).
       if (initNotifications) {
         unawaited(_initializeNotificationServices(_currentUser!.id!));
       }
@@ -391,11 +372,9 @@ class AuthController with ChangeNotifier {
 
     final success = await login(creds.email, creds.password);
     if (success) {
-      // One-time migration off the legacy raw-password flow: biometrics was
-      // already just confirmed above, so switch this device to the
-      // flag-based approach (login() already issued a fresh refresh token)
-      // and delete the stored plaintext password instead of keeping it
-      // around indefinitely.
+      // One-time migration off the legacy raw-password flow to the flag-based
+      // approach: biometrics is already confirmed above and login() issued a
+      // fresh refresh token, so it's safe to delete the stored plaintext password now.
       await SessionStorage.setBiometricEnabled(true);
       await CredentialStorage.clearCredentials();
     }
@@ -420,10 +399,9 @@ class AuthController with ChangeNotifier {
     if ((access == null || access.isEmpty) && hasRefresh) {
       final outcome = await ApiClient.refreshSessionDetailed();
       if (outcome != SessionRefreshOutcome.success) {
-        // Only clear on a server-confirmed rejection. A network/server
-        // error says nothing about whether the refresh token is still
-        // good, so wiping the session here would log users out over a
-        // dropped connection rather than an actually-expired session.
+        // Only clear on a server-confirmed rejection — a network/server error
+        // doesn't mean the refresh token is bad, and clearing here would log
+        // users out over a dropped connection rather than an expired session.
         if (outcome == SessionRefreshOutcome.invalid) {
           await _clearAuthSession();
         }
@@ -773,11 +751,9 @@ class AuthController with ChangeNotifier {
       final hasSession = res['access_token'] != null;
 
       if (isNewUser && !hasSession) {
-        // Truly brand-new account: the backend hasn't created anything yet
-        // (see /auth/google — new emails get no DB write, no session). Hold
-        // the Google profile + idToken and route to onboarding; the
-        // account is only created, atomically, at the final "Let's get
-        // started" step via /auth/google/complete.
+        // Brand-new account: backend made no DB write/session yet (see
+        // /auth/google). Hold the Google profile + idToken and route to
+        // onboarding; the account is created atomically later via /auth/google/complete.
         debugPrint('[Google] New account — deferring creation until onboarding completes');
         _pendingGoogleOnboarding = SignupData(
           name: (res['name'] as String?) ?? googleUser.displayName,
@@ -845,12 +821,9 @@ class AuthController with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      // Best-effort cleanup, unawaited: the FCM-clear API call and Google's
-      // native signOut() (which alone can take 1-3+ seconds) would otherwise
-      // hold the loading screen up for no benefit — neither's success
-      // affects correctness. loginWithGoogle() already does its own
-      // signOut() before signing in again, so a still-pending one here
-      // doesn't risk a stale session on immediate re-login.
+      // Best-effort, unawaited: FCM-clear and Google's signOut() (1-3+s) would
+      // otherwise hold up the loading screen for no correctness benefit.
+      // loginWithGoogle() signs out again before its own sign-in, so a still-pending call here is safe.
       unawaited(() async {
         try {
           await ApiClient.patch('/auth/profile', body: {'fcmToken': null});
@@ -874,14 +847,9 @@ class AuthController with ChangeNotifier {
     }
   }
 
-  /// Finalizes Google onboarding at the "Let's get started" step. For a
-  /// brand-new account (no session yet — [pendingGoogleOnboarding] carries a
-  /// googleIdToken), creates the account atomically via
-  /// /auth/google/complete, mirroring [register]. For an existing account
-  /// resuming interrupted onboarding (already has a session), just patches
-  /// the profile as usual. Either way, clears the onboarding flag only on
-  /// success, so a failure doesn't send the user to Home with an empty
-  /// profile.
+  /// Finalizes Google onboarding. Brand-new accounts (carries a googleIdToken,
+  /// no session yet) are created atomically via /auth/google/complete; resumed
+  /// accounts just get a profile patch — flag clears only on success, so failure won't strand the user on Home with an empty profile.
   Future<bool> completeGoogleOnboarding(Map<String, dynamic> profileData) async {
     final googleIdToken = _pendingGoogleOnboarding?.googleIdToken;
     if (googleIdToken == null) {
@@ -1090,10 +1058,9 @@ class AuthController with ChangeNotifier {
       await _notificationManager!.initialize(userId);
       final notificationService = NotificationService();
       await notificationService.syncFCMTokenToDatabase();
-      // Independent of FCM token sync -- syncFCMTokenToDatabase() can return
-      // early (no token available, permission denied, Firebase not ready)
-      // without ever reaching its own timezone sync, so this must run as a
-      // sibling call rather than depend on that method's success path.
+      // Independent of FCM sync: syncFCMTokenToDatabase() can return early
+      // (no token, permission denied, Firebase not ready) without reaching its
+      // own timezone sync, so this must run as a sibling call, not depend on it.
       await notificationService.syncTimezoneOffsetToDatabase();
       await notificationService.applyMealLoggingReminderPreferences(
         _currentUser?.mealLoggingReminderPrefs,
