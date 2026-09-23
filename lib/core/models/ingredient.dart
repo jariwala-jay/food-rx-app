@@ -10,6 +10,11 @@ class Ingredient {
   final String? aisle;
   /// Bundled asset path (e.g. assets/pantry_ingredients/foo.png). When set, UI uses this instead of CDN.
   final String? localAssetPath;
+  /// Verified Spoonacular ingredient ID, distinct from [id]. For curated
+  /// items [id] is an internal slug; this stays null unless the catalog
+  /// mapping has confirmed an identity. Live search results carry the
+  /// real ID in [id] instead, so this is null there too.
+  final int? spoonacularId;
 
   const Ingredient({
     required this.id,
@@ -18,6 +23,7 @@ class Ingredient {
     required this.imageName,
     this.aisle,
     this.localAssetPath,
+    this.spoonacularId,
   });
 
   String get imageUrl => ImageUrlHelper.getValidImageUrl(imageName);
@@ -46,6 +52,7 @@ class Ingredient {
       'name': name,
       'image': image,
       if (localAssetPath != null) 'localAssetPath': localAssetPath,
+      if (spoonacularId != null) 'spoonacularId': spoonacularId,
     };
   }
 

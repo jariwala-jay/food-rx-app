@@ -28,6 +28,11 @@ class PantryItem {
   final DateTime addedDate;
   final bool isSelected; // Used for multi-selection in the UI
   final bool isPantryItem; // For MongoDBService compatibility
+  /// Verified Spoonacular ingredient ID, safe to use for nutrition lookup.
+  /// Null for custom items, unmapped catalog items, and cases where the
+  /// ingredient is known but its nutrition isn't confirmed (e.g. frozen
+  /// or canned forms).
+  final int? spoonacularId;
 
   PantryItem({
     required this.id,
@@ -40,6 +45,7 @@ class PantryItem {
     DateTime? addedDate,
     this.isSelected = false,
     this.isPantryItem = true, // Default to true for items added via new UI
+    this.spoonacularId,
   }) : addedDate = addedDate ?? DateTime.now();
 
   // Compatibility getters for old code if any still uses them directly
@@ -72,6 +78,7 @@ class PantryItem {
     DateTime? addedDate,
     bool? isSelected,
     bool? isPantryItem,
+    int? spoonacularId,
   }) {
     return PantryItem(
       id: id ?? this.id,
@@ -84,6 +91,7 @@ class PantryItem {
       addedDate: addedDate ?? this.addedDate,
       isSelected: isSelected ?? this.isSelected,
       isPantryItem: isPantryItem ?? this.isPantryItem,
+      spoonacularId: spoonacularId ?? this.spoonacularId,
     );
   }
 
@@ -107,6 +115,8 @@ class PantryItem {
       unit: unit,
       expirationDate: expirationDate,
       isPantryItem: isFoodPantryItem,
+      // Spoonacular search results always have a real numeric id.
+      spoonacularId: int.tryParse(item['id'].toString()),
     );
   }
 
@@ -132,6 +142,8 @@ class PantryItem {
       unit: unit,
       expirationDate: expirationDate,
       isPantryItem: isFoodPantryItem,
+      // Curated slugs and 'custom_...' ids correctly parse to null here.
+      spoonacularId: int.tryParse(ingredient.id),
     );
   }
 
@@ -151,6 +163,7 @@ class PantryItem {
           .toIso8601String(), // Use 'expiryDate' key as per old model
       'imageUrl': imageUrl,
       'isPantryItem': isPantryItem,
+      if (spoonacularId != null) 'spoonacularId': spoonacularId,
     };
   }
 
@@ -212,6 +225,9 @@ class PantryItem {
           : DateTime.now(),
       isPantryItem: map['isPantryItem'] ?? true,
       isSelected: false, // isSelected is a UI state, not stored in DB
+      spoonacularId: map['spoonacularId'] is int
+          ? map['spoonacularId'] as int
+          : int.tryParse(map['spoonacularId']?.toString() ?? ''),
     );
   }
 

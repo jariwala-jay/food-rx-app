@@ -116,6 +116,8 @@ class _PantryGroupCategoryPageState extends State<PantryGroupCategoryPage> {
                   : (itemData['imageUrl']?.split('/').last ?? 'default.jpg'),
               aisle: key,
               localAssetPath: asset,
+              spoonacularId: int.tryParse(
+                  itemData['spoonacularId']?.toString() ?? ''),
             ),
           ),
         );

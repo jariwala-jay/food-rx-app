@@ -102,6 +102,14 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
     final String itemId = widget.foodItem['id']?.toString() ??
         'temp_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Prefer the curated catalog's verified spoonacularId; otherwise parse
+    // itemId directly, which covers live search results (itemId is
+    // already the real Spoonacular id there). Unmapped curated items and
+    // custom items correctly fall through to null either way.
+    final int? spoonacularId = widget.foodItem['spoonacularId'] != null
+        ? int.tryParse(widget.foodItem['spoonacularId'].toString())
+        : int.tryParse(itemId);
+
     final newItem = PantryItem(
       id: itemId, // This will be replaced by MongoDB with proper ObjectId
       name: _itemName,
@@ -112,6 +120,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
       expirationDate: _calculatedExpiryDate,
       addedDate: DateTime.now(),
       isPantryItem: widget.isFoodPantryItem,
+      spoonacularId: spoonacularId,
     );
 
     developer.log(

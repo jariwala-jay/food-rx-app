@@ -101,6 +101,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
               imageName: asset != null
                   ? 'default.jpg'
                   : (itemData['imageUrl']?.split('/').last ?? 'default.jpg'),
+              spoonacularId: int.tryParse(
+                  itemData['spoonacularId']?.toString() ?? ''),
               aisle: categoryKey,
               localAssetPath: asset,
             );
