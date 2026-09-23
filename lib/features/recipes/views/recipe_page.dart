@@ -334,6 +334,7 @@ class _RecipePageState extends State<RecipePage> with TickerProviderStateMixin {
               onChanged: (_) => setState(() {}),
               autocorrect: false,
               enableSuggestions: false,
+              unfocusOnTapOutside: true,
               suffixIcon: IconButton(
                 icon: Icon(Icons.close, color: Colors.grey[600]),
                 onPressed: _closeRecipeSearch,
