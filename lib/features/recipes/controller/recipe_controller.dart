@@ -320,7 +320,7 @@ class RecipeController extends ChangeNotifier {
       }
     }
 
-    if (userDietType == 'dash' && recipe.nutrition != null) {
+    if (recipe.nutrition != null) {
       final sodiumNutrient = recipe.nutrition!.nutrients
           .where((n) => n.name.toLowerCase() == 'sodium')
           .firstOrNull;
@@ -560,8 +560,8 @@ class RecipeController extends ChangeNotifier {
         }
       }
 
-      // Add sodium tracking from nutrition data (DASH diet specific)
-      if (userDietType == 'dash' && recipe.nutrition != null) {
+      // Add sodium tracking from nutrition data
+      if (recipe.nutrition != null) {
         final sodiumNutrient = recipe.nutrition!.nutrients
             .where((n) => n.name.toLowerCase() == 'sodium')
             .firstOrNull;

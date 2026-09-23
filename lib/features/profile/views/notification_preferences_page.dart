@@ -198,7 +198,9 @@ class _NotificationPreferencesPageState
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Padding(
@@ -268,6 +270,7 @@ class _NotificationPreferencesPageState
                       ],
                     const SizedBox(height: 16),
                   ],
+                ),
                 ),
               ),
             ),

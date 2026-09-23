@@ -449,6 +449,18 @@ class RecipeIngredient {
   static bool _textSuggestsOptional(String s) =>
       s.toLowerCase().contains('optional');
 
+  /// Spoonacular sends lines with no stated quantity ("Salt to taste",
+  /// "olive oil") as `1 serving`, which the unit cleanup turns into a
+  /// misleading "1 piece salt". For such lines, returns the source wording to
+  /// show instead.
+  String? get unquantifiedDisplayText {
+    final text = original.trim();
+    if (text.isEmpty || RegExp(r'\d').hasMatch(text)) return null;
+    final measureUnit = measures.us.unitShort.toLowerCase();
+    if (measureUnit != 'serving' && measureUnit != 'servings') return null;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
   /// True when Spoonacular marks this line optional (see [original] / [meta]).
   bool get isOptionalIngredient =>
       _textSuggestsOptional(original) ||

@@ -34,6 +34,8 @@ class AuthController with ChangeNotifier {
   ReplanTrigger? _pendingReplanTrigger;
   NotificationManager? _notificationManager;
   Uint8List? _localProfilePhotoData;
+  String? _cachedProfilePhotoId;
+  Uint8List? _cachedProfilePhotoData;
   StreamSubscription<void>? _unauthorizedSubscription;
 
   // Non-null while a new Google user needs to complete health-profile onboarding.
@@ -125,6 +127,19 @@ class AuthController with ChangeNotifier {
   NotificationManager? get notificationManager => _notificationManager;
   Uint8List? get localProfilePhotoData => _localProfilePhotoData;
 
+  /// Downloaded bytes for the current profilePhotoId, if already fetched, so
+  /// screens can render the photo on their first frame.
+  Uint8List? get cachedProfilePhotoData =>
+      _cachedProfilePhotoId != null &&
+              _cachedProfilePhotoId == _currentUser?.profilePhotoId
+          ? _cachedProfilePhotoData
+          : null;
+
+  void cacheProfilePhoto(String photoId, Uint8List data) {
+    _cachedProfilePhotoId = photoId;
+    _cachedProfilePhotoData = data;
+  }
+
   bool _isTransientNetworkError(Object e) =>
       e is SocketException ||
       e is TimeoutException ||
@@ -146,6 +161,8 @@ class AuthController with ChangeNotifier {
     _notificationManager?.dispose();
     _notificationManager = null;
     _localProfilePhotoData = null;
+    _cachedProfilePhotoId = null;
+    _cachedProfilePhotoData = null;
   }
 
   /// True if biometric login is enabled with a usable refresh token, or legacy
@@ -1001,9 +1018,14 @@ class AuthController with ChangeNotifier {
   }
 
   Future<List<int>?> getProfilePhoto() async {
-    if (_currentUser?.profilePhotoId == null) return null;
+    final photoId = _currentUser?.profilePhotoId;
+    if (photoId == null) return null;
+    final cached = cachedProfilePhotoData;
+    if (cached != null) return cached;
     try {
-      return await ApiClient.getBytes('/api/profile-photos/${_currentUser!.profilePhotoId}');
+      final bytes = await ApiClient.getBytes('/api/profile-photos/$photoId');
+      if (bytes != null) cacheProfilePhoto(photoId, Uint8List.fromList(bytes));
+      return bytes;
     } catch (e) {
       _error = userFacingErrorMessage(e);
       return null;

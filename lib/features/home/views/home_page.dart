@@ -326,6 +326,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         final photoData =
             await ApiClient.getBytes('/api/profile-photos/$photoId');
         if (photoData != null && mounted) {
+          authProvider.cacheProfilePhoto(
+              photoId, Uint8List.fromList(photoData));
           setState(() {
             _profilePhotoData = Uint8List.fromList(photoData);
             _loadedProfilePhotoId = photoId;

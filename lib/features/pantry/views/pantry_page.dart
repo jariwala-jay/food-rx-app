@@ -58,12 +58,22 @@ class _EditPantryItemSheetState extends State<EditPantryItemSheet> {
   late final TextEditingController _qtyController;
   late DateTime _selectedDate;
   bool _isSaving = false;
+  String? _quantityErrorText;
+
+  static String? _quantityError(String text) {
+    final qty = double.tryParse(text.trim());
+    return qty != null && qty > PantryItem.maxQuantity
+        ? 'Maximum quantity is ${PantryItem.maxQuantity}'
+        : null;
+  }
 
   @override
   void initState() {
     super.initState();
     _qtyController =
         TextEditingController(text: widget.item.quantity.toString());
+    // Items saved before the cap existed can already exceed it.
+    _quantityErrorText = _quantityError(_qtyController.text);
     _selectedDate = _dateOnly(widget.item.expiryDate ?? DateTime.now());
   }
 
@@ -124,6 +134,12 @@ class _EditPantryItemSheetState extends State<EditPantryItemSheet> {
     try {
       qty = double.parse(_qtyController.text);
     } catch (_) {}
+
+    final quantityError = _quantityError(_qtyController.text);
+    if (quantityError != null) {
+      setState(() => _quantityErrorText = quantityError);
+      return;
+    }
 
     setState(() => _isSaving = true);
 
@@ -191,9 +207,14 @@ class _EditPantryItemSheetState extends State<EditPantryItemSheet> {
             TextField(
               controller: _qtyController,
               keyboardType: TextInputType.number,
+              maxLength: 6,
+              onChanged: (text) =>
+                  setState(() => _quantityErrorText = _quantityError(text)),
               decoration: InputDecoration(
                 labelText: 'Quantity (${widget.item.unitLabel})',
                 border: const OutlineInputBorder(),
+                counterText: '',
+                errorText: _quantityErrorText,
               ),
             ),
             const SizedBox(height: 16),

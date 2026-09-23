@@ -43,8 +43,9 @@ String spoonacularSafeUnit(String unitLabel) {
 class PantrySodiumEnrichmentResult {
   /// Total sodium (mg) across all logged items with a usable value.
   final double totalSodiumMg;
-  /// Names of items where a lookup was attempted but failed. Items with
-  /// no spoonacularId at all are excluded -- no lookup was attempted.
+  /// Names of items with no usable sodium contribution -- no verified
+  /// spoonacularId at all, or a lookup that came back without a sodium
+  /// value. Both are reported the same way; the user can't tell them apart.
   final List<String> itemsWithoutSodium;
 
   const PantrySodiumEnrichmentResult({
@@ -67,6 +68,7 @@ Future<PantrySodiumEnrichmentResult> computeSodiumEnrichmentForLoggedItems({
     final item = entry.key;
     final amount = entry.value;
     if (item.spoonacularId == null) {
+      itemsWithoutSodium.add(item.name);
       continue; // No verified identity -- no lookup attempted at all.
     }
 

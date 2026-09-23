@@ -75,7 +75,7 @@ void main() {
       expect(result.itemsWithoutSodium, isEmpty);
     });
 
-    test('an unmapped item makes no request and is not reported as failed',
+    test('an unmapped item makes no request but is still reported as unavailable',
         () async {
       int callCount = 0;
       final client = MockClient((request) async {
@@ -93,9 +93,9 @@ void main() {
       expect(callCount, 0,
           reason: 'no verified identity means no lookup is even attempted');
       expect(result.totalSodiumMg, 0.0);
-      expect(result.itemsWithoutSodium, isEmpty,
-          reason: 'an item that was never attempted is not the same as one '
-              'that was attempted and failed');
+      expect(result.itemsWithoutSodium, ['Heavy Cream'],
+          reason: 'no match and a failed lookup both mean sodium wasn\'t '
+              'counted, so both report the same way');
     });
 
     test('a fully custom item (no spoonacularId) behaves the same as an unmapped one',
@@ -115,7 +115,7 @@ void main() {
 
       expect(callCount, 0);
       expect(result.totalSodiumMg, 0.0);
-      expect(result.itemsWithoutSodium, isEmpty);
+      expect(result.itemsWithoutSodium, ["Grandma's special food"]);
     });
 
     test('an API failure for a mapped item does not increment sodium and is reported',
@@ -218,7 +218,7 @@ void main() {
       );
 
       expect(result.totalSodiumMg, 200.0); // 100 + 100, heavy cream skipped
-      expect(result.itemsWithoutSodium, isEmpty);
+      expect(result.itemsWithoutSodium, ['Heavy Cream']);
     });
 
     test('a piece-unit item translates to the full word before the request',

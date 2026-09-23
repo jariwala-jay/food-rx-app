@@ -431,183 +431,24 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
   }
 
   Future<void> _openBottomSheet() async {
-    List<String> localFiltered = List<String>.from(widget.options);
-    final controller = TextEditingController();
-    final searchFocusNode = FocusNode();
-    final Set<String> tempSelected =
-        Set<String>.from(widget.selectedValues ?? const <String>[]);
-    List<String> nestedOptionValues =
-        List<String>.from(widget.nestedOptionValues);
-
     final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setModalState) {
-          return GestureDetector(
-            onTap: () => searchFocusNode.unfocus(),
-            behavior: HitTestBehavior.translucent,
-            child: Container(
-              height: MediaQuery.of(sheetContext).size.height * 0.7,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            widget.label ?? 'Select',
-                            style: AppTypography.bg_16_m,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () {
-                            if (widget.multiSelect) {
-                              Navigator.pop(
-                                  sheetContext, tempSelected.toList());
-                            } else {
-                              Navigator.pop(sheetContext);
-                            }
-                          },
-                          child: const Text(
-                            'Done',
-                            style: TextStyle(
-                              color: Colors.deepOrange,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'Inter',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  if (widget.showSearchBar)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: TextField(
-                        controller: controller,
-                        focusNode: searchFocusNode,
-                        style: AppTypography.bg_14_r.copyWith(color: Colors.black),
-                        decoration: InputDecoration(
-                          hintText: 'Search here',
-                          hintStyle: AppTypography.bg_14_r
-                              .copyWith(color: const Color(0xFF90909A)),
-                          prefixIcon: const Icon(Icons.search,
-                              color: Color(0xFF90909A)),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F8),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                        ),
-                        onChanged: (q) {
-                          localFiltered = widget.options
-                              .where((o) =>
-                                  o.toLowerCase().contains(q.toLowerCase()))
-                              .toList();
-                          setModalState(() {});
-                        },
-                      ),
-                    ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: localFiltered.length,
-                      itemBuilder: (itemContext, index) {
-                        final option = localFiltered[index];
-                        if (widget.multiSelect) {
-                          final isNestedOption = option == widget.nestedOption;
-                          final isChecked = isNestedOption
-                              ? nestedOptionValues.isNotEmpty
-                              : tempSelected.contains(option);
-                          return CheckboxListTile(
-                            title: Text(
-                              isNestedOption && nestedOptionValues.isNotEmpty
-                                  ? _nestedOptionLabel(
-                                      option, nestedOptionValues)
-                                  : option,
-                              style: AppTypography.bg_14_r,
-                            ),
-                            value: isChecked,
-                            onChanged: (v) async {
-                              if (isNestedOption) {
-                                // "Other" is a managed collection, not a
-                                // boolean toggle — every tap opens the
-                                // picker; the checked state is purely
-                                // derived from nestedOptionValues, and
-                                // clearing (with confirmation) happens
-                                // inside the picker itself.
-                                final updatedValues =
-                                    await widget.onNestedOptionTap?.call();
-                                if (updatedValues != null) {
-                                  nestedOptionValues = updatedValues;
-                                  if (updatedValues.isNotEmpty) {
-                                    tempSelected.remove(widget.exclusiveOption);
-                                  } else {
-                                    widget.onNestedOptionCleared?.call();
-                                  }
-                                  setModalState(() {});
-                                }
-                                return;
-                              }
-                              if (v == true) {
-                                if (widget.exclusiveOption != null &&
-                                    option == widget.exclusiveOption) {
-                                  // Selecting the exclusive option clears everything else
-                                  tempSelected
-                                    ..clear()
-                                    ..add(option);
-                                  if (nestedOptionValues.isNotEmpty) {
-                                    nestedOptionValues = [];
-                                    widget.onNestedOptionCleared?.call();
-                                  }
-                                } else {
-                                  // Selecting any other option removes the exclusive option
-                                  tempSelected
-                                    ..remove(widget.exclusiveOption)
-                                    ..add(option);
-                                }
-                              } else {
-                                tempSelected.remove(option);
-                              }
-                              setModalState(() {});
-                            },
-                            activeColor: const Color(0xFFFF6A00),
-                            controlAffinity: ListTileControlAffinity.leading,
-                          );
-                        } else {
-                          return ListTile(
-                            title: Text(option, style: AppTypography.bg_14_r),
-                            onTap: () => Navigator.pop(sheetContext, option),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      builder: (sheetContext) => _DropdownBottomSheetContent(
+        label: widget.label,
+        options: widget.options,
+        multiSelect: widget.multiSelect,
+        showSearchBar: widget.showSearchBar,
+        initialSelected: widget.selectedValues,
+        exclusiveOption: widget.exclusiveOption,
+        nestedOption: widget.nestedOption,
+        initialNestedOptionValues: widget.nestedOptionValues,
+        onNestedOptionTap: widget.onNestedOptionTap,
+        onNestedOptionCleared: widget.onNestedOptionCleared,
       ),
     );
 
-    searchFocusNode.dispose();
     if (!mounted) return;
     if (result != null) {
       if (widget.multiSelect) {
@@ -743,6 +584,233 @@ class _AppDropdownFieldState extends State<AppDropdownField> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Content of [AppDropdownField]'s bottom-sheet picker. Owns the
+/// TextEditingController/FocusNode via State lifecycle -- local variables
+/// disposed right after `await showModalBottomSheet(...)` returns race
+/// with the sheet's still-in-flight exit transition.
+class _DropdownBottomSheetContent extends StatefulWidget {
+  const _DropdownBottomSheetContent({
+    required this.label,
+    required this.options,
+    required this.multiSelect,
+    required this.showSearchBar,
+    required this.initialSelected,
+    required this.exclusiveOption,
+    required this.nestedOption,
+    required this.initialNestedOptionValues,
+    required this.onNestedOptionTap,
+    required this.onNestedOptionCleared,
+  });
+
+  final String? label;
+  final List<String> options;
+  final bool multiSelect;
+  final bool showSearchBar;
+  final List<String>? initialSelected;
+  final String? exclusiveOption;
+  final String? nestedOption;
+  final List<String> initialNestedOptionValues;
+  final Future<List<String>?> Function()? onNestedOptionTap;
+  final VoidCallback? onNestedOptionCleared;
+
+  @override
+  State<_DropdownBottomSheetContent> createState() =>
+      _DropdownBottomSheetContentState();
+}
+
+class _DropdownBottomSheetContentState
+    extends State<_DropdownBottomSheetContent> {
+  late final TextEditingController _controller;
+  late final FocusNode _searchFocusNode;
+  late List<String> _localFiltered;
+  late Set<String> _tempSelected;
+  late List<String> _nestedOptionValues;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _searchFocusNode = FocusNode();
+    _localFiltered = List<String>.from(widget.options);
+    _tempSelected =
+        Set<String>.from(widget.initialSelected ?? const <String>[]);
+    _nestedOptionValues = List<String>.from(widget.initialNestedOptionValues);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _searchFocusNode.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.label ?? 'Select',
+                      style: AppTypography.bg_16_m,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () {
+                      if (widget.multiSelect) {
+                        Navigator.pop(context, _tempSelected.toList());
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: Colors.deepOrange,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (widget.showSearchBar)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _searchFocusNode,
+                  style: AppTypography.bg_14_r.copyWith(color: Colors.black),
+                  decoration: InputDecoration(
+                    hintText: 'Search here',
+                    hintStyle: AppTypography.bg_14_r
+                        .copyWith(color: const Color(0xFF90909A)),
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFF90909A)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF7F7F8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  onChanged: (q) {
+                    setState(() {
+                      _localFiltered = widget.options
+                          .where(
+                              (o) => o.toLowerCase().contains(q.toLowerCase()))
+                          .toList();
+                    });
+                  },
+                ),
+              ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _localFiltered.length,
+                itemBuilder: (itemContext, index) {
+                  final option = _localFiltered[index];
+                  if (widget.multiSelect) {
+                    final isNestedOption = option == widget.nestedOption;
+                    final isChecked = isNestedOption
+                        ? _nestedOptionValues.isNotEmpty
+                        : _tempSelected.contains(option);
+                    return CheckboxListTile(
+                      title: Text(
+                        isNestedOption && _nestedOptionValues.isNotEmpty
+                            ? _nestedOptionLabel(option, _nestedOptionValues)
+                            : option,
+                        style: AppTypography.bg_14_r,
+                      ),
+                      value: isChecked,
+                      onChanged: (v) async {
+                        if (isNestedOption) {
+                          // "Other" is a managed collection, not a
+                          // boolean toggle — every tap opens the
+                          // picker; the checked state is purely
+                          // derived from nestedOptionValues, and
+                          // clearing (with confirmation) happens
+                          // inside the picker itself.
+                          final updatedValues =
+                              await widget.onNestedOptionTap?.call();
+                          if (updatedValues != null) {
+                            setState(() {
+                              _nestedOptionValues = updatedValues;
+                              if (updatedValues.isNotEmpty) {
+                                _tempSelected.remove(widget.exclusiveOption);
+                              } else {
+                                widget.onNestedOptionCleared?.call();
+                              }
+                            });
+                          }
+                          return;
+                        }
+                        setState(() {
+                          if (v == true) {
+                            if (widget.exclusiveOption != null &&
+                                option == widget.exclusiveOption) {
+                              // Selecting the exclusive option clears everything else
+                              _tempSelected
+                                ..clear()
+                                ..add(option);
+                              if (_nestedOptionValues.isNotEmpty) {
+                                _nestedOptionValues = [];
+                                widget.onNestedOptionCleared?.call();
+                              }
+                            } else {
+                              // Selecting any other option removes the exclusive option
+                              _tempSelected
+                                ..remove(widget.exclusiveOption)
+                                ..add(option);
+                            }
+                          } else {
+                            _tempSelected.remove(option);
+                          }
+                        });
+                      },
+                      activeColor: const Color(0xFFFF6A00),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    );
+                  } else {
+                    return ListTile(
+                      title: Text(option, style: AppTypography.bg_14_r),
+                      onTap: () => Navigator.pop(context, option),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        ),
       ),
     );
   }
