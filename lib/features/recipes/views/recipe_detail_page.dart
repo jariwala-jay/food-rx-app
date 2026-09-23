@@ -286,8 +286,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         }
       }
 
-      // Add sodium tracking from nutrition data (DASH diet specific)
-      if (userDietType == 'dash' && _adjustedRecipe.nutrition != null) {
+      // Add sodium tracking from nutrition data
+      if (_adjustedRecipe.nutrition != null) {
         final sodiumNutrient = _adjustedRecipe.nutrition!.nutrients
             .where((n) => n.name.toLowerCase() == 'sodium')
             .firstOrNull;
