@@ -440,13 +440,16 @@ class PantryItemPickerProvider extends ChangeNotifier {
       developer.log(
           'Provider: Saving ${itemsToSave.length} items to pantry for user $userId. isFoodPantryItem context: $isFoodPantryItem');
 
-      for (var item in itemsToSave) {
+      // Each item is its own independent insert with no ordering or shared
+      // state between requests, so issue them concurrently rather than
+      // paying per-item network latency sequentially.
+      await Future.wait(itemsToSave.map((item) {
         // Ensure isPantryItem is set based on the context of this provider
         final itemToSave = item.copyWith(isPantryItem: isFoodPantryItem);
         developer.log(
             'Attempting to save item: ${itemToSave.name} with isPantryItem: ${itemToSave.isPantryItem}');
-        await _pantryApi.addPantryItem(userId, itemToSave.toMap());
-      }
+        return _pantryApi.addPantryItem(userId, itemToSave.toMap());
+      }));
       _selectedItems.clear();
       isLoading = false;
       _currentCategoryKey = ''; // Force reload on next page visit if needed
