@@ -660,7 +660,9 @@ class _DropdownBottomSheetContentState
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
           children: [
             Container(
               padding: const EdgeInsets.all(16),
@@ -807,6 +809,7 @@ class _DropdownBottomSheetContentState
               ),
             ),
           ],
+        ),
         ),
       ),
     );
