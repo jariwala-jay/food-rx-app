@@ -24,10 +24,16 @@ class _ProfilePageState extends State<ProfilePage> {
   Uint8List? _profilePhotoData;
   final _imagePicker = ImagePicker();
   bool _isUploadingPhoto = false;
+  bool _photoLoadFailed = false;
 
   @override
   void initState() {
     super.initState();
+    // Seed from the cache so a previously loaded photo shows on the first
+    // frame instead of flashing the default avatar while it re-downloads.
+    final auth = Provider.of<AuthController>(context, listen: false);
+    _profilePhotoData =
+        auth.cachedProfilePhotoData ?? auth.localProfilePhotoData;
     _loadProfilePhoto();
   }
 
@@ -35,9 +41,12 @@ class _ProfilePageState extends State<ProfilePage> {
     final authProvider = Provider.of<AuthController>(context, listen: false);
     if (authProvider.currentUser?.profilePhotoId != null) {
       final photoData = await authProvider.getProfilePhoto();
-      if (mounted && photoData != null) {
+      if (mounted) {
         setState(() {
-          _profilePhotoData = Uint8List.fromList(photoData);
+          _photoLoadFailed = photoData == null;
+          if (photoData != null) {
+            _profilePhotoData = Uint8List.fromList(photoData);
+          }
         });
       }
     } else if (mounted) {
@@ -404,11 +413,17 @@ class _ProfilePageState extends State<ProfilePage> {
                           children: [
                             CircleAvatar(
                               radius: 60,
+                              backgroundColor: Colors.grey.shade200,
+                              // Neutral circle (not the default avatar) while an
+                              // uploaded photo is still loading.
                               backgroundImage: _profilePhotoData != null
                                   ? MemoryImage(_profilePhotoData!)
-                                  : const AssetImage(
-                                          'assets/images/profile_pic.png')
-                                      as ImageProvider,
+                                  : (user.profilePhotoId != null &&
+                                          !_photoLoadFailed)
+                                      ? null
+                                      : const AssetImage(
+                                              'assets/images/profile_pic.png')
+                                          as ImageProvider,
                             ),
                             if (_isUploadingPhoto)
                               Positioned.fill(
