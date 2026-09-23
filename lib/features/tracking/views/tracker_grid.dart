@@ -493,6 +493,30 @@ class _TrackerGridState extends State<TrackerGrid>
               return Future.error(e);
             }
           },
+          // Sodium is a separate tracker from whichever one was opened --
+          // resolved via the same lookup pattern the recipe cook flow uses.
+          onSodiumLog: (sodiumMg) async {
+            final provider =
+                Provider.of<TrackerProvider>(context, listen: false);
+            final sodiumTracker = provider.findTrackerByCategory(
+                TrackerCategory.sodium, tracker.dietType);
+            if (sodiumTracker != null) {
+              await provider.incrementTracker(sodiumTracker.id, sodiumMg);
+            }
+          },
+          onSodiumUnavailable: (itemNames) {
+            if (!context.mounted) return;
+            final label = itemNames.length == 1
+                ? itemNames.first
+                : '${itemNames.length} items';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    "Sodium information wasn't available for $label, so it "
+                    "wasn't added to today's sodium total."),
+              ),
+            );
+          },
         ),
       );
     }

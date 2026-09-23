@@ -15,15 +15,98 @@ import 'package:flutter_app/core/services/pantry_deduction_service.dart';
 import 'package:flutter_app/core/services/diet_serving_service.dart';
 import 'package:flutter_app/core/services/ingredient_substitution_service.dart';
 import 'package:flutter_app/core/utils/user_facing_errors.dart';
+import 'package:flutter_app/core/utils/nutrient_unit_converter.dart';
+import 'package:flutter_app/features/pantry/repositories/spoonacular_ingredient_nutrition_service.dart';
+
+/// Whether a pantry item should be selectable for tracker logging: matches
+/// the tracker's category and search query, isn't expired, and doesn't
+/// conflict with the user's allergies. Expired items must never be
+/// loggable -- they may still be visible elsewhere in the pantry list,
+/// but logging a serving from spoiled food isn't a real serving eaten.
+bool pantryItemIsLoggable({
+  required bool matchesCategory,
+  required bool matchesSearch,
+  required bool isExpired,
+  required bool hasAllergyConflict,
+}) {
+  return matchesCategory && matchesSearch && !isExpired && !hasAllergyConflict;
+}
+
+/// Spoonacular silently mishandles the abbreviated 'pc' unit (treats it
+/// as unrecognized and falls back to a 1:1 gram guess) -- the full word
+/// 'piece' resolves correctly instead. Every other PantryItem.unitLabel
+/// value passes through unchanged.
+String spoonacularSafeUnit(String unitLabel) {
+  return unitLabel == 'pc' ? 'piece' : unitLabel;
+}
+
+class PantrySodiumEnrichmentResult {
+  /// Total sodium (mg) across all logged items with a usable value.
+  final double totalSodiumMg;
+  /// Names of items where a lookup was attempted but failed. Items with
+  /// no spoonacularId at all are excluded -- no lookup was attempted.
+  final List<String> itemsWithoutSodium;
+
+  const PantrySodiumEnrichmentResult({
+    required this.totalSodiumMg,
+    required this.itemsWithoutSodium,
+  });
+}
+
+/// Computes sodium for a set of just-logged pantry items, using each
+/// item's verified spoonacularId and the actual amount consumed (not a
+/// fixed reference amount). Never throws -- failures just return null.
+Future<PantrySodiumEnrichmentResult> computeSodiumEnrichmentForLoggedItems({
+  required List<MapEntry<PantryItem, double>> loggedItemsWithPhysicalAmounts,
+  required SpoonacularIngredientNutritionService nutritionService,
+}) async {
+  double totalSodiumMg = 0.0;
+  final itemsWithoutSodium = <String>[];
+
+  for (final entry in loggedItemsWithPhysicalAmounts) {
+    final item = entry.key;
+    final amount = entry.value;
+    if (item.spoonacularId == null) {
+      continue; // No verified identity -- no lookup attempted at all.
+    }
+
+    final nutrition = await nutritionService.getIngredientNutrition(
+      item.spoonacularId,
+      amount: amount,
+      unit: spoonacularSafeUnit(item.unitLabel),
+    );
+    final sodium =
+        nutrition != null ? findNutrient(nutrition, 'Sodium') : null;
+    if (sodium != null) {
+      totalSodiumMg += nutrientAmountInMg(sodium);
+    } else {
+      itemsWithoutSodium.add(item.name);
+    }
+  }
+
+  return PantrySodiumEnrichmentResult(
+    totalSodiumMg: totalSodiumMg,
+    itemsWithoutSodium: itemsWithoutSodium,
+  );
+}
 
 class PantryTrackerLoggingModal extends StatefulWidget {
   final TrackerGoal tracker;
   final Function(double) onLog;
+  /// Called with the total sodium (mg) contributed by this submit, if
+  /// any. Separate from [onLog] since sodium is a different tracker than
+  /// the one this modal was opened for -- the caller applies it.
+  final Function(double sodiumMg)? onSodiumLog;
+  /// Called with the names of items whose sodium lookup failed, so the
+  /// caller can show a non-blocking notice. Never blocks logging.
+  final void Function(List<String> itemNames)? onSodiumUnavailable;
 
   const PantryTrackerLoggingModal({
     Key? key,
     required this.tracker,
     required this.onLog,
+    this.onSodiumLog,
+    this.onSodiumUnavailable,
   }) : super(key: key);
 
   @override
@@ -152,17 +235,17 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
   }
 
   /// Filters to items matching the tracker category, the (optional) search
-  /// [query], and not in [_allergyConflictItemIds].
+  /// [query], not expired, and not in [_allergyConflictItemIds].
   void _filterItems([String query = '']) {
     final normalizedQuery = query.toLowerCase();
     _filteredItems = _allPantryAndHomeItems().where((item) {
-      final matchesCategory =
-          _itemMatchesCategory(item, widget.tracker.category);
-      final matchesSearch = normalizedQuery.isEmpty ||
-          item.name.toLowerCase().contains(normalizedQuery);
-      return matchesCategory &&
-          matchesSearch &&
-          !_allergyConflictItemIds.contains(item.id);
+      return pantryItemIsLoggable(
+        matchesCategory: _itemMatchesCategory(item, widget.tracker.category),
+        matchesSearch: normalizedQuery.isEmpty ||
+            item.name.toLowerCase().contains(normalizedQuery),
+        isExpired: item.isExpired,
+        hasAllergyConflict: _allergyConflictItemIds.contains(item.id),
+      );
     }).toList();
 
     setState(() {});
@@ -445,6 +528,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
 
       double totalServingsLogged = 0.0;
       final itemsToDeduct = <Map<String, dynamic>>[];
+      final loggedItemsWithPhysicalAmounts = <MapEntry<PantryItem, double>>[];
       String? staleItemId;
 
       // Calculate servings for each selected item
@@ -480,6 +564,8 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
           'amount': actualAmountToDeduct,
           'unit': item.unitLabel,
         });
+        loggedItemsWithPhysicalAmounts
+            .add(MapEntry(item, actualAmountToDeduct));
       }
 
       if (staleItemId != null) {
@@ -523,6 +609,21 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
 
       // Log to tracker
       await widget.onLog(totalServingsLogged);
+
+      // Sodium enrichment runs only after deduction/servings succeed, and
+      // never blocks them -- a lookup failure just skips that item's
+      // contribution.
+      final sodiumResult = await computeSodiumEnrichmentForLoggedItems(
+        loggedItemsWithPhysicalAmounts: loggedItemsWithPhysicalAmounts,
+        nutritionService: SpoonacularIngredientNutritionService(),
+      );
+      if (sodiumResult.totalSodiumMg > 0 && widget.onSodiumLog != null) {
+        await widget.onSodiumLog!(sodiumResult.totalSodiumMg);
+      }
+      if (sodiumResult.itemsWithoutSodium.isNotEmpty &&
+          widget.onSodiumUnavailable != null) {
+        widget.onSodiumUnavailable!(sodiumResult.itemsWithoutSodium);
+      }
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -1040,6 +1141,7 @@ class _PantryTrackerLoggingModalState extends State<PantryTrackerLoggingModal> {
           ),
           child: TextField(
             controller: _searchController,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             decoration: const InputDecoration(
               hintText: 'Search pantry items...',
               hintStyle: TextStyle(
