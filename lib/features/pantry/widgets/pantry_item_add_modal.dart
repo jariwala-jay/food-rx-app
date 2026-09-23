@@ -29,6 +29,10 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
   final TextEditingController _quantityController = TextEditingController();
   UnitType _selectedUnit = UnitType.piece;
   bool _isQuantityValid = true;
+  /// Visible only for the max-quantity case -- other invalid states (empty,
+  /// non-numeric) keep the existing invisible errorText/red-border-only
+  /// feedback below, unchanged.
+  String? _quantityErrorText;
   String _itemName = '';
   String _imageUrl = '';
   DateTime _calculatedExpiryDate = DateTime.now();
@@ -66,6 +70,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
     if (text.isEmpty) {
       setState(() {
         _isQuantityValid = false;
+        _quantityErrorText = null;
       });
       return;
     }
@@ -73,11 +78,18 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
     try {
       final quantity = double.parse(text);
       setState(() {
-        _isQuantityValid = quantity > 0;
+        if (quantity > PantryItem.maxQuantity) {
+          _isQuantityValid = false;
+          _quantityErrorText = 'Maximum quantity is ${PantryItem.maxQuantity}';
+        } else {
+          _isQuantityValid = quantity > 0;
+          _quantityErrorText = null;
+        }
       });
     } catch (e) {
       setState(() {
         _isQuantityValid = false;
+        _quantityErrorText = null;
       });
     }
   }
@@ -93,6 +105,14 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
       developer.log('Modal: Invalid quantity format.');
       setState(() {
         _isQuantityValid = false;
+      });
+      return;
+    }
+    if (quantity > PantryItem.maxQuantity) {
+      developer.log('Modal: Quantity exceeds maximum.');
+      setState(() {
+        _isQuantityValid = false;
+        _quantityErrorText = 'Maximum quantity is ${PantryItem.maxQuantity}';
       });
       return;
     }
@@ -201,6 +221,7 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
                             controller: _quantityController,
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
+                            maxLength: 6,
                             onChanged: (_) {
                               _validateQuantity();
                               // Complete step when quantity is entered (if valid)
@@ -217,11 +238,15 @@ class _PantryItemAddModalState extends State<PantryItemAddModal> {
                             decoration: InputDecoration(
                               hintText: 'Enter Quantity',
                               border: InputBorder.none,
-                              errorText: _isQuantityValid
-                                  ? null
-                                  : 'Enter valid quantity',
-                              errorStyle:
-                                  const TextStyle(height: 0, fontSize: 0),
+                              counterText: '',
+                              errorText: _quantityErrorText ??
+                                  (_isQuantityValid
+                                      ? null
+                                      : 'Enter valid quantity'),
+                              errorStyle: _quantityErrorText != null
+                                  ? const TextStyle(
+                                      fontSize: 11, color: Colors.red)
+                                  : const TextStyle(height: 0, fontSize: 0),
                             ),
                           ),
                         ),
