@@ -270,123 +270,12 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   /// for save — tapping its QTY pill in the selected-items list below.
   Future<void> _editSelectedItemQuantity(BuildContext context,
       PantryItemPickerProvider provider, PantryItem item) async {
-    final quantityController = TextEditingController(
-      text: item.quantity.toStringAsFixed(
-          item.quantity.truncateToDouble() == item.quantity ? 0 : 1),
-    );
-    UnitType selectedUnit = item.unit;
-
-    await showDialog<void>(
+    final result = await showDialog<(double, UnitType)>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            item.name,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: TextField(
-                    controller: quantityController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      hintText: 'Quantity',
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<UnitType>(
-                      value: selectedUnit,
-                      isExpanded: true,
-                      dropdownColor: Colors.white,
-                      style: const TextStyle(color: Colors.black87),
-                      items: UnitType.values
-                          .map((u) => DropdownMenuItem(
-                                value: u,
-                                child: Text(_unitDisplayName(u)),
-                              ))
-                          .toList(),
-                      onChanged: (u) {
-                        if (u != null) setDialogState(() => selectedUnit = u);
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child:
-                  const Text('Cancel', style: TextStyle(color: Colors.black)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6A00),
-              ),
-              onPressed: () {
-                final qty = double.tryParse(quantityController.text.trim());
-                if (qty == null || qty <= 0) return;
-                provider.updateSelectedItemQuantity(item.id, qty, selectedUnit);
-                Navigator.of(dialogContext).pop();
-              },
-              child:
-                  const Text('Update', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
+      builder: (dialogContext) => _EditQuantityDialog(item: item),
     );
-    quantityController.dispose();
-  }
-
-  String _unitDisplayName(UnitType unit) {
-    switch (unit) {
-      case UnitType.pound:
-        return 'Pound (lb)';
-      case UnitType.ounces:
-        return 'Ounces (oz)';
-      case UnitType.gallon:
-        return 'Gallon';
-      case UnitType.milliliter:
-        return 'Milliliter (ml)';
-      case UnitType.liter:
-        return 'Liter (L)';
-      case UnitType.piece:
-        return 'Piece';
-      case UnitType.grams:
-        return 'Grams (g)';
-      case UnitType.kilograms:
-        return 'Kilograms (kg)';
-      case UnitType.cup:
-        return 'Cup';
-      case UnitType.tablespoon:
-        return 'Tablespoon';
-      case UnitType.teaspoon:
-        return 'Teaspoon';
+    if (result != null) {
+      provider.updateSelectedItemQuantity(item.id, result.$1, result.$2);
     }
   }
 
@@ -1391,6 +1280,168 @@ class _PantryItemPickerViewState extends State<_PantryItemPickerView> {
   }
 }
 
+/// Content of the quantity/unit edit dialog opened from the selected-items
+/// sheet. Owns the TextEditingController via State lifecycle -- disposing
+/// a local controller right after `await showDialog(...)` returns races
+/// with the dialog's still-in-flight exit transition.
+class _EditQuantityDialog extends StatefulWidget {
+  const _EditQuantityDialog({required this.item});
+
+  final PantryItem item;
+
+  @override
+  State<_EditQuantityDialog> createState() => _EditQuantityDialogState();
+}
+
+class _EditQuantityDialogState extends State<_EditQuantityDialog> {
+  late final TextEditingController _quantityController;
+  late UnitType _selectedUnit;
+  String? _quantityErrorText;
+
+  @override
+  void initState() {
+    super.initState();
+    final quantity = widget.item.quantity;
+    _quantityController = TextEditingController(
+      text: quantity
+          .toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1),
+    );
+    _selectedUnit = widget.item.unit;
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        widget.item.name,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+      ),
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextField(
+                controller: _quantityController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                maxLength: 6,
+                onChanged: (text) {
+                  final qty = double.tryParse(text.trim());
+                  setState(() {
+                    _quantityErrorText = qty != null &&
+                            qty > PantryItem.maxQuantity
+                        ? 'Maximum quantity is ${PantryItem.maxQuantity}'
+                        : null;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Quantity',
+                  border: InputBorder.none,
+                  counterText: '',
+                  errorText: _quantityErrorText,
+                  errorStyle: const TextStyle(fontSize: 11, color: Colors.red),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<UnitType>(
+                  value: _selectedUnit,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  style: const TextStyle(color: Colors.black87),
+                  items: UnitType.values
+                      .map((u) => DropdownMenuItem(
+                            value: u,
+                            child: Text(_unitDisplayName(u)),
+                          ))
+                      .toList(),
+                  onChanged: (u) {
+                    if (u != null) setState(() => _selectedUnit = u);
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel', style: TextStyle(color: Colors.black)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFF6A00),
+          ),
+          onPressed: () {
+            final qty = double.tryParse(_quantityController.text.trim());
+            if (qty == null || qty <= 0) return;
+            if (qty > PantryItem.maxQuantity) {
+              setState(() {
+                _quantityErrorText =
+                    'Maximum quantity is ${PantryItem.maxQuantity}';
+              });
+              return;
+            }
+            Navigator.of(context).pop((qty, _selectedUnit));
+          },
+          child: const Text('Update', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+}
+
+String _unitDisplayName(UnitType unit) {
+  switch (unit) {
+    case UnitType.pound:
+      return 'Pound (lb)';
+    case UnitType.ounces:
+      return 'Ounces (oz)';
+    case UnitType.gallon:
+      return 'Gallon';
+    case UnitType.milliliter:
+      return 'Milliliter (ml)';
+    case UnitType.liter:
+      return 'Liter (L)';
+    case UnitType.piece:
+      return 'Piece';
+    case UnitType.grams:
+      return 'Grams (g)';
+    case UnitType.kilograms:
+      return 'Kilograms (kg)';
+    case UnitType.cup:
+      return 'Cup';
+    case UnitType.tablespoon:
+      return 'Tablespoon';
+    case UnitType.teaspoon:
+      return 'Teaspoon';
+  }
+}
+
 /// Review/edit sheet for [PantryItemPickerProvider.selectedItemsList].
 ///
 /// Stateful so its [ScrollController] has a proper dispose lifecycle --
@@ -1418,19 +1469,21 @@ class _SelectedItemsSheetState extends State<_SelectedItemsSheet> {
   @override
   Widget build(BuildContext context) {
     return Consumer<PantryItemPickerProvider>(
-      builder: (context, provider, child) {
+      // Named distinctly from itemBuilder's own `context` param below to
+      // avoid shadowing it.
+      builder: (sheetContext, provider, child) {
         // The bar that opened this sheet disappears once the last item is
         // removed, so keep the sheet from lingering empty behind it.
         if (provider.selectedItemsList.isEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
+            if (Navigator.of(sheetContext).canPop()) {
+              Navigator.of(sheetContext).pop();
             }
           });
         }
         return Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
           ),
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -1453,7 +1506,7 @@ class _SelectedItemsSheetState extends State<_SelectedItemsSheet> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => Navigator.of(sheetContext).pop(),
                       child: const Text(
                         'Done',
                         style: TextStyle(
@@ -1501,7 +1554,7 @@ class _SelectedItemsSheetState extends State<_SelectedItemsSheet> {
                           children: [
                             GestureDetector(
                               onTap: () => widget.onEditQuantity(
-                                  context, provider, item),
+                                  sheetContext, provider, item),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 8),
@@ -1536,7 +1589,7 @@ class _SelectedItemsSheetState extends State<_SelectedItemsSheet> {
                 ),
               ),
               SizedBox(
-                height: MediaQuery.of(context).viewPadding.bottom + 8,
+                height: MediaQuery.of(sheetContext).viewPadding.bottom + 8,
               ),
             ],
           ),

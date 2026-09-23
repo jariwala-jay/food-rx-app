@@ -18,6 +18,11 @@ enum UnitType {
 }
 
 class PantryItem {
+  /// System-wide ceiling on a logged quantity, not unit-specific -- a
+  /// lower cap for "piece" than "lb" would encode a household-pantry
+  /// assumption this app has no evidence for.
+  static const int maxQuantity = 999999;
+
   final String id;
   final String name;
   final String imageUrl;
