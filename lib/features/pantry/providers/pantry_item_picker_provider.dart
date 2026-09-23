@@ -41,10 +41,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
   // Track which items have been selected and their quantities
   final Map<String, PantryItem> _selectedItems = {};
 
-  // Bumped on every searchSpoonacular() call so an in-flight request whose
-  // response arrives after a newer one (e.g. "coco" resolves after
-  // "coconut" already finished) can detect it's stale and discard itself
-  // instead of clobbering the newer results.
+  // Bumped per searchSpoonacular() call so a stale in-flight response (e.g.
+  // "coco" resolving after "coconut") can detect it's outdated and discard itself.
   int _searchGeneration = 0;
 
   bool get hasInitialized => _currentCategoryKey.isNotEmpty;
@@ -66,10 +64,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
     );
   }
 
-  /// Direct allergy/exclusion check for a typed name, independent of any
-  /// search having actually run — used to gate the "add exactly what I
-  /// typed" UI so it's never offered for a name that would just be
-  /// silently rejected by [addItemToSelection] below.
+  /// Lets the UI hide the "add exactly what I typed" option before a search
+  /// even runs, for names [addItemToSelection] would reject anyway.
   bool isAllergyConflict(String itemName) => _isAllergyItemName(itemName);
 
   Future<void> loadItems(String categoryKey) async {
@@ -174,19 +170,11 @@ class PantryItemPickerProvider extends ChangeNotifier {
     }
   }
 
-  /// [searchItems] always clears [isShowingGlobalIngredientSearch].
-  ///
-  /// When [resetGlobalSearchFlags] is true (the default for every
-  /// top-level caller — each keystroke, regardless of query length, since
-  /// this is the one place guaranteed to run even when searchSpoonacular
-  /// early-returns for a short query and never reaches its own resets),
-  /// this also clears [isRateLimitedSearch] and [isEmptyDueToAllergyFilter].
-  ///
-  /// searchSpoonacular itself calls this internally *after* deliberately
-  /// setting those two flags to reflect a real rate-limit/allergy-filter
-  /// outcome (to populate [searchResults] with local matches) — those call
-  /// sites pass `false` so this reset doesn't immediately wipe out the
-  /// result it just computed.
+  /// [resetGlobalSearchFlags] defaults to true since this runs on every
+  /// keystroke, including when searchSpoonacular early-returns for a short
+  /// query and never reaches its own resets. searchSpoonacular passes
+  /// `false` when it calls this internally after setting those flags itself,
+  /// so the reset doesn't wipe out the rate-limit/allergy result it just computed.
   void searchItems(String query, {bool resetGlobalSearchFlags = true}) {
     isShowingGlobalIngredientSearch = false;
     if (resetGlobalSearchFlags) {
@@ -256,10 +244,8 @@ class PantryItemPickerProvider extends ChangeNotifier {
         number: 20,
         intolerances: _mapUserAllergiesToIntolerances(),
       );
-      // A newer keystroke kicked off its own search while this request was
-      // still in flight (e.g. "coco" resolving after "coconut" already
-      // has) — its results already own `searchResults`, so bail out here
-      // instead of clobbering them with this stale response.
+      // A newer keystroke's search already owns `searchResults` — bail instead
+      // of clobbering it with this now-stale response.
       if (isSuperseded()) return;
 
       // The `intolerances` param only covers Spoonacular's fixed categories;
@@ -451,7 +437,11 @@ class PantryItemPickerProvider extends ChangeNotifier {
         return _pantryApi.addPantryItem(userId, itemToSave.toMap());
       }));
       _selectedItems.clear();
-      isLoading = false;
+      // Deliberately leave isLoading true here (only the catch block below
+      // resets it): the caller navigates away right after a successful
+      // save, and the picker's list is gated on isLoading, so clearing it
+      // would reveal the now-unselected item list -- indistinguishable from
+      // plain category browsing -- for the moment before that pop happens.
       _currentCategoryKey = ''; // Force reload on next page visit if needed
       notifyListeners();
       developer.log('Provider: Successfully saved items.');
