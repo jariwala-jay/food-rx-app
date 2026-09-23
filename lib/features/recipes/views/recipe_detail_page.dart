@@ -986,6 +986,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   }
 
   String _buildScaledIngredientText(dynamic ingredient) {
+    final unquantified = ingredient.unquantifiedDisplayText as String?;
+    if (unquantified != null) return unquantified;
+
     final amount = ingredient.amount;
     final rawUnit = (ingredient.unit ?? '').toString();
     final rawName = (ingredient.name ?? '').toString();
