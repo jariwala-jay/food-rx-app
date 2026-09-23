@@ -32,10 +32,9 @@ class RecipeGenerationService {
   /// [_generateWithFallbacks].
   static const int kDefaultMinUsefulCandidates = 12;
 
-  /// Spoonacular's complexSearch `number` param used for every tier request
-  /// (see [_tryFetchAndValidateRecipes]) — also the page size [_generateWithFallbacks]
-  /// checks against to decide whether a tier's full page means more results
-  /// exist beyond it.
+  /// Spoonacular's complexSearch `number` param for every tier request; also
+  /// the page size [_generateWithFallbacks] checks to detect a full page
+  /// (more results may exist beyond it).
   static const int _spoonacularPageSize = 100;
 
   final RecipeRepository _recipeRepository;
@@ -68,12 +67,9 @@ class RecipeGenerationService {
     required List<PantryItem> pantryItems,
     required Map<String, dynamic> userProfile,
   }) async {
-    // Phase 1.5: only meaningful, non-expired pantry items bias Spoonacular
-    // discovery. Local validation (_hasEnoughIngredients, main ingredient
-    // check) already excludes expired items, so an expired item never
-    // actually counts as "in pantry" there — sending it to Spoonacular would
-    // only bias search results toward something the user can't really cook.
-    // Seasonings/condiments remain in [pantryItems] for ranking, badges, cook.
+    // Expired items are excluded here since local validation would reject
+    // them anyway — no point biasing Spoonacular toward something uncookable.
+    // Seasonings/condiments still pass through in [pantryItems] for ranking/badges.
     final includeSelection =
         IngredientNutritionalCategoryResolver.selectForSpoonacularInclude(
       pantryItems.where((e) => !e.isExpired).map(
@@ -211,10 +207,8 @@ class RecipeGenerationService {
           '🍽️ No preference: favorites first ($favoriteNames), then other cuisines');
     }
 
-    // Favorites and all-cuisines are independent Spoonacular searches — run
-    // them concurrently instead of sequentially so the no-preference path
-    // doesn't pay for two full fallback ladders back-to-back (each can take
-    // several sequential requests on its own; see [_generateWithFallbacks]).
+    // Run concurrently, not sequentially — each is a full fallback ladder
+    // ([_generateWithFallbacks]) that can take several requests on its own.
     final results = await Future.wait([
       _generateWithFallbacks(
         enhancedFilter.copyWith(cuisines: favoriteCuisines),
@@ -284,12 +278,9 @@ class RecipeGenerationService {
     required _GenerationDiagnostics diagnostics,
     String? batchLabel,
   }) async {
-    // Accumulates validated candidates across tiers (deduped by recipe id,
-    // first-seen-wins via _mergePrimaryFirst) until there are enough for the
-    // ranking stage to work with, instead of stopping at the first tier that
-    // returns anything at all. A stricter tier's version of a recipe (e.g.
-    // isShoppingListSuggestion == false) always wins over a later, more
-    // relaxed tier re-surfacing the same id.
+    // Accumulates across tiers (deduped by id, first-seen-wins) instead of
+    // stopping at the first tier with any results — a stricter tier's recipe
+    // always wins over a later, more relaxed tier re-surfacing the same id.
     List<Recipe> accumulated = [];
 
     bool absorb(String label, _TierFetchResult tier) {
@@ -313,13 +304,9 @@ class RecipeGenerationService {
       return false;
     }
 
-    // A tier's own filter is the most precise match for what the user
-    // asked for — before falling through to a more-relaxed tier, check
-    // whether this tier's first page came back full (== _spoonacularPageSize)
-    // with more candidates reported beyond it (totalResults). If so, that's
-    // Spoonacular's per-request cap, not the tier being out of matches:
-    // fetch page 2 of the *same* filter first. Returns true once the
-    // threshold is reached (by either page).
+    // A full first page with more results reported beyond it means
+    // Spoonacular's per-request cap, not tier exhaustion — fetch page 2 of
+    // the same filter before falling through to a more-relaxed tier.
     Future<bool> runTier(
       String label,
       Future<_TierFetchResult> Function({required int offset}) fetchPage,
@@ -407,10 +394,8 @@ class RecipeGenerationService {
       return accumulated;
     }
 
-    // Tier 4: drop includeIngredients. Spoonacular's includeIngredients is
-    // an AND filter — even a capped pantry list can still fail to match.
-    // Lean on local pantry validation (_hasEnoughIngredients, main
-    // ingredient check) instead.
+    // Tier 4: drop includeIngredients — it's an AND filter, so even a capped
+    // pantry list can fail to match. Lean on local pantry validation instead.
     if (pantryIngredientNames.isNotEmpty) {
       final droppedIngredients = pantryIngredientNames.join(', ');
       if (kDebugMode) {
@@ -434,11 +419,9 @@ class RecipeGenerationService {
       }
     }
 
-    // Tier 5: some cuisine+mealType combos have zero matches in
-    // Spoonacular's own dataset (e.g. cuisine=indian&type=breakfast returns
-    // 0 candidates even though cuisine=indian alone returns plenty). For
-    // breakfast: drop the `type` param and rely on _matchesBreakfastIntent
-    // locally so the result isn't an obvious lunch/dinner dish.
+    // Tier 5: some cuisine+mealType combos return 0 matches in Spoonacular's
+    // dataset even though the cuisine alone has plenty (e.g. indian+breakfast).
+    // Drop the `type` param and rely on _matchesBreakfastIntent locally instead.
     if (enhancedFilter.mealType == MealType.breakfast &&
         !enhancedFilter.suppressTypeParam) {
       if (kDebugMode) {
@@ -462,17 +445,9 @@ class RecipeGenerationService {
       }
     }
 
-    // Tier 6, absolute last resort: show real recipes to shop against
-    // instead of an empty state. Drops only the main-ingredient gate (never
-    // meal-type-intent, allergy/health/medical/instructions, and never the
-    // <= 8 missing-ingredients cap — past that it's not "a bit of
-    // shopping") and lets _sortRecipesByPantryEase rank the closest
-    // matches — e.g. a pantry with just chicken in it surfaces chicken
-    // recipes first, missing ingredients and all, so the user can see what
-    // to buy. A breakfast search still only shows breakfast dishes here,
-    // just possibly ones missing their main ingredient. Always runs
-    // unconditionally at this point — there's no tier after it, so its
-    // result is absorbed but never gated on the threshold.
+    // Tier 6, last resort: drops only the main-ingredient gate (never
+    // meal-type, allergy/health/medical, or the <= 8 missing-ingredients cap)
+    // so the user sees real recipes to shop for instead of an empty state.
     final shoppingListFilter = enhancedFilter.mealType == MealType.breakfast
         ? relaxedHealthFilter.copyWith(suppressTypeParam: true)
         : relaxedHealthFilter;
@@ -529,10 +504,8 @@ class RecipeGenerationService {
       ),
     );
 
-    // No preference → no cuisine bias at all; ties get shuffled instead
-    // (sortByEasiestToMake randomizes same-missing-count groups when
-    // preferredCuisines is empty). Multi-select → selection order, others
-    // last within each tier.
+    // No preference → no cuisine bias (ties shuffled by sortByEasiestToMake).
+    // Multi-select → selection order, others last within each tier.
     final preferredCuisines = filter.isNoPreferenceOnly
         ? const <CuisineType>[]
         : filter.explicitCuisines;
@@ -545,10 +518,8 @@ class RecipeGenerationService {
       preferredCuisines: preferredCuisines,
       tiebreaker: (a, b) {
         // Only breaks ties among recipes already equal on missing
-        // ingredients/coverage/score (Point 2) — a recipe with fewer
-        // missing ingredients still wins outright even against a much
-        // faster one; this just stops e.g. a 120-min recipe beating a
-        // 15-min recipe when they're otherwise equally easy to shop for.
+        // ingredients/coverage/score — fewer missing ingredients still wins
+        // outright over a faster recipe; this only orders within a tie.
         final timeCmp = _compareReadyTime(a.readyInMinutes, b.readyInMinutes);
         if (timeCmp != 0) return timeCmp;
         final usedCmp =
@@ -573,21 +544,10 @@ class RecipeGenerationService {
 
   /// Fetch recipes from repository and validate them.
   ///
-  /// [relaxPantryGates]: last-resort "shop for the rest" mode — skips only
-  /// the main-ingredient-in-pantry gate, so the user gets real recipe
-  /// suggestions instead of an empty state when the star ingredient isn't
-  /// in their pantry. Matching recipes get flagged via
-  /// [Recipe.isShoppingListSuggestion] so the UI can label them as closest
-  /// matches rather than strict results. Meal-type-intent is never relaxed
-  /// (a breakfast search must never surface a dinner/lunch/snack dish, even
-  /// as a last resort — Tier 5 already handles the "no recipe in this
-  /// cuisine is ever tagged breakfast" case via [RecipeFilter.suppressTypeParam]
-  /// + local intent matching instead). The <= 8 missing-ingredients cap
-  /// (_hasEnoughIngredients) is NOT relaxed here either — past that point
-  /// it's not "a bit of shopping", and showing it anyway stopped being a
-  /// helpful suggestion. Allergy and health/medical gates are never relaxed
-  /// either — those protect against something actually unsafe, not just
-  /// "not quite what you asked for".
+  /// [relaxPantryGates] skips only the main-ingredient gate (flagged via
+  /// [Recipe.isShoppingListSuggestion]). Meal-type, the missing-ingredients
+  /// cap, and allergy/health/medical gates are never relaxed — those guard
+  /// against unsafe or wrong-category results, not an imperfect match.
   Future<_TierFetchResult> _tryFetchAndValidateRecipes(
     RecipeFilter filter,
     List<String> pantryIngredientNames,
@@ -607,12 +567,9 @@ class RecipeGenerationService {
     diagnostics.recordSpoonacularRequest(requestUri.toString(),
         label: batchLabel);
 
-    // Fetch recipes from the repository. Use the cache-aware fetch when the
-    // concrete repository supports it (instrumentation only — falls back to
-    // the plain interface method, with cache status unknown/assumed false,
-    // for any other RecipeRepository implementation e.g. test fakes). Only
-    // the detailed path reports totalResults, so pagination (see
-    // [_generateWithFallbacks]) is a no-op against a plain RecipeRepository.
+    // Cache-aware fetch when supported (falls back to the plain interface
+    // for other implementations, e.g. test fakes). Only the detailed path
+    // reports totalResults, so pagination is a no-op against a plain repo.
     final List<Recipe> recipes;
     bool fromCache = false;
     int? totalResults;
@@ -752,12 +709,9 @@ class RecipeGenerationService {
         continue;
       }
 
-      // f. Snacks/breakfast: drop full meals Spoonacular mis-tags as the
-      // wrong meal (e.g. fried rice tagged snack, a dinner dish surfacing
-      // for a breakfast search). Never relaxed, even in shopping-list mode
-      // — a search for breakfast should never show a dinner/lunch/snack
-      // item, even as a last resort; better to return fewer results than
-      // the wrong meal type.
+      // f. Drop meals Spoonacular mis-tags as the wrong type (e.g. fried
+      // rice tagged snack). Never relaxed, even in shopping-list mode —
+      // better fewer results than the wrong meal type.
       if (!_matchesMealTypeIntent(recipe, filter)) {
         diagnostics.failedMealType++;
         if (kDebugMode) {
@@ -922,11 +876,9 @@ class RecipeGenerationService {
     );
   }
 
-  /// When user picks Snacks, exclude obvious full meals Spoonacular still tags as snack.
-  /// When the breakfast search had to drop Spoonacular's own `type` filter
-  /// (see [RecipeFilter.suppressTypeParam]) because a cuisine+breakfast combo
-  /// has zero matches in Spoonacular's dataset, apply a local allowlist so a
-  /// dinner/lunch dish from that cuisine doesn't get shown as "breakfast".
+  /// Snacks: excludes obvious full meals Spoonacular still tags as snack.
+  /// Breakfast: when [RecipeFilter.suppressTypeParam] dropped Spoonacular's own
+  /// `type` filter (Tier 5), applies a local allowlist instead.
   bool _matchesMealTypeIntent(Recipe recipe, RecipeFilter filter) {
     if (filter.mealType == MealType.snack) {
       return _matchesSnackIntent(recipe);
@@ -1141,13 +1093,9 @@ class RecipeGenerationService {
     return true;
   }
 
-  /// Title keywords for cocktails/spirits — used when nutrition data is
-  /// unavailable, or as a backstop against recipes with trace/miscounted
-  /// alcohol nutrient data (e.g. rum-flavored desserts). Bare "spritz" was
-  /// deliberately dropped in favor of the specific drinks below it —
-  /// "spritzer" alone is also a common name for plain sparkling-fruit-soda
-  /// mocktails with no alcohol at all, so it isn't a reliable signal on its
-  /// own the way a named cocktail or "wine spritzer" is.
+  /// Title keywords for cocktails/spirits — backstop when nutrition data is
+  /// missing or misreports trace alcohol. Bare "spritz" is excluded:
+  /// "spritzer" alone also commonly names alcohol-free mocktails.
   static const List<String> _alcoholicDrinkKeywords = [
     'martini', 'margarita', 'mojito', 'daiquiri', 'mimosa', 'sangria',
     'cocktail', 'bloody mary', 'pina colada', 'piña colada', 'aperol spritz',
@@ -1155,12 +1103,9 @@ class RecipeGenerationService {
     'moscow mule', 'gin and tonic', 'rum punch', 'wine spritzer',
   ];
 
-  /// A title explicitly flagging itself as alcohol-free overrides the
-  /// keyword backstop above — "Virgin Sangria" and "Sparkling Cranberry
-  /// Spritzer Mocktail" aren't alcoholic just because they share a name
-  /// with a cocktail. Only applies to the title heuristic: real nutrient
-  /// data showing alcohol > 0 (checked first, below) always wins regardless
-  /// of what the title claims.
+  /// Overrides the keyword backstop above — e.g. "Virgin Sangria" isn't
+  /// alcoholic just because it shares a name with a cocktail. Only applies
+  /// to the title heuristic; real alcohol nutrient data (checked first) wins.
   static const List<String> _nonAlcoholicQualifiers = [
     'virgin',
     'mocktail',
@@ -1245,20 +1190,16 @@ class _GenerationDiagnostics {
     fallbackStatus = status;
   }
 
-  /// [label] is passed explicitly per call (e.g. "FAVORITES" vs
-  /// "ALL CUISINES") rather than read from shared mutable state, since the
-  /// no-preference path runs its two batches concurrently — a shared
-  /// "current label" field would get stomped by whichever batch set it last.
+  /// [label] is passed per call, not read from shared mutable state — the
+  /// no-preference path runs two batches concurrently, so a shared field
+  /// would get stomped by whichever batch set it last.
   void recordSpoonacularRequest(String url, {String? label}) {
     spoonacularRequests.add((label: label, url: url));
   }
 
-  /// Records one tier attempt for the "actual network calls vs cache hits,
-  /// candidates per tier, new-to-pool per tier" measurement — added purely
-  /// for instrumentation, appended by [absorb] in [_generateWithFallbacks]
-  /// which already computes every one of these values for its own dedup
-  /// logic; this just also keeps a copy. Never read by the fallback ladder
-  /// itself, so it cannot change when the ladder stops or what it returns.
+  /// Instrumentation only — appended by [absorb] in [_generateWithFallbacks],
+  /// which already computes these values for its own dedup logic. Never read
+  /// by the fallback ladder itself, so it can't affect when it stops.
   void recordTier({
     required String label,
     required String? batchLabel,

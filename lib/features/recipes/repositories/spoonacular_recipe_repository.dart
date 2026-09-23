@@ -11,15 +11,9 @@ import 'dart:developer' as developer;
 const String recipeRateLimitMessage =
     'Recipes are temporarily unavailable. Please try again in a moment.';
 
-/// Spaces out real Spoonacular network calls so the app's own fallback
-/// ladder — sequential tiers, pagination's page-2 follow-ups, and the
-/// No-Preference path's two concurrent tier batches — never bursts past
-/// RapidAPI's plan rate limit (2 requests/second as of Aug 2026). Cache
-/// hits never go through this; only calls that actually hit the network.
-///
-/// [now] and [delay] are injectable so [waitForSlot]'s slot-reservation
-/// math is unit-testable without real elapsed time (see
-/// spoonacular_request_throttle_test.dart).
+/// Paces real Spoonacular calls so the fallback ladder, pagination, and
+/// parallel batches stay under RapidAPI's rate limit (2 req/s, Aug 2026);
+/// cache hits skip this. [now]/[delay] are injectable for deterministic tests.
 class SpoonacularRequestThrottle {
   SpoonacularRequestThrottle({
     this.minInterval = const Duration(milliseconds: 550),
@@ -33,12 +27,9 @@ class SpoonacularRequestThrottle {
   final Future<void> Function(Duration) _delay;
   DateTime? _nextSlot;
 
-  /// Reserves the next available slot and waits until it arrives; returns
-  /// how long it waited (Duration.zero if the slot was already available).
-  /// Slot reservation happens synchronously — before any `await` — so
-  /// concurrent callers (e.g. two [Future.wait]'d batches each hitting the
-  /// network) queue in call order instead of racing on the same "last
-  /// call" timestamp and both slipping through together.
+  /// Reserves the next slot and waits for it, returning how long it waited.
+  /// Reservation happens synchronously (before any `await`) so concurrent
+  /// callers queue in call order instead of racing on the same slot.
   Future<Duration> waitForSlot() {
     final current = _now();
     final slot =
@@ -58,20 +49,15 @@ class SpoonacularRecipeRepository {
   DateTime? _rateLimitUntil;
   final SpoonacularRequestThrottle _throttle = SpoonacularRequestThrottle();
 
-  // A single generation pass can retry the same (or near-identical) query
-  // across several fallback tiers, and a user re-tapping "Generate" without
-  // changing filters/pantry repeats it again — caching identical requests
-  // for a short window avoids burning API quota on answers we already have.
+  // Fallback tiers can retry the same query within one generation pass, and
+  // re-tapping "Generate" repeats it again — cache briefly to save quota.
   static const Duration _cacheTtl = Duration(minutes: 5);
   final Map<String, ({DateTime cachedAt, List<Recipe> recipes, int? totalResults})>
       _cache = {};
 
-  /// Sweeps out entries past [_cacheTtl] so the in-memory cache doesn't grow
-  /// unbounded over a long session — a read only ever skips a stale entry,
-  /// it never removes it, so this is the one place that actually reclaims
-  /// the memory. Called on every cache write (i.e. every real network
-  /// fetch), which is frequent enough in practice to keep the map bounded
-  /// to roughly one TTL window's worth of distinct queries.
+  /// Removes entries past [_cacheTtl]. Reads only skip stale entries rather
+  /// than deleting them, so this write-time sweep is the only place memory
+  /// is actually reclaimed.
   void _evictExpiredCacheEntries() {
     final now = DateTime.now();
     _cache.removeWhere((_, entry) => now.difference(entry.cachedAt) >= _cacheTtl);
@@ -126,13 +112,9 @@ class SpoonacularRecipeRepository {
     return result.recipes;
   }
 
-  /// Same fetch as [getRecipes], but also reports whether this specific call
-  /// was served from the in-memory cache — for instrumentation only (e.g.
-  /// distinguishing real network calls from cache hits in generation
-  /// diagnostics). Returned as part of the result rather than a shared
-  /// mutable field, since concurrent callers (e.g. the no-preference
-  /// favorites/all-cuisines branches, which now run in parallel) could
-  /// otherwise race on a single "last call" flag.
+  /// Same as [getRecipes], but also reports whether this call hit the cache
+  /// (for diagnostics). Returned per-call, not a shared field, since
+  /// parallel callers (e.g. no-preference branches) would race on one flag.
   Future<({List<Recipe> recipes, bool fromCache, int? totalResults})>
       getRecipesDetailed(
     RecipeFilter filter,
@@ -177,10 +159,8 @@ class SpoonacularRecipeRepository {
       throw ApiException(429, recipeRateLimitMessage);
     }
 
-    // Space this call out from the last real network call so the fallback
-    // ladder's sequential tiers, pagination's page-2 follow-ups, and the
-    // No-Preference path's two concurrent batches can't burst past
-    // RapidAPI's rate limit between them.
+    // Throttle so the fallback ladder, pagination, and parallel batches
+    // can't burst past RapidAPI's rate limit.
     final waited = await _throttle.waitForSlot();
     if (kDebugMode && waited > Duration.zero) {
       debugPrint(
@@ -277,23 +257,21 @@ class SpoonacularRecipeRepository {
     }
   }
 
+  // Saved/cooked-recipe tracking is user data, not Spoonacular content —
+  // these need a database-backed implementation, not built yet.
   Future<List<Recipe>> getSavedRecipes(String userId) {
-    // This would be implemented with a database, not Spoonacular
     throw UnimplementedError();
   }
 
   Future<void> saveRecipe(String userId, Recipe recipe) {
-    // This would be implemented with a database
     throw UnimplementedError();
   }
 
   Future<void> unsaveRecipe(String userId, int recipeId) {
-    // This would be implemented with a database
     throw UnimplementedError();
   }
 
   Future<void> cookRecipe(String userId, Recipe recipe) {
-    // This would be implemented with a database
     throw UnimplementedError();
   }
 
