@@ -398,7 +398,20 @@ class AuthController with ChangeNotifier {
     return success;
   }
 
-  Future<bool> _restoreSessionFromStorage() async {
+  // Single-flight: initialize() and a `resumed` lifecycle event can both start
+  // a restore while the first /auth/me is still pending. Concurrent callers
+  // share that attempt (result or exception); cleared on any completion so a
+  // later resume can retry.
+  Future<bool>? _restoreInFlight;
+
+  Future<bool> _restoreSessionFromStorage() {
+    return _restoreInFlight ??=
+        _performRestoreSessionFromStorage().whenComplete(() {
+      _restoreInFlight = null;
+    });
+  }
+
+  Future<bool> _performRestoreSessionFromStorage() async {
     final userId = await ApiClient.userId;
     final userEmail = await ApiClient.userEmail;
     final hasRefresh = await ApiClient.hasRefreshToken();
