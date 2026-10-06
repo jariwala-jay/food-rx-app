@@ -9,7 +9,7 @@ from pymongo.errors import AutoReconnect, ConnectionFailure, ServerSelectionTime
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.database import ensure_database_indexes, get_database, close_database, reset_database
+from app.database import ensure_indexes_in_background, get_database, close_database, reset_database
 from app.deps import get_current_user_id
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, chatbot, education, pantry, recipes, trackers, notifications, tips, well_known
@@ -31,14 +31,18 @@ _DB_UNAVAILABLE_DETAIL = (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await get_database()
-    await ensure_database_indexes()
+    index_task = asyncio.create_task(ensure_indexes_in_background())
     # Loading chromadb + embeddings is slow (multi-second) and only the chatbot
     # needs it — run it in the background so auth/pantry/tracker requests aren't
     # blocked behind it on a cold start. rag_service.chat() already degrades
     # gracefully (self._ready check) if hit before this finishes.
     asyncio.create_task(rag_service.initialize())
-    yield
-    await close_database()
+    try:
+        yield
+    finally:
+        index_task.cancel()
+        await asyncio.gather(index_task, return_exceptions=True)
+        await close_database()
 
 
 app = FastAPI(

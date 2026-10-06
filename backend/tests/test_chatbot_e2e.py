@@ -80,7 +80,7 @@ class TestChatbotE2E(unittest.TestCase):
         return TestClient(app)
 
     @patch("app.main.close_database", new_callable=AsyncMock)
-    @patch("app.main.ensure_database_indexes", new_callable=AsyncMock)
+    @patch("app.main.ensure_indexes_in_background", new_callable=AsyncMock)
     @patch("app.main.get_database", new_callable=AsyncMock)
     @patch("app.main.rag_service.initialize", new_callable=AsyncMock)
     def test_health_endpoint(self, *_mocks: Any) -> None:
@@ -94,7 +94,7 @@ class TestChatbotE2E(unittest.TestCase):
     @patch("app.routers.chatbot.reset_state", new_callable=AsyncMock)
     @patch("app.routers.chatbot.get_database", new_callable=AsyncMock)
     @patch("app.main.close_database", new_callable=AsyncMock)
-    @patch("app.main.ensure_database_indexes", new_callable=AsyncMock)
+    @patch("app.main.ensure_indexes_in_background", new_callable=AsyncMock)
     @patch("app.main.get_database", new_callable=AsyncMock)
     @patch("app.main.rag_service.initialize", new_callable=AsyncMock)
     def test_starter_questions_returns_five(
@@ -115,7 +115,7 @@ class TestChatbotE2E(unittest.TestCase):
     @patch("app.routers.chatbot.get_database", new_callable=AsyncMock)
     @patch("app.services.rag_service.rag_service.chat", new_callable=AsyncMock)
     @patch("app.main.close_database", new_callable=AsyncMock)
-    @patch("app.main.ensure_database_indexes", new_callable=AsyncMock)
+    @patch("app.main.ensure_indexes_in_background", new_callable=AsyncMock)
     @patch("app.main.get_database", new_callable=AsyncMock)
     @patch("app.main.rag_service.initialize", new_callable=AsyncMock)
     def test_chat_returns_response_contract(
@@ -153,7 +153,7 @@ class TestChatbotE2E(unittest.TestCase):
     @patch("app.routers.chatbot.reset_state", new_callable=AsyncMock)
     @patch("app.routers.chatbot.get_database", new_callable=AsyncMock)
     @patch("app.main.close_database", new_callable=AsyncMock)
-    @patch("app.main.ensure_database_indexes", new_callable=AsyncMock)
+    @patch("app.main.ensure_indexes_in_background", new_callable=AsyncMock)
     @patch("app.main.get_database", new_callable=AsyncMock)
     @patch("app.main.rag_service.initialize", new_callable=AsyncMock)
     def test_start_handshake_returns_greeting_and_starters(
