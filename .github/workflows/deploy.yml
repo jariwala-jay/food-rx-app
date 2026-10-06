@@ -34,6 +34,7 @@ jobs:
         run: |
           python3 -m unittest \
             tests.test_env_client_secret_separation \
+            tests.test_background_index_creation \
             tests.test_forgot_reset_password_endpoints \
             tests.test_google_id_token_verification \
             tests.test_password_hash_migration \

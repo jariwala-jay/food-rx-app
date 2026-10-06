@@ -103,6 +103,7 @@ flutter:
     - assets/nutrition/screenshots/glycemic_index/
     - assets/images/profile_pic.png
     - assets/images/healthy_diet.png
+    - ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png
     - .env
   #   - images/a_dot_ham.jpeg
 

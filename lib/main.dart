@@ -11,6 +11,7 @@ import 'package:showcaseview/showcaseview.dart';
 
 import 'package:flutter_app/features/auth/controller/auth_controller.dart';
 import 'package:flutter_app/features/auth/views/login_page.dart';
+import 'package:flutter_app/features/auth/views/startup_loading_screen.dart';
 import 'package:flutter_app/features/auth/views/welcome_page.dart';
 import 'package:flutter_app/features/auth/views/signup_page.dart';
 import 'package:flutter_app/features/auth/views/forgot_password_page.dart';
@@ -274,6 +275,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
 
+  // isLoading is shared by login/logout/profile updates too; this latch keeps
+  // the "Starting up" message to the first load only.
+  bool _initialLoadFinished = false;
+
   @override
   void initState() {
     super.initState();
@@ -431,14 +436,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       home: Consumer<AuthController>(
         builder: (context, authController, _) {
           if (authController.isLoading) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6A00)),
-                ),
-              ),
+            return StartupLoadingScreen(
+              showStartupMessage: !_initialLoadFinished,
             );
           }
+          _initialLoadFinished = true;
 
           // Google user mid-onboarding — checked before isAuthenticated
           // since a brand-new account has no session until the final
